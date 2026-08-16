@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, BarChart2, Info } from 'lucide-react';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
@@ -34,17 +34,59 @@ interface AnalysisData {
 }
 
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+const toFaDecimal = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: 2 });
+
+interface IndexData {
+  name: string;
+  index: number;
+  change: number;
+  changePercent: number;
+  min: number;
+  max: number;
+}
 
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
+  const [indexData, setIndexData] = useState<IndexData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('chart');
 
-  const handleSelect = useCallback(async (symbol: string) => {
+  const handleSelect = useCallback(async (symbol: string, category?: string) => {
+    // Index: show real-time data only
+    if (category === 'index') {
+      setLoading(true);
+      setError(null);
+      setData(null);
+      setIndexData(null);
+      try {
+        const r = await fetch('/api/instruments');
+        if (r.ok) {
+          const d = await r.json();
+          const found = (d.indices || []).find((i: { l18: string }) => i.l18 === symbol);
+          if (found) {
+            setIndexData({
+              name: found.l18,
+              index: found.pl,
+              change: found.indexChange || 0,
+              changePercent: found.indexChangePercent || 0,
+              min: found.indexMin || 0,
+              max: found.indexMax || 0,
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Regular instrument: full TA analysis
     setLoading(true);
     setError(null);
     setData(null);
+    setIndexData(null);
     try {
       const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}`);
       if (!res.ok) {
@@ -95,8 +137,26 @@ export default function Home() {
 
           {/* Search */}
           <div className="flex-1 min-w-[240px] max-w-xl">
-            <SymbolSearch onSelect={handleSelect} />
+            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، شاخص، صندوق، اوراق ...' />
           </div>
+
+          {/* Index Info (header) */}
+          {indexData && (
+            <div className="flex items-center gap-4 text-sm shrink-0">
+              <div className="text-left">
+                <div className="text-gray-400 text-xs">{indexData.name}</div>
+                <div className="font-bold text-lg">
+                  {toFaDecimal(indexData.index)}
+                  <span className={`text-xs mr-2 ${indexData.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {indexData.changePercent >= 0 ? '▲' : '▼'} {toFaDecimal(Math.abs(indexData.changePercent))}%
+                  </span>
+                </div>
+              </div>
+              <span className="px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[10px] font-bold">
+                شاخص
+              </span>
+            </div>
+          )}
 
           {/* Price Info (after selection) */}
           {data?.info && (
@@ -123,21 +183,55 @@ export default function Home() {
 
       {/* ── MAIN CONTENT ──────────────────────────────────────── */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4">
+        {/* Index Overview */}
+        {indexData && !loading && (
+          <div className="max-w-2xl mx-auto py-12">
+            <div className="bg-[#111d2e]/60 border border-white/5 rounded-2xl p-8 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-5">
+                <BarChart2 className="w-8 h-8 text-rose-400" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-100 mb-1">{indexData.name}</h2>
+              <div className="text-3xl font-black text-gray-100 my-4 tabular-nums">{toFaDecimal(indexData.index)}</div>
+              <div className={`inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl ${indexData.changePercent >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                {indexData.changePercent >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                {toFaDecimal(Math.abs(indexData.change))} ({indexData.changePercent >= 0 ? '+' : ''}{toFaDecimal(indexData.changePercent)}%)
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-8 max-w-sm mx-auto">
+                <div className="bg-white/[0.03] rounded-xl px-4 py-3">
+                  <div className="text-[10px] text-gray-500 mb-1">بیشترین امروز</div>
+                  <div className="text-sm font-bold text-emerald-400 tabular-nums">{toFaDecimal(indexData.max)}</div>
+                </div>
+                <div className="bg-white/[0.03] rounded-xl px-4 py-3">
+                  <div className="text-[10px] text-gray-500 mb-1">کمترین امروز</div>
+                  <div className="text-sm font-bold text-red-400 tabular-nums">{toFaDecimal(indexData.min)}</div>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <Info className="w-3.5 h-3.5" />
+                <span>داده‌های تاریخی شاخص‌ها از طریق API فعلی قابل دسترسی نیستند. تحلیل تکنیکال فقط برای ابزارهای دارای داده کندل‌استیک در دسترس است.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
-        {!data && !loading && !error && (
+        {!data && !indexData && !loading && !error && (
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-400/10 to-amber-600/5 border border-amber-500/20 flex items-center justify-center mb-6">
               <BarChart3 className="w-12 h-12 text-amber-400/60" />
             </div>
             <h2 className="text-xl font-bold text-gray-200 mb-2">تحلیل تکنیکال بورس ایران</h2>
             <p className="text-gray-500 max-w-md mb-6">
-              نماد مورد نظر خود را جستجو کنید تا تحلیل کامل تکنیکال شامل اندیکاتورها،
-              حمایت‌ها و مقاومت‌ها، و گراف تصمیم VDss نمایش داده شود.
+              نماد، شاخص، صندوق، اوراق بدهی یا ابزار مشتقه مورد نظر خود را جستجو کنید
+              تا تحلیل کامل تکنیکال نمایش داده شود.
             </p>
-            <div className="flex gap-3 text-xs text-gray-600">
-              <span className="px-3 py-1.5 rounded-full bg-white/5">RSI, MFI, CCI, ADX</span>
-              <span className="px-3 py-1.5 rounded-full bg-white/5">MACD, Stochastic, BB</span>
-              <span className="px-3 py-1.5 rounded-full bg-white/5">VDss + VDes</span>
+            <div className="flex flex-wrap justify-center gap-2 text-xs text-gray-600">
+              <span className="px-3 py-1.5 rounded-full bg-white/5">سهام</span>
+              <span className="px-3 py-1.5 rounded-full bg-rose-500/10 text-rose-400/60">شاخص‌ها</span>
+              <span className="px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-400/60">صندوق‌ها</span>
+              <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400/60">اوراق بدهی</span>
+              <span className="px-3 py-1.5 rounded-full bg-orange-500/10 text-orange-400/60">مشتقه</span>
+              <span className="px-3 py-1.5 rounded-full bg-white/5">RSI, MACD, BB, VDss</span>
             </div>
           </div>
         )}
@@ -167,7 +261,7 @@ export default function Home() {
         )}
 
         {/* Analysis Results */}
-        {data && !loading && (
+        {data && !loading && !indexData && (
           <div className="space-y-4">
             {/* Quick Stats Bar */}
             {data.info && (

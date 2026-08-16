@@ -25,6 +25,8 @@ export interface TseSymbol {
   pmax: number; // max price
   eps: number;
   pe: number;
+  cs: string; // industry/sector name
+  cs_id: number;
   Buy_CountI: number;
   Buy_CountN: number;
   Buy_I_Volume: number;
@@ -36,6 +38,39 @@ export interface TseSymbol {
   qd1: number; qd2: number; qd3: number; qd4: number; qd5: number;
   qo1: number; qo2: number; qo3: number; qo4: number; qo5: number;
 }
+
+export interface TseIndex {
+  name: string;
+  time: string;
+  index: number;
+  index_change: number;
+  index_change_percent: number;
+  min: number;
+  max: number;
+}
+
+// Instrument type categories (matching BrsApi type param)
+export const INSTRUMENT_TYPES = {
+  STOCK: 1,    // Stocks + ETFs
+  SALAF: 2,    // Forward/Salaf contracts
+  FUTURE: 3,   // Futures
+  BOND: 4,     // Treasury bonds
+  MORTGAGE: 5, // Mortgage certificates
+} as const;
+
+// Human-readable category names
+export const CATEGORY_LABELS: Record<string, string> = {
+  all: 'همه',
+  indices: 'شاخص‌ها',
+  stocks: 'سهام',
+  etf: 'صندوق‌ها',
+  bond: 'اوراق بدهی',
+  future: 'قرارداد آتی',
+  salaf: 'سلف موازی',
+  mortgage: 'تسه مسکن',
+};
+
+export const ETF_CATEGORY = 'صندوق سرمایه‌گذاری قابل معامله';
 
 export interface CandleData {
   date: string;
@@ -63,24 +98,77 @@ export interface HistoryData {
   tval: number;
 }
 
-// Cache for symbols list
-let symbolsCache: TseSymbol[] | null = null;
-let symbolsCacheTime = 0;
+// Per-type caches
+const symbolsCaches = new Map<number, { data: TseSymbol[]; time: number }>();
+let indicesCache: { data: TseIndex[]; time: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function fetchAllSymbols(type: number = 1): Promise<TseSymbol[]> {
   const now = Date.now();
-  if (symbolsCache && now - symbolsCacheTime < CACHE_TTL) {
-    return symbolsCache;
+  const cached = symbolsCaches.get(type);
+  if (cached && now - cached.time < CACHE_TTL) {
+    return cached.data;
   }
   const url = `${BASE_URL}/AllSymbols.php?key=${API_KEY}&type=${type}`;
   const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
-  if (!res.ok) throw new Error(`Failed to fetch symbols: ${res.status}`);
-  const data = await res.json();
-  // The API returns an object with symbol data
-  symbolsCache = Array.isArray(data) ? data : data.data || data.symbols || Object.values(data).flat().filter((d: unknown) => d && typeof d === 'object' && 'l18' in (d as object));
-  symbolsCacheTime = now;
-  return symbolsCache;
+  if (!res.ok) throw new Error(`Failed to fetch symbols (type=${type}): ${res.status}`);
+  const raw = await res.json();
+  // Check for API error response
+  if (raw && !Array.isArray(raw) && raw.code_http) {
+    throw new Error(raw.message_error || `API error: ${raw.code_http}`);
+  }
+  const data: TseSymbol[] = Array.isArray(raw) ? raw : raw.data || raw.symbols || [];
+  symbolsCaches.set(type, { data, time: now });
+  return data;
+}
+
+export async function fetchIndices(): Promise<TseIndex[]> {
+  const now = Date.now();
+  if (indicesCache && now - indicesCache.time < CACHE_TTL) {
+    return indicesCache.data;
+  }
+  const url = `${BASE_URL}/Index.php?key=${API_KEY}&type=3`;
+  const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
+  if (!res.ok) throw new Error(`Failed to fetch indices: ${res.status}`);
+  const raw = await res.json();
+  if (raw && !Array.isArray(raw) && raw.code_http) {
+    throw new Error(raw.message_error || `API error: ${raw.code_http}`);
+  }
+  const data: TseIndex[] = Array.isArray(raw) ? raw : [];
+  indicesCache = { data, time: now };
+  return data;
+}
+
+export async function fetchAllInstruments(): Promise<{
+  indices: TseIndex[];
+  stocks: TseSymbol[];
+  etfs: TseSymbol[];
+  bonds: TseSymbol[];
+  futures: TseSymbol[];
+  salaf: TseSymbol[];
+  mortgage: TseSymbol[];
+  industries: string[];
+}> {
+  // Fetch type 1 (stocks + ETFs)
+  const type1 = await fetchAllSymbols(INSTRUMENT_TYPES.STOCK);
+  const stocks = type1.filter((s) => s.cs !== ETF_CATEGORY);
+  const etfs = type1.filter((s) => s.cs === ETF_CATEGORY);
+
+  // Get unique industry names from stocks
+  const industrySet = new Set<string>();
+  stocks.forEach((s) => { if (s.cs) industrySet.add(s.cs); });
+  const industries = Array.from(industrySet).sort();
+
+  // Fetch other types in parallel
+  const [bonds, futures, salaf, mortgage, indices] = await Promise.all([
+    fetchAllSymbols(INSTRUMENT_TYPES.BOND).catch(() => [] as TseSymbol[]),
+    fetchAllSymbols(INSTRUMENT_TYPES.FUTURE).catch(() => [] as TseSymbol[]),
+    fetchAllSymbols(INSTRUMENT_TYPES.SALAF).catch(() => [] as TseSymbol[]),
+    fetchAllSymbols(INSTRUMENT_TYPES.MORTGAGE).catch(() => [] as TseSymbol[]),
+    fetchIndices().catch(() => [] as TseIndex[]),
+  ]);
+
+  return { indices, stocks, etfs, bonds, futures, salaf, mortgage, industries };
 }
 
 export async function fetchSymbolData(symbol: string): Promise<Record<string, unknown>> {

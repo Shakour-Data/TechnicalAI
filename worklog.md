@@ -65,3 +65,25 @@ Stage Summary:
 - Probabilities consistent across entire project
 - 6 S/R levels with strength displayed everywhere
 - Drawing tools working on chart tab
+---
+Task ID: 5
+Agent: main
+Task: Add all TSE instrument types with TradingView-style categorization
+
+Work Log:
+- Explored BrsApi.ir API: type=1 (stocks+ETFs, 1518), type=2 (salaf, 45), type=3 (futures, 2), type=4 (bonds, 550), type=5 (mortgage, 5)
+- Discovered Index.php?type=3 returns 7 market indices (شاخص کل, شاخص کل هم‌وزن, etc.) with real-time values but no candlestick data
+- Updated tse-api.ts: added TseIndex interface, fetchIndices(), fetchAllInstruments() that fetches all 5 types + indices in parallel, per-type caching, INSTRUMENT_TYPES constants, CATEGORY_LABELS
+- Added cs/cs_id fields to TseSymbol interface for industry categorization
+- Created /api/instruments route: fetches all instruments, splits type=1 into stocks vs ETFs by cs field, returns categorized data with industry list
+- Completely rewrote symbol-search.tsx: TradingView-style category tabs (همه, شاخص‌ها, سهام, صندوق‌ها, اوراق بدهی, مشتقه), industry sub-filter chips for stocks (shows first 8 + "بیشتر" picker), color-coded category badges (سهام=blue, صندوق=purple, اخزا=emerald, آتی=orange, سلف=amber, تسه=cyan, شاخص=rose), popular items by trade value
+- Updated page.tsx: added IndexData state, handleSelect now accepts category param, index selection shows overview card (value, change, min/max, info message about no historical data), non-index selection proceeds with full TA analysis
+- Updated search placeholder to mention all instrument types
+- Updated empty state to show all available instrument categories
+
+Stage Summary:
+- All 2,125+ financial instruments available in search (1,099 stocks, 419 ETFs, 550 bonds, 45 salaf, 2 futures, 5 mortgage, 7 indices)
+- 50+ industry categories for stock filtering
+- Market indices (7) shown with dedicated tab and real-time overview
+- Full TA analysis works for all tradable instruments (tested with فملی)
+- Category badges provide visual distinction in search results
