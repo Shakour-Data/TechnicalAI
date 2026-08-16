@@ -119,4 +119,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Hide lightweight-charts watermark */
+  a[href*="tradingview.com"] {
+    display: none !important;
+  }
+}
+
+/* Hide lightweight-charts watermark (outside layer for higher priority) */
+a[href*="tradingview.com"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
 }

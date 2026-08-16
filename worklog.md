@@ -102,3 +102,25 @@ Stage Summary:
 - MA21, MA100, S/R levels, and price targets pre-drawn on chart
 - All indicator values used in analysis (RSI, MFI, CCI, Stochastic, MACD, ADX, DI, SAR, BB)
 - Lint passes clean, no console errors
+---
+Task ID: 1
+Agent: main
+Task: Fix VDes TradingView chart (ERR_TIMED_OUT) and expand analysis text
+
+Work Log:
+- Identified that https://s3.tradingview.com/tv.js cannot load in sandbox (ERR_TIMED_OUT)
+- Rewrote /src/components/tse/tradingview-chart.tsx to use lightweight-charts instead of TradingView widget
+- Chart now renders: candlestick + volume + MA21 line series + MA100 line series + support/resistance price lines (rounded) + scenario price targets (rounded)
+- Added 2 new analysis paragraphs to VDes: "تحلیل حجم معاملات و شاخص OBV" and "تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده"
+- Added obv and atr props to VdesAnalysisProps and passed from page.tsx
+- Updated chart section title and legend (removed TradingView tools reference, added price targets legend)
+- Hidden lightweight-charts "Charting by TradingView" watermark via global CSS
+- Verified: no console errors, lint passes, chart renders with 5.3% non-background pixel content
+
+Stage Summary:
+- tradingview-chart.tsx: Complete rewrite from TradingView widget to lightweight-charts with MA21/MA100 line series, S/R price lines, scenario targets
+- vdes-analysis.tsx: Added 2 new paragraphs (OBV/ATR volume analysis + Risk/Reward confluence), added atr/obv props
+- page.tsx: Added atr and obv prop passing to VdesAnalysis
+- globals.css: Added CSS to hide TradingView watermark
+- All verified working via Agent Browser with no errors
+

@@ -37,6 +37,8 @@ export interface VdesAnalysisProps {
   diPlus: number;
   diMinus: number;
   sar: number;
+  atr: number;
+  obv: number;
   bollingerUpper: number;
   bollingerMiddle: number;
   bollingerLower: number;
@@ -85,7 +87,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const {
     symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
     rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
-    diPlus, diMinus, sar, bollingerUpper, bollingerMiddle, bollingerLower,
+    diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
   } = props;
 
@@ -209,7 +211,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         }}>
         <h2 className="text-sm font-semibold mb-3 text-gray-200 flex items-center gap-3">
           <span style={{ color: '#f8e365' }}>📊</span>
-          نمودار قیمتی سهم (۱ روزه) — به همراه سطوح کلیدی و ابزارهای تحلیل
+          نمودار قیمتی سهم (۱ روزه) — به همراه MA21، MA100، سطوح حمایت/مقاومت و اهداف قیمتی
         </h2>
         <TradingViewChart
           symbolName={symbolName}
@@ -225,7 +227,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           <span>🟢 خطوط سبز: حمایت‌ها ({supports.map(toFa).join(' ، ')})</span>
           <span>🟣 خط بنفش: MA100 ({toFa(ma100)})</span>
           <span>🔵 خط آبی: MA21 ({toFa(ma21)})</span>
-          <span>⚙️ از ابزارهای رسم سمت چپ نمودار می‌توانید استفاده کنید</span>
+          <span>🟡 خطوط زرد: اهداف قیمتی سناریوها (رند شده)</span>
         </div>
       </div>
 
@@ -318,6 +320,51 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
                 )}
               </ul>
             </div>
+
+            {/* ── PARAGRAPH 4: Volume & OBV Analysis ── */}
+            <p className="text-sm text-gray-300 leading-[1.85]">
+              <strong style={{ color: '#f8e365' }}>تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
+              شاخص جریان ورودی پول (OBV) در سطح <b className="text-gray-200">{obv > 0 ? '+' : ''}{(obv / 1e6).toFixed(1)}M</b> قرار دارد
+              {obv > 0
+                ? <span> که <b className="text-emerald-400">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است. افزایش OBV همزمان با رشد قیمت، تأییدکننده قدرت خریداران واقعی در بازار می‌باشد.</span>
+                : <span> که <b className="text-red-400">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد. کاهش OBV در کنار قیمت ثابت یا صعودی، هشدار واگرایی منفی محسوب می‌شود.</span>
+              }
+              {' '}اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
+              {atr > currentPrice * 0.03
+                ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-400">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
+                : <span> نوسان معقول که نشان‌دهنده <b className="text-gray-400">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
+              }
+            </p>
+
+            {/* ── PARAGRAPH 5: Risk/Reward & Confluence ── */}
+            <p className="text-sm text-gray-300 leading-[1.85]">
+              <strong style={{ color: '#f8e365' }}>تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+              با بررسی همزمان تمام اندیکاتورها، می‌توان نتیجه‌گیری کرد که
+              {overallSignal === 'bullish'
+                ? <span> اکثر شاخص‌ها <b className="text-emerald-400">الگوی صعودی</b> را تأیید می‌کنند. نسبت ریسک به بازده (Risk/Reward) با در نظر گرفتن حد ضرر در حمایت {toFa(S1_level)} و هدف اول {toFa(R1_level)} ریال، حدود <b className="text-emerald-400">{((R1_level - currentPrice) / (currentPrice - S1_level)).toFixed(1)}:1</b> محاسبه می‌شود که{' '}
+                {((R1_level - currentPrice) / (currentPrice - S1_level)) > 2
+                  ? <span className="text-emerald-400">نسبت بسیار مطلوبی</span>
+                  : ((R1_level - currentPrice) / (currentPrice - S1_level)) > 1
+                  ? <span className="text-amber-400">نسبت قابل قبولی</span>
+                  : <span className="text-red-400">نسبت نامطلوبی</span>
+                }{' '}برای ورود به معامله محسوب می‌شود.</span>
+                : overallSignal === 'bearish'
+                ? <span> اکثر شاخص‌ها <b className="text-red-400">الگوی نزولی</b> را نشان می‌دهند و ورود به معامله خرید در این شرایط <b className="text-red-400">ریسک بالایی</b> دارد. توصیه می‌شود تا بازگشت قیمت به محدوده حمایت {toFa(S1_level)} ریال و تشکیل سیگنال بازگشتی، از ورود خودداری شود.</span>
+                : <span> سیگنال‌ها <b className="text-amber-400">تضاد</b> دارند و بازار در فاز تردید قرار دارد. در این شرایط، بهترین استراتژی <b className="text-amber-400">انتظار و مشاهده</b> است تا قیمت از محدوده {toFa(S1_level)} تا {toFa(R1_level)} ریال خارج شده و جهت مشخص شود.</span>
+              }
+              {' '}تلاقی MA21 و MA100{' '}
+              {Math.abs(ma21 - ma100) / currentPrice < 0.01
+                ? <span className="text-amber-400">بسیار نزدیک به هم</span>
+                : ma21 > ma100
+                ? <span className="text-emerald-400">به نفع صعودی (MA21 بالاتر از MA100)</span>
+                : <span className="text-red-400">به نفع نزولی (MA21 پایین‌تر از MA100)</span>
+              }
+              {' '}است که {' '}
+              {Math.abs(ma21 - ma100) / currentPrice < 0.01
+                ? 'می‌تواند نشانه تقاطع طلایی یا مرگ در آینده نزدیک باشد و باید با دقت پایش شود.'
+                : trendDirection === 'up' ? 'تأییدکننده قدرت روند صعودی می‌باشد.' : 'هشدار تداوم فشار نزولی را صادر می‌کند.'
+              }
+            </p>
 
             {/* ── Scenario Analysis ── */}
             <p className="text-sm text-gray-300 leading-[1.85]">

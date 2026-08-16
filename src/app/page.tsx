@@ -244,6 +244,8 @@ export default function Home() {
                   diPlus={data.ta.diPlus}
                   diMinus={data.ta.diMinus}
                   sar={data.ta.sar}
+                  atr={data.ta.atr}
+                  obv={data.ta.obv}
                   bollingerUpper={data.ta.bollingerBands.upper}
                   bollingerMiddle={data.ta.bollingerBands.middle}
                   bollingerLower={data.ta.bollingerBands.lower}
