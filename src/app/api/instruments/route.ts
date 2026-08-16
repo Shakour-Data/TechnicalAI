@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchAllInstruments } from '@/lib/tse-api';
+import { fetchAllInstruments, fetchTsetmcInstruments } from '@/lib/tse-api';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -14,6 +14,7 @@ interface InstrumentItem {
   tval: number;
   cs: string;
   category: string;
+  insCode?: string;
   index?: number;
   indexChange?: number;
   indexChangePercent?: number;
@@ -40,6 +41,9 @@ export async function GET() {
       category,
     });
 
+    // Try to fetch TSETMC indices (111+ industry indices) — non-blocking, 2s timeout
+    const tsetmcIndicesPromise = fetchTsetmcInstruments();
+
     const stocks = data.stocks.map((s) => toItem(s, 'stock'));
     const etfs = data.etfs.map((s) => toItem(s, 'etf'));
     const bonds = data.bonds.map((s) => toItem(s, 'bond'));
@@ -47,22 +51,60 @@ export async function GET() {
     const salaf = data.salaf.map((s) => toItem(s, 'salaf'));
     const mortgage = data.mortgage.map((s) => toItem(s, 'mortgage'));
 
-    const indices: InstrumentItem[] = data.indices.map((idx) => ({
-      l18: idx.name,
-      l30: '',
-      pl: idx.index,
-      pcp: idx.index_change_percent,
-      tno: 0,
-      tvol: 0,
-      tval: 0,
-      cs: '',
-      category: 'index',
-      index: idx.index,
-      indexChange: idx.index_change,
-      indexChangePercent: idx.index_change_percent,
-      indexMin: idx.min,
-      indexMax: idx.max,
-    }));
+    // Get TSETMC indices (may have already resolved in parallel)
+    const tsetmcIndices = await tsetmcIndicesPromise;
+
+    let indices: InstrumentItem[];
+
+    if (tsetmcIndices && tsetmcIndices.length > 0) {
+      // Use TSETMC indices — they include industry indices with insCode for historical data
+      indices = tsetmcIndices.map((idx) => ({
+        l18: idx.symbol,
+        l30: idx.name,
+        pl: 0, // No real-time price from TSETMC instruments list
+        pcp: 0,
+        tno: 0,
+        tvol: 0,
+        tval: 0,
+        cs: idx.group || '',
+        category: 'index',
+        insCode: idx.insCode,
+      }));
+
+      // Merge real-time values from BrsApi indices where names match
+      for (const brsIdx of data.indices) {
+        const match = indices.find(
+          (t) => t.l18 === brsIdx.name || t.l30 === brsIdx.name,
+        );
+        if (match) {
+          match.pl = brsIdx.index;
+          match.pcp = brsIdx.index_change_percent;
+          match.index = brsIdx.index;
+          match.indexChange = brsIdx.index_change;
+          match.indexChangePercent = brsIdx.index_change_percent;
+          match.indexMin = brsIdx.min;
+          match.indexMax = brsIdx.max;
+        }
+      }
+    } else {
+      // Fallback to BrsApi 7 indices (no insCode = no historical TA)
+      indices = data.indices.map((idx) => ({
+        l18: idx.name,
+        l30: '',
+        pl: idx.index,
+        pcp: idx.index_change_percent,
+        tno: 0,
+        tvol: 0,
+        tval: 0,
+        cs: '',
+        category: 'index',
+        index: idx.index,
+        indexChange: idx.index_change,
+        indexChangePercent: idx.index_change_percent,
+        indexMin: idx.min,
+        indexMax: idx.max,
+      }));
+    }
 
     return NextResponse.json({
       indices,

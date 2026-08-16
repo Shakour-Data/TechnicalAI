@@ -52,21 +52,36 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('chart');
 
-  const handleSelect = useCallback(async (symbol: string, category?: string) => {
-    // Index: show real-time data only
+  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string) => {
+    // Index: try TSETMC TA first, fall back to static overview
     if (category === 'index') {
       setLoading(true);
       setError(null);
       setData(null);
       setIndexData(null);
       try {
+        // Try fetching TA analysis via TSETMC if insCode is available
+        if (insCode) {
+          const analysisRes = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}&indexInsCode=${encodeURIComponent(insCode)}`);
+          if (analysisRes.ok) {
+            const analysisJson = await analysisRes.json();
+            if (analysisJson.candles && analysisJson.candles.length > 0 && analysisJson.ta) {
+              setData(analysisJson);
+              setActiveTab('chart');
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Fallback: show static index overview (no historical data)
         const r = await fetch('/api/instruments');
         if (r.ok) {
           const d = await r.json();
           const found = (d.indices || []).find((i: { l18: string }) => i.l18 === symbol);
           if (found) {
             setIndexData({
-              name: found.l18,
+              name: found.l30 || found.l18,
               index: found.pl,
               change: found.indexChange || 0,
               changePercent: found.indexChangePercent || 0,

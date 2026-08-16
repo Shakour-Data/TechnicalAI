@@ -21,6 +21,7 @@ interface InstrumentItem {
   tval: number;
   cs: string;
   category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index';
+  insCode?: string;
   index?: number;
   indexChange?: number;
   indexChangePercent?: number;
@@ -40,7 +41,7 @@ interface InstrumentsData {
 }
 
 interface SymbolSearchProps {
-  onSelect?: (symbol: string, category?: string) => void;
+  onSelect?: (symbol: string, category?: string, insCode?: string) => void;
   placeholder?: string;
   className?: string;
 }
@@ -279,7 +280,7 @@ export default function SymbolSearch({
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18);
     setOpen(false);
-    onSelect?.(s.l18, s.category);
+    onSelect?.(s.l18, s.category, s.insCode);
     inputRef.current?.blur();
   }, [onSelect]);
 

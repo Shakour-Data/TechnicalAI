@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchCandlestick, fetchSymbolData, type CandleData } from '@/lib/tse-api';
+import { fetchCandlestick, fetchSymbolData, fetchTsetmcIndexHistory, type CandleData } from '@/lib/tse-api';
 import { analyze, type OHLCV } from '@/lib/ta-engine';
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,65 @@ export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol');
   if (!symbol) return NextResponse.json({ error: 'symbol is required' }, { status: 400 });
 
+  const indexInsCode = req.nextUrl.searchParams.get('indexInsCode');
+
   try {
+    // If indexInsCode is provided, fetch from TSETMC instead of BrsApi
+    if (indexInsCode) {
+      const tsetmcCandles = await fetchTsetmcIndexHistory(indexInsCode);
+
+      if (tsetmcCandles && tsetmcCandles.length > 0) {
+        // Build index name from symbol (the Persian name passed as symbol param)
+        const indexName = symbol;
+
+        const ohlcv: OHLCV[] = tsetmcCandles.map((c) => ({
+          date: c.date,
+          open: Number(c.open) || 0,
+          high: Number(c.high) || 0,
+          low: Number(c.low) || 0,
+          close: Number(c.close) || 0,
+          volume: Number(c.volume) || 0,
+        }));
+
+        const ta = analyze(ohlcv);
+
+        const lastCandle = tsetmcCandles[tsetmcCandles.length - 1];
+        const prevCandle = tsetmcCandles.length > 1 ? tsetmcCandles[tsetmcCandles.length - 2] : lastCandle;
+
+        return NextResponse.json({
+          symbol,
+          candles: tsetmcCandles,
+          info: {
+            name: indexName,
+            symbol: indexName,
+            lastPrice: lastCandle?.close ?? 0,
+            change: prevCandle ? ((lastCandle.close - prevCandle.close) / prevCandle.close) * 100 : 0,
+            closePrice: lastCandle?.close ?? 0,
+            closeChange: prevCandle ? lastCandle.close - prevCandle.close : 0,
+            openPrice: lastCandle?.open ?? 0,
+            minPrice: lastCandle?.low ?? 0,
+            maxPrice: lastCandle?.high ?? 0,
+            yesterdayClose: prevCandle?.close ?? 0,
+            volume: lastCandle?.volume ?? 0,
+            value: 0,
+            trades: 0,
+            eps: 0,
+            pe: 0,
+          },
+          ta,
+        });
+      }
+
+      // TSETMC returned no candles — signal to caller
+      return NextResponse.json({
+        symbol,
+        candles: [],
+        info: null,
+        ta: null,
+      });
+    }
+
+    // Regular instrument: use BrsApi
     const [candles, symbolInfo] = await Promise.all([
       fetchCandlestick(symbol, 3), // adjusted daily
       fetchSymbolData(symbol).catch(() => null),

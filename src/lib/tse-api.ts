@@ -1,3 +1,5 @@
+import { deflateRawSync, inflateSync } from 'node:zlib';
+
 const API_KEY = "BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3";
 const BASE_URL = "https://Api.BrsApi.ir/Tsetmc";
 
@@ -197,4 +199,192 @@ export async function fetchHistory(symbol: string): Promise<HistoryData[]> {
   const data = await res.json();
   if (Array.isArray(data)) return data;
   return data.data || data.history || [];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TSETMC SOAP API Integration
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TSETMC_SOAP_URL = 'http://service.tsetmc.com/WebService/TseClient.asmx';
+const TSETMC_TIMEOUT = 2000;
+
+export interface TsetmcInstrument {
+  insCode: string;
+  instrumentId: string;
+  latinSymbol: string;
+  symbol: string;
+  name: string;
+  group: string;
+}
+
+export interface TsetmcIndexCandle {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/**
+ * Helper: convert DEven (Jalali date like 14040115) to formatted string "1404/01/15"
+ */
+function devenToDate(deven: string): string {
+  const s = deven.trim();
+  if (s.length < 8) return s;
+  return `${s.slice(0, 4)}/${s.slice(4, 6)}/${s.slice(6, 8)}`;
+}
+
+/**
+ * Helper: compress data string for TSETMC SOAP API (zlib + 4-byte LE length prefix)
+ */
+function compressForTsetmc(data: string): string {
+  const buf = Buffer.from(data, 'ascii');
+  const len = Buffer.alloc(4);
+  len.writeUInt32LE(buf.length);
+  const compressed = deflateRawSync(buf);
+  // Wrap in zlib format manually: 78 9c = zlib default compression header
+  const wrapper = Buffer.alloc(2 + compressed.length);
+  wrapper[0] = 0x78;
+  wrapper[1] = 0x9c;
+  compressed.copy(wrapper, 2);
+  return Buffer.concat([len, wrapper]).toString('base64');
+}
+
+/**
+ * Extract text content from <Result> tag in SOAP XML response
+ */
+function extractSoapResult(xml: string): string | null {
+  const match = /<Result[^>]*>([^<]+)<\/Result>/i.exec(xml);
+  return match ? match[1] : null;
+}
+
+/**
+ * Fetch all instruments from TSETMC SOAP API, filter for indices (type="I")
+ * Returns null on timeout/error (graceful fallback)
+ */
+export async function fetchTsetmcInstruments(): Promise<TsetmcInstrument[] | null> {
+  try {
+    const soapBody = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Instrument xmlns="http://tsetmc.com/"><DEven>0</DEven></Instrument></soap:Body></soap:Envelope>`;
+
+    const res = await fetch(TSETMC_SOAP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://tsetmc.com/Instrument',
+      },
+      body: soapBody,
+      signal: AbortSignal.timeout(TSETMC_TIMEOUT),
+    });
+
+    if (!res.ok) return null;
+
+    const xml = await res.text();
+    const result = extractSoapResult(xml);
+    if (!result) return null;
+
+    const lines = result.split(';').filter((l) => l.trim().length > 0);
+    const indices: TsetmcInstrument[] = [];
+
+    for (const line of lines) {
+      const fields = line.split(',');
+      // type field is index 19, market is index 20
+      const type = fields[19]?.trim();
+      if (type !== 'I') continue; // Only indices
+
+      const insCode = fields[0]?.trim();
+      const instrumentId = fields[1]?.trim();
+      const latinSymbol = fields[2]?.trim();
+      const symbol = fields[5]?.trim();
+      const name = fields[6]?.trim();
+      const group = fields[18]?.trim();
+
+      if (insCode && symbol) {
+        indices.push({ insCode, instrumentId, latinSymbol, symbol, name, group });
+      }
+    }
+
+    return indices;
+  } catch {
+    // Timeout, network error, parse error — graceful fallback
+    return null;
+  }
+}
+
+/**
+ * Fetch historical OHLC data for an index from TSETMC SOAP API
+ * Returns empty array on timeout/error
+ */
+export async function fetchTsetmcIndexHistory(insCode: string): Promise<TsetmcIndexCandle[]> {
+  try {
+    const input = `${insCode},0,1`;
+    const compressed = compressForTsetmc(input);
+
+    const soapBody = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><DecompressAndGetInsturmentClosingPrice xmlns="http://tsetmc.com/"><insCodes>${compressed}</insCodes></DecompressAndGetInsturmentClosingPrice></soap:Body></soap:Envelope>`;
+
+    const res = await fetch(TSETMC_SOAP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://tsetmc.com/DecompressAndGetInsturmentClosingPrice',
+      },
+      body: soapBody,
+      signal: AbortSignal.timeout(TSETMC_TIMEOUT),
+    });
+
+    if (!res.ok) return [];
+
+    const xml = await res.text();
+    const result = extractSoapResult(xml);
+    if (!result) return [];
+
+    // The result may be base64 encoded (compressed response)
+    let decoded = result;
+    // If it looks base64, try to decode
+    if (result.length > 100 && /^[A-Za-z0-9+/=]+$/.test(result)) {
+      try {
+        decoded = inflateSync(Buffer.from(result, 'base64')).toString('utf-8');
+      } catch {
+        // If decompression fails, use raw result
+      }
+    }
+
+    const entries = decoded.split(';').filter((e) => e.trim().length > 0);
+    if (entries.length === 0) return [];
+
+    const candles: TsetmcIndexCandle[] = [];
+
+    for (const entry of entries) {
+      const fields = entry.split(',');
+      if (fields.length < 12) continue;
+
+      const dEven = fields[1]?.trim();
+      const pClosing = Number(fields[2]);
+      const priceMax = Number(fields[8]);
+      const priceMin = Number(fields[9]);
+      const priceFirst = Number(fields[10]);
+      const qTotTran5J = Number(fields[11]);
+
+      if (!dEven || pClosing <= 0) continue;
+
+      candles.push({
+        date: devenToDate(dEven),
+        open: priceFirst || pClosing,
+        high: priceMax || pClosing,
+        low: priceMin || pClosing,
+        close: pClosing,
+        volume: qTotTran5J || 0,
+      });
+    }
+
+    // TSETMC returns newest first — reverse to chronological
+    candles.reverse();
+
+    return candles;
+  } catch {
+    // Timeout, network error, parse error — graceful fallback
+    return [];
+  }
 }
