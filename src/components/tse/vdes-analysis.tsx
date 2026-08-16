@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import TradingViewChart, { TradingViewChartSkeleton, type CandleData } from '@/components/tse/tradingview-chart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -18,17 +19,31 @@ interface Scenario {
 
 export interface VdesAnalysisProps {
   symbolName: string;
+  candles: CandleData[];
   currentPrice: number;
   resistances: number[];
   supports: number[];
+  ma21: number;
   ma100: number;
   rsi: number;
   mfi: number;
   cci: number;
   adx: number;
+  stochK: number;
+  stochD: number;
+  macdLine: number;
+  macdSignal: number;
+  macdHist: number;
+  diPlus: number;
+  diMinus: number;
+  sar: number;
+  bollingerUpper: number;
+  bollingerMiddle: number;
+  bollingerLower: number;
   trendDirection: string;
   trendAngle: number;
   trendR2: number;
+  overallSignal: string;
   scenarios: {
     R1: Scenario;
     R2: Scenario;
@@ -68,8 +83,10 @@ const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
 
 export default function VdesAnalysis(props: VdesAnalysisProps) {
   const {
-    symbolName, currentPrice, resistances, supports, ma100,
-    rsi, mfi, cci, adx, trendDirection, trendAngle, trendR2, scenarios,
+    symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
+    rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
+    diPlus, diMinus, sar, bollingerUpper, bollingerMiddle, bollingerLower,
+    trendDirection, trendAngle, trendR2, overallSignal, scenarios,
   } = props;
 
   const R1_level = resistances[0] ?? currentPrice * 1.05;
@@ -81,7 +98,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const targetMin = Math.round(R1_level + (R2_level - R1_level) * 0.5);
   const targetMax = Math.round(R2_level + (R2_level - R1_level) * 0.8);
 
-  // Find dominant scenario
+  // ── Dominant scenario ──────────────────────────────────────────
   let highestKey = 'R3';
   let highestProb = 0;
   for (const key of SCENARIO_KEYS) {
@@ -93,27 +110,67 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const strategy = STRATEGY_MAP[highestKey];
   const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + scenarios[k].probability, 0);
 
-  // RSI signal
+  // ── RSI signal ─────────────────────────────────────────────────
   const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
   const rsiColor = rsi > 70 ? 'text-red-400' : rsi > 60 ? 'text-amber-400' : rsi > 40 ? 'text-gray-300' : rsi > 30 ? 'text-amber-400' : 'text-emerald-400';
 
-  // Trend text
+  // ── Stochastic signal ──────────────────────────────────────────
+  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+
+  // ── MACD signal ────────────────────────────────────────────────
+  const macdSignalText = macdHist > 0 ? 'مومنتوم مثبت (هیستوگرام بالای صفر)' : 'مومنتوم منفی (هیستوگرام زیر صفر)';
+  const macdBullish = macdLine > macdSignal;
+
+  // ── Trend text ─────────────────────────────────────────────────
   const trendText = trendDirection === 'up'
     ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
     : trendDirection === 'down'
     ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
     : 'خنثی و بدون جهت مشخص';
 
-  // Strategy recommendation text
+  // ── DI signal ──────────────────────────────────────────────────
+  const diSignal = diPlus > diMinus
+    ? `DI+ (${toFa(diPlus)}) بالاتر از DI- (${toFa(diMinus)}) — فشار خرید غالب`
+    : `DI- (${toFa(diMinus)}) بالاتر از DI+ (${toFa(diPlus)}) — فشار فروش غالب`;
+
+  // ── SAR signal ─────────────────────────────────────────────────
+  const sarSignal = sar < currentPrice
+    ? `SAR (${toFa(sar)}) زیر قیمت — تأیید روند صعودی`
+    : `SAR (${toFa(sar)}) بالای قیمت — تأیید روند نزولی`;
+
+  // ── Bollinger Band position ────────────────────────────────────
+  const bbRange = bollingerUpper - bollingerLower;
+  const bbPos = bbRange > 0 ? ((currentPrice - bollingerLower) / bbRange * 100).toFixed(0) : '50';
+  const bbSignal = currentPrice > bollingerUpper ? 'بالای باند بالایی (اشباع خرید)'
+    : currentPrice < bollingerLower ? 'زیر باند پایینی (اشباع فروش)'
+    : `داخل باندها (${bbPos}٪ از بازه)`;
+
+  // ── TradingView scenario colors ────────────────────────────────
+  const tvScenarios = useMemo(() => {
+    const colors: Record<string, string> = {
+      R1: '#34c98b', R2: '#3ad5db', R3: '#ff7b32', R4: '#ffb11b', R5: '#ef4d62',
+    };
+    return Object.fromEntries(
+      SCENARIO_KEYS.map(k => [k, {
+        targetMin: scenarios[k].targetMin,
+        targetMax: scenarios[k].targetMax,
+        name: scenarios[k].name,
+        probability: scenarios[k].probability,
+        color: colors[k],
+      }])
+    );
+  }, [scenarios]);
+
+  // ── Strategy recommendation text ────────────────────────────────
   const strategyText = rsi > 70 || mfi > 80
-    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد.`
+    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
     : rsi < 30 || mfi < 20
-    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و فاصله قیمت از حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است.`
-    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}, ADX: ${toFa(adx)})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود.`;
+    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
+    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. حجم معاملات و مومنتوم MACD را برای تأیید سیگنال پایش کنید.`;
 
   return (
     <div className="space-y-5" dir="rtl">
-      {/* ── Header ── */}
+      {/* ═══ HEADER ═══ */}
       <div className="rounded-[32px] px-6 py-5 border border-amber-500/20"
         style={{
           background: 'rgba(18,28,46,0.7)',
@@ -143,7 +200,36 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         </div>
       </div>
 
-      {/* ── Dual Analysis Layout ── */}
+      {/* ═══ TRADINGVIEW CHART ═══ */}
+      <div className="rounded-[28px] p-4 border border-white/6"
+        style={{
+          background: 'rgba(14,22,40,0.7)',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 20px 40px -12px rgba(0,0,0,0.5)',
+        }}>
+        <h2 className="text-sm font-semibold mb-3 text-gray-200 flex items-center gap-3">
+          <span style={{ color: '#f8e365' }}>📊</span>
+          نمودار قیمتی سهم (۱ روزه) — به همراه سطوح کلیدی و ابزارهای تحلیل
+        </h2>
+        <TradingViewChart
+          symbolName={symbolName}
+          candles={candles}
+          supports={supports}
+          resistances={resistances}
+          ma21={ma21}
+          ma100={ma100}
+          scenarios={tvScenarios}
+        />
+        <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-gray-500">
+          <span>🔴 خطوط قرمز: مقاومت‌ها ({resistances.map(toFa).join(' ، ')})</span>
+          <span>🟢 خطوط سبز: حمایت‌ها ({supports.map(toFa).join(' ، ')})</span>
+          <span>🟣 خط بنفش: MA100 ({toFa(ma100)})</span>
+          <span>🔵 خط آبی: MA21 ({toFa(ma21)})</span>
+          <span>⚙️ از ابزارهای رسم سمت چپ نمودار می‌توانید استفاده کنید</span>
+        </div>
+      </div>
+
+      {/* ═══ DUAL ANALYSIS LAYOUT ═══ */}
       <div className="rounded-[28px] p-5 border border-white/6"
         style={{
           background: 'rgba(14,22,40,0.7)',
@@ -151,60 +237,105 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           boxShadow: '0 20px 40px -12px rgba(0,0,0,0.5)',
         }}>
         <h2 className="text-sm font-semibold mb-4 text-gray-200 flex items-center gap-3">
-          <span className="text-amber-400">🧠</span>
+          <span style={{ color: '#f8e365' }}>🧠</span>
           تحلیل جامع روند و سطوح کلیدی
         </h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* ── Text Analysis (Right in RTL) ── */}
-          <div className="rounded-2xl p-4 border border-white/4 space-y-3 flex flex-col"
+          <div className="rounded-2xl p-4 border border-white/4 space-y-4 flex flex-col"
             style={{ background: 'rgba(8,20,35,0.5)' }}>
 
-            {/* Trend Description */}
-            <p className="text-sm text-gray-300 leading-relaxed">
+            {/* ── PARAGRAPH 1: General Trend & Price Position ── */}
+            <p className="text-sm text-gray-300 leading-[1.85]">
               <strong style={{ color: '#f8e365' }}>روند کلی و موقعیت قیمت:</strong>{' '}
-              سهم {symbolName} در یک روند {trendDirection === 'up' ? 'صعودی قدرتمند' : trendDirection === 'down' ? 'نزولی' : 'خنثی'} قرار دارد. قیمت با عبور از میانگین‌های متحرک، در حال حاضر در محدوده{' '}
-              <b className="text-gray-100">{toFa(currentPrice)} ریال</b> معامله می‌شود.
-              اندیکاتور RSI (<b className={rsiColor}>{toFa(rsi)}</b>) و MFI (<b className={rsiColor}>{toFa(mfi)}</b>)
-              {rsi > 70 ? ' هشدار اشباع خرید را صادر می‌کنند.' : rsi < 30 ? ' هشدار اشباع فروش را صادر می‌کنند.' : ' در محدوده عادی قرار دارند.'}
+              سهم {symbolName} در حال حاضر در محدوده{' '}
+              <b className="text-gray-100">{toFa(currentPrice)} ریال</b> معامله می‌شود و روند میان‌مدت{' '}
+              <b className={trendDirection === 'up' ? 'text-emerald-400' : trendDirection === 'down' ? 'text-red-400' : 'text-amber-400'}>{trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی'}</b>
+              {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={+(trendR2 * 100).toFixed(1)}%).
+              قیمت نسبت به MA21 ({toFa(ma21)} ریال){' '}
+              {currentPrice > ma21 ? <span className="text-emerald-400">بالاتر</span> : <span className="text-red-400">پایین‌تر</span>}
+              {' '}و نسبت به MA100 ({toFa(ma100)} ریال){' '}
+              {currentPrice > ma100 ? <span className="text-emerald-400">بالاتر</span> : <span className="text-red-400">پایین‌تر</span>}
+              {' '}قرار دارد. اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
+              {sar < currentPrice ? <span>زیر قیمت قرار دارد که <b className="text-emerald-400">تأیید روند صعودی</b> است.</span> : <span>بالای قیمت قرار دارد که <b className="text-red-400">تأیید روند نزولی</b> است.</span>}
+              {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده {' '}
+              {adx > 40 ? <b className="text-emerald-400">روند قدرتمند</b> : adx > 25 ? <b className="text-amber-400">روند متوسط</b> : <b className="text-gray-500">روند ضعیف یا رنج</b>}
+              {' '}می‌باشد. {' '}{diSignal}.
             </p>
 
-            {/* Key Levels */}
+            {/* ── PARAGRAPH 2: Oscillator & Momentum Analysis ── */}
+            <p className="text-sm text-gray-300 leading-[1.85]">
+              <strong style={{ color: '#f8e365' }}>تحلیل اسیلاتورها و مومنتوم:</strong>{' '}
+              اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
+              <b className={rsiColor}>{rsiSignal}</b> قرار دارد.
+              اندیکاتور MFI ({toFa(mfi)}) نیز{' '}
+              {mfi > 80 ? <span className="text-red-400">اشباع خرید را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-400">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}
+              . اندیکاتور CCI ({toFa(cci)}){' '}
+              {cci > 100 ? <span className="text-red-400">بالاتر از +100 (قدرت خریداری قوی)</span> : cci < -100 ? <span className="text-emerald-400">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}
+              . استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت{' '}
+              <b className={stochK > 80 ? 'text-red-400' : stochK < 20 ? 'text-emerald-400' : 'text-gray-300'}>{stochSignal}</b> را نشان می‌دهد.
+              {' '}MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با {macdBullish ? <span className="text-emerald-400">عبور خط اصلی بالای خط سیگنال — سیگنال صعودی</span> : <span className="text-red-400">خط اصلی زیر خط سیگنال — سیگنال نزولی</span>}
+              . هیستوگرام MACD ({toFa(macdHist)}) {' '}
+              {macdHist > 0 ? <span className="text-emerald-400">مثبت</span> : <span className="text-red-400">منفی</span>}
+              {' '}و {' '}{macdSignalText}.
+            </p>
+
+            {/* ── PARAGRAPH 3: Bollinger Bands & Volatility ── */}
+            <p className="text-sm text-gray-300 leading-[1.85]">
+              <strong style={{ color: '#f8e365' }}>تحلیل نوسانات و باند بولینگر:</strong>{' '}
+              قیمت در باند بولینگر{' '}
+              <b className="text-gray-200">{bbSignal}</b>
+              {' '}قرار دارد. باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} ریال.
+              {currentPrice > bollingerUpper
+                ? ' عبور از باند بالایی معمولاً نشان‌دهنده ادامه حرکت صعودی کوتاه‌مدت یا واکنش به باند است.'
+                : currentPrice < bollingerLower
+                ? ' نزدیکی یا عبور از باند پایینی می‌تواند نشانه بازگشت قیمت به سمت باند میانی باشد.'
+                : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
+            </p>
+
+            {/* ── Key Levels ── */}
             <div className="rounded-xl px-4 py-3 border-r-4 border-red-400/70" style={{ background: 'rgba(248,227,101,0.06)' }}>
-              <strong className="text-red-400 text-sm">🔴 سطوح کلیدی پیش رو:</strong>
-              <ul className="mt-2 space-y-1.5 text-xs text-gray-300 leading-relaxed list-disc list-inside">
+              <strong className="text-red-400 text-sm">🔴 سطوح کلیدی پیش رو (رند شده):</strong>
+              <ul className="mt-2 space-y-1.5 text-xs text-gray-300 leading-[1.85] list-disc list-inside">
                 <li>
                   <b>مقاومت {toFa(R1_level)} ریال (R1):</b> نخستین سد پیش روی سهم. عبور با تثبیت از این سطح، راه را برای صعود تا {toFa(R2_level)} ریال هموار می‌کند.
                 </li>
                 <li>
                   <b>مقاومت {toFa(R2_level)} ریال (R2):</b> سد بعدی در مسیر صعودی. شکست این سطح به معنای تأیید روند تا {toFa(targetMax)} ریال است.
                 </li>
+                {resistances.length > 2 && (
+                  <li><b>مقاومت‌های بعدی:</b> {resistances.slice(2).map(toFa).join(' ، ')} ریال</li>
+                )}
                 <li>
                   <b>حمایت {toFa(S1_level)} ریال (S1):</b> حمایت نخست و کلیدی. در صورت اصلاح، این سطح مرز تفکیک پولبک سالم از اصلاح عمیق‌تر است.
                 </li>
                 <li>
-                  <b>حمایت‌های بعدی:</b> در صورت شکست S1، سطوح {toFa(S2_level)} و {toFa(S3_level)} ریال فعال خواهند شد.
+                  <b>حمایت {toFa(S2_level)} ریال (S2):</b> حمایت دوم. حفظ این سطح برای جلوگیری از افت بیشتر حیاتی است.
                 </li>
+                {supports.length > 2 && (
+                  <li><b>حمایت‌های بعدی:</b> {supports.slice(2).map(toFa).join(' ، ')} ریال</li>
+                )}
               </ul>
             </div>
 
-            {/* Scenario Analysis */}
-            <p className="text-sm text-gray-300 leading-relaxed">
+            {/* ── Scenario Analysis ── */}
+            <p className="text-sm text-gray-300 leading-[1.85]">
               <strong style={{ color: '#f8e365' }}>تحلیل سناریوها و احتمال وقوع:</strong>{' '}
               بر اساس تحلیل روند و سطوح کلیدی، پنج سناریوی اصلی پیش روی سهم قابل تصور است.
-              سناریوی صعودی با احتمال <b className="text-emerald-400">{toFa(scenarios.R1.probability)}٪</b>،
+              {' '}سناریوی <b className="text-emerald-400">صعودی (R1)</b> با احتمال <b>{toFa(scenarios.R1.probability)}٪</b>،
               در صورت عبور از مقاومت {toFa(R1_level)} و تثبیت بالای آن، قیمت را به کریدور {toFa(targetMin)} تا {toFa(targetMax)} ریال هدایت می‌کند.
-              سناریوی پولبک سالم با احتمال <b className="text-cyan-400">{toFa(scenarios.R2.probability)}٪</b>،
-              بازگشت تا حمایت {toFa(S1_level)} ریال را شامل می‌شود.
-              سناریوهای اصلاح با مجموع احتمالات{' '}
-              <b className="text-red-400">{toFa(scenarios.R3.probability + scenarios.R4.probability + scenarios.R5.probability)}٪</b>،
+              {' '}سناریوی <b className="text-cyan-400">پولبک سالم (R2)</b> با احتمال <b>{toFa(scenarios.R2.probability)}٪</b>،
+              بازگشت تا حمایت {toFa(S1_level)} ریال و بازپس‌گیری مقاومت {toFa(R1_level)} را شامل می‌شود.
+              {' '}سناریوهای اصلاح با مجموع احتمالات{' '}
+              <b className="text-red-400">{toFa(scenarios.R3.probability + scenarios.R4.probability + scenarios.R5.probability)}٪</b>
               {' '}در صورت شکست حمایت {toFa(S1_level)} ریال رخ داده و قیمت را به سمت سطوح {toFa(S2_level)} و {toFa(S3_level)} ریال هدایت خواهد کرد.
             </p>
 
-            {/* Strategy */}
+            {/* ── Strategy ── */}
             <div className="rounded-xl px-4 py-3 border-r-4" style={{ background: 'rgba(255,178,95,0.06)', borderRightColor: '#ffb25f' }}>
               <strong className="text-amber-400 text-sm">🟡 استراتژی پیشنهادی:</strong>
-              <p className="text-xs text-gray-300 leading-relaxed mt-1.5">{strategyText}</p>
+              <p className="text-xs text-gray-300 leading-[1.85] mt-1.5">{strategyText}</p>
             </div>
           </div>
 
@@ -222,7 +353,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
                 return (
                   <div
                     key={key}
-                    className="rounded-xl p-3 border-r-4 relative"
+                    className="rounded-xl p-3"
                     style={{
                       background: 'rgba(255,255,255,0.03)',
                       border: '1px solid rgba(255,255,255,0.06)',
@@ -233,12 +364,17 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
                       سناریو {key} | {meta.label}
                     </div>
                     <div className="text-xs text-[#b0c4dd] leading-relaxed">{s.description}</div>
-                    <span
-                      className="inline-block mt-2 px-3.5 py-0.5 rounded-full text-lg font-black"
-                      style={{ background: meta.badgeBg, color: meta.badgeColor }}
-                    >
-                      {toFa(s.probability)}٪
-                    </span>
+                    <div className="flex items-center justify-between mt-2">
+                      <span
+                        className="inline-block px-3.5 py-0.5 rounded-full text-lg font-black"
+                        style={{ background: meta.badgeBg, color: meta.badgeColor }}
+                      >
+                        {toFa(s.probability)}٪
+                      </span>
+                      <span className="text-[10px] text-gray-500" dir="ltr">
+                        هدف: {toFa(s.targetMin)} — {toFa(s.targetMax)}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -269,7 +405,7 @@ export function VdesAnalysisSkeleton() {
   return (
     <div className="space-y-5">
       <Skeleton className="h-28 w-full bg-white/5 rounded-[32px]" />
-      <Skeleton className="h-[500px] w-full bg-white/5 rounded-[28px]" />
+      <Skeleton className="h-[650px] w-full bg-white/5 rounded-[28px]" />
     </div>
   );
 }

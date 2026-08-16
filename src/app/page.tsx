@@ -226,17 +226,31 @@ export default function Home() {
               <TabsContent value="vdes" className="mt-3">
                 <VdesAnalysis
                   symbolName={data.info?.name ?? data.symbol}
+                  candles={data.candles}
                   currentPrice={lastPrice}
                   resistances={data.ta.resistances}
                   supports={data.ta.supports}
+                  ma21={data.ta.sma.sma21 || 0}
                   ma100={data.ta.sma.sma100 || 0}
                   rsi={data.ta.rsi}
                   mfi={data.ta.mfi}
                   cci={data.ta.cci}
                   adx={data.ta.adx}
+                  stochK={data.ta.stochK}
+                  stochD={data.ta.stochD}
+                  macdLine={data.ta.macd.line}
+                  macdSignal={data.ta.macd.signal}
+                  macdHist={data.ta.macd.histogram}
+                  diPlus={data.ta.diPlus}
+                  diMinus={data.ta.diMinus}
+                  sar={data.ta.sar}
+                  bollingerUpper={data.ta.bollingerBands.upper}
+                  bollingerMiddle={data.ta.bollingerBands.middle}
+                  bollingerLower={data.ta.bollingerBands.lower}
                   trendDirection={data.ta.trend.medium.direction}
                   trendAngle={data.ta.trend.medium.angle}
                   trendR2={data.ta.trend.medium.r2}
+                  overallSignal={data.ta.overallSignal}
                   scenarios={data.ta.scenarios}
                 />
               </TabsContent>
