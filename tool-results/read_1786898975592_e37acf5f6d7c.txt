@@ -1,0 +1,2002 @@
+     1→  1590→export interface IChartApi extends IChartApiBase<Time> {
+     2→  1591→        /**
+     3→  1592→         * Applies new options to the chart
+     4→  1593→         *
+     5→  1594→         * @param options - Any subset of options.
+     6→  1595→         */
+     7→  1596→        applyOptions(options: DeepPartial<ChartOptions>): void;
+     8→  1597→}
+     9→  1598→/**
+    10→  1599→ * The main interface of a single chart.
+    11→  1600→ */
+    12→  1601→export interface IChartApiBase<HorzScaleItem = Time> {
+    13→  1602→        /**
+    14→  1603→         * Removes the chart object including all DOM elements. This is an irreversible operation, you cannot do anything with the chart after removing it.
+    15→  1604→         */
+    16→  1605→        remove(): void;
+    17→  1606→        /**
+    18→  1607→         * Sets fixed size of the chart. By default chart takes up 100% of its container.
+    19→  1608→         *
+    20→  1609→         * If chart has the `autoSize` option enabled, and the ResizeObserver is available then
+    21→  1610→         * the width and height values will be ignored.
+    22→  1611→         *
+    23→  1612→         * @param width - Target width of the chart.
+    24→  1613→         * @param height - Target height of the chart.
+    25→  1614→         * @param forceRepaint - True to initiate resize immediately. One could need this to get screenshot immediately after resize.
+    26→  1615→         */
+    27→  1616→        resize(width: number, height: number, forceRepaint?: boolean): void;
+    28→  1617→        /**
+    29→  1618→         * Creates a custom series with specified parameters.
+    30→  1619→         *
+    31→  1620→         * A custom series is a generic series which can be extended with a custom renderer to
+    32→  1621→         * implement chart types which the library doesn't support by default.
+    33→  1622→         *
+    34→  1623→         * @param customPaneView - A custom series pane view which implements the custom renderer.
+    35→  1624→         * @param customOptions - Customization parameters of the series being created.
+    36→  1625→         * ```js
+    37→  1626→         * const series = chart.addCustomSeries(myCustomPaneView);
+    38→  1627→         * ```
+    39→  1628→         */
+    40→  1629→        addCustomSeries<TData extends CustomData<HorzScaleItem>, TOptions extends CustomSeriesOptions, TPartialOptions extends SeriesPartialOptions<TOptions> = SeriesPartialOptions<TOptions>>(customPaneView: ICustomSeriesPaneView<HorzScaleItem, TData, TOptions>, customOptions?: SeriesPartialOptions<TOptions>, paneIndex?: number): ISeriesApi<"Custom", HorzScaleItem, TData | WhitespaceData<HorzScaleItem>, TOptions, TPartialOptions>;
+    41→  1630→        /**
+    42→  1631→         * Creates a series with specified parameters.
+    43→  1632→         *
+    44→  1633→         * @param definition - A series definition.
+    45→  1634→         * @param options - Customization parameters of the series being created.
+    46→  1635→         * @param paneIndex - An index of the pane where the series should be created.
+    47→  1636→         * ```js
+    48→  1637→         * const series = chart.addSeries(LineSeries, { lineWidth: 2 });
+    49→  1638→         * ```
+    50→  1639→         */
+    51→  1640→        addSeries<T extends SeriesType>(definition: SeriesDefinition<T>, options?: SeriesPartialOptionsMap[T], paneIndex?: number): ISeriesApi<T, HorzScaleItem>;
+    52→  1641→        /**
+    53→  1642→         * Removes a series of any type. This is an irreversible operation, you cannot do anything with the series after removing it.
+    54→  1643→         *
+    55→  1644→         * @example
+    56→  1645→         * ```js
+    57→  1646→         * chart.removeSeries(series);
+    58→  1647→         * ```
+    59→  1648→         */
+    60→  1649→        removeSeries(seriesApi: ISeriesApi<SeriesType, HorzScaleItem>): void;
+    61→  1650→        /**
+    62→  1651→         * Subscribe to the chart click event.
+    63→  1652→         *
+    64→  1653→         * @param handler - Handler to be called on mouse click.
+    65→  1654→         * @example
+    66→  1655→         * ```js
+    67→  1656→         * function myClickHandler(param) {
+    68→  1657→         *     if (!param.point) {
+    69→  1658→         *         return;
+    70→  1659→         *     }
+    71→  1660→         *
+    72→  1661→         *     console.log(`Click at ${param.point.x}, ${param.point.y}. The time is ${param.time}.`);
+    73→  1662→         * }
+    74→  1663→         *
+    75→  1664→         * chart.subscribeClick(myClickHandler);
+    76→  1665→         * ```
+    77→  1666→         */
+    78→  1667→        subscribeClick(handler: MouseEventHandler<HorzScaleItem>): void;
+    79→  1668→        /**
+    80→  1669→         * Unsubscribe a handler that was previously subscribed using {@link subscribeClick}.
+    81→  1670→         *
+    82→  1671→         * @param handler - Previously subscribed handler
+    83→  1672→         * @example
+    84→  1673→         * ```js
+    85→  1674→         * chart.unsubscribeClick(myClickHandler);
+    86→  1675→         * ```
+    87→  1676→         */
+    88→  1677→        unsubscribeClick(handler: MouseEventHandler<HorzScaleItem>): void;
+    89→  1678→        /**
+    90→  1679→         * Subscribe to the chart double-click event.
+    91→  1680→         *
+    92→  1681→         * @param handler - Handler to be called on mouse double-click.
+    93→  1682→         * @example
+    94→  1683→         * ```js
+    95→  1684→         * function myDblClickHandler(param) {
+    96→  1685→         *     if (!param.point) {
+    97→  1686→         *         return;
+    98→  1687→         *     }
+    99→  1688→         *
+   100→  1689→         *     console.log(`Double Click at ${param.point.x}, ${param.point.y}. The time is ${param.time}.`);
+   101→  1690→         * }
+   102→  1691→         *
+   103→  1692→         * chart.subscribeDblClick(myDblClickHandler);
+   104→  1693→         * ```
+   105→  1694→         */
+   106→  1695→        subscribeDblClick(handler: MouseEventHandler<HorzScaleItem>): void;
+   107→  1696→        /**
+   108→  1697→         * Unsubscribe a handler that was previously subscribed using {@link subscribeDblClick}.
+   109→  1698→         *
+   110→  1699→         * @param handler - Previously subscribed handler
+   111→  1700→         * @example
+   112→  1701→         * ```js
+   113→  1702→         * chart.unsubscribeDblClick(myDblClickHandler);
+   114→  1703→         * ```
+   115→  1704→         */
+   116→  1705→        unsubscribeDblClick(handler: MouseEventHandler<HorzScaleItem>): void;
+   117→  1706→        /**
+   118→  1707→         * Subscribe to the crosshair move event.
+   119→  1708→         *
+   120→  1709→         * @param handler - Handler to be called on crosshair move.
+   121→  1710→         * @example
+   122→  1711→         * ```js
+   123→  1712→         * function myCrosshairMoveHandler(param) {
+   124→  1713→         *     if (!param.point) {
+   125→  1714→         *         return;
+   126→  1715→         *     }
+   127→  1716→         *
+   128→  1717→         *     console.log(`Crosshair moved to ${param.point.x}, ${param.point.y}. The time is ${param.time}.`);
+   129→  1718→         * }
+   130→  1719→         *
+   131→  1720→         * chart.subscribeCrosshairMove(myCrosshairMoveHandler);
+   132→  1721→         * ```
+   133→  1722→         */
+   134→  1723→        subscribeCrosshairMove(handler: MouseEventHandler<HorzScaleItem>): void;
+   135→  1724→        /**
+   136→  1725→         * Unsubscribe a handler that was previously subscribed using {@link subscribeCrosshairMove}.
+   137→  1726→         *
+   138→  1727→         * @param handler - Previously subscribed handler
+   139→  1728→         * @example
+   140→  1729→         * ```js
+   141→  1730→         * chart.unsubscribeCrosshairMove(myCrosshairMoveHandler);
+   142→  1731→         * ```
+   143→  1732→         */
+   144→  1733→        unsubscribeCrosshairMove(handler: MouseEventHandler<HorzScaleItem>): void;
+   145→  1734→        /**
+   146→  1735→         * Returns API to manipulate a price scale.
+   147→  1736→         *
+   148→  1737→         * @param priceScaleId - ID of the price scale.
+   149→  1738→         * @param paneIndex - Index of the pane (default: 0)
+   150→  1739→         * @returns Price scale API.
+   151→  1740→         */
+   152→  1741→        priceScale(priceScaleId: string, paneIndex?: number): IPriceScaleApi;
+   153→  1742→        /**
+   154→  1743→         * Returns API to manipulate the time scale
+   155→  1744→         *
+   156→  1745→         * @returns Target API
+   157→  1746→         */
+   158→  1747→        timeScale(): ITimeScaleApi<HorzScaleItem>;
+   159→  1748→        /**
+   160→  1749→         * Applies new options to the chart
+   161→  1750→         *
+   162→  1751→         * @param options - Any subset of options.
+   163→  1752→         */
+   164→  1753→        applyOptions(options: DeepPartial<ChartOptionsImpl<HorzScaleItem>>): void;
+   165→  1754→        /**
+   166→  1755→         * Returns currently applied options
+   167→  1756→         *
+   168→  1757→         * @returns Full set of currently applied options, including defaults
+   169→  1758→         */
+   170→  1759→        options(): Readonly<ChartOptionsImpl<HorzScaleItem>>;
+   171→  1760→        /**
+   172→  1761→         * Make a screenshot of the chart with all the elements excluding crosshair.
+   173→  1762→         *
+   174→  1763→         * @param addTopLayer - if true, the top layer and primitives will be included in the screenshot (default: false)
+   175→  1764→         * @param includeCrosshair - works only if addTopLayer is enabled. If true, the crosshair will be included in the screenshot (default: false)
+   176→  1765→         * @returns A canvas with the chart drawn on. Any `Canvas` methods like `toDataURL()` or `toBlob()` can be used to serialize the result.
+   177→  1766→         */
+   178→  1767→        takeScreenshot(addTopLayer?: boolean, includeCrosshair?: boolean): HTMLCanvasElement;
+   179→  1768→        /**
+   180→  1769→         * Add a pane to the chart
+   181→  1770→         * @param preserveEmptyPane - Whether to preserve the empty pane
+   182→  1771→         * @returns The pane API
+   183→  1772→         */
+   184→  1773→        addPane(preserveEmptyPane?: boolean): IPaneApi<HorzScaleItem>;
+   185→  1774→        /**
+   186→  1775→         * Returns array of panes' API
+   187→  1776→         *
+   188→  1777→         * @returns array of pane's Api
+   189→  1778→         */
+   190→  1779→        panes(): IPaneApi<HorzScaleItem>[];
+   191→  1780→        /**
+   192→  1781→         * Removes a pane with index
+   193→  1782→         *
+   194→  1783→         * @param index - the pane to be removed
+   195→  1784→         */
+   196→  1785→        removePane(index: number): void;
+   197→  1786→        /**
+   198→  1787→         * swap the position of two panes.
+   199→  1788→         *
+   200→  1789→         * @param first - the first index
+   201→  1790→         * @param second - the second index
+   202→  1791→         */
+   203→  1792→        swapPanes(first: number, second: number): void;
+   204→  1793→        /**
+   205→  1794→         * Returns the active state of the `autoSize` option. This can be used to check
+   206→  1795→         * whether the chart is handling resizing automatically with a `ResizeObserver`.
+   207→  1796→         *
+   208→  1797→         * @returns Whether the `autoSize` option is enabled and the active.
+   209→  1798→         */
+   210→  1799→        autoSizeActive(): boolean;
+   211→  1800→        /**
+   212→  1801→         * Returns the generated div element containing the chart. This can be used for adding your own additional event listeners, or for measuring the
+   213→  1802→         * elements dimensions and position within the document.
+   214→  1803→         *
+   215→  1804→         * @returns generated div element containing the chart.
+   216→  1805→         */
+   217→  1806→        chartElement(): HTMLDivElement;
+   218→  1807→        /**
+   219→  1808→         * Set the crosshair position within the chart.
+   220→  1809→         *
+   221→  1810→         * Usually the crosshair position is set automatically by the user's actions. However in some cases you may want to set it explicitly.
+   222→  1811→         *
+   223→  1812→         * For example if you want to synchronise the crosshairs of two separate charts.
+   224→  1813→         *
+   225→  1814→         * @param price - The price (vertical coordinate) of the new crosshair position.
+   226→  1815→         * @param horizontalPosition - The horizontal coordinate (time by default) of the new crosshair position.
+   227→  1816→         */
+   228→  1817→        setCrosshairPosition(price: number, horizontalPosition: HorzScaleItem, seriesApi: ISeriesApi<SeriesType, HorzScaleItem>): void;
+   229→  1818→        /**
+   230→  1819→         * Clear the crosshair position within the chart.
+   231→  1820→         */
+   232→  1821→        clearCrosshairPosition(): void;
+   233→  1822→        /**
+   234→  1823→         * Returns the dimensions of the chart pane (the plot surface which excludes time and price scales).
+   235→  1824→         * This would typically only be useful for plugin development.
+   236→  1825→         *
+   237→  1826→         * @param paneIndex - The index of the pane
+   238→  1827→         * @defaultValue `0`
+   239→  1828→         * @returns Dimensions of the chart pane
+   240→  1829→         */
+   241→  1830→        paneSize(paneIndex?: number): PaneSize;
+   242→  1831→        /**
+   243→  1832→         * Returns the horizontal scale behaviour.
+   244→  1833→         */
+   245→  1834→        horzBehaviour(): IHorzScaleBehavior<HorzScaleItem>;
+   246→  1835→}
+   247→  1836→/**
+   248→  1837→ * Renderer for the custom series. This paints on the main chart pane.
+   249→  1838→ */
+   250→  1839→export interface ICustomSeriesPaneRenderer {
+   251→  1840→        /**
+   252→  1841→         * Draw function for the renderer.
+   253→  1842→         *
+   254→  1843→         * @param target - canvas context to draw on, refer to FancyCanvas library for more details about this class.
+   255→  1844→         * @param priceConverter - converter function for changing prices into vertical coordinate values.
+   256→  1845→         * @param isHovered - Whether the series is hovered.
+   257→  1846→         * @param hitTestData - Optional hit test data for the series.
+   258→  1847→         */
+   259→  1848→        draw(target: CanvasRenderingTarget2D, priceConverter: PriceToCoordinateConverter, isHovered: boolean, hitTestData?: unknown): void;
+   260→  1849→        /**
+   261→  1850→         * Optional hit test function for the renderer.
+   262→  1851→         *
+   263→  1852→         * @param x - horizontal coordinate for the hit test.
+   264→  1853→         * @param y - vertical coordinate for the hit test.
+   265→  1854→         * @param priceConverter - converter function for changing prices into vertical coordinate values.
+   266→  1855→         * @returns hit test result or `null` if no item was hit.
+   267→  1856→         */
+   268→  1857→        hitTest?(x: Coordinate, y: Coordinate, priceConverter: PriceToCoordinateConverter): CustomSeriesHitTestResult | null;
+   269→  1858→}
+   270→  1859→/**
+   271→  1860→ * This interface represents the view for the custom series
+   272→  1861→ */
+   273→  1862→export interface ICustomSeriesPaneView<HorzScaleItem = Time, TData extends CustomData<HorzScaleItem> = CustomData<HorzScaleItem>, TSeriesOptions extends CustomSeriesOptions = CustomSeriesOptions> {
+   274→  1863→        /**
+   275→  1864→         * This method returns a renderer - special object to draw data for the series
+   276→  1865→         * on the main chart pane.
+   277→  1866→         *
+   278→  1867→         * @returns an renderer object to be used for drawing.
+   279→  1868→         */
+   280→  1869→        renderer(): ICustomSeriesPaneRenderer;
+   281→  1870→        /**
+   282→  1871→         * This method will be called with the latest data for the renderer to use
+   283→  1872→         * during the next paint.
+   284→  1873→         */
+   285→  1874→        update(data: PaneRendererCustomData<HorzScaleItem, TData>, seriesOptions: TSeriesOptions): void;
+   286→  1875→        /**
+   287→  1876→         * A function for interpreting the custom series data and returning an array of numbers
+   288→  1877→         * representing the price values for the item. These price values are used
+   289→  1878→         * by the chart to determine the auto-scaling (to ensure the items are in view) and the crosshair
+   290→  1879→         * and price line positions. The last value in the array will be used as the current value. You shouldn't need to
+   291→  1880→         * have more than 3 values in this array since the library only needs a largest, smallest, and current value.
+   292→  1881→         */
+   293→  1882→        priceValueBuilder(plotRow: TData): CustomSeriesPricePlotValues;
+   294→  1883→        /**
+   295→  1884→         * A function for testing whether a data point should be considered fully specified, or if it should
+   296→  1885→         * be considered as whitespace. Should return `true` if is whitespace.
+   297→  1886→         *
+   298→  1887→         * @param data - data point to be tested
+   299→  1888→         */
+   300→  1889→        isWhitespace(data: TData | CustomSeriesWhitespaceData<HorzScaleItem>): data is CustomSeriesWhitespaceData<HorzScaleItem>;
+   301→  1890→        /**
+   302→  1891→         * Default options
+   303→  1892→         */
+   304→  1893→        defaultOptions(): TSeriesOptions;
+   305→  1894→        /**
+   306→  1895→         * This method will be evoked when the series has been removed from the chart. This method should be used to
+   307→  1896→         * clean up any objects, references, and other items that could potentially cause memory leaks.
+   308→  1897→         *
+   309→  1898→         * This method should contain all the necessary code to clean up the object before it is removed from memory.
+   310→  1899→         * This includes removing any event listeners or timers that are attached to the object, removing any references
+   311→  1900→         * to other objects, and resetting any values or properties that were modified during the lifetime of the object.
+   312→  1901→         */
+   313→  1902→        destroy?(): void;
+   314→  1903→        /**
+   315→  1904→         * Optional reducer used for conflation of custom data points.
+   316→  1905→         * Given exactly 2 custom data contexts, should return a single aggregated item.
+   317→  1906→         * Each context provides access to the original data plus metadata needed for conflation.
+   318→  1907→         */
+   319→  1908→        conflationReducer?(item1: CustomConflationContext<HorzScaleItem, TData>, item2: CustomConflationContext<HorzScaleItem, TData>): TData;
+   320→  1909→}
+   321→  1910→/**
+   322→  1911→ * Class interface for Horizontal scale behavior
+   323→  1912→ */
+   324→  1913→export interface IHorzScaleBehavior<HorzScaleItem> {
+   325→  1914→        /**
+   326→  1915→         * Structure describing options of the chart.
+   327→  1916→         *
+   328→  1917→         * @returns ChartOptionsBase
+   329→  1918→         */
+   330→  1919→        options(): ChartOptionsImpl<HorzScaleItem>;
+   331→  1920→        /**
+   332→  1921→         * Set the chart options. Note that this is different to `applyOptions` since the provided options will overwrite the current options
+   333→  1922→         * instead of merging with the current options.
+   334→  1923→         *
+   335→  1924→         * @param options - Chart options to be set
+   336→  1925→         * @returns void
+   337→  1926→         */
+   338→  1927→        setOptions(options: ChartOptionsImpl<HorzScaleItem>): void;
+   339→  1928→        /**
+   340→  1929→         * Method to preprocess the data.
+   341→  1930→         *
+   342→  1931→         * @param data - Data items for the series
+   343→  1932→         * @returns void
+   344→  1933→         */
+   345→  1934→        preprocessData(data: DataItem<HorzScaleItem> | DataItem<HorzScaleItem>[]): void;
+   346→  1935→        /**
+   347→  1936→         * Convert horizontal scale item into an internal horizontal scale item.
+   348→  1937→         *
+   349→  1938→         * @param item - item to be converted
+   350→  1939→         * @returns InternalHorzScaleItem
+   351→  1940→         */
+   352→  1941→        convertHorzItemToInternal(item: HorzScaleItem): InternalHorzScaleItem;
+   353→  1942→        /**
+   354→  1943→         * Creates and returns a converter for changing series data into internal horizontal scale items.
+   355→  1944→         *
+   356→  1945→         * @param data - series data
+   357→  1946→         * @returns HorzScaleItemConverterToInternalObj
+   358→  1947→         */
+   359→  1948→        createConverterToInternalObj(data: SeriesDataItemTypeMap<HorzScaleItem>[SeriesType][]): HorzScaleItemConverterToInternalObj<HorzScaleItem>;
+   360→  1949→        /**
+   361→  1950→         * Returns the key for the specified horizontal scale item.
+   362→  1951→         *
+   363→  1952→         * @param internalItem - horizontal scale item for which the key should be returned
+   364→  1953→         * @returns InternalHorzScaleItemKey
+   365→  1954→         */
+   366→  1955→        key(internalItem: InternalHorzScaleItem | HorzScaleItem): InternalHorzScaleItemKey;
+   367→  1956→        /**
+   368→  1957→         * Returns the cache key for the specified horizontal scale item.
+   369→  1958→         *
+   370→  1959→         * @param internalItem - horizontal scale item for which the cache key should be returned
+   371→  1960→         * @returns number
+   372→  1961→         */
+   373→  1962→        cacheKey(internalItem: InternalHorzScaleItem): number;
+   374→  1963→        /**
+   375→  1964→         * Update the formatter with the localization options.
+   376→  1965→         *
+   377→  1966→         * @param options - Localization options
+   378→  1967→         * @returns void
+   379→  1968→         */
+   380→  1969→        updateFormatter(options: LocalizationOptions<HorzScaleItem>): void;
+   381→  1970→        /**
+   382→  1971→         * Format the horizontal scale item into a display string.
+   383→  1972→         *
+   384→  1973→         * @param item - horizontal scale item to be formatted as a string
+   385→  1974→         * @returns string
+   386→  1975→         */
+   387→  1976→        formatHorzItem(item: InternalHorzScaleItem): string;
+   388→  1977→        /**
+   389→  1978→         * Format the horizontal scale tickmark into a display string.
+   390→  1979→         *
+   391→  1980→         * @param item - tickmark item
+   392→  1981→         * @param localizationOptions - Localization options
+   393→  1982→         * @returns string
+   394→  1983→         */
+   395→  1984→        formatTickmark(item: TickMark, localizationOptions: LocalizationOptions<HorzScaleItem>): string;
+   396→  1985→        /**
+   397→  1986→         * Returns the maximum tickmark weight value for the specified tickmarks on the time scale.
+   398→  1987→         *
+   399→  1988→         * @param marks - Timescale tick marks
+   400→  1989→         * @returns TickMarkWeightValue
+   401→  1990→         */
+   402→  1991→        maxTickMarkWeight(marks: TimeMark[]): TickMarkWeightValue;
+   403→  1992→        /**
+   404→  1993→         * Fill the weights for the sorted time scale points.
+   405→  1994→         *
+   406→  1995→         * @param sortedTimePoints - sorted time scale points
+   407→  1996→         * @param startIndex - starting index
+   408→  1997→         * @returns void
+   409→  1998→         */
+   410→  1999→        fillWeightsForPoints(sortedTimePoints: readonly Mutable<TimeScalePoint>[], startIndex: number): void;
+   411→  2000→        /**
+   412→  2001→         * If returns true, then the tick mark formatter will be called for all the visible
+   413→  2002→         * tick marks even if the formatter has previously been called for a specific tick mark.
+   414→  2003→         * This allows you to change the formatting on all the tick marks.
+   415→  2004→         *
+   416→  2005→         * @param tickMarks - array of tick marks
+   417→  2006→         * @returns boolean
+   418→  2007→         */
+   419→  2008→        shouldResetTickmarkLabels?(tickMarks: readonly TickMark[]): boolean;
+   420→  2009→}
+   421→  2010→/**
+   422→  2011→ * Represents the interface for interacting with a pane in a lightweight chart.
+   423→  2012→ */
+   424→  2013→export interface IPaneApi<HorzScaleItem> {
+   425→  2014→        /**
+   426→  2015→         * Retrieves the height of the pane in pixels.
+   427→  2016→         *
+   428→  2017→         * @returns The height of the pane in pixels.
+   429→  2018→         */
+   430→  2019→        getHeight(): number;
+   431→  2020→        /**
+   432→  2021→         * Sets the height of the pane.
+   433→  2022→         *
+   434→  2023→         * @param height - The number of pixels to set as the height of the pane.
+   435→  2024→         */
+   436→  2025→        setHeight(height: number): void;
+   437→  2026→        /**
+   438→  2027→         * Moves the pane to a new position.
+   439→  2028→         *
+   440→  2029→         * @param paneIndex - The target index of the pane. Should be a number between 0 and the total number of panes - 1.
+   441→  2030→         */
+   442→  2031→        moveTo(paneIndex: number): void;
+   443→  2032→        /**
+   444→  2033→         * Retrieves the index of the pane.
+   445→  2034→         *
+   446→  2035→         * @returns The index of the pane. It is a number between 0 and the total number of panes - 1.
+   447→  2036→         */
+   448→  2037→        paneIndex(): number;
+   449→  2038→        /**
+   450→  2039→         * Retrieves the array of series for the current pane.
+   451→  2040→         *
+   452→  2041→         * @returns An array of series.
+   453→  2042→         */
+   454→  2043→        getSeries(): ISeriesApi<SeriesType, HorzScaleItem>[];
+   455→  2044→        /**
+   456→  2045→         * Retrieves the HTML element of the pane.
+   457→  2046→         *
+   458→  2047→         * @returns The HTML element of the pane or null if pane wasn't created yet.
+   459→  2048→         */
+   460→  2049→        getHTMLElement(): HTMLElement | null;
+   461→  2050→        /**
+   462→  2051→         * Attaches additional drawing primitive to the pane
+   463→  2052→         *
+   464→  2053→         * @param primitive - any implementation of IPanePrimitive interface
+   465→  2054→         */
+   466→  2055→        attachPrimitive(primitive: IPanePrimitive<HorzScaleItem>): void;
+   467→  2056→        /**
+   468→  2057→         * Detaches additional drawing primitive from the pane
+   469→  2058→         *
+   470→  2059→         * @param primitive - implementation of IPanePrimitive interface attached before
+   471→  2060→         * Does nothing if specified primitive was not attached
+   472→  2061→         */
+   473→  2062→        detachPrimitive(primitive: IPanePrimitive<HorzScaleItem>): void;
+   474→  2063→        /**
+   475→  2064→         * Returns the price scale with the given id.
+   476→  2065→         *
+   477→  2066→         * @param priceScaleId - ID of the price scale to find
+   478→  2067→         * @throws If the price scale with the given id is not found in this pane
+   479→  2068→         */
+   480→  2069→        priceScale(priceScaleId: string): IPriceScaleApi;
+   481→  2070→        /**
+   482→  2071→         * Sets whether to preserve the empty pane
+   483→  2072→         *
+   484→  2073→         * @param preserve - Whether to preserve the empty pane
+   485→  2074→         */
+   486→  2075→        setPreserveEmptyPane(preserve: boolean): void;
+   487→  2076→        /**
+   488→  2077→         * Returns whether to preserve the empty pane
+   489→  2078→         *
+   490→  2079→         * @returns Whether to preserve the empty pane
+   491→  2080→         */
+   492→  2081→        preserveEmptyPane(): boolean;
+   493→  2082→        /**
+   494→  2083→         * Returns the stretch factor of the pane.
+   495→  2084→         * Stretch factor determines the relative size of the pane compared to other panes.
+   496→  2085→         *
+   497→  2086→         * @returns The stretch factor of the pane. Default is 1
+   498→  2087→         */
+   499→  2088→        getStretchFactor(): number;
+   500→  2089→        /**
+   501→  2090→         * Sets the stretch factor of the pane.
+   502→  2091→         * When you creating a pane, the stretch factor is 1 by default.
+   503→  2092→         * So if you have three panes, and you want to make the first pane twice as big as the second and third panes, you can set the stretch factor of the first pane to 2000.
+   504→  2093→         * Example:
+   505→  2094→         * ```js
+   506→  2095→         * const pane1 = chart.addPane();
+   507→  2096→         * const pane2 = chart.addPane();
+   508→  2097→         * const pane3 = chart.addPane();
+   509→  2098→         * pane1.setStretchFactor(0.2);
+   510→  2099→         * pane2.setStretchFactor(0.3);
+   511→  2100→         * pane3.setStretchFactor(0.5);
+   512→  2101→         * // Now the first pane will be 20% of the total height, the second pane will be 30% of the total height, and the third pane will be 50% of the total height.
+   513→  2102→         * // Note: if you have one pane with default stretch factor of 1 and set other pane's stretch factor to 50,
+   514→  2103→         * // library will try to make second pane 50 times smaller than the first pane
+   515→  2104→         * ```
+   516→  2105→         * @param stretchFactor - The stretch factor of the pane.
+   517→  2106→         */
+   518→  2107→        setStretchFactor(stretchFactor: number): void;
+   519→  2108→        /**
+   520→  2109→         * Creates a custom series with specified parameters.
+   521→  2110→         *
+   522→  2111→         * A custom series is a generic series which can be extended with a custom renderer to
+   523→  2112→         * implement chart types which the library doesn't support by default.
+   524→  2113→         *
+   525→  2114→         * @param customPaneView - A custom series pane view which implements the custom renderer.
+   526→  2115→         * @param customOptions - Customization parameters of the series being created.
+   527→  2116→         * ```js
+   528→  2117→         * const series = pane.addCustomSeries(myCustomPaneView);
+   529→  2118→         * ```
+   530→  2119→         */
+   531→  2120→        addCustomSeries<TData extends CustomData<HorzScaleItem>, TOptions extends CustomSeriesOptions, TPartialOptions extends SeriesPartialOptions<TOptions> = SeriesPartialOptions<TOptions>>(customPaneView: ICustomSeriesPaneView<HorzScaleItem, TData, TOptions>, customOptions?: SeriesPartialOptions<TOptions>): ISeriesApi<"Custom", HorzScaleItem, TData | WhitespaceData<HorzScaleItem>, TOptions, TPartialOptions>;
+   532→  2121→        /**
+   533→  2122→         * Creates a series with specified parameters.
+   534→  2123→         *
+   535→  2124→         * @param definition - A series definition.
+   536→  2125→         * @param options - Customization parameters of the series being created.
+   537→  2126→         * ```js
+   538→  2127→         * const series = pane.addSeries(LineSeries, { lineWidth: 2 });
+   539→  2128→         * ```
+   540→  2129→         */
+   541→  2130→        addSeries<T extends SeriesType>(definition: SeriesDefinition<T>, options?: SeriesPartialOptionsMap[T]): ISeriesApi<T, HorzScaleItem>;
+   542→  2131→}
+   543→  2132→/**
+   544→  2133→ * Base interface for series primitives. It must be implemented to add some external graphics to series
+   545→  2134→ */
+   546→  2135→export interface IPanePrimitiveBase<TPaneAttachedParameters = unknown> {
+   547→  2136→        /**
+   548→  2137→         * This method is called when viewport has been changed, so primitive have to recalculate / invalidate its data
+   549→  2138→         */
+   550→  2139→        updateAllViews?(): void;
+   551→  2140→        /**
+   552→  2141→         * Returns array of objects representing primitive in the main area of the chart
+   553→  2142→         *
+   554→  2143→         * @returns array of objects; each of then must implement IPrimitivePaneView interface
+   555→  2144→         *
+   556→  2145→         * For performance reasons, the lightweight library uses internal caches based on references to arrays
+   557→  2146→         * So, this method must return new array if set of views has changed and should try to return the same array if nothing changed
+   558→  2147→         */
+   559→  2148→        paneViews?(): readonly IPanePrimitivePaneView[];
+   560→  2149→        /**
+   561→  2150→         * Attached Lifecycle hook.
+   562→  2151→         *
+   563→  2152→         * @param param - An object containing useful references for the attached primitive to use.
+   564→  2153→         * @returns void
+   565→  2154→         */
+   566→  2155→        attached?(param: TPaneAttachedParameters): void;
+   567→  2156→        /**
+   568→  2157→         * Detached Lifecycle hook.
+   569→  2158→         *
+   570→  2159→         * @returns void
+   571→  2160→         */
+   572→  2161→        detached?(): void;
+   573→  2162→        /**
+   574→  2163→         * Hit test method which will be called by the library when the cursor is moved.
+   575→  2164→         * Use this to register object ids being hovered for use within the crosshairMoved
+   576→  2165→         * and click events emitted by the chart. Additionally, the hit test result can
+   577→  2166→         * specify a preferred cursor type to display for the main chart pane. This method
+   578→  2167→         * should return the top most hit for this primitive if more than one object is
+   579→  2168→         * being intersected.
+   580→  2169→         *
+   581→  2170→         * @param x - x Coordinate of mouse event
+   582→  2171→         * @param y - y Coordinate of mouse event
+   583→  2172→         */
+   584→  2173→        hitTest?(x: number, y: number): PrimitiveHoveredItem | null;
+   585→  2174→}
+   586→  2175→/**
+   587→  2176→ * This interface represents the primitive for one of the pane of the chart (main chart area, time scale, price scale).
+   588→  2177→ */
+   589→  2178→export interface IPanePrimitivePaneView {
+   590→  2179→        /**
+   591→  2180→         * Defines where in the visual layer stack the renderer should be executed. Default is `'normal'`.
+   592→  2181→         *
+   593→  2182→         * @returns the desired position in the visual layer stack. @see {@link PrimitivePaneViewZOrder}
+   594→  2183→         */
+   595→  2184→        zOrder?(): PrimitivePaneViewZOrder;
+   596→  2185→        /**
+   597→  2186→         * This method returns a renderer - special object to draw data
+   598→  2187→         *
+   599→  2188→         * @returns an renderer object to be used for drawing, or `null` if we have nothing to draw.
+   600→  2189→         */
+   601→  2190→        renderer(): IPrimitivePaneRenderer | null;
+   602→  2191→}
+   603→  2192→/**
+   604→  2193→ * Interface for a pane primitive.
+   605→  2194→ */
+   606→  2195→export interface IPanePrimitiveWrapper<T, Options> {
+   607→  2196→        /**
+   608→  2197→         * Detaches the plugin from the pane.
+   609→  2198→         */
+   610→  2199→        detach: () => void;
+   611→  2200→        /**
+   612→  2201→         * Returns the current pane.
+   613→  2202→         */
+   614→  2203→        getPane: () => IPaneApi<T>;
+   615→  2204→        /**
+   616→  2205→         * Applies options to the primitive.
+   617→  2206→         * @param options - Options to apply. The options are deeply merged with the current options.
+   618→  2207→         */
+   619→  2208→        applyOptions?: (options: DeepPartial<Options>) => void;
+   620→  2209→}
+   621→  2210→/** Interface to be implemented by the object in order to be used as a price formatter */
+   622→  2211→export interface IPriceFormatter {
+   623→  2212→        /**
+   624→  2213→         * Formatting function
+   625→  2214→         *
+   626→  2215→         * @param price - Original price to be formatted
+   627→  2216→         * @returns Formatted price
+   628→  2217→         */
+   629→  2218→        format(price: number): string;
+   630→  2219→        /**
+   631→  2220→         * A formatting function for price scale tick marks. Use this function to define formatting rules based on all provided price values.
+   632→  2221→         * @param prices - Prices to be formatted
+   633→  2222→         * @returns Formatted prices
+   634→  2223→         */
+   635→  2224→        formatTickmarks(prices: readonly number[]): string[];
+   636→  2225→}
+   637→  2226→/**
+   638→  2227→ * Represents the interface for interacting with price lines.
+   639→  2228→ */
+   640→  2229→export interface IPriceLine {
+   641→  2230→        /**
+   642→  2231→         * Apply options to the price line.
+   643→  2232→         *
+   644→  2233→         * @param options - Any subset of options.
+   645→  2234→         * @example
+   646→  2235→         * ```js
+   647→  2236→         * priceLine.applyOptions({
+   648→  2237→         *     price: 90.0,
+   649→  2238→         *     color: 'red',
+   650→  2239→         *     lineWidth: 3,
+   651→  2240→         *     lineStyle: LightweightCharts.LineStyle.Dashed,
+   652→  2241→         *     axisLabelVisible: false,
+   653→  2242→         *     title: 'P/L 600',
+   654→  2243→         * });
+   655→  2244→         * ```
+   656→  2245→         */
+   657→  2246→        applyOptions(options: Partial<PriceLineOptions>): void;
+   658→  2247→        /**
+   659→  2248→         * Get the currently applied options.
+   660→  2249→         */
+   661→  2250→        options(): Readonly<PriceLineOptions>;
+   662→  2251→}
+   663→  2252→/** Interface to control chart's price scale */
+   664→  2253→export interface IPriceScaleApi {
+   665→  2254→        /**
+   666→  2255→         * Applies new options to the price scale
+   667→  2256→         *
+   668→  2257→         * @param options - Any subset of options.
+   669→  2258→         */
+   670→  2259→        applyOptions(options: DeepPartial<PriceScaleOptions>): void;
+   671→  2260→        /**
+   672→  2261→         * Returns currently applied options of the price scale
+   673→  2262→         *
+   674→  2263→         * @returns Full set of currently applied options, including defaults
+   675→  2264→         */
+   676→  2265→        options(): Readonly<PriceScaleOptions>;
+   677→  2266→        /**
+   678→  2267→         * Returns a width of the price scale if it's visible or 0 if invisible.
+   679→  2268→         */
+   680→  2269→        width(): number;
+   681→  2270→        /**
+   682→  2271→         * Sets the visible range of the price scale.
+   683→  2272→         *
+   684→  2273→         * @param range - The visible range to set, with `from` and `to` properties.
+   685→  2274→         */
+   686→  2275→        setVisibleRange(range: IRange<number>): void;
+   687→  2276→        /**
+   688→  2277→         * Returns the visible range of the price scale.
+   689→  2278→         *
+   690→  2279→         * @returns The visible range of the price scale, or null if the range is not set.
+   691→  2280→         */
+   692→  2281→        getVisibleRange(): IRange<number> | null;
+   693→  2282→        /**
+   694→  2283→         * Sets the auto scale mode of the price scale.
+   695→  2284→         *
+   696→  2285→         * @param on - If true, enables auto scaling; if false, disables it.
+   697→  2286→         */
+   698→  2287→        setAutoScale(on: boolean): void;
+   699→  2288→}
+   700→  2289→/**
+   701→  2290→ * This interface represents rendering some element on the canvas
+   702→  2291→ */
+   703→  2292→export interface IPrimitivePaneRenderer {
+   704→  2293→        /**
+   705→  2294→         * Method to draw main content of the element
+   706→  2295→         *
+   707→  2296→         * @param target - canvas context to draw on, refer to FancyCanvas library for more details about this class
+   708→  2297→         * @param utils - exposes drawing utilities (such as setLineStyle) from the library to plugins
+   709→  2298→         *
+   710→  2299→         */
+   711→  2300→        draw(target: CanvasRenderingTarget2D, utils?: DrawingUtils): void;
+   712→  2301→        /**
+   713→  2302→         * Optional method to draw the background.
+   714→  2303→         * Some elements could implement this method to draw on the background of the chart.
+   715→  2304→         * Usually this is some kind of watermarks or time areas highlighting.
+   716→  2305→         *
+   717→  2306→         * @param target - canvas context to draw on, refer FancyCanvas library for more details about this class
+   718→  2307→         * @param utils - exposes drawing utilities (such as setLineStyle) from the library to plugins
+   719→  2308→         */
+   720→  2309→        drawBackground?(target: CanvasRenderingTarget2D, utils?: DrawingUtils): void;
+   721→  2310→}
+   722→  2311→/**
+   723→  2312→ * This interface represents the primitive for one of the pane of the chart (main chart area, time scale, price scale).
+   724→  2313→ */
+   725→  2314→export interface IPrimitivePaneView {
+   726→  2315→        /**
+   727→  2316→         * Defines where in the visual layer stack the renderer should be executed. Default is `'normal'`.
+   728→  2317→         *
+   729→  2318→         * @returns the desired position in the visual layer stack. @see {@link PrimitivePaneViewZOrder}
+   730→  2319→         */
+   731→  2320→        zOrder?(): PrimitivePaneViewZOrder;
+   732→  2321→        /**
+   733→  2322→         * This method returns a renderer - special object to draw data
+   734→  2323→         *
+   735→  2324→         * @returns an renderer object to be used for drawing, or `null` if we have nothing to draw.
+   736→  2325→         */
+   737→  2326→        renderer(): IPrimitivePaneRenderer | null;
+   738→  2327→}
+   739→  2328→/**
+   740→  2329→ * Represents a generic range `from` one value `to` another.
+   741→  2330→ */
+   742→  2331→export interface IRange<T> {
+   743→  2332→        /**
+   744→  2333→         * The from value. The start of the range.
+   745→  2334→         */
+   746→  2335→        from: T;
+   747→  2336→        /**
+   748→  2337→         * The to value. The end of the range.
+   749→  2338→         */
+   750→  2339→        to: T;
+   751→  2340→}
+   752→  2341→/**
+   753→  2342→ * Represents the interface for interacting with series.
+   754→  2343→ */
+   755→  2344→export interface ISeriesApi<TSeriesType extends SeriesType, HorzScaleItem = Time, TData = SeriesDataItemTypeMap<HorzScaleItem>[TSeriesType], TOptions = SeriesOptionsMap[TSeriesType], TPartialOptions = SeriesPartialOptionsMap[TSeriesType]> {
+   756→  2345→        /**
+   757→  2346→         * Returns current price formatter
+   758→  2347→         *
+   759→  2348→         * @returns Interface to the price formatter object that can be used to format prices in the same way as the chart does
+   760→  2349→         */
+   761→  2350→        priceFormatter(): IPriceFormatter;
+   762→  2351→        /**
+   763→  2352→         * Converts specified series price to pixel coordinate according to the series price scale
+   764→  2353→         *
+   765→  2354→         * @param price - Input price to be converted
+   766→  2355→         * @returns Pixel coordinate of the price level on the chart
+   767→  2356→         */
+   768→  2357→        priceToCoordinate(price: number): Coordinate | null;
+   769→  2358→        /**
+   770→  2359→         * Converts specified coordinate to price value according to the series price scale
+   771→  2360→         *
+   772→  2361→         * @param coordinate - Input coordinate to be converted
+   773→  2362→         * @returns Price value of the coordinate on the chart
+   774→  2363→         */
+   775→  2364→        coordinateToPrice(coordinate: number): BarPrice | null;
+   776→  2365→        /**
+   777→  2366→         * Returns bars information for the series in the provided [logical range](/time-scale.md#logical-range) or `null`, if no series data has been found in the requested range.
+   778→  2367→         * This method can be used, for instance, to implement downloading historical data while scrolling to prevent a user from seeing empty space.
+   779→  2368→         *
+   780→  2369→         * @param range - The [logical range](/time-scale.md#logical-range) to retrieve info for.
+   781→  2370→         * @returns The bars info for the given logical range.
+   782→  2371→         * @example Getting bars info for current visible range
+   783→  2372→         * ```js
+   784→  2373→         * const barsInfo = series.barsInLogicalRange(chart.timeScale().getVisibleLogicalRange());
+   785→  2374→         * console.log(barsInfo);
+   786→  2375→         * ```
+   787→  2376→         * @example Implementing downloading historical data while scrolling
+   788→  2377→         * ```js
+   789→  2378→         * function onVisibleLogicalRangeChanged(newVisibleLogicalRange) {
+   790→  2379→         *     const barsInfo = series.barsInLogicalRange(newVisibleLogicalRange);
+   791→  2380→         *     // if there less than 50 bars to the left of the visible area
+   792→  2381→         *     if (barsInfo !== null && barsInfo.barsBefore < 50) {
+   793→  2382→         *         // try to load additional historical data and prepend it to the series data
+   794→  2383→         *     }
+   795→  2384→         * }
+   796→  2385→         *
+   797→  2386→         * chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+   798→  2387→         * ```
+   799→  2388→         */
+   800→  2389→        barsInLogicalRange(range: IRange<number>): BarsInfo<HorzScaleItem> | null;
+   801→  2390→        /**
+   802→  2391→         * Applies new options to the existing series
+   803→  2392→         * You can set options initially when you create series or use the `applyOptions` method of the series to change the existing options.
+   804→  2393→         * Note that you can only pass options you want to change.
+   805→  2394→         *
+   806→  2395→         * @param options - Any subset of options.
+   807→  2396→         */
+   808→  2397→        applyOptions(options: TPartialOptions): void;
+   809→  2398→        /**
+   810→  2399→         * Returns currently applied options
+   811→  2400→         *
+   812→  2401→         * @returns Full set of currently applied options, including defaults
+   813→  2402→         */
+   814→  2403→        options(): Readonly<TOptions>;
+   815→  2404→        /**
+   816→  2405→         * Returns the API interface for controlling the price scale that this series is currently attached to.
+   817→  2406→         *
+   818→  2407→         * @returns IPriceScaleApi An interface for controlling the price scale (axis component) currently used by this series
+   819→  2408→         *
+   820→  2409→         * @remarks
+   821→  2410→         * Important: The returned PriceScaleApi is bound to the specific price scale (by ID and pane) that the series
+   822→  2411→         * is using at the time this method is called. If you later move the series to a different pane or attach it
+   823→  2412→         * to a different price scale (e.g., from 'right' to 'left'), the previously returned PriceScaleApi will NOT
+   824→  2413→         * follow the series. It will continue to control the original price scale it was created for.
+   825→  2414→         *
+   826→  2415→         * To control the new price scale after moving a series, you must call this method again to get a fresh
+   827→  2416→         * PriceScaleApi instance for the current price scale.
+   828→  2417→         */
+   829→  2418→        priceScale(): IPriceScaleApi;
+   830→  2419→        /**
+   831→  2420→         * Sets or replaces series data.
+   832→  2421→         *
+   833→  2422→         * @param data - Ordered (earlier time point goes first) array of data items. Old data is fully replaced with the new one.
+   834→  2423→         * @example Setting data to a line series
+   835→  2424→         * ```js
+   836→  2425→         * lineSeries.setData([
+   837→  2426→         *     { time: '2018-12-12', value: 24.11 },
+   838→  2427→         *     { time: '2018-12-13', value: 31.74 },
+   839→  2428→         * ]);
+   840→  2429→         * ```
+   841→  2430→         * @example Setting data to a bars (or candlestick) series
+   842→  2431→         * ```js
+   843→  2432→         * barSeries.setData([
+   844→  2433→         *     { time: '2018-12-19', open: 141.77, high: 170.39, low: 120.25, close: 145.72 },
+   845→  2434→         *     { time: '2018-12-20', open: 145.72, high: 147.99, low: 100.11, close: 108.19 },
+   846→  2435→         * ]);
+   847→  2436→         * ```
+   848→  2437→         */
+   849→  2438→        setData(data: TData[]): void;
+   850→  2439→        /**
+   851→  2440→         * Adds new data item to the existing set (or updates the latest item if times of the passed/latest items are equal).
+   852→  2441→         *
+   853→  2442→         * @param bar - A single data item to be added. Time of the new item must be greater or equal to the latest existing time point.
+   854→  2443→         * If the new item's time is equal to the last existing item's time, then the existing item is replaced with the new one.
+   855→  2444→         * @param historicalUpdate - If true, allows updating an existing data point that is not the latest bar. Default is false.
+   856→  2445→         * Updating older data using `historicalUpdate` will be slower than updating the most recent data point.
+   857→  2446→         * @example Updating line series data
+   858→  2447→         * ```js
+   859→  2448→         * lineSeries.update({
+   860→  2449→         *     time: '2018-12-12',
+   861→  2450→         *     value: 24.11,
+   862→  2451→         * });
+   863→  2452→         * ```
+   864→  2453→         * @example Updating bar (or candlestick) series data
+   865→  2454→         * ```js
+   866→  2455→         * barSeries.update({
+   867→  2456→         *     time: '2018-12-19',
+   868→  2457→         *     open: 141.77,
+   869→  2458→         *     high: 170.39,
+   870→  2459→         *     low: 120.25,
+   871→  2460→         *     close: 145.72,
+   872→  2461→         * });
+   873→  2462→         * ```
+   874→  2463→         */
+   875→  2464→        update(bar: TData, historicalUpdate?: boolean): void;
+   876→  2465→        /**
+   877→  2466→         * Removes one or more data items from the end of the series.
+   878→  2467→         *
+   879→  2468→         * @param count - The number of data items to remove.
+   880→  2469→         * @returns The removed data items.
+   881→  2470→         * @example Removing one data item from a series
+   882→  2471→         * ```js
+   883→  2472→         * const removedData = lineSeries.pop(1);
+   884→  2473→         * console.log(removedData);
+   885→  2474→         * ```
+   886→  2475→         */
+   887→  2476→        pop(count: number): TData[];
+   888→  2477→        /**
+   889→  2478→         * Returns a bar data by provided logical index.
+   890→  2479→         *
+   891→  2480→         * @param logicalIndex - Logical index
+   892→  2481→         * @param mismatchDirection - Search direction if no data found at provided logical index.
+   893→  2482→         * @returns Original data item provided via setData or update methods.
+   894→  2483→         * @example
+   895→  2484→         * ```js
+   896→  2485→         * const originalData = series.dataByIndex(10, LightweightCharts.MismatchDirection.NearestLeft);
+   897→  2486→         * ```
+   898→  2487→         */
+   899→  2488→        dataByIndex(logicalIndex: number, mismatchDirection?: MismatchDirection): TData | null;
+   900→  2489→        /**
+   901→  2490→         * Returns all the bar data for the series.
+   902→  2491→         *
+   903→  2492→         * @returns Original data items provided via setData or update methods.
+   904→  2493→         * @example
+   905→  2494→         * ```js
+   906→  2495→         * const originalData = series.data();
+   907→  2496→         * ```
+   908→  2497→         */
+   909→  2498→        data(): readonly TData[];
+   910→  2499→        /**
+   911→  2500→         * Subscribe to the data changed event. This event is fired whenever the `update` or `setData` method is evoked
+   912→  2501→         * on the series.
+   913→  2502→         *
+   914→  2503→         * @param handler - Handler to be called on a data changed event.
+   915→  2504→         * @example
+   916→  2505→         * ```js
+   917→  2506→         * function myHandler() {
+   918→  2507→         *     const data = series.data();
+   919→  2508→         *     console.log(`The data has changed. New Data length: ${data.length}`);
+   920→  2509→         * }
+   921→  2510→         *
+   922→  2511→         * series.subscribeDataChanged(myHandler);
+   923→  2512→         * ```
+   924→  2513→         */
+   925→  2514→        subscribeDataChanged(handler: DataChangedHandler): void;
+   926→  2515→        /**
+   927→  2516→         * Unsubscribe a handler that was previously subscribed using {@link subscribeDataChanged}.
+   928→  2517→         *
+   929→  2518→         * @param handler - Previously subscribed handler
+   930→  2519→         * @example
+   931→  2520→         * ```js
+   932→  2521→         * chart.unsubscribeDataChanged(myHandler);
+   933→  2522→         * ```
+   934→  2523→         */
+   935→  2524→        unsubscribeDataChanged(handler: DataChangedHandler): void;
+   936→  2525→        /**
+   937→  2526→         * Creates a new price line
+   938→  2527→         *
+   939→  2528→         * @param options - Any subset of options, however `price` is required.
+   940→  2529→         * @example
+   941→  2530→         * ```js
+   942→  2531→         * const priceLine = series.createPriceLine({
+   943→  2532→         *     price: 80.0,
+   944→  2533→         *     color: 'green',
+   945→  2534→         *     lineWidth: 2,
+   946→  2535→         *     lineStyle: LightweightCharts.LineStyle.Dotted,
+   947→  2536→         *     axisLabelVisible: true,
+   948→  2537→         *     title: 'P/L 500',
+   949→  2538→         * });
+   950→  2539→         * ```
+   951→  2540→         */
+   952→  2541→        createPriceLine(options: CreatePriceLineOptions): IPriceLine;
+   953→  2542→        /**
+   954→  2543→         * Removes the price line that was created before.
+   955→  2544→         *
+   956→  2545→         * @param line - A line to remove.
+   957→  2546→         * @example
+   958→  2547→         * ```js
+   959→  2548→         * const priceLine = series.createPriceLine({ price: 80.0 });
+   960→  2549→         * series.removePriceLine(priceLine);
+   961→  2550→         * ```
+   962→  2551→         */
+   963→  2552→        removePriceLine(line: IPriceLine): void;
+   964→  2553→        /**
+   965→  2554→         * Returns an array of price lines.
+   966→  2555→         */
+   967→  2556→        priceLines(): IPriceLine[];
+   968→  2557→        /**
+   969→  2558→         * Return current series type.
+   970→  2559→         *
+   971→  2560→         * @returns Type of the series.
+   972→  2561→         * @example
+   973→  2562→         * ```js
+   974→  2563→         * const lineSeries = chart.addSeries(LineSeries);
+   975→  2564→         * console.log(lineSeries.seriesType()); // "Line"
+   976→  2565→         *
+   977→  2566→         * const candlestickSeries = chart.addCandlestickSeries();
+   978→  2567→         * console.log(candlestickSeries.seriesType()); // "Candlestick"
+   979→  2568→         * ```
+   980→  2569→         */
+   981→  2570→        seriesType(): TSeriesType;
+   982→  2571→        /**
+   983→  2572→         * Return the last value data of the series.
+   984→  2573→         *
+   985→  2574→         * @param globalLast - If false, get the last value in the current visible range. Otherwise, fetch the absolute last value
+   986→  2575→         * @returns The last value data of the series.
+   987→  2576→         * @example
+   988→  2577→         * ```js
+   989→  2578→         * const lineSeries = chart.addSeries(LineSeries);
+   990→  2579→         * console.log(lineSeries.lastValueData(true)); // { noData: false, price: 24.11, color: '#000000' }
+   991→  2580→         *
+   992→  2581→         * const candlestickSeries = chart.addCandlestickSeries();
+   993→  2582→         * console.log(candlestickSeries.lastValueData(false)); // { noData: false, price: 145.72, color: '#000000' }
+   994→  2583→         * ```
+   995→  2584→         */
+   996→  2585→        lastValueData(globalLast: boolean): LastValueDataResult;
+   997→  2586→        /**
+   998→  2587→         * Attaches additional drawing primitive to the series
+   999→  2588→         *
+  1000→  2589→         * @param primitive - any implementation of ISeriesPrimitive interface
+  1001→  2590→         */
+  1002→  2591→        attachPrimitive(primitive: ISeriesPrimitive<HorzScaleItem>): void;
+  1003→  2592→        /**
+  1004→  2593→         * Detaches additional drawing primitive from the series
+  1005→  2594→         *
+  1006→  2595→         * @param primitive - implementation of ISeriesPrimitive interface attached before
+  1007→  2596→         * Does nothing if specified primitive was not attached
+  1008→  2597→         */
+  1009→  2598→        detachPrimitive(primitive: ISeriesPrimitive<HorzScaleItem>): void;
+  1010→  2599→        /**
+  1011→  2600→         * Move the series to another pane.
+  1012→  2601→         *
+  1013→  2602→         * If the pane with the specified index does not exist, the pane will be created.
+  1014→  2603→         *
+  1015→  2604→         * @param paneIndex - The index of the pane. Should be a number between 0 and the total number of panes.
+  1016→  2605→         */
+  1017→  2606→        moveToPane(paneIndex: number): void;
+  1018→  2607→        /**
+  1019→  2608→         * Gets the zero-based index of this series within the list of all series on the current pane.
+  1020→  2609→         *
+  1021→  2610→         * @returns The current index of the series in the pane's series collection.
+  1022→  2611→         */
+  1023→  2612→        seriesOrder(): number;
+  1024→  2613→        /**
+  1025→  2614→         * Sets the zero-based index of this series within the pane's series collection, thereby adjusting its rendering order.
+  1026→  2615→         *
+  1027→  2616→         * Note:
+  1028→  2617→         * - The chart may automatically recalculate this index after operations such as removing other series or moving this series to a different pane.
+  1029→  2618→         * - If the provided index is less than 0, equal to, or greater than the number of series, it will be clamped to a valid range.
+  1030→  2619→         * - Price scales derive their formatters from the series with the lowest index; changing the order may affect the price scale's formatting
+  1031→  2620→         *
+  1032→  2621→         * @param order - The desired zero-based index to set for this series within the pane.
+  1033→  2622→         */
+  1034→  2623→        setSeriesOrder(order: number): void;
+  1035→  2624→        /**
+  1036→  2625→         * Returns the pane to which the series is currently attached.
+  1037→  2626→         *
+  1038→  2627→         * @returns Pane API object to control the pane
+  1039→  2628→         */
+  1040→  2629→        getPane(): IPaneApi<HorzScaleItem>;
+  1041→  2630→}
+  1042→  2631→/**
+  1043→  2632→ * Interface for a series markers plugin
+  1044→  2633→ */
+  1045→  2634→export interface ISeriesMarkersPluginApi<HorzScaleItem> extends ISeriesPrimitiveWrapper<HorzScaleItem> {
+  1046→  2635→        /**
+  1047→  2636→         * Set markers to the series.
+  1048→  2637→         * @param markers - An array of markers to be displayed on the series.
+  1049→  2638→         */
+  1050→  2639→        setMarkers: (markers: SeriesMarker<HorzScaleItem>[]) => void;
+  1051→  2640→        /**
+  1052→  2641→         * Returns current markers.
+  1053→  2642→         */
+  1054→  2643→        markers: () => readonly SeriesMarker<HorzScaleItem>[];
+  1055→  2644→        /**
+  1056→  2645→         * Detaches the plugin from the series.
+  1057→  2646→         */
+  1058→  2647→        detach: () => void;
+  1059→  2648→}
+  1060→  2649→/**
+  1061→  2650→ * This interface represents a label on the price or time axis
+  1062→  2651→ */
+  1063→  2652→export interface ISeriesPrimitiveAxisView {
+  1064→  2653→        /**
+  1065→  2654→         * The desired coordinate for the label. Note that the label will be automatically moved to prevent overlapping with other labels. If you would like the label to be drawn at the
+  1066→  2655→         * exact coordinate under all circumstances then rather use `fixedCoordinate`.
+  1067→  2656→         * For a price axis the value returned will represent the vertical distance (pixels) from the top. For a time axis the value will represent the horizontal distance from the left.
+  1068→  2657→         *
+  1069→  2658→         * @returns coordinate. distance from top for price axis, or distance from left for time axis.
+  1070→  2659→         */
+  1071→  2660→        coordinate(): number;
+  1072→  2661→        /**
+  1073→  2662→         * fixed coordinate of the label. A label with a fixed coordinate value will always be drawn at the specified coordinate and will appear above any 'unfixed' labels. If you supply
+  1074→  2663→         * a fixed coordinate then you should return a large negative number for `coordinate` so that the automatic placement of unfixed labels doesn't leave a blank space for this label.
+  1075→  2664→         * For a price axis the value returned will represent the vertical distance (pixels) from the top. For a time axis the value will represent the horizontal distance from the left.
+  1076→  2665→         *
+  1077→  2666→         * @returns coordinate. distance from top for price axis, or distance from left for time axis.
+  1078→  2667→         */
+  1079→  2668→        fixedCoordinate?(): number | undefined;
+  1080→  2669→        /**
+  1081→  2670→         * @returns text of the label
+  1082→  2671→         */
+  1083→  2672→        text(): string;
+  1084→  2673→        /**
+  1085→  2674→         * @returns text color of the label
+  1086→  2675→         */
+  1087→  2676→        textColor(): string;
+  1088→  2677→        /**
+  1089→  2678→         * @returns background color of the label
+  1090→  2679→         */
+  1091→  2680→        backColor(): string;
+  1092→  2681→        /**
+  1093→  2682→         * @returns whether the label should be visible (default: `true`)
+  1094→  2683→         */
+  1095→  2684→        visible?(): boolean;
+  1096→  2685→        /**
+  1097→  2686→         * @returns whether the tick mark line should be visible (default: `true`)
+  1098→  2687→         */
+  1099→  2688→        tickVisible?(): boolean;
+  1100→  2689→}
+  1101→  2690→/**
+  1102→  2691→ * Base interface for series primitives. It must be implemented to add some external graphics to series
+  1103→  2692→ */
+  1104→  2693→export interface ISeriesPrimitiveBase<TSeriesAttachedParameters = unknown> {
+  1105→  2694→        /**
+  1106→  2695→         * This method is called when viewport has been changed, so primitive have to recalculate / invalidate its data
+  1107→  2696→         */
+  1108→  2697→        updateAllViews?(): void;
+  1109→  2698→        /**
+  1110→  2699→         * Returns array of labels to be drawn on the price axis used by the series
+  1111→  2700→         *
+  1112→  2701→         * @returns array of objects; each of then must implement ISeriesPrimitiveAxisView interface
+  1113→  2702→         *
+  1114→  2703→         * For performance reasons, the lightweight library uses internal caches based on references to arrays
+  1115→  2704→         * So, this method must return new array if set of views has changed and should try to return the same array if nothing changed
+  1116→  2705→         */
+  1117→  2706→        priceAxisViews?(): readonly ISeriesPrimitiveAxisView[];
+  1118→  2707→        /**
+  1119→  2708→         * Returns array of labels to be drawn on the time axis
+  1120→  2709→         *
+  1121→  2710→         * @returns array of objects; each of then must implement ISeriesPrimitiveAxisView interface
+  1122→  2711→         *
+  1123→  2712→         * For performance reasons, the lightweight library uses internal caches based on references to arrays
+  1124→  2713→         * So, this method must return new array if set of views has changed and should try to return the same array if nothing changed
+  1125→  2714→         */
+  1126→  2715→        timeAxisViews?(): readonly ISeriesPrimitiveAxisView[];
+  1127→  2716→        /**
+  1128→  2717→         * Returns array of objects representing primitive in the main area of the chart
+  1129→  2718→         *
+  1130→  2719→         * @returns array of objects; each of then must implement ISeriesPrimitivePaneView interface
+  1131→  2720→         *
+  1132→  2721→         * For performance reasons, the lightweight library uses internal caches based on references to arrays
+  1133→  2722→         * So, this method must return new array if set of views has changed and should try to return the same array if nothing changed
+  1134→  2723→         */
+  1135→  2724→        paneViews?(): readonly IPrimitivePaneView[];
+  1136→  2725→        /**
+  1137→  2726→         * Returns array of objects representing primitive in the price axis area of the chart
+  1138→  2727→         *
+  1139→  2728→         * @returns array of objects; each of then must implement ISeriesPrimitivePaneView interface
+  1140→  2729→         *
+  1141→  2730→         * For performance reasons, the lightweight library uses internal caches based on references to arrays
+  1142→  2731→         * So, this method must return new array if set of views has changed and should try to return the same array if nothing changed
+  1143→  2732→         */
+  1144→  2733→        priceAxisPaneViews?(): readonly IPrimitivePaneView[];
+  1145→  2734→        /**
+  1146→  2735→         * Returns array of objects representing primitive in the time axis area of the chart
+  1147→  2736→         *
+  1148→  2737→         * @returns array of objects; each of then must implement ISeriesPrimitivePaneView interface
+  1149→  2738→         *
+  1150→  2739→         * For performance reasons, the lightweight library uses internal caches based on references to arrays
+  1151→  2740→         * So, this method must return new array if set of views has changed and should try to return the same array if nothing changed
+  1152→  2741→         */
+  1153→  2742→        timeAxisPaneViews?(): readonly IPrimitivePaneView[];
+  1154→  2743→        /**
+  1155→  2744→         * Return autoscaleInfo which will be merged with the series base autoscaleInfo. You can use this to expand the autoscale range
+  1156→  2745→         * to include visual elements drawn outside of the series' current visible price range.
+  1157→  2746→         *
+  1158→  2747→         * **Important**: Please note that this method will be evoked very often during scrolling and zooming of the chart, thus it
+  1159→  2748→         * is recommended that this method is either simple to execute, or makes use of optimisations such as caching to ensure that
+  1160→  2749→         * the chart remains responsive.
+  1161→  2750→         *
+  1162→  2751→         * @param startTimePoint - start time point for the current visible range
+  1163→  2752→         * @param endTimePoint - end time point for the current visible range
+  1164→  2753→         * @returns AutoscaleInfo
+  1165→  2754→         */
+  1166→  2755→        autoscaleInfo?(startTimePoint: Logical, endTimePoint: Logical): AutoscaleInfo | null;
+  1167→  2756→        /**
+  1168→  2757→         * Attached Lifecycle hook.
+  1169→  2758→         *
+  1170→  2759→         * @param param - An object containing useful references for the attached primitive to use.
+  1171→  2760→         * @returns void
+  1172→  2761→         */
+  1173→  2762→        attached?(param: TSeriesAttachedParameters): void;
+  1174→  2763→        /**
+  1175→  2764→         * Detached Lifecycle hook.
+  1176→  2765→         *
+  1177→  2766→         * @returns void
+  1178→  2767→         */
+  1179→  2768→        detached?(): void;
+  1180→  2769→        /**
+  1181→  2770→         * Hit test method which will be called by the library when the cursor is moved.
+  1182→  2771→         * Use this to register object ids being hovered for use within the crosshairMoved
+  1183→  2772→         * and click events emitted by the chart. Additionally, the hit test result can
+  1184→  2773→         * specify a preferred cursor type to display for the main chart pane. This method
+  1185→  2774→         * should return the top most hit for this primitive if more than one object is
+  1186→  2775→         * being intersected.
+  1187→  2776→         *
+  1188→  2777→         * @param x - x Coordinate of mouse event
+  1189→  2778→         * @param y - y Coordinate of mouse event
+  1190→  2779→         */
+  1191→  2780→        hitTest?(x: number, y: number): PrimitiveHoveredItem | null;
+  1192→  2781→}
+  1193→  2782→/**
+  1194→  2783→ * Interface for a series primitive.
+  1195→  2784→ */
+  1196→  2785→export interface ISeriesPrimitiveWrapper<T, Options = unknown> {
+  1197→  2786→        /**
+  1198→  2787→         * Detaches the plugin from the series.
+  1199→  2788→         */
+  1200→  2789→        detach: () => void;
+  1201→  2790→        /**
+  1202→  2791→         * Returns the current series.
+  1203→  2792→         */
+  1204→  2793→        getSeries: () => ISeriesApi<SeriesType, T>;
+  1205→  2794→        /**
+  1206→  2795→         * Applies options to the primitive.
+  1207→  2796→         * @param options - Options to apply. The options are deeply merged with the current options.
+  1208→  2797→         */
+  1209→  2798→        applyOptions?: (options: DeepPartial<Options>) => void;
+  1210→  2799→}
+  1211→  2800→/**
+  1212→  2801→ * UpDownMarkersPrimitive Plugin for showing the direction of price changes on the chart.
+  1213→  2802→ * This plugin can only be used with Line and Area series types.
+  1214→  2803→ * 1. Manual control:
+  1215→  2804→ *
+  1216→  2805→ * - Use the `setMarkers` method to manually add markers to the chart.
+  1217→  2806→ * This will replace any existing markers.
+  1218→  2807→ * - Use `clearMarkers` to remove all markers.
+  1219→  2808→ *
+  1220→  2809→ * 2. Automatic updates:
+  1221→  2810→ *
+  1222→  2811→ * Use `setData` and `update` from this primitive instead of the those on the series to let the
+  1223→  2812→ * primitive handle the creation of price change markers automatically.
+  1224→  2813→ *
+  1225→  2814→ * - Use `setData` to initialize or replace all data points.
+  1226→  2815→ * - Use `update` to modify individual data points. This will automatically
+  1227→  2816→ * create markers for price changes on existing data points.
+  1228→  2817→ * - The `updateVisibilityDuration` option controls how long markers remain visible.
+  1229→  2818→ */
+  1230→  2819→export interface ISeriesUpDownMarkerPluginApi<HorzScaleItem, TData extends SeriesDataItemTypeMap<HorzScaleItem>[UpDownMarkersSupportedSeriesTypes] = SeriesDataItemTypeMap<HorzScaleItem>["Line"]> extends ISeriesPrimitiveWrapper<HorzScaleItem> {
+  1231→  2820→        /**
+  1232→  2821→         * Applies new options to the plugin.
+  1233→  2822→         * @param options - Partial options to apply.
+  1234→  2823→         */
+  1235→  2824→        applyOptions: (options: Partial<UpDownMarkersPluginOptions>) => void;
+  1236→  2825→        /**
+  1237→  2826→         * Sets the data for the series and manages data points for marker updates.
+  1238→  2827→         * @param data - Array of data points to set.
+  1239→  2828→         */
+  1240→  2829→        setData: (data: TData[]) => void;
+  1241→  2830→        /**
+  1242→  2831→         * Updates a single data point and manages marker updates for existing data points.
+  1243→  2832→         * @param data - The data point to update.
+  1244→  2833→         * @param historicalUpdate - Optional flag for historical updates.
+  1245→  2834→         */
+  1246→  2835→        update: (data: TData, historicalUpdate?: boolean) => void;
+  1247→  2836→        /**
+  1248→  2837→         * Retrieves the current markers on the chart.
+  1249→  2838→         * @returns An array of SeriesUpDownMarker.
+  1250→  2839→         */
+  1251→  2840→        markers: () => readonly SeriesUpDownMarker<HorzScaleItem>[];
+  1252→  2841→        /**
+  1253→  2842→         * Manually sets markers on the chart.
+  1254→  2843→         * @param markers - Array of SeriesUpDownMarker to set.
+  1255→  2844→         */
+  1256→  2845→        setMarkers: (markers: SeriesUpDownMarker<HorzScaleItem>[]) => void;
+  1257→  2846→        /**
+  1258→  2847→         * Clears all markers from the chart.
+  1259→  2848→         */
+  1260→  2849→        clearMarkers: () => void;
+  1261→  2850→}
+  1262→  2851→/** Interface to chart time scale */
+  1263→  2852→export interface ITimeScaleApi<HorzScaleItem> {
+  1264→  2853→        /**
+  1265→  2854→         * Return the distance from the right edge of the time scale to the lastest bar of the series measured in bars.
+  1266→  2855→         */
+  1267→  2856→        scrollPosition(): number;
+  1268→  2857→        /**
+  1269→  2858→         * Scrolls the chart to the specified position.
+  1270→  2859→         *
+  1271→  2860→         * @param position - Target data position
+  1272→  2861→         * @param animated - Setting this to true makes the chart scrolling smooth and adds animation
+  1273→  2862→         */
+  1274→  2863→        scrollToPosition(position: number, animated: boolean): void;
+  1275→  2864→        /**
+  1276→  2865→         * Restores default scroll position of the chart. This process is always animated.
+  1277→  2866→         */
+  1278→  2867→        scrollToRealTime(): void;
+  1279→  2868→        /**
+  1280→  2869→         * Returns current visible time range of the chart.
+  1281→  2870→         *
+  1282→  2871→         * Note that this method cannot extrapolate time and will use the only currently existent data.
+  1283→  2872→         * To get complete information about current visible range, please use {@link getVisibleLogicalRange} and {@link ISeriesApi.barsInLogicalRange}.
+  1284→  2873→         *
+  1285→  2874→         * @returns Visible range or null if the chart has no data at all.
+  1286→  2875→         */
+  1287→  2876→        getVisibleRange(): IRange<HorzScaleItem> | null;
+  1288→  2877→        /**
+  1289→  2878→         * Sets visible range of data.
+  1290→  2879→         *
+  1291→  2880→         * Note that this method cannot extrapolate time and will use the only currently existent data.
+  1292→  2881→         * Thus, for example, if currently a chart doesn't have data prior `2018-01-01` date and you set visible range with `from` date `2016-01-01`, it will be automatically adjusted to `2018-01-01` (and the same for `to` date).
+  1293→  2882→         *
+  1294→  2883→         * But if you can approximate indexes on your own - you could use {@link setVisibleLogicalRange} instead.
+  1295→  2884→         *
+  1296→  2885→         * @param range - Target visible range of data.
+  1297→  2886→         * @example
+  1298→  2887→         * ```js
+  1299→  2888→         * chart.timeScale().setVisibleRange({
+  1300→  2889→         *     from: (new Date(Date.UTC(2018, 0, 1, 0, 0, 0, 0))).getTime() / 1000,
+  1301→  2890→         *     to: (new Date(Date.UTC(2018, 1, 1, 0, 0, 0, 0))).getTime() / 1000,
+  1302→  2891→         * });
+  1303→  2892→         * ```
+  1304→  2893→         */
+  1305→  2894→        setVisibleRange(range: IRange<HorzScaleItem>): void;
+  1306→  2895→        /**
+  1307→  2896→         * Returns the current visible [logical range](/time-scale.md#logical-range) of the chart as an object with the first and last time points of the logical range, or returns `null` if the chart has no data.
+  1308→  2897→         *
+  1309→  2898→         * @returns Visible range or null if the chart has no data at all.
+  1310→  2899→         */
+  1311→  2900→        getVisibleLogicalRange(): LogicalRange | null;
+  1312→  2901→        /**
+  1313→  2902→         * Sets visible [logical range](/time-scale.md#logical-range) of data.
+  1314→  2903→         *
+  1315→  2904→         * @param range - Target visible logical range of data.
+  1316→  2905→         * @example
+  1317→  2906→         * ```js
+  1318→  2907→         * chart.timeScale().setVisibleLogicalRange({ from: 0, to: 10 });
+  1319→  2908→         * ```
+  1320→  2909→         */
+  1321→  2910→        setVisibleLogicalRange(range: IRange<number>): void;
+  1322→  2911→        /**
+  1323→  2912→         * Restores default zoom level and scroll position of the time scale.
+  1324→  2913→         */
+  1325→  2914→        resetTimeScale(): void;
+  1326→  2915→        /**
+  1327→  2916→         * Automatically calculates the visible range to fit all data from all series.
+  1328→  2917→         */
+  1329→  2918→        fitContent(): void;
+  1330→  2919→        /**
+  1331→  2920→         * Converts a logical index to local x coordinate.
+  1332→  2921→         *
+  1333→  2922→         * @param logical - Logical index needs to be converted
+  1334→  2923→         * @returns x coordinate of that time or `null` if the chart doesn't have data
+  1335→  2924→         */
+  1336→  2925→        logicalToCoordinate(logical: Logical): Coordinate | null;
+  1337→  2926→        /**
+  1338→  2927→         * Converts a coordinate to logical index.
+  1339→  2928→         *
+  1340→  2929→         * @param x - Coordinate needs to be converted
+  1341→  2930→         * @returns Logical index that is located on that coordinate or `null` if the chart doesn't have data
+  1342→  2931→         */
+  1343→  2932→        coordinateToLogical(x: number): Logical | null;
+  1344→  2933→        /**
+  1345→  2934→         * Converts time to index.
+  1346→  2935→         *
+  1347→  2936→         * @param time - Time needs to be converted
+  1348→  2937→         * @returns Index of that time or `null` if no time found on time scale
+  1349→  2938→         */
+  1350→  2939→        timeToIndex(time: HorzScaleItem, findNearest?: boolean): TimePointIndex | null;
+  1351→  2940→        /**
+  1352→  2941→         * Converts a time to local x coordinate.
+  1353→  2942→         *
+  1354→  2943→         * @param time - Time needs to be converted
+  1355→  2944→         * @returns X coordinate of that time or `null` if no time found on time scale
+  1356→  2945→         */
+  1357→  2946→        timeToCoordinate(time: HorzScaleItem): Coordinate | null;
+  1358→  2947→        /**
+  1359→  2948→         * Converts a coordinate to time.
+  1360→  2949→         *
+  1361→  2950→         * @param x - Coordinate needs to be converted.
+  1362→  2951→         * @returns Time of a bar that is located on that coordinate or `null` if there are no bars found on that coordinate.
+  1363→  2952→         */
+  1364→  2953→        coordinateToTime(x: number): HorzScaleItem | null;
+  1365→  2954→        /**
+  1366→  2955→         * Returns a width of the time scale.
+  1367→  2956→         */
+  1368→  2957→        width(): number;
+  1369→  2958→        /**
+  1370→  2959→         * Returns a height of the time scale.
+  1371→  2960→         */
+  1372→  2961→        height(): number;
+  1373→  2962→        /**
+  1374→  2963→         * Subscribe to the visible time range change events.
+  1375→  2964→         *
+  1376→  2965→         * The argument passed to the handler function is an object with `from` and `to` properties of type {@link Time}, or `null` if there is no visible data.
+  1377→  2966→         *
+  1378→  2967→         * @param handler - Handler (function) to be called when the visible indexes change.
+  1379→  2968→         * @example
+  1380→  2969→         * ```js
+  1381→  2970→         * function myVisibleTimeRangeChangeHandler(newVisibleTimeRange) {
+  1382→  2971→         *     if (newVisibleTimeRange === null) {
+  1383→  2972→         *         // handle null
+  1384→  2973→         *     }
+  1385→  2974→         *
+  1386→  2975→         *     // handle new logical range
+  1387→  2976→         * }
+  1388→  2977→         *
+  1389→  2978→         * chart.timeScale().subscribeVisibleTimeRangeChange(myVisibleTimeRangeChangeHandler);
+  1390→  2979→         * ```
+  1391→  2980→         */
+  1392→  2981→        subscribeVisibleTimeRangeChange(handler: TimeRangeChangeEventHandler<HorzScaleItem>): void;
+  1393→  2982→        /**
+  1394→  2983→         * Unsubscribe a handler that was previously subscribed using {@link subscribeVisibleTimeRangeChange}.
+  1395→  2984→         *
+  1396→  2985→         * @param handler - Previously subscribed handler
+  1397→  2986→         * @example
+  1398→  2987→         * ```js
+  1399→  2988→         * chart.timeScale().unsubscribeVisibleTimeRangeChange(myVisibleTimeRangeChangeHandler);
+  1400→  2989→         * ```
+  1401→  2990→         */
+  1402→  2991→        unsubscribeVisibleTimeRangeChange(handler: TimeRangeChangeEventHandler<HorzScaleItem>): void;
+  1403→  2992→        /**
+  1404→  2993→         * Subscribe to the visible logical range change events.
+  1405→  2994→         *
+  1406→  2995→         * The argument passed to the handler function is an object with `from` and `to` properties of type `number`, or `null` if there is no visible data.
+  1407→  2996→         *
+  1408→  2997→         * @param handler - Handler (function) to be called when the visible indexes change.
+  1409→  2998→         * @example
+  1410→  2999→         * ```js
+  1411→  3000→         * function myVisibleLogicalRangeChangeHandler(newVisibleLogicalRange) {
+  1412→  3001→         *     if (newVisibleLogicalRange === null) {
+  1413→  3002→         *         // handle null
+  1414→  3003→         *     }
+  1415→  3004→         *
+  1416→  3005→         *     // handle new logical range
+  1417→  3006→         * }
+  1418→  3007→         *
+  1419→  3008→         * chart.timeScale().subscribeVisibleLogicalRangeChange(myVisibleLogicalRangeChangeHandler);
+  1420→  3009→         * ```
+  1421→  3010→         */
+  1422→  3011→        subscribeVisibleLogicalRangeChange(handler: LogicalRangeChangeEventHandler): void;
+  1423→  3012→        /**
+  1424→  3013→         * Unsubscribe a handler that was previously subscribed using {@link subscribeVisibleLogicalRangeChange}.
+  1425→  3014→         *
+  1426→  3015→         * @param handler - Previously subscribed handler
+  1427→  3016→         * @example
+  1428→  3017→         * ```js
+  1429→  3018→         * chart.timeScale().unsubscribeVisibleLogicalRangeChange(myVisibleLogicalRangeChangeHandler);
+  1430→  3019→         * ```
+  1431→  3020→         */
+  1432→  3021→        unsubscribeVisibleLogicalRangeChange(handler: LogicalRangeChangeEventHandler): void;
+  1433→  3022→        /**
+  1434→  3023→         * Adds a subscription to time scale size changes
+  1435→  3024→         *
+  1436→  3025→         * @param handler - Handler (function) to be called when the time scale size changes
+  1437→  3026→         */
+  1438→  3027→        subscribeSizeChange(handler: SizeChangeEventHandler): void;
+  1439→  3028→        /**
+  1440→  3029→         * Removes a subscription to time scale size changes
+  1441→  3030→         *
+  1442→  3031→         * @param handler - Previously subscribed handler
+  1443→  3032→         */
+  1444→  3033→        unsubscribeSizeChange(handler: SizeChangeEventHandler): void;
+  1445→  3034→        /**
+  1446→  3035→         * Applies new options to the time scale.
+  1447→  3036→         *
+  1448→  3037→         * @param options - Any subset of options.
+  1449→  3038→         */
+  1450→  3039→        applyOptions(options: DeepPartial<HorzScaleOptions>): void;
+  1451→  3040→        /**
+  1452→  3041→         * Returns current options
+  1453→  3042→         *
+  1454→  3043→         * @returns Currently applied options
+  1455→  3044→         */
+  1456→  3045→        options(): Readonly<HorzScaleOptions>;
+  1457→  3046→}
+  1458→  3047→/**
+  1459→  3048→ * The main interface of a single yield curve chart.
+  1460→  3049→ */
+  1461→  3050→export interface IYieldCurveChartApi extends Omit<IChartApiBase<number>, "addSeries"> {
+  1462→  3051→        /**
+  1463→  3052→         * Creates a series with specified parameters.
+  1464→  3053→         *
+  1465→  3054→         * Note that the Yield Curve chart only supports the Area and Line series types.
+  1466→  3055→         *
+  1467→  3056→         * @param definition - A series definition for either AreaSeries or LineSeries.
+  1468→  3057→         * @param options - Customization parameters of the series being created.
+  1469→  3058→         * @param paneIndex - An index of the pane where the series should be created.
+  1470→  3059→         * ```js
+  1471→  3060→         * const series = chart.addSeries(LineSeries, { lineWidth: 2 });
+  1472→  3061→         * ```
+  1473→  3062→         */
+  1474→  3063→        addSeries<T extends YieldCurveSeriesType>(definition: SeriesDefinition<T>, options?: SeriesPartialOptionsMap[T], paneIndex?: number): ISeriesApi<T, number, WhitespaceData<number> | LineData<number>>;
+  1475→  3064→}
+  1476→  3065→export interface ImageWatermarkOptions {
+  1477→  3066→        /**
+  1478→  3067→         * Maximum width for the image watermark.
+  1479→  3068→         *
+  1480→  3069→         * @defaultValue undefined
+  1481→  3070→         */
+  1482→  3071→        maxWidth?: number;
+  1483→  3072→        /**
+  1484→  3073→         * Maximum height for the image watermark.
+  1485→  3074→         *
+  1486→  3075→         * @defaultValue undefined
+  1487→  3076→         */
+  1488→  3077→        maxHeight?: number;
+  1489→  3078→        /**
+  1490→  3079→         * Padding to maintain around the image watermark relative
+  1491→  3080→         * to the chart pane edges.
+  1492→  3081→         *
+  1493→  3082→         * @defaultValue 0
+  1494→  3083→         */
+  1495→  3084→        padding: number;
+  1496→  3085→        /**
+  1497→  3086→         * The alpha (opacity) for the image watermark. Where `1` is fully
+  1498→  3087→         * opaque (visible) and `0` is fully transparent.
+  1499→  3088→         *
+  1500→  3089→         * @defaultValue 1
+  1501→  3090→         */
+  1502→  3091→        alpha: number;
+  1503→  3092→}
+  1504→  3093→/**
+  1505→  3094→ * Represents options for enabling or disabling kinetic scrolling with mouse and touch gestures.
+  1506→  3095→ */
+  1507→  3096→export interface KineticScrollOptions {
+  1508→  3097→        /**
+  1509→  3098→         * Enable kinetic scroll with touch gestures.
+  1510→  3099→         *
+  1511→  3100→         * @defaultValue `true`
+  1512→  3101→         */
+  1513→  3102→        touch: boolean;
+  1514→  3103→        /**
+  1515→  3104→         * Enable kinetic scroll with the mouse.
+  1516→  3105→         *
+  1517→  3106→         * @defaultValue `false`
+  1518→  3107→         */
+  1519→  3108→        mouse: boolean;
+  1520→  3109→}
+  1521→  3110→/** Represents last value data result of a series for plugins when there is data */
+  1522→  3111→export interface LastValueDataResultWithData {
+  1523→  3112→        /**
+  1524→  3113→         * Indicates if the series has data.
+  1525→  3114→         */
+  1526→  3115→        noData: false;
+  1527→  3116→        /**
+  1528→  3117→         * The last price of the series.
+  1529→  3118→         */
+  1530→  3119→        price: number;
+  1531→  3120→        /**
+  1532→  3121→         * The color of the last value.
+  1533→  3122→         */
+  1534→  3123→        color: string;
+  1535→  3124→}
+  1536→  3125→/** Represents last value data result of a series for plugins when there is no data */
+  1537→  3126→export interface LastValueDataResultWithoutData {
+  1538→  3127→        /**
+  1539→  3128→         * Indicates if the series has data.
+  1540→  3129→         */
+  1541→  3130→        noData: true;
+  1542→  3131→}
+  1543→  3132→/** Represents layout options */
+  1544→  3133→export interface LayoutOptions {
+  1545→  3134→        /**
+  1546→  3135→         * Chart and scales background color.
+  1547→  3136→         *
+  1548→  3137→         * @defaultValue `{ type: ColorType.Solid, color: '#FFFFFF' }`
+  1549→  3138→         */
+  1550→  3139→        background: Background;
+  1551→  3140→        /**
+  1552→  3141→         * Color of text on the scales.
+  1553→  3142→         *
+  1554→  3143→         * @defaultValue `'#191919'`
+  1555→  3144→         */
+  1556→  3145→        textColor: string;
+  1557→  3146→        /**
+  1558→  3147→         * Font size of text on scales in pixels.
+  1559→  3148→         *
+  1560→  3149→         * @defaultValue `12`
+  1561→  3150→         */
+  1562→  3151→        fontSize: number;
+  1563→  3152→        /**
+  1564→  3153→         * Font family of text on the scales.
+  1565→  3154→         *
+  1566→  3155→         * @defaultValue `-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif`
+  1567→  3156→         */
+  1568→  3157→        fontFamily: string;
+  1569→  3158→        /**
+  1570→  3159→         * Panes options.
+  1571→  3160→         *
+  1572→  3161→         * @defaultValue `{ enableResize: true, separatorColor: '#2B2B43', separatorHoverColor: 'rgba(178, 181, 189, 0.2)'}`
+  1573→  3162→         */
+  1574→  3163→        panes: LayoutPanesOptions;
+  1575→  3164→        /**
+  1576→  3165→         * Display the TradingView attribution logo on the main chart pane.
+  1577→  3166→         *
+  1578→  3167→         * The licence for library specifies that you add the "attribution notice"
+  1579→  3168→         * from the NOTICE file to your code and a link to https://www.tradingview.com/ to
+  1580→  3169→         * the page of your website or mobile application that is available to your users.
+  1581→  3170→         * Using this attribution logo is sufficient for meeting this linking requirement.
+  1582→  3171→         * However, if you already fulfill this requirement then you can disable this
+  1583→  3172→         * attribution logo.
+  1584→  3173→         *
+  1585→  3174→         * @defaultValue true
+  1586→  3175→         */
+  1587→  3176→        attributionLogo: boolean;
+  1588→  3177→        /**
+  1589→  3178→         * Specifies the color space of the rendering context for the internal
+  1590→  3179→         * canvas elements.
+  1591→  3180→         *
+  1592→  3181→         * Note: this option should only be specified during the chart creation
+  1593→  3182→         * and not changed at a later stage by using `applyOptions`.
+  1594→  3183→         *
+  1595→  3184→         * @defaultValue `srgb`
+  1596→  3185→         *
+  1597→  3186→         * See [HTMLCanvasElement: getContext() method - Web APIs | MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext#colorspace) for more info
+  1598→  3187→         */
+  1599→  3188→        colorSpace: ColorSpace;
+  1600→  3189→        /**
+  1601→  3190→         * Array of custom color parser functions to handle color formats outside of standard sRGB values.
+  1602→  3191→         * Each parser function takes a string input and should return either:
+  1603→  3192→         * - An {@link Rgba} array [r,g,b,a] for valid colors (with values 0-255 for rgb and 0-1 for a)
+  1604→  3193→         * - null if the parser cannot handle that color string, allowing the next parser to attempt it
+  1605→  3194→         *
+  1606→  3195→         * Parsers are tried in order until one returns a non-null result. This allows chaining multiple
+  1607→  3196→         * parsers to handle different color space formats.
+  1608→  3197→         *
+  1609→  3198→         * Note: this option should only be specified during the chart creation
+  1610→  3199→         * and not changed at a later stage by using `applyOptions`.
+  1611→  3200→         *
+  1612→  3201→         * The library already supports these color formats by default:
+  1613→  3202→         * - Hex colors (#RGB, #RGBA, #RRGGBB, #RRGGBBAA)
+  1614→  3203→         * - RGB/RGBA functions (rgb(), rgba())
+  1615→  3204→         * - HSL/HSLA functions (hsl(), hsla())
+  1616→  3205→         * - HWB function (hwb())
+  1617→  3206→         * - Named colors (red, blue, etc.)
+  1618→  3207→         * - 'transparent' keyword
+  1619→  3208→         *
+  1620→  3209→         * Custom parsers are only needed for other color spaces like:
+  1621→  3210→         * - Display P3: color(display-p3 r g b)
+  1622→  3211→         * - CIE Lab: lab(l a b)
+  1623→  3212→         * - LCH: lch(l c h)
+  1624→  3213→         * - Oklab: oklab(l a b)
+  1625→  3214→         * - Oklch: oklch(l c h)
+  1626→  3215→         * - ...
+  1627→  3216→         */
+  1628→  3217→        colorParsers: CustomColorParser[];
+  1629→  3218→}
+  1630→  3219→/**
+  1631→  3220→ * Represents panes customizations.
+  1632→  3221→ */
+  1633→  3222→export interface LayoutPanesOptions {
+  1634→  3223→        /**
+  1635→  3224→        * Enable panes resizing
+  1636→  3225→        *
+  1637→  3226→        * @defaultValue `true`
+  1638→  3227→        */
+  1639→  3228→        enableResize: boolean;
+  1640→  3229→        /**
+  1641→  3230→        * Color of pane separator
+  1642→  3231→        *
+  1643→  3232→        * @defaultValue `#2B2B43`
+  1644→  3233→        */
+  1645→  3234→        separatorColor: string;
+  1646→  3235→        /**
+  1647→  3236→        * Color of pane separator background applied on hover
+  1648→  3237→        *
+  1649→  3238→        * @defaultValue `rgba(178, 181, 189, 0.2)`
+  1650→  3239→        */
+  1651→  3240→        separatorHoverColor: string;
+  1652→  3241→}
+  1653→  3242→/**
+  1654→  3243→ * Structure describing a single item of data for line series
+  1655→  3244→ */
+  1656→  3245→export interface LineData<HorzScaleItem = Time> extends SingleValueData<HorzScaleItem> {
+  1657→  3246→        /**
+  1658→  3247→         * Optional color value for certain data item. If missed, color from options is used
+  1659→  3248→         */
+  1660→  3249→        color?: string;
+  1661→  3250→}
+  1662→  3251→/**
+  1663→  3252→ * Represents style options for a line series.
+  1664→  3253→ */
+  1665→  3254→export interface LineStyleOptions {
+  1666→  3255→        /**
+  1667→  3256→         * Line color.
+  1668→  3257→         *
+  1669→  3258→         * @defaultValue `'#2196f3'`
+  1670→  3259→         */
+  1671→  3260→        color: string;
+  1672→  3261→        /**
+  1673→  3262→         * Line style.
+  1674→  3263→         *
+  1675→  3264→         * @defaultValue {@link LineStyle.Solid}
+  1676→  3265→         */
+  1677→  3266→        lineStyle: LineStyle;
+  1678→  3267→        /**
+  1679→  3268→         * Line width in pixels.
+  1680→  3269→         *
+  1681→  3270→         * @defaultValue `3`
+  1682→  3271→         */
+  1683→  3272→        lineWidth: LineWidth;
+  1684→  3273→        /**
+  1685→  3274→         * Line type.
+  1686→  3275→         *
+  1687→  3276→         * @defaultValue {@link LineType.Simple}
+  1688→  3277→         */
+  1689→  3278→        lineType: LineType;
+  1690→  3279→        /**
+  1691→  3280→         * Show series line.
+  1692→  3281→         *
+  1693→  3282→         * @defaultValue `true`
+  1694→  3283→         */
+  1695→  3284→        lineVisible: boolean;
+  1696→  3285→        /**
+  1697→  3286→         * Show circle markers on each point.
+  1698→  3287→         *
+  1699→  3288→         * @defaultValue `false`
+  1700→  3289→         */
+  1701→  3290→        pointMarkersVisible: boolean;
+  1702→  3291→        /**
+  1703→  3292→         * Circle markers radius in pixels.
+  1704→  3293→         *
+  1705→  3294→         * @defaultValue `undefined`
+  1706→  3295→         */
+  1707→  3296→        pointMarkersRadius?: number;
+  1708→  3297→        /**
+  1709→  3298→         * Show the crosshair marker.
+  1710→  3299→         *
+  1711→  3300→         * @defaultValue `true`
+  1712→  3301→         */
+  1713→  3302→        crosshairMarkerVisible: boolean;
+  1714→  3303→        /**
+  1715→  3304→         * Crosshair marker radius in pixels.
+  1716→  3305→         *
+  1717→  3306→         * @defaultValue `4`
+  1718→  3307→         */
+  1719→  3308→        crosshairMarkerRadius: number;
+  1720→  3309→        /**
+  1721→  3310→         * Crosshair marker border color. An empty string falls back to the color of the series under the crosshair.
+  1722→  3311→         *
+  1723→  3312→         * @defaultValue `''`
+  1724→  3313→         */
+  1725→  3314→        crosshairMarkerBorderColor: string;
+  1726→  3315→        /**
+  1727→  3316→         * The crosshair marker background color. An empty string falls back to the color of the series under the crosshair.
+  1728→  3317→         *
+  1729→  3318→         * @defaultValue `''`
+  1730→  3319→         */
+  1731→  3320→        crosshairMarkerBackgroundColor: string;
+  1732→  3321→        /**
+  1733→  3322→         * Crosshair marker border width in pixels.
+  1734→  3323→         *
+  1735→  3324→         * @defaultValue `2`
+  1736→  3325→         */
+  1737→  3326→        crosshairMarkerBorderWidth: number;
+  1738→  3327→        /**
+  1739→  3328→         * Last price animation mode.
+  1740→  3329→         *
+  1741→  3330→         * @defaultValue {@link LastPriceAnimationMode.Disabled}
+  1742→  3331→         */
+  1743→  3332→        lastPriceAnimation: LastPriceAnimationMode;
+  1744→  3333→}
+  1745→  3334→/**
+  1746→  3335→ * Represents options for formatting dates, times, and prices according to a locale.
+  1747→  3336→ */
+  1748→  3337→export interface LocalizationOptions<HorzScaleItem> extends LocalizationOptionsBase {
+  1749→  3338→        /**
+  1750→  3339→         * Override formatting of the time scale crosshair label.
+  1751→  3340→         *
+  1752→  3341→         * @defaultValue `undefined`
+  1753→  3342→         */
+  1754→  3343→        timeFormatter?: TimeFormatterFn<HorzScaleItem>;
+  1755→  3344→        /**
+  1756→  3345→         * Date formatting string.
+  1757→  3346→         *
+  1758→  3347→         * Can contain `yyyy`, `yy`, `MMMM`, `MMM`, `MM` and `dd` literals which will be replaced with corresponding date's value.
+  1759→  3348→         *
+  1760→  3349→         * Ignored if {@link timeFormatter} has been specified.
+  1761→  3350→         *
+  1762→  3351→         * @defaultValue `'dd MMM \'yy'`
+  1763→  3352→         */
+  1764→  3353→        dateFormat: string;
+  1765→  3354→}
+  1766→  3355→/**
+  1767→  3356→ * Represents basic localization options
+  1768→  3357→ */
+  1769→  3358→export interface LocalizationOptionsBase {
+  1770→  3359→        /**
+  1771→  3360→         * Current locale used to format dates. Uses the browser's language settings by default.
+  1772→  3361→         *
+  1773→  3362→         * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl#Locale_identification_and_negotiation
+  1774→  3363→         * @defaultValue `navigator.language`
+  1775→  3364→         */
+  1776→  3365→        locale: string;
+  1777→  3366→        /**
+  1778→  3367→         * Override formatting of the price scale tick marks, labels and crosshair labels. Can be used for cases that can't be covered with built-in price formats.
+  1779→  3368→         *
+  1780→  3369→         * @see {@link PriceFormatCustom}
+  1781→  3370→         * @defaultValue `undefined`
+  1782→  3371→         */
+  1783→  3372→        priceFormatter?: PriceFormatterFn;
+  1784→  3373→        /**
+  1785→  3374→         * Overrides the formatting of price scale tick marks. Use this to define formatting rules based on all provided price values.
+  1786→  3375→         *
+  1787→  3376→         * @defaultValue `undefined`
+  1788→  3377→         */
+  1789→  3378→        tickmarksPriceFormatter?: TickmarksPriceFormatterFn;
+  1790→  3379→        /**
+  1791→  3380→         * Overrides the formatting of percentage scale tick marks.
+  1792→  3381→         *
+  1793→  3382→         * @defaultValue `undefined`
+  1794→  3383→         */
+  1795→  3384→        percentageFormatter?: PercentageFormatterFn;
+  1796→  3385→        /**
+  1797→  3386→         * Override formatting of the percentage scale tick marks. Can be used if formatting should be adjusted based on all the values being formatted
+  1798→  3387→         *
+  1799→  3388→         * @defaultValue `undefined`
+  1800→  3389→         */
+  1801→  3390→        tickmarksPercentageFormatter?: TickmarksPercentageFormatterFn;
+  1802→  3391→}
+  1803→  3392→export interface MouseEventParams<HorzScaleItem = Time> {
+  1804→  3393→        /**
+  1805→  3394→         * Time of the data at the location of the mouse event.
+  1806→  3395→         *
+  1807→  3396→         * The value will be `undefined` if the location of the event in the chart is outside the range of available data.
+  1808→  3397→         */
+  1809→  3398→        time?: HorzScaleItem;
+  1810→  3399→        /**
+  1811→  3400→         * Logical index
+  1812→  3401→         */
+  1813→  3402→        logical?: Logical;
+  1814→  3403→        /**
+  1815→  3404→         * Location of the event in the chart.
+  1816→  3405→         *
+  1817→  3406→         * The value will be `undefined` if the event is fired outside the chart, for example a mouse leave event.
+  1818→  3407→         */
+  1819→  3408→        point?: Point;
+  1820→  3409→        /**
+  1821→  3410→         * The index of the Pane
+  1822→  3411→         */
+  1823→  3412→        paneIndex?: number;
+  1824→  3413→        /**
+  1825→  3414→         * Data of all series at the location of the event in the chart.
+  1826→  3415→         *
+  1827→  3416→         * Keys of the map are {@link ISeriesApi} instances. Values are prices.
+  1828→  3417→         * Values of the map are original data items
+  1829→  3418→         */
+  1830→  3419→        seriesData: Map<ISeriesApi<SeriesType, HorzScaleItem>, BarData<HorzScaleItem> | LineData<HorzScaleItem> | HistogramData<HorzScaleItem> | CustomData<HorzScaleItem>>;
+  1831→  3420→        /**
+  1832→  3421→         * Rich information about the hovered item and its owner.
+  1833→  3422→         */
+  1834→  3423→        hoveredInfo?: HoveredInfo<HorzScaleItem>;
+  1835→  3424→        /**
+  1836→  3425→         * The {@link ISeriesApi} for the series at the point of the mouse event.
+  1837→  3426→         *
+  1838→  3427→         * @deprecated Use `hoveredInfo.series` instead.
+  1839→  3428→         */
+  1840→  3429→        hoveredSeries?: ISeriesApi<SeriesType, HorzScaleItem>;
+  1841→  3430→        /**
+  1842→  3431→         * The ID of the object at the point of the mouse event.
+  1843→  3432→         *
+  1844→  3433→         * @deprecated Use `hoveredInfo.objectId` instead.
+  1845→  3434→         */
+  1846→  3435→        hoveredObjectId?: unknown;
+  1847→  3436→        /**
+  1848→  3437→         * The underlying source mouse or touch event data, if available
+  1849→  3438→         */
+  1850→  3439→        sourceEvent?: TouchMouseEventData;
+  1851→  3440→}
+  1852→  3441→/**
+  1853→  3442→ * Represents a bar with a {@link Time} and open, high, low, and close prices.
+  1854→  3443→ */
+  1855→  3444→export interface OhlcData<HorzScaleItem = Time> extends WhitespaceData<HorzScaleItem> {
+  1856→  3445→        /**
+  1857→  3446→         * The bar time.
+  1858→  3447→         */
+  1859→  3448→        time: HorzScaleItem;
+  1860→  3449→        /**
+  1861→  3450→         * The open price.
+  1862→  3451→         */
+  1863→  3452→        open: number;
+  1864→  3453→        /**
+  1865→  3454→         * The high price.
+  1866→  3455→         */
+  1867→  3456→        high: number;
+  1868→  3457→        /**
+  1869→  3458→         * The low price.
+  1870→  3459→         */
+  1871→  3460→        low: number;
+  1872→  3461→        /**
+  1873→  3462→         * The close price.
+  1874→  3463→         */
+  1875→  3464→        close: number;
+  1876→  3465→}
+  1877→  3466→/**
+  1878→  3467→ * Object containing references to the chart instance, and a requestUpdate method for triggering
+  1879→  3468→ * a refresh of the chart.
+  1880→  3469→ */
+  1881→  3470→export interface PaneAttachedParameter<HorzScaleItem = Time> {
+  1882→  3471→        /**
+  1883→  3472→         * Chart instance.
+  1884→  3473→         */
+  1885→  3474→        chart: IChartApiBase<HorzScaleItem>;
+  1886→  3475→        /**
+  1887→  3476→         * Request an update (redraw the chart)
+  1888→  3477→         */
+  1889→  3478→        requestUpdate: () => void;
+  1890→  3479→}
+  1891→  3480→/**
+  1892→  3481→ * Data provide to the custom series pane view which can be used within the renderer
+  1893→  3482→ * for drawing the series data.
+  1894→  3483→ */
+  1895→  3484→export interface PaneRendererCustomData<HorzScaleItem, TData extends CustomData<HorzScaleItem>> {
+  1896→  3485→        /**
+  1897→  3486→         * List of all the series' items and their x coordinates.
+  1898→  3487→         */
+  1899→  3488→        bars: readonly CustomBarItemData<HorzScaleItem, TData>[];
+  1900→  3489→        /**
+  1901→  3490→         * Spacing between consecutive bars.
+  1902→  3491→         */
+  1903→  3492→        barSpacing: number;
+  1904→  3493→        /**
+  1905→  3494→         * The current visible range of items on the chart.
+  1906→  3495→         */
+  1907→  3496→        visibleRange: IRange<number> | null;
+  1908→  3497→        /**
+  1909→  3498→         * Current conflation factor. The value represents how many data points have been combined
+  1910→  3499→         * to form this conflated data point. This can be used to calculate the effective bar spacing
+  1911→  3500→         * until the next data point. `effectiveBarSpacing = conflationFactor * barSpacing`. If you
+  1912→  3501→         * are rendering a non-continuous series (like a Candlestick instead of Line) then you likely
+  1913→  3502→         * would want to use the effectiveBarSpacing value for your width calculations.
+  1914→  3503→         */
+  1915→  3504→        conflationFactor: number;
+  1916→  3505→}
+  1917→  3506→/**
+  1918→  3507→ * Dimensions of the Chart Pane
+  1919→  3508→ * (the main chart area which excludes the time and price scales).
+  1920→  3509→ */
+  1921→  3510→export interface PaneSize {
+  1922→  3511→        /** Height of the Chart Pane (pixels) */
+  1923→  3512→        height: number;
+  1924→  3513→        /** Width of the Chart Pane (pixels) */
+  1925→  3514→        width: number;
+  1926→  3515→}
+  1927→  3516→/**
+  1928→  3517→ * Represents a point on the chart.
+  1929→  3518→ */
+  1930→  3519→export interface Point {
+  1931→  3520→        /**
+  1932→  3521→         * The x coordinate.
+  1933→  3522→         */
+  1934→  3523→        readonly x: Coordinate;
+  1935→  3524→        /**
+  1936→  3525→         * The y coordinate.
+  1937→  3526→         */
+  1938→  3527→        readonly y: Coordinate;
+  1939→  3528→}
+  1940→  3529→/**
+  1941→  3530→ * Extends LocalizationOptions for price-based charts.
+  1942→  3531→ * Includes settings specific to formatting price values on the horizontal scale.
+  1943→  3532→ */
+  1944→  3533→export interface PriceChartLocalizationOptions extends LocalizationOptions<HorzScalePriceItem> {
+  1945→  3534→        /**
+  1946→  3535→         * The number of decimal places to display for price values on the horizontal scale.
+  1947→  3536→         */
+  1948→  3537→        precision: number;
+  1949→  3538→}
+  1950→  3539→/**
+  1951→  3540→ * Configuration options specific to price-based charts.
+  1952→  3541→ * Extends the base chart options and includes localization settings for price formatting.
+  1953→  3542→ */
+  1954→  3543→export interface PriceChartOptions extends ChartOptionsImpl<number> {
+  1955→  3544→        /**
+  1956→  3545→         * Localization options for formatting price values and other chart elements.
+  1957→  3546→         */
+  1958→  3547→        localization: PriceChartLocalizationOptions;
+  1959→  3548→}
+  1960→  3549→/**
+  1961→  3550→ * Represents series value formatting options.
+  1962→  3551→ * The precision and minMove properties allow wide customization of formatting.
+  1963→  3552→ *
+  1964→  3553→ * @example
+  1965→  3554→ * `minMove=0.01`, `precision` is not specified - prices will change like 1.13, 1.14, 1.15 etc.
+  1966→  3555→ * @example
+  1967→  3556→ * `minMove=0.01`, `precision=3` - prices will change like 1.130, 1.140, 1.150 etc.
+  1968→  3557→ * @example
+  1969→  3558→ * `minMove=0.05`, `precision` is not specified - prices will change like 1.10, 1.15, 1.20 etc.
+  1970→  3559→ */
+  1971→  3560→export interface PriceFormatBuiltIn {
+  1972→  3561→        /**
+  1973→  3562→         * Built-in price formats:
+  1974→  3563→         * - `'price'` is the most common choice; it allows customization of precision and rounding of prices.
+  1975→  3564→         * - `'volume'` uses abbreviation for formatting prices like `1.2K` or `12.67M`.
+  1976→  3565→         * - `'percent'` uses `%` sign at the end of prices.
+  1977→  3566→         */
+  1978→  3567→        type: "price" | "volume" | "percent";
+  1979→  3568→        /**
+  1980→  3569→         * Number of digits after the decimal point.
+  1981→  3570→         * If it is not set, then its value is calculated automatically based on minMove.
+  1982→  3571→         *
+  1983→  3572→         * @defaultValue `2` if both {@link minMove} and {@link precision} are not provided, calculated automatically based on {@link minMove} otherwise.
+  1984→  3573→         */
+  1985→  3574→        precision: number;
+  1986→  3575→        /**
+  1987→  3576→         * The minimum possible step size for price value movement. This value shouldn't have more decimal digits than the precision.
+  1988→  3577→         *
+  1989→  3578→         * @defaultValue `0.01`
+  1990→  3579→         */
+  1991→  3580→        minMove: number;
+  1992→  3581→        /**
+  1993→  3582→         * The base value for the price format. It should equal to 1 / {@link minMove}.
+  1994→  3583→         * If this option is specified, we ignore the {@link minMove} option.
+  1995→  3584→         * It can be useful for cases with very small price movements like `1e-18` where we can reach limitations of floating point precision.
+  1996→  3585→         */
+  1997→  3586→        base?: number;
+  1998→  3587→}
+  1999→  3588→/**
+  2000→  3589→ * Represents series value formatting options.
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]

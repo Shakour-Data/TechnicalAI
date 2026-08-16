@@ -99,7 +99,7 @@ export async function fetchCandlestick(
   if (!res.ok) throw new Error(`Failed to fetch candlestick for ${symbol}: ${res.status}`);
   const data = await res.json();
   if (Array.isArray(data)) return data;
-  return data.data || data.candlesticks || [];
+  return data.candle_daily_adjusted || data.candle_daily || data.data || data.candlesticks || [];
 }
 
 export async function fetchHistory(symbol: string): Promise<HistoryData[]> {
