@@ -7,7 +7,8 @@ import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText } fr
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
-import VdssVdes from '@/components/tse/vdss-vdes';
+import VdssGraph, { VdssGraphSkeleton } from '@/components/tse/vdss-graph';
+import VdesAnalysis, { VdesAnalysisSkeleton } from '@/components/tse/vdes-analysis';
 
 interface AnalysisData {
   symbol: string;
@@ -63,8 +64,7 @@ export default function Home() {
   const lastPrice = data?.ta ? data.candles[data.candles.length - 1]?.close ?? 0 : 0;
   const signalColor = data?.ta?.overallSignal === 'bullish' ? 'text-emerald-400' : data?.ta?.overallSignal === 'bearish' ? 'text-red-400' : 'text-amber-400';
   const signalBg = data?.ta?.overallSignal === 'bullish' ? 'bg-emerald-500/20 border-emerald-500/30' : data?.ta?.overallSignal === 'bearish' ? 'bg-red-500/20 border-red-500/30' : 'bg-amber-500/20 border-amber-500/30';
-  const signalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
-  const SignalIcon = signalIcon;
+  const SignalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#060a13] text-gray-100 flex flex-col">
@@ -208,11 +208,37 @@ export default function Home() {
               </TabsContent>
 
               <TabsContent value="vdss" className="mt-3">
-                <VdssVdes scenarios={data.ta.scenarios} currentPrice={lastPrice} />
+                <VdssGraph
+                  symbolName={data.info?.name ?? data.symbol}
+                  currentPrice={lastPrice}
+                  resistances={data.ta.resistances}
+                  supports={data.ta.supports}
+                  ma100={data.ta.sma.sma100 || 0}
+                  rsi={data.ta.rsi}
+                  mfi={data.ta.mfi}
+                  cci={data.ta.cci}
+                  adx={data.ta.adx}
+                  trendDirection={data.ta.trend.medium.direction}
+                  scenarios={data.ta.scenarios}
+                />
               </TabsContent>
 
               <TabsContent value="vdes" className="mt-3">
-                <VdssVdes scenarios={data.ta.scenarios} currentPrice={lastPrice} />
+                <VdesAnalysis
+                  symbolName={data.info?.name ?? data.symbol}
+                  currentPrice={lastPrice}
+                  resistances={data.ta.resistances}
+                  supports={data.ta.supports}
+                  ma100={data.ta.sma.sma100 || 0}
+                  rsi={data.ta.rsi}
+                  mfi={data.ta.mfi}
+                  cci={data.ta.cci}
+                  adx={data.ta.adx}
+                  trendDirection={data.ta.trend.medium.direction}
+                  trendAngle={data.ta.trend.medium.angle}
+                  trendR2={data.ta.trend.medium.r2}
+                  scenarios={data.ta.scenarios}
+                />
               </TabsContent>
             </Tabs>
           </div>
