@@ -16,15 +16,22 @@ export async function GET() {
       tno: 0,
       tvol: 0,
       tval: 0,
-      cs: '',
+      cs: i.groupTitle || '',
       category: i.category,
       tgjuKey: i.key,
     });
 
+    // Group by category
     const currencies = instruments.filter((i) => i.category === 'currency').map(toItem);
     const gold = instruments.filter((i) => i.category === 'gold').map(toItem);
     const silver = instruments.filter((i) => i.category === 'silver').map(toItem);
     const goldEtfs = instruments.filter((i) => i.category === 'gold_etf').map(toItem);
+    const crypto = instruments.filter((i) => i.category === 'crypto').map(toItem);
+    const worldIndices = instruments.filter((i) => i.category === 'world_index').map(toItem);
+    const forex = instruments.filter((i) => i.category === 'forex').map(toItem);
+    const energy = instruments.filter((i) => i.category === 'energy').map(toItem);
+    const metals = instruments.filter((i) => i.category === 'metal').map(toItem);
+    const commodities = instruments.filter((i) => i.category === 'commodity').map(toItem);
     const items = instruments.map(toItem);
 
     return NextResponse.json({
@@ -32,6 +39,12 @@ export async function GET() {
       gold,
       silver,
       goldEtfs,
+      crypto,
+      worldIndices,
+      forex,
+      energy,
+      metals,
+      commodities,
       items,
     });
   } catch (err) {

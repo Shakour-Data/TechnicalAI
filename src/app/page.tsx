@@ -46,7 +46,11 @@ interface IndexData {
   max: number;
 }
 
-const TGJU_CATEGORIES = new Set(['currency', 'gold', 'silver', 'gold_etf']);
+// All TGJU-based categories that use the tgju.org chart API
+const TGJU_CATEGORIES = new Set([
+  'currency', 'gold', 'silver', 'gold_etf',
+  'crypto', 'world_index', 'forex', 'energy', 'metal', 'commodity',
+]);
 
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
@@ -60,7 +64,7 @@ export default function Home() {
     // TGJU instrument: fetch historical data via tgju.org chart API
     if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
       setLoading(true);
-      setLoadingMessage('در حال دریافت داده‌های تاریخی از TGJU ... (حدود ۱۵ ثانیه)');
+      setLoadingMessage('در حال دریافت داده‌های تاریخی ... (حدود ۱۵ ثانیه)');
       setError(null);
       setData(null);
       setIndexData(null);
@@ -126,7 +130,7 @@ export default function Home() {
       return;
     }
 
-    // Regular TSE instrument: full TA analysis
+    // Regular TSE instrument: full TA analysis (تعدیل شده / adjusted prices only)
     setLoading(true);
     setError(null);
     setData(null);
@@ -162,7 +166,6 @@ export default function Home() {
     sar: data.ta.sar,
   } : null, [data?.ta]);
 
-  // Build stats bar for TGJU (no volume/value data)
   const isTgjuData = data?.isTgju;
 
   return (
@@ -176,12 +179,12 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-base font-bold text-amber-400 leading-tight">تحلیل تکنیکال بازار</h1>
-              <p className="text-[10px] text-gray-500">بورس + ارز + طلا (TSETMC &amp; TGJU)</p>
+              <p className="text-[10px] text-gray-500">بورس + ارز + طلا + کریپتو + فارکس + بورس جهانی (TSETMC &amp; TGJU)</p>
             </div>
           </div>
 
           <div className="flex-1 min-w-[240px] max-w-xl">
-            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، ارز، طلا، شاخص، صندوق ...' />
+            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، ارز، طلا، کریپتو، شاخص ...' />
           </div>
 
           {indexData && (
@@ -267,14 +270,18 @@ export default function Home() {
             </div>
             <h2 className="text-xl font-bold text-gray-200 mb-2">تحلیل تکنیکال بازار ایران</h2>
             <p className="text-gray-500 max-w-md mb-6">
-              نماد بورسی، ارز، طلا، شاخص یا صندوق مورد نظر خود را جستجو کنید
+              نماد بورسی، ارز، طلا، کریپتو، شاخص جهانی یا جفت ارز مورد نظر خود را جستجو کنید
               تا تحلیل کامل تکنیکال نمایش داده شود.
             </p>
             <div className="flex flex-wrap justify-center gap-2 text-xs text-gray-600">
               <span className="px-3 py-1.5 rounded-full bg-white/5">سهام</span>
               <span className="px-3 py-1.5 rounded-full bg-teal-500/10 text-teal-400/60">ارزها</span>
+              <span className="px-3 py-1.5 rounded-full bg-violet-500/10 text-violet-400/60">جفت ارز</span>
+              <span className="px-3 py-1.5 rounded-full bg-orange-500/10 text-orange-400/60">کریپتو</span>
               <span className="px-3 py-1.5 rounded-full bg-yellow-500/10 text-yellow-400/60">طلا و نقره</span>
-              <span className="px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400/60">صندوق طلا</span>
+              <span className="px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-400/60">بورس جهانی</span>
+              <span className="px-3 py-1.5 rounded-full bg-red-500/10 text-red-400/60">نفت و انرژی</span>
+              <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400/60">فلزات</span>
               <span className="px-3 py-1.5 rounded-full bg-rose-500/10 text-rose-400/60">شاخص‌ها</span>
               <span className="px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-400/60">صندوق‌ها</span>
               <span className="px-3 py-1.5 rounded-full bg-white/5">RSI, MACD, BB, VDss</span>
@@ -426,7 +433,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-auto border-t border-white/5 py-3 text-center text-[10px] text-gray-600">
-        داده‌های بورس از TSETMC | داده‌های ارز و طلا از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست.
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست.
       </footer>
     </div>
   );

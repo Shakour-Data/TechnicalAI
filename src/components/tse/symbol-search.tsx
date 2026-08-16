@@ -8,6 +8,7 @@ import {
   Search, X, TrendingUp, TrendingDown,
   BarChart3, Landmark, Building2, FileText,
   ChevronDown, Layers, ArrowUpDown, Coins, CircleDollarSign,
+  Globe, Bitcoin, Fuel, Gem, Package,
 } from 'lucide-react';
 
 /* --─ Types ---------------------------------------------- */
@@ -21,7 +22,9 @@ interface InstrumentItem {
   tvol: number;
   tval: number;
   cs: string;
-  category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index' | 'currency' | 'gold' | 'silver' | 'gold_etf';
+  category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index'
+    | 'currency' | 'gold' | 'silver' | 'gold_etf'
+    | 'crypto' | 'world_index' | 'forex' | 'energy' | 'metal' | 'commodity';
   insCode?: string;
   tgjuKey?: string;
   index?: number;
@@ -47,6 +50,12 @@ interface TgjuData {
   gold: InstrumentItem[];
   silver: InstrumentItem[];
   goldEtfs: InstrumentItem[];
+  crypto: InstrumentItem[];
+  worldIndices: InstrumentItem[];
+  forex: InstrumentItem[];
+  energy: InstrumentItem[];
+  metals: InstrumentItem[];
+  commodities: InstrumentItem[];
   items: InstrumentItem[];
 }
 
@@ -61,18 +70,29 @@ interface SymbolSearchProps {
 const MAX_RESULTS = 30;
 
 const CATEGORIES = [
-  { key: 'all', label: 'همه', icon: Layers },
-  { key: 'indices', label: 'شاخص‌ها', icon: BarChart3 },
-  { key: 'stocks', label: 'سهام', icon: Building2 },
-  { key: 'etf', label: 'صندوق‌ها', icon: Landmark },
-  { key: 'currency', label: 'ارزها', icon: CircleDollarSign },
-  { key: 'gold', label: 'طلا و نقره', icon: Coins },
-  { key: 'gold_etf', label: 'صندوق طلا', icon: Coins },
-  { key: 'bond', label: 'اوراق بدهی', icon: FileText },
-  { key: 'derivative', label: 'مشتقه', icon: ArrowUpDown },
+  { key: 'all',         label: 'همه',           icon: Layers },
+  { key: 'indices',     label: 'شاخص‌ها',       icon: BarChart3 },
+  { key: 'stocks',      label: 'سهام',          icon: Building2 },
+  { key: 'etf',         label: 'صندوق‌ها',      icon: Landmark },
+  { key: 'currency',    label: 'ارزها (ریال)',   icon: CircleDollarSign },
+  { key: 'forex',       label: 'جفت ارز',       icon: Globe },
+  { key: 'crypto',      label: 'کریپتو',        icon: Bitcoin },
+  { key: 'gold',        label: 'طلا و سکه',     icon: Coins },
+  { key: 'gold_etf',    label: 'صندوق طلا',     icon: Coins },
+  { key: 'world_index', label: 'بورس جهانی',    icon: Globe },
+  { key: 'energy',      label: 'نفت و انرژی',   icon: Fuel },
+  { key: 'metal',       label: 'فلزات جهانی',   icon: Gem },
+  { key: 'commodity',   label: 'کالاهای جهانی', icon: Package },
+  { key: 'bond',        label: 'اوراق بدهی',    icon: FileText },
+  { key: 'derivative',  label: 'مشتقه',         icon: ArrowUpDown },
 ] as const;
 
 type CategoryKey = (typeof CATEGORIES)[number]['key'];
+
+const TGJU_CATEGORIES = new Set<CategoryKey>([
+  'currency', 'gold', 'silver', 'gold_etf',
+  'crypto', 'world_index', 'forex', 'energy', 'metal', 'commodity',
+]);
 
 const CATEGORY_COLORS: Record<string, string> = {
   stock: 'bg-blue-500/15 text-blue-400',
@@ -86,6 +106,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   gold: 'bg-yellow-500/15 text-yellow-400',
   silver: 'bg-gray-400/15 text-gray-300',
   gold_etf: 'bg-amber-500/15 text-amber-400',
+  crypto: 'bg-orange-500/15 text-orange-400',
+  world_index: 'bg-blue-500/15 text-blue-400',
+  forex: 'bg-violet-500/15 text-violet-400',
+  energy: 'bg-red-500/15 text-red-400',
+  metal: 'bg-emerald-500/15 text-emerald-400',
+  commodity: 'bg-lime-500/15 text-lime-400',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -100,6 +126,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   gold: 'طلا',
   silver: 'نقره',
   gold_etf: 'صندوق طلا',
+  crypto: 'کریپتو',
+  world_index: 'شاخص جهانی',
+  forex: 'فارکس',
+  energy: 'انرژی',
+  metal: 'فلز',
+  commodity: 'کالا',
 };
 
 /* --─ Helpers -------------------------------------------- */
@@ -143,7 +175,7 @@ export default function SymbolSearch({
   const cacheRef = React.useRef<InstrumentsData | null>(null);
   const tgjuCacheRef = React.useRef<TgjuData | null>(null);
   const fetchRef = React.useRef<Promise<InstrumentsData> | null>(null);
-  const tgjuFetchRef = React.useRef<Promise<TgjuData> | null>(null);
+  const tgjuFetchRef = React.useRef<Promise<TgjuData | null> | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
@@ -189,12 +221,10 @@ export default function SymbolSearch({
   }, []);
 
   /* -- Check if category is TGJU-based -- */
-  const isTgjuCategory = (cat: CategoryKey) =>
-    cat === 'currency' || cat === 'gold' || cat === 'gold_etf' || cat === 'silver';
+  const isTgjuCategory = (cat: CategoryKey) => TGJU_CATEGORIES.has(cat);
 
   /* -- Get all items for current category -- */
   const getItemsForCategory = React.useCallback(async (cat: CategoryKey): Promise<InstrumentItem[]> => {
-    // TGJU categories
     if (isTgjuCategory(cat)) {
       const tgju = tgjuCacheRef.current || await fetchTgjuData();
       if (!tgju) return [];
@@ -203,6 +233,12 @@ export default function SymbolSearch({
         case 'gold': return [...tgju.gold, ...tgju.silver];
         case 'gold_etf': return tgju.goldEtfs;
         case 'silver': return tgju.silver;
+        case 'crypto': return tgju.crypto;
+        case 'world_index': return tgju.worldIndices;
+        case 'forex': return tgju.forex;
+        case 'energy': return tgju.energy;
+        case 'metal': return tgju.metals;
+        case 'commodity': return tgju.commodities;
         default: return [];
       }
     }
@@ -226,9 +262,15 @@ export default function SymbolSearch({
           ...data.stocks,
           ...data.etfs,
           ...(tgju?.currencies || []),
+          ...(tgju?.forex || []),
+          ...(tgju?.crypto || []),
           ...(tgju?.gold || []),
           ...(tgju?.silver || []),
           ...(tgju?.goldEtfs || []),
+          ...(tgju?.worldIndices || []),
+          ...(tgju?.energy || []),
+          ...(tgju?.metals || []),
+          ...(tgju?.commodities || []),
           ...data.bonds,
           ...data.futures,
           ...data.salaf,
@@ -238,7 +280,7 @@ export default function SymbolSearch({
     }
   }, [activeIndustry, fetchData, fetchTgjuData]);
 
-  /* -- Popular items (top by value) -- */
+  /* -- Popular items -- */
   const getPopular = React.useCallback(async () => {
     const data = cacheRef.current || await fetchData();
     const tgju = tgjuCacheRef.current;
@@ -247,7 +289,8 @@ export default function SymbolSearch({
       ...data.stocks,
       ...data.etfs,
       ...(tgju?.currencies || []),
-      ...(tgju?.gold || []).slice(0, 5),
+      ...(tgju?.crypto?.slice(0, 5) || []),
+      ...(tgju?.gold?.slice(0, 3) || []),
     ];
     const sorted = [...all].sort((a, b) => (b.tval || 0) - (a.tval || 0)).slice(0, 15);
     setResults(sorted);
@@ -271,9 +314,7 @@ export default function SymbolSearch({
   /* -- Show dropdown with data -- */
   const showDropdown = React.useCallback(async (q: string) => {
     setOpen(true);
-    // Ensure both data sources are loaded
-    const [,] = await Promise.all([fetchData(), fetchTgjuData()]);
-
+    await Promise.all([fetchData(), fetchTgjuData()]);
     const items = await getItemsForCategory(activeCategory);
     if (q.trim().length === 0) {
       if (activeCategory === 'all') {
@@ -400,11 +441,19 @@ export default function SymbolSearch({
         </div>
       );
     }
+    // For static TGJU items with no live price, show dash
+    if (isTgju && item.pl === 0) {
+      return (
+        <div className='flex shrink-0 flex-col items-end gap-0.5'>
+          <span className='text-xs text-gray-500'>—</span>
+        </div>
+      );
+    }
     const isUp = item.pcp > 0;
     const isDown = item.pcp < 0;
     return (
       <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
-        <span className='text-xs font-semibold text-gray-200'>{isTgju ? formatNum(item.pl) : formatNum(item.pl)}</span>
+        <span className='text-xs font-semibold text-gray-200'>{formatNum(item.pl)}</span>
         <span className={cn(
           'text-[11px] font-bold px-1.5 py-0.5 rounded',
           isUp ? 'bg-emerald-500/15 text-emerald-400' :
@@ -561,13 +610,7 @@ export default function SymbolSearch({
             </div>
           )}
 
-          {isTgjuCategory(activeCategory) && loading && results.length === 0 && (
-            <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-gray-400'>
-              <Spinner /><span>در حال بارگذاری ...</span>
-            </div>
-          )}
-
-          {!isTgjuCategory(activeCategory) && loading && results.length === 0 && (
+          {loading && results.length === 0 && (
             <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-gray-400'>
               <Spinner /><span>در حال بارگذاری ...</span>
             </div>
@@ -601,8 +644,6 @@ export default function SymbolSearch({
               >
                 {results.map((item, index) => {
                   const isActive = index === activeIndex;
-                  const isUp = item.pcp > 0;
-                  const isDown = item.pcp < 0;
                   const isTgjuItem = isTgjuCategory(item.category as CategoryKey);
                   return (
                     <div
@@ -621,19 +662,14 @@ export default function SymbolSearch({
                       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
                         <div className='flex items-center gap-2'>
                           <span className='truncate font-bold text-sm text-gray-100'>{item.l18}</span>
-                          {isUp && <TrendingUp className='w-3 h-3 text-emerald-400 shrink-0' />}
-                          {isDown && <TrendingDown className='w-3 h-3 text-red-400 shrink-0' />}
+                          {item.pcp > 0 && <TrendingUp className='w-3 h-3 text-emerald-400 shrink-0' />}
+                          {item.pcp < 0 && <TrendingDown className='w-3 h-3 text-red-400 shrink-0' />}
                           <span className={cn(
                             'text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium',
                             CATEGORY_COLORS[item.category],
                           )}>
                             {CATEGORY_LABELS[item.category]}
                           </span>
-                          {isTgjuItem && (
-                            <span className='text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium bg-teal-500/10 text-teal-500/70'>
-                              TGJU
-                            </span>
-                          )}
                         </div>
                         {item.l30 && item.l30 !== item.l18 && (
                           <span className='truncate text-[11px] text-gray-500 leading-tight'>{item.l30}</span>

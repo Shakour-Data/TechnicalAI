@@ -182,7 +182,7 @@ export async function fetchSymbolData(symbol: string): Promise<Record<string, un
 
 export async function fetchCandlestick(
   symbol: string,
-  type: number = 3 // 1=realtime 2min, 2=daily unadjusted, 3=daily adjusted
+  type: number = 3, // ⚠️ ALWAYS use type=3 (تعدیل‌شده / adjusted). Never use 1 (realtime) or 2 (unadjusted).
 ): Promise<CandleData[]> {
   const url = `${BASE_URL}/Candlestick.php?key=${API_KEY}&type=${type}&l18=${encodeURIComponent(symbol)}`;
   const res = await fetch(url, { headers: HEADERS });

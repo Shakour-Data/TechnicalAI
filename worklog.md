@@ -22,3 +22,31 @@ Stage Summary:
 - Historical data fetched via z-ai page_reader (bypasses Cloudflare), cached 30min
 - Real-time prices from tgju-api (fast, no Cloudflare), cached 5min
 - All existing TSE functionality preserved
+---
+Task ID: 1
+Agent: main
+Task: Fix console errors, enforce adjusted prices, add crypto/world indices/forex/energy/metals/commodities from TGJU
+
+Work Log:
+- Read dev.log and identified a past parsing error (already resolved in code)
+- Verified no current compilation or runtime errors
+- Confirmed all TSE candlestick data uses type=3 (تعدیل شده / adjusted prices) - only call site in analysis/route.ts uses fetchCandlestick(symbol, 3)
+- Added safety comment to fetchCandlestick function to prevent future misuse
+- Explored tgju.org website to discover all available instrument keys via page_reader
+- Tested chart API keys: crypto-bitcoin, indices-us30-oanda, eur-usd-ask — all confirmed working
+- Updated tgju-api.ts: Added 80+ static instruments across 6 new categories (crypto, world_index, forex, energy, metal, commodity)
+- Updated tgju-instruments API route to return all new categories
+- Updated symbol-search.tsx: Added 15 category tabs (was 8), with icons from lucide-react (Globe, Bitcoin, Fuel, Gem, Package)
+- Updated page.tsx: Extended TGJU_CATEGORIES set to include all 10 TGJU-based categories
+- Verified with Agent Browser: all category tabs work, search across categories works, zero console errors, responsive layout confirmed
+
+Stage Summary:
+- 15 category tabs in symbol search: همه، شاخص‌ها، سهام، صندوق‌ها، ارزها (ریال)، جفت ارز، کریپتو، طلا و سکه، صندوق طلا، بورس جهانی، نفت و انرژی، فلزات جهانی، کالاهای جهانی، اوراق بدهی، مشتقه
+- Crypto: 13 coins (BTC, ETH, LTC, XRP, BCH, ADA, XLM, USDT, XMR, DASH, EOS, NEO, IOTA)
+- World Indices: 21 indices across America, Europe, Asia, Middle East (Dow, Nasdaq, S&P500, DAX, CAC40, FTSE, Nikkei, Hang Seng, TASI, etc.)
+- Forex: 16 pairs (EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, etc.)
+- Energy: 6 instruments (Brent, WTI, OPEC, Natural Gas, Gasoline, LNG)
+- Metals: 10 instruments (Gold ounce, Silver, Platinum, Palladium, Copper, Aluminum, Zinc, Nickel, Lead, Tin)
+- Commodities: 9 instruments (Wheat, Corn, Soybeans, Rice, Cotton, Cocoa, Sugar, Coffee, Soybean Oil)
+- All prices are based on TGJU chart API historical data
+- All TSE data uses adjusted prices only (type=3)
