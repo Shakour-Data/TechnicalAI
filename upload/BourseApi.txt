@@ -1,0 +1,541 @@
+
+
+API key  for BrsApi:
+BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3
+
+# راهنمای جامع استفاده از API رایگان بورس TSETMC (brsapi.ir)
+
+***
+
+## ساختار کلی سایت
+
+سایت **brsapi.ir** یک پلتفرم رایگان برای دسترسی برنامه‌نویسی به داده‌های بازار بورس ایران (TSETMC) است. منوی اصلی شامل ۴ بخش کلیدی است: [brsapi](https://brsapi.ir/)
+
+| بخش | توضیح |
+|---|---|
+| وب‌سرویس‌های بورس و فرابورس | APIهای اصلی سهام، صندوق‌ها، شاخص |
+| وب‌سرویس‌های بورس کالا | APIهای IME |
+| سایر وب‌سرویس‌های بازار مالی | سایر ابزارهای مالی |
+| درخواست Api Key رایگان | ثبت‌نام و دریافت کلید |
+
+***
+
+## گام اول: دریافت API Key رایگان
+
+قبل از هر چیز باید کلید رایگان دریافت کنید: [brsapi](https://brsapi.ir/)
+
+```
+URL: https://brsapi.ir/tsetmc-exchange-free-bourse-api-key-request/
+```
+
+پس از ثبت درخواست، یک `API Key` مانند `FreeSV0E1LSgB9RDjuf0QorSLViX8pPG` دریافت می‌کنید.
+
+***
+
+## بخش اول: استخراج داده‌های لحظه‌ای
+
+### 1) دریافت دیتای همه نمادها به‌صورت لحظه‌ای
+
+این API مهم‌ترین endpoint برای مانیتورینگ است: [brsapi](https://brsapi.ir/)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/AllSymbols.php?key=YourApiKey&type=Number
+```
+
+**پارامترهای ورودی:**
+
+| پارامتر | اجباری | مقادیر |
+|---|---|---|
+| `key` | بله | API Key شما |
+| `type` | خیر (پیش‌فرض=1) | 1=سهام+ETF+حق‌تقدم / 2=بورس کالا / 3=آتی / 4=اوراق بدهی / 5=تسهیلات مسکن |
+
+**مثال:**
+```
+https://Api.BrsApi.ir/Tsetmc/AllSymbols.php?key=FreeSV0E1LSgB9RDjuf0QorSLViX8pPG&type=1
+```
+
+**فیلدهای خروجی JSON (لحظه‌ای):** [brsapi](https://brsapi.ir/)
+
+| فیلد | توضیح | نمونه |
+|---|---|---|
+| `time` | زمان آخرین اطلاعات | 12:30:01 |
+| `l18` | نماد | شتران |
+| `l30` | نام شرکت | پالایش نفت تهران |
+| `isin` | شناسه بین‌المللی | IRO1PTEH0001 |
+| `id` | شناسه داخلی TSETMC | 51617145873056483 |
+| `pl` | آخرین قیمت | 4499 |
+| `plp` | درصد تغییر آخرین قیمت | 1.4 |
+| `pc` | قیمت پایانی | 4529 |
+| `pcp` | درصد تغییر قیمت پایانی | 2.07 |
+| `tno` | تعداد معاملات | 5953 |
+| `tvol` | حجم معاملات | 174743191 |
+| `tval` | ارزش معاملات | 791481204551 |
+| `Buy_CountI` | تعداد خریدار حقیقی | 2068 |
+| `Buy_CountN` | تعداد خریدار حقوقی | 19 |
+| `Buy_I_Volume` | حجم خرید حقیقی | 143033919 |
+| `Buy_N_Volume` | حجم خرید حقوقی | 31709272 |
+| `pd1`-`pd5` | قیمت خرید (۵ سطر) | 4497 |
+| `po1`-`po5` | قیمت فروش (۵ سطر) | 4499 |
+| `eps` | EPS | 908 |
+| `pe` | P/E | 4.98 |
+
+***
+
+### 2) دریافت دیتای جامع یک نماد خاص (لحظه‌ای)
+
+برای دریافت اطلاعات کامل یک نماد به‌صورت لحظه‌ای: [brsapi](https://brsapi.ir/bourse-api-symbol-webservice/)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Symbol.php?key=YourApiKey&l18=نماد
+```
+
+**مثال:**
+```
+https://Api.BrsApi.ir/Tsetmc/Symbol.php?key=FreeSV0E1LSgB9RDjuf0QorSLViX8pPG&l18=خودرو
+```
+
+این API علاوه بر تمام فیلدهای AllSymbols، اطلاعات اضافه‌ای مانند اطلاعات مجامع (`assembly[]`)، گروه صنعت، وضعیت بازار و عمق کامل بازار را هم برمی‌گرداند. [brsapi](https://brsapi.ir/bourse-api-symbol-webservice/)
+
+***
+
+### 3) دریافت کندل‌استیک لحظه‌ای (تایم‌فریم ۲ دقیقه‌ای)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Candlestick.php?key=YourApiKey&type=1&l18=نماد
+```
+
+با `type=1` کندل‌های لحظه‌ای روز جاری با تایم‌فریم ۲ دقیقه دریافت می‌شود. [brsapi](https://brsapi.ir/bourse-api-candlestick-webservice/)
+
+***
+
+## بخش دوم: استخراج داده‌های تاریخی
+
+### 1) دیتای تاریخی قیمت و معاملات (روزانه)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/History.php?key=YourApiKey&type=0&l18=نماد
+```
+
+**مثال:**
+```
+https://Api.BrsApi.ir/Tsetmc/History.php?key=FreeSV0E1LSgB9RDjuf0QorSLViX8pPG&type=0&l18=فملی
+```
+
+**فیلدهای خروجی (به‌ازای هر روز معاملاتی):** [brsapi](https://brsapi.ir/bourse-api-history-webservice/)
+
+| فیلد | توضیح | نمونه |
+|---|---|---|
+| `date` | تاریخ شمسی | 1403-08-08 |
+| `time` | زمان بسته‌شدن | 12:30:00 |
+| `pf` | اولین قیمت | 4500 |
+| `pc` | قیمت پایانی | 4529 |
+| `pl` | آخرین قیمت | 4499 |
+| `py` | قیمت پایانی روز قبل | 4437 |
+| `pmin` | کمترین قیمت | 4470 |
+| `pmax` | بیشترین قیمت | 4594 |
+| `pcc` | تغییر قیمت پایانی | 92 |
+| `pcp` | درصد تغییر قیمت پایانی | 2.07 |
+| `tno` | تعداد معاملات | 5953 |
+| `tvol` | حجم معاملات | 174743191 |
+| `tval` | ارزش معاملات | 791481204551 |
+
+***
+
+### 2) کندل‌استیک تاریخی (تعدیل‌نشده و تعدیل‌شده)
+
+این API سه نوع داده ارائه می‌دهد: [brsapi](https://brsapi.ir/bourse-api-candlestick-webservice/)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Candlestick.php?key=YourApiKey&type=Number&l18=نماد
+```
+
+| مقدار `type` | نوع داده |
+|---|---|
+| `1` | کندل لحظه‌ای روز جاری (تایم‌فریم ۲ دقیقه) |
+| `2` | تاریخچه روزانه تعدیل‌نشده (قیمت خام) |
+| `3` | تاریخچه روزانه تعدیل‌شده (لحاظ سود نقدی و افزایش سرمایه) |
+
+**مثال برای تاریخچه تعدیل‌شده:**
+```
+https://Api.BrsApi.ir/Tsetmc/Candlestick.php?key=FreeSV0E1LSgB9RDjuf0QorSLViX8pPG&type=3&l18=فملی
+```
+
+**فیلدهای خروجی کندل:** [brsapi](https://brsapi.ir/bourse-api-candlestick-webservice/)
+
+| فیلد | توضیح |
+|---|---|
+| `date` | تاریخ شمسی |
+| `time` | زمان (فقط در لحظه‌ای) |
+| `open` | اولین قیمت |
+| `high` | بالاترین قیمت |
+| `low` | پایین‌ترین قیمت |
+| `close` | آخرین قیمت |
+| `volume` | حجم معامله |
+| `count` | تعداد کل کندل‌ها |
+
+***
+
+## پیاده‌سازی در Python
+
+```python
+import requests
+
+API_KEY = "YourApiKey"
+
+# --- داده لحظه‌ای همه نمادها ---
+def get_all_symbols(market_type=1):
+    url = f"https://Api.BrsApi.ir/Tsetmc/AllSymbols.php?key={API_KEY}&type={market_type}"
+    response = requests.get(url)
+    return response.json()
+
+# --- داده تاریخی یک نماد ---
+def get_history(symbol):
+    url = f"https://Api.BrsApi.ir/Tsetmc/History.php?key={API_KEY}&type=0&l18={symbol}"
+    response = requests.get(url)
+    return response.json()
+
+# --- کندل تاریخی تعدیل‌شده ---
+def get_candlestick_adjusted(symbol):
+    url = f"https://Api.BrsApi.ir/Tsetmc/Candlestick.php?key={API_KEY}&type=3&l18={symbol}"
+    response = requests.get(url)
+    return response.json()
+
+# --- کندل لحظه‌ای (روز جاری) ---
+def get_candlestick_realtime(symbol):
+    url = f"https://Api.BrsApi.ir/Tsetmc/Candlestick.php?key={API_KEY}&type=1&l18={symbol}"
+    response = requests.get(url)
+    return response.json()
+
+# نمونه استفاده
+if __name__ == "__main__":
+    data = get_all_symbols()
+    print(data)
+    
+    history = get_history("فملی")
+    print(history)
+```
+
+***
+
+## خلاصه و مقایسه APIها
+
+| API | Endpoint | نوع | کاربرد |
+|---|---|---|---|
+| AllSymbols | `/AllSymbols.php` | لحظه‌ای | دیتای همه نمادها |
+| Symbol | `/Symbol.php` | لحظه‌ای | دیتای جامع یک نماد |
+| History | `/History.php` | تاریخی | قیمت و معاملات روزانه |
+| Candlestick type=1 | `/Candlestick.php` | لحظه‌ای | کندل‌های ۲ دقیقه‌ای |
+| Candlestick type=2 | `/Candlestick.php` | تاریخی | OHLCV تعدیل‌نشده |
+| Candlestick type=3 | `/Candlestick.php` | تاریخی | OHLCV تعدیل‌شده |
+
+***
+
+## نکات مهم برای برنامه‌نویس
+
+1. **فرمت خروجی**: همه APIها JSON برمی‌گردانند [brsapi](https://brsapi.ir/)
+2. **نام‌گذاری پارامترها**: دقیقاً مشابه متغیرهای فیلترنویسی TSETMC است [brsapi](https://brsapi.ir/)
+3. **برای داده لحظه‌ای**: فقط در ساعات بازار (۹ تا ۱۲:۳۰) داده به‌روز می‌شود
+4. **نماد فارسی**: نمادها به فارسی وارد می‌شوند (مثل `فملی` یا `خودرو`)
+5. **API Key رایگان**: برای استفاده رایگان کلید `FreeSV0E1LSgB9RDjuf0QorSLViX8pPG` هم در مستندات به‌عنوان نمونه آمده [brsapi](https://brsapi.ir/)
+
+
+
+# بررسی کامل تمام صفحات سایت brsapi.ir
+
+***
+
+## ساختار کلی سایت
+
+سایت **brsapi.ir** شامل **۳ دسته اصلی** و **۱۴+ صفحه API** است که همه را به‌ترتیب بررسی کردم: [brsapi](https://brsapi.ir/category/api-bourse/)
+
+***
+
+## 🔑 گام صفر: دریافت API Key رایگان
+
+**مهم‌ترین نکته** قبل از شروع: [brsapi](https://brsapi.ir/tsetmc-exchange-free-bourse-api-key-request/)
+
+```
+https://api.brsapi.ir/Panel/register.html
+```
+
+### قوانین مهم برای برنامه‌نویسان:
+- هر کلید: **۳۰۰ ریکوئست در هر ۵ دقیقه** (رایگان)
+- **User-Agent پیش‌فرض Python و Go مسدود می‌شود!** — باید User-Agent مرورگر (Chrome/Firefox) را در هدر بفرستی
+- استفاده در Google Sheets و Cloudflare Workers ممنوع است
+- پروکسی و CORS Proxy ممنوع است
+
+**نمونه صحیح در Python:**
+```python
+import requests
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+}
+response = requests.get(url, headers=headers)
+```
+
+***
+
+# بخش اول: وب‌سرویس‌های بورس و فرابورس
+
+## ✅ 1. API دیتای لحظه‌ای همه نمادها (AllSymbols)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/AllSymbols.php?key=YourApiKey&type=1
+```
+
+**پارامتر `type`:** [brsapi](https://brsapi.ir/category/api-bourse/)
+
+| مقدار | معنی |
+|---|---|
+| 1 | سهام + ETF + حق‌تقدم (پیش‌فرض) |
+| 2 | بورس کالا (فقط نمادهای TSETMC) |
+| 3 | آتی |
+| 4 | اوراق بدهی |
+| 5 | تسهیلات مسکن |
+
+**فیلدهای خروجی JSON:**
+
+| فیلد | توضیح |
+|---|---|
+| `time` | زمان آخرین داده |
+| `l18` | نماد فارسی |
+| `l30` | نام شرکت |
+| `isin` | شناسه بین‌المللی |
+| `id` | شناسه داخلی TSETMC |
+| `pl` / `plp` | آخرین قیمت / درصد تغییر |
+| `pc` / `pcp` | قیمت پایانی / درصد تغییر |
+| `py` | قیمت پایانی دیروز |
+| `pf` | اولین قیمت |
+| `pmin` / `pmax` | کمترین / بیشترین قیمت |
+| `tno` | تعداد معاملات |
+| `tvol` | حجم معاملات |
+| `tval` | ارزش معاملات |
+| `eps` / `pe` | EPS / P/E |
+| `Buy_CountI` / `Buy_CountN` | خریداران حقیقی / حقوقی |
+| `Buy_I_Volume` / `Buy_N_Volume` | حجم خرید حقیقی / حقوقی |
+| `Sell_I_Volume` / `Sell_N_Volume` | حجم فروش حقیقی / حقوقی |
+| `pd1`-`pd5` | قیمت خرید (۵ سطر عمق بازار) |
+| `po1`-`po5` | قیمت فروش (۵ سطر عمق بازار) |
+| `qd1`-`qd5` | حجم خرید (۵ سطر) |
+| `qo1`-`qo5` | حجم فروش (۵ سطر) |
+
+***
+
+## ✅ 2. API دیتای جامع نماد (Symbol) — لحظه‌ای
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Symbol.php?key=YourApiKey&l18=خودرو
+```
+
+شامل همه فیلدهای AllSymbols + اطلاعات مجامع (`assembly[]`)، گروه صنعت و وضعیت بازار. [brsapi](https://brsapi.ir/bourse-api-codal-webservice/)
+
+***
+
+## ✅ 3. API کندل‌استیک — هم لحظه‌ای هم تاریخی
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Candlestick.php?key=YourApiKey&type=Number&l18=فملی
+```
+
+**پارامتر `type`:** [brsapi](https://brsapi.ir/bourse-api-transaction-webservice/)
+
+| مقدار | معنی |
+|---|---|
+| **1** | کندل لحظه‌ای روز جاری — تایم‌فریم **۲ دقیقه** |
+| **2** | تاریخچه روزانه **تعدیل‌نشده** |
+| **3** | تاریخچه روزانه **تعدیل‌شده** (لحاظ سود نقدی + افزایش سرمایه) |
+
+**فیلدهای خروجی:**
+
+| فیلد | توضیح |
+|---|---|
+| `date` | تاریخ شمسی |
+| `time` | زمان (فقط type=1) |
+| `open` | اولین قیمت |
+| `high` | بالاترین قیمت |
+| `low` | پایین‌ترین قیمت |
+| `close` | آخرین قیمت |
+| `volume` | حجم معامله |
+| `count` | تعداد کل کندل‌ها |
+
+***
+
+## ✅ 4. API دیتای تاریخی (History) — روزانه
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/History.php?key=YourApiKey&type=0&l18=فملی
+```
+
+**فیلدهای خروجی (به‌ازای هر روز):** [brsapi](https://brsapi.ir/bourse-api-index-webservice/)
+
+| فیلد | توضیح |
+|---|---|
+| `date` | تاریخ شمسی مثل `1403-08-08` |
+| `time` | زمان |
+| `pf` | اولین قیمت |
+| `pc` | قیمت پایانی |
+| `pl` | آخرین قیمت |
+| `py` | قیمت پایانی روز قبل |
+| `pmin` / `pmax` | کمترین / بیشترین قیمت |
+| `pcc` / `pcp` | تغییر قیمت / درصد تغییر |
+| `tno` | تعداد معاملات |
+| `tvol` | حجم معاملات |
+| `tval` | ارزش معاملات |
+
+***
+
+## ✅ 5. API ریزمعاملات (Transaction) — لحظه‌ای
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Transaction.php?key=YourApiKey&l18=اهرم&date=1404-02-22
+```
+
+- اگر `date` ارسال نشود → آخرین روز معاملاتی برمی‌گردد [brsapi](https://brsapi.ir/bourse-api-transaction-webservice/)
+
+| فیلد | توضیح |
+|---|---|
+| `row` | ردیف معامله |
+| `time` | زمان دقیق معامله |
+| `volume` | حجم |
+| `price` | قیمت |
+| `canceled` | ابطال (0 یا 1) |
+
+***
+
+## ✅ 6. API سهامداران (Shareholder)
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Shareholder.php?key=YourApiKey&l18=شتران&date=1404-02-22
+```
+
+- `date` اختیاری — بدون آن → آخرین وضعیت [brsapi](https://brsapi.ir/bourse-api-shareholder-webservice/)
+
+| فیلد | توضیح |
+|---|---|
+| `name` | نام سهامدار |
+| `volume` | حجم سهام |
+| `percent` | درصد مالکیت |
+| `change` | تغییر نسبت به قبل |
+
+***
+
+## ✅ 7. API شاخص‌های بورس (Index) — لحظه‌ای
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Index.php?key=YourApiKey&type=1
+```
+
+**پارامتر `type`:** [brsapi](https://brsapi.ir/bourse-api-index-webservice/)
+
+| مقدار | معنی |
+|---|---|
+| 1 | شاخص کل + هم‌وزن بورس |
+| 2 | شاخص فرابورس |
+| 3 | شاخص‌های منتخب (کل، قیمت، آزاد شناور، بازار اول و دوم) |
+
+**فیلدهای خروجی:**
+
+| فیلد | توضیح |
+|---|---|
+| `index` | مقدار شاخص |
+| `index_change` | تغییر عددی |
+| `index_equalWeight` | شاخص هم‌وزن |
+| `min` / `max` | کمترین / بیشترین روز |
+| `state` | وضعیت بازار (باز/بسته) |
+| `mv` | ارزش بازار |
+| `tvol` / `tval` | حجم و ارزش معاملات کل |
+
+***
+
+## ✅ 8. API کدال (Codal) — اطلاعیه‌ها
+
+```
+GET https://Api.BrsApi.ir/Codal/Announcement.php?key=YourApiKey&l18=وبملت&category=1&date_start=1403-01-01&date_end=1403-10-30&page=1
+```
+
+**پارامترها (همه اختیاری به‌جز key):** [brsapi](https://brsapi.ir/bourse-api-codal-webservice/)
+
+| پارامتر | توضیح |
+|---|---|
+| `l18` | نماد (نبود = همه نمادها) |
+| `category` | 1=صورت مالی سالانه / 2=افشای اطلاعات / 3=عملکرد ماهانه / 6=مجامع / 7=افزایش سرمایه |
+| `period` | دوره ماهانه (1 تا 12) |
+| `audited` | حسابرسی شده (true/false) |
+| `date_start` / `date_end` | بازه تاریخی |
+| `page` | شماره صفحه |
+
+***
+
+## ✅ 9. API بازار آپشن بورس (اختیار معامله) — لحظه‌ای
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Option.php?key=YourApiKey
+```
+
+فیلدهای مهم: [brsapi](https://brsapi.ir/bourse-api-option-webservice/)
+
+| فیلد | توضیح |
+|---|---|
+| `base_l18` | نماد پایه |
+| `l18` | نماد آپشن |
+| `type` | call / put |
+| `date_end` | تاریخ سررسید |
+| `day_remain` | روزهای باقی‌مانده |
+| `price_strike` | قیمت اعمال |
+| `interest_open` | موقعیت‌های باز |
+| `size_contract` | اندازه قرارداد |
+| `base_pl` / `base_pc` | آخرین قیمت / پایانی نماد پایه |
+| `nval` | ارزش مفهومی معاملات |
+
+***
+
+## ✅ 10. Nav API صندوق‌های ETF — لحظه‌ای
+
+```
+GET https://Api.BrsApi.ir/Tsetmc/Nav.php?key=YourApiKey&l18=اهرم
+```
+
+| فیلد | توضیح |
+|---|---|
+| `psubtran` | NAV صدور |
+| `predtran` | NAV ابطال |
+| `date` / `time` | تاریخ و زمان |
+
+***
+
+# بخش دوم: وب‌سرویس‌های بورس کالا (IME)
+
+## ✅ 11. API آمار معاملات فیزیکی بورس کالا
+
+```
+GET https://Api.BrsApi.ir/IME/Physical.php?key=YourApiKey
+```
+
+شامل: نماد، گروه کالا، تالار معامله، تولیدکننده، کارگزار، نوع قرارداد، قیمت پایه، حجم عرضه/تقاضا، ارزش معامله، تاریخ تحویل. [brsapi](https://brsapi.ir/ime-api-physical-webservice/)
+
+***
+
+## ✅ 12. API صندوق‌های کالایی بورس کالا
+
+```
+GET https://Api.BrsApi.ir/IME/Fund.php?key=YourApiKey
+```
+
+شامل اطلاعات قیمتی و معاملاتی صندوق‌های کالایی مشابه ساختار AllSymbols. [brsapi](https://brsapi.ir/ime-api-fund-webservice/)
+
+***
+
+## ✅ 13. API گواهی سپرده کالایی
+
+```
+GET https://Api.BrsApi.ir/IME/Certificate.php?key=YourApiKey
+```
+
+| فیلد | توضیح |
+|---|---|
+| `commodity` | نام کالا |
+| `contract_code` | کد قرارداد |
+| `contract_size` | اندازه قرارداد |
+| `py` / `pl` / `pc` | قیمت‌ها |
+| `tvol` / `tval` | حجم

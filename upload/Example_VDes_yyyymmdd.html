@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تحلیل تکنیکال سهم - VDes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0b0f1a; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #eef5ff; padding: 20px 16px 40px; min-height: 100vh; display: flex; justify-content: center; }
+    .app { max-width: 1400px; width: 100%; }
+    .header { background: rgba(18, 28, 46, 0.7); backdrop-filter: blur(14px); border: 1px solid rgba(255, 215, 100, 0.25); border-radius: 32px; padding: 26px 32px; margin-bottom: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6); }
+    .header h1 { font-size: 1.8rem; font-weight: 700; color: #f8e365; margin-bottom: 6px; }
+    .header .sub { color: #b0c4dd; font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 8px; }
+    .header .sub span { background: rgba(255, 255, 255, 0.04); padding: 4px 14px; border-radius: 40px; border: 1px solid rgba(255, 255, 255, 0.04); }
+    .panel { background: rgba(14, 22, 40, 0.7); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 28px; padding: 22px 24px; margin-bottom: 24px; box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5); }
+    .panel h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 16px; color: #d4e4ff; display: flex; align-items: center; gap: 12px; }
+    .panel h2 i { color: #f8e365; }
+    .chart-container { width: 100%; border-radius: 18px; overflow: hidden; background: #0d1424; border: 1px solid rgba(255, 255, 255, 0.06); padding: 8px; }
+    .chart-container img { width: 100%; height: auto; display: block; border-radius: 12px; }
+    .analysis-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; margin-top: 0; }
+    @media (max-width: 950px) { .analysis-wrapper { grid-template-columns: 1fr; } }
+    .analysis-text { background: rgba(8, 20, 35, 0.5); border-radius: 16px; padding: 16px 18px; border: 1px solid rgba(255, 255, 255, 0.04); line-height: 1.7; font-size: 0.95rem; color: #d0def0; height: 100%; display: flex; flex-direction: column; }
+    .analysis-text p { margin-bottom: 8px; }
+    .analysis-text ul { padding-right: 20px; margin-top: 6px; margin-bottom: 8px; }
+    .analysis-text ul li { line-height: 1.7; margin-bottom: 2px; }
+    .analysis-text strong { color: #f8e365; }
+    .highlight-box { background: rgba(248, 227, 101, 0.06); border-right: 4px solid #f8e365; padding: 10px 14px; border-radius: 12px; margin: 10px 0; }
+    .highlight-box p { margin: 4px 0; }
+    .highlight-box ul { margin: 6px 0 0 0; }
+    .tag { display: inline-block; padding: 4px 14px; border-radius: 40px; font-weight: 700; font-size: 0.8rem; margin: 2px 0; }
+    .tag-up { background: rgba(89, 227, 155, 0.15); color: #59e39b; border: 1px solid rgba(89, 227, 155, 0.2); }
+    .tag-stop { background: rgba(255, 178, 95, 0.15); color: #ffb25f; border: 1px solid rgba(255, 178, 95, 0.2); }
+    .tag-down { background: rgba(255, 117, 138, 0.15); color: #ff758a; border: 1px solid rgba(255, 117, 138, 0.2); }
+    .graph-summary-box { background: rgba(8, 20, 35, 0.5); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 16px; padding: 16px 18px; height: 100%; display: flex; flex-direction: column; }
+    .graph-summary-box h3 { color: #3ad5db; font-size: 1.1rem; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 8px; }
+    .dss-node { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; position: relative; flex-grow: 1; }
+    .dss-node .node-title { font-size: 1rem; font-weight: bold; margin-bottom: 3px; }
+    .dss-node .node-desc { font-size: 0.9rem; color: #b0c4dd; line-height: 1.5; }
+    .dss-node .prob-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-weight: bold; font-size: 1.3rem; margin-top: 8px; }
+    .dss-node.up { border-right: 4px solid #59e39b; }
+    .dss-node.pullback { border-right: 4px solid #ffb25f; }
+    .dss-node.down { border-right: 4px solid #ff758a; }
+    .dss-node.up .prob-badge { background: rgba(89, 227, 155, 0.2); color: #59e39b; }
+    .dss-node.pullback .prob-badge { background: rgba(255, 178, 95, 0.2); color: #ffb25f; }
+    .dss-node.down .prob-badge { background: rgba(255, 117, 138, 0.2); color: #ff758a; }
+    .footer { margin-top: 18px; color: #5a7395; font-size: 0.75rem; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.04); padding-top: 16px; }
+    @media (max-width: 600px) { .header h1 { font-size: 1.3rem; } .panel { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- HEADER -->
+    <header class="header">
+      <h1 id="vdesTitle">📈 تحلیل تکنیکال سهم</h1>
+      <div class="sub">
+        <span id="vdesPrice">📍 قیمت مرجع: -- ریال</span>
+        <span id="vdesTarget">🎯 هدف کوتاه‌مدت: --</span>
+        <span id="vdesDate">📅 تاریخ تحلیل: --</span>
+      </div>
+    </header>
+
+    <!-- CHART SECTION -->
+    <section class="panel">
+      <h2><i>📊</i> نمودار قیمتی سهم (۱ روزه) - به همراه سطوح کلیدی</h2>
+      <div class="chart-container">
+        <!-- مسیر تصویر محلی شما -->
+        <img id="vdesChart" src="" alt="نمودار سهم" />
+      </div>
+    </section>
+
+    <!-- DUAL ANALYSIS SECTION -->
+    <section class="panel" style="padding-bottom: 20px;">
+      <h2 style="margin-bottom: 10px;"><i>🧠</i> تحلیل جامع روند و سطوح کلیدی</h2>
+      
+      <div class="analysis-wrapper">
+        
+        <!-- باکس سمت چپ: متن تحلیل -->
+        <div class="analysis-text" id="analysisContainer">
+          <p id="vdesTrendDesc"><strong>روند کلی و موقعیت قیمت:</strong> --</p>
+
+          <div class="highlight-box">
+            <strong>🔴 سطوح کلیدی پیش رو:</strong>
+            <ul id="vdesLevelsList">
+              <li><strong>مقاومت R1:</strong> --</li>
+              <li><strong>مقاومت R2:</strong> --</li>
+              <li><strong>حمایت S1:</strong> --</li>
+              <li><strong>حمایت S2:</strong> --</li>
+            </ul>
+          </div>
+
+          <p id="vdesScenariosDesc"><strong>تحلیل سناریوها و احتمال وقوع:</strong> --</p>
+
+          <div class="highlight-box" style="border-right-color: #ffb25f;">
+            <strong>🟡 استراتژی پیشنهادی:</strong>
+            <p id="vdesStrategy">--</p>
+          </div>
+        </div>
+
+        <!-- باکس سمت راست: خلاصه سناریوها و احتمالات -->
+        <div class="graph-summary-box">
+          <h3>🏛️ خلاصه سناریوها و احتمالات</h3>
+          
+          <div class="dss-node up">
+            <div class="node-title">سناریو R1 | تداوم صعود هیجانی</div>
+            <div class="node-desc" id="vdesDescR1">--</div>
+            <div class="prob-badge" id="vdesProbR1">--%</div>
+          </div>
+
+          <div class="dss-node pullback">
+            <div class="node-title">سناریو R2 | پولبک سالم</div>
+            <div class="node-desc" id="vdesDescR2">--</div>
+            <div class="prob-badge" id="vdesProbR2">--%</div>
+          </div>
+
+          <div class="dss-node down">
+            <div class="node-title">سناریو R3 | اصلاح کنترل‌شده</div>
+            <div class="node-desc" id="vdesDescR3">--</div>
+            <div class="prob-badge" id="vdesProbR3">--%</div>
+          </div>
+
+          <div class="dss-node down" style="border-right-color: #ffb11b;">
+            <div class="node-title">سناریو R4 | اصلاح عمیق</div>
+            <div class="node-desc" id="vdesDescR4">--</div>
+            <div class="prob-badge" id="vdesProbR4" style="color:#ffb11b; background: rgba(255, 177, 27, 0.2);">--%</div>
+          </div>
+
+          <div class="dss-node down" style="border-right-color: #ef4d62;">
+            <div class="node-title">سناریو R5 | تضعیف ساختار</div>
+            <div class="node-desc" id="vdesDescR5">--</div>
+            <div class="prob-badge" id="vdesProbR5" style="color:#ef4d62; background: rgba(239, 77, 98, 0.2);">--%</div>
+          </div>
+
+          <div style="margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); text-align: left; font-size: 0.8rem; color: #5a7395; line-height: 1.6;">
+            <strong>📌 قانون احتمالات:</strong> مجموع احتمالات پنج سناریوی پیش رو برابر <strong>۱۰۰٪</strong> است.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <footer class="footer">
+      تمامی تحلیل‌ها بر اساس داده‌های تکنیکال، سطوح کلیدی و روندهای گذشته تدوین شده است. این محتوا صرفاً جنبه آموزشی و تحلیلی دارد و توصیه‌ی سرمایه‌گذاری محسوب نمی‌شود.
+    </footer>
+  </div>
+
+<script>
+// ------------------------------------------------------------------
+// 1. تابع تبدیل اعداد انگلیسی به فارسی
+// ------------------------------------------------------------------
+function toPersianNum(num) {
+  const persianDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+  return num.toString().replace(/\d/g, d => persianDigits[d]);
+}
+
+// ------------------------------------------------------------------
+// 2. ورودی‌های داده (این بخش را با داده‌های سهم جدید پر کنید)
+// ------------------------------------------------------------------
+const inputData = {
+  symbolName: "نام سهم (مثال: شتران)",
+  price: 0, // قیمت آخرین معامله
+  levels: {
+    R1: 0, S1: 0, MA100: 0,
+    R2: 0, S2: 0, S3: 0, S4: 0
+  },
+  indicators: {
+    RSI: 0, MFI: 0, CCI: 0, ADX: 0
+  },
+  analysisDate: "۱۴۰۵/۰۵/۲۶",
+  chartPath: "E:\\Shakour\\MyAnalysis\\Chapar\\14050526\\Shetraan_Chart_14050525.png"
+};
+
+// ------------------------------------------------------------------
+// 3. موتور محاسباتی (دقیقاً طبق فرمول‌های Master Prompt)
+// ------------------------------------------------------------------
+function calculateProbabilities(data) {
+  const {price, levels, indicators} = data;
+  const {R1, S1, MA100, R2, S2, S3, S4} = levels;
+  const {RSI, MFI, CCI, ADX} = indicators;
+
+  const adxScore = ADX / 100;
+  const rsiBull = RSI > 70 ? 1 : RSI > 50 ? 0.5 : 0;
+  const mfiBull = MFI > 80 ? 1 : MFI > 50 ? 0.5 : 0;
+  const cciBull = CCI > 100 ? 1 : CCI > 0 ? 0.5 : 0;
+  const consensus = (rsiBull + mfiBull + cciBull) / 3;
+  const trendBull = Math.min(1, 0.4 * adxScore + 0.6 * consensus);
+
+  const dR1 = Math.exp(-5 * Math.abs(price - R1) / R1);
+
+  const raw_R1 = (0.45 * dR1 + 0.55 * trendBull);
+  const raw_R2 = (1 - raw_R1) * 0.6 + 0.4 * (price > S1 ? 1 : 0) * (RSI < 70 || MFI < 80 ? 0.5 : 1);
+  
+  const dFromR1S1 = (Math.abs(price - R1)/R1 + Math.abs(price - S1)/S1);
+  const corrFact = 1 / (1 + dFromR1S1 * 10);
+  const raw_R3 = 0.3 * (price > MA100 ? 1 : 0) * corrFact * trendBull;
+  
+  const raw_R4 = 0.05 * (price > MA100 ? 0.2 : 1);
+  const raw_R5 = 0.02 * (price > MA100 ? 0 : 1) + 0.01 * (RSI < 30 || MFI < 30 ? 1 : 0);
+
+  const rawValues = {R1: raw_R1, R2: raw_R2, R3: raw_R3, R4: raw_R4, R5: raw_R5};
+  const sum = Object.values(rawValues).reduce((a,b) => a + b, 0);
+  const norm = (k) => Math.round((rawValues[k] / sum) * 100);
+
+  return { R1: norm('R1'), R2: norm('R2'), R3: norm('R3'), R4: norm('R4'), R5: norm('R5') };
+}
+
+// ------------------------------------------------------------------
+// 4. به‌روزرسانی DOM (نمایش احتمالات و تحلیل متنی)
+// ------------------------------------------------------------------
+function updateAnalysis(data) {
+  const {symbolName, price, levels, indicators, analysisDate, chartPath} = data;
+  const {R1, S1, MA100, R2, S2, S3, S4} = levels;
+  const {RSI, MFI, CCI, ADX} = indicators;
+
+  const probs = calculateProbabilities(data);
+
+  // 1. به‌روزرسانی هدر
+  document.getElementById('vdesTitle').textContent = `📈 تحلیل تکنیکال ${symbolName}`;
+  document.getElementById('vdesPrice').textContent = `📍 قیمت مرجع: ${toPersianNum(price)} ریال`;
+  document.getElementById('vdesTarget').textContent = `🎯 هدف کوتاه‌مدت: ${toPersianNum(R1 + Math.round((R2 - R1) * 0.5))} - ${toPersianNum(R2 + Math.round((R2 - R1) * 0.8))} ریال`;
+  document.getElementById('vdesDate').textContent = `📅 تاریخ تحلیل: ${analysisDate}`;
+
+  // 2. به‌روزرسانی تصویر نمودار
+  document.getElementById('vdesChart').src = chartPath;
+
+  // 3. به‌روزرسانی تحلیل متنی (با استفاده از مقادیر محاسبه‌شده)
+  document.getElementById('vdesTrendDesc').innerHTML = `
+    <strong>روند کلی و موقعیت قیمت:</strong> سهم ${symbolName} در یک روند صعودی قدرتمند قرار دارد. قیمت با عبور از میانگین‌های متحرک، در حال حاضر در محدوده <strong>${toPersianNum(price)} ریال</strong> معامله می‌شود. اندیکاتورهای RSI (${toPersianNum(Math.round(RSI))}) و MFI (${toPersianNum(Math.round(MFI))}) هشدار اشباع خرید شدید را صادر می‌کنند.
+  `;
+
+  document.getElementById('vdesLevelsList').innerHTML = `
+    <li><strong>مقاومت ${toPersianNum(R1)} ریال (R1):</strong> نخستین سد پیش روی سهم. عبور با تثبیت از این سطح، راه را برای صعود تا ${toPersianNum(R2)} ریال هموار می‌کند.</li>
+    <li><strong>مقاومت ${toPersianNum(R2)} ریال (R2):</strong> سد بعدی در مسیر صعودی. شکست این سطح به معنای تایید روند تا ${toPersianNum(R2 + Math.round((R2 - R1) * 0.8))} ریال است.</li>
+    <li><strong>حمایت ${toPersianNum(S1)} ریال (S1):</strong> حمایت نخست و کلیدی. در صورت اصلاح، این سطح مرز تفکیک پولبک سالم از اصلاح عمیق‌تر است.</li>
+    <li><strong>حمایت‌های بعدی:</strong> در صورت شکست S1، سطوح ${toPersianNum(S2)} و ${toPersianNum(S3)} ریال فعال خواهند شد.</li>
+  `;
+
+  document.getElementById('vdesScenariosDesc').innerHTML = `
+    <strong>تحلیل سناریوها و احتمال وقوع:</strong> بر اساس تحلیل روند و سطوح کلیدی، سه سناریوی اصلی پیش روی این سهم قابل تصور است. سناریوی صعودی با احتمال <strong id="text-R1">${toPersianNum(probs.R1)}%</strong>، در صورت عبور از مقاومت ${toPersianNum(R1)} و تثبیت بالای آن، قیمت را به کریدور ${toPersianNum(R1 + Math.round((R2 - R1) * 0.5))} تا ${toPersianNum(R2 + Math.round((R2 - R1) * 0.8))} ریال هدایت می‌کند. سناریوی پولبک سالم با احتمال <strong id="text-R2">${toPersianNum(probs.R2)}%</strong>، به دلیل اشباع خرید، محتمل‌ترین سناریو است و بازگشت تا حمایت ${toPersianNum(S1)} ریال را شامل می‌شود. همچنین، سناریوی اصلاح و تضعیف روند با مجموع احتمالات <strong id="text-R3toR5">${toPersianNum(probs.R3 + probs.R4 + probs.R5)}%</strong>، در صورت شکست حمایت ${toPersianNum(S1)} ریال رخ داده و قیمت را به سمت سطوح ${toPersianNum(S2)} و ${toPersianNum(S3)} ریال هدایت خواهد کرد.
+  `;
+
+  document.getElementById('vdesStrategy').innerHTML = `
+    با توجه به هشدار اشباع خرید و فاصله قیمت تا مقاومت ${toPersianNum(R1)}، استراتژی محتاطانه و کم‌ریسک‌تر، <strong>انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toPersianNum(S1)} تا ${toPersianNum(S2)} ریال</strong> می‌باشد. در صورت رسیدن قیمت به این سطح و حفظ آن، می‌توان از بازگشت مجدد به روند صعودی بهره‌مند شد.
+  `;
+
+  // 4. به‌روزرسانی باکس‌های سناریو (سمت راست)
+  document.getElementById('vdesDescR1').textContent = `عبور از مقاومت ${toPersianNum(R1)} و ${toPersianNum(R2)} ریال. حرکت به کریدور ${toPersianNum(R1 + Math.round((R2 - R1) * 0.5))} تا ${toPersianNum(R2 + Math.round((R2 - R1) * 0.8))} ریال.`;
+  document.getElementById('vdesProbR1').textContent = toPersianNum(probs.R1) + '%';
+
+  document.getElementById('vdesDescR2').textContent = `اصلاح تا حمایت ${toPersianNum(S1)} ریال و بازپس‌گیری مقاومت ${toPersianNum(R1)} ریال.`;
+  document.getElementById('vdesProbR2').textContent = toPersianNum(probs.R2) + '%';
+
+  document.getElementById('vdesDescR3').textContent = `حرکت میان حمایت‌های ${toPersianNum(S2)} تا ${toPersianNum(S3)} ریال.`;
+  document.getElementById('vdesProbR3').textContent = toPersianNum(probs.R3) + '%';
+
+  document.getElementById('vdesDescR4').textContent = `آزمون محدوده ${toPersianNum(S4)} تا میانگین متحرک ۱۰۰ روزه (${toPersianNum(Math.round(MA100))}).`;
+  document.getElementById('vdesProbR4').textContent = toPersianNum(probs.R4) + '%';
+
+  document.getElementById('vdesDescR5').textContent = `شکست پایدار محدوده میانگین متحرک ۱۰۰ روزه.`;
+  document.getElementById('vdesProbR5').textContent = toPersianNum(probs.R5) + '%';
+
+  console.log('✅ احتمالات نهایی محاسبه شده برای VDes:', probs);
+}
+
+// ------------------------------------------------------------------
+// 5. اجرای نهایی
+// ------------------------------------------------------------------
+window.addEventListener("load", () => {
+  updateAnalysis(inputData);
+});
+</script>
+</body>
+</html>
