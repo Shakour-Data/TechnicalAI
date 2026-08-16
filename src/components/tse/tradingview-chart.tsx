@@ -35,6 +35,8 @@ export interface TradingViewChartProps {
   candles: CandleData[];
   supports: number[];
   resistances: number[];
+  supportStrengths: { price: number; strength: number; isTarget: boolean }[];
+  resistanceStrengths: { price: number; strength: number; isTarget: boolean }[];
   ma21: number;
   ma100: number;
   scenarios: Record<string, { targetMin: number; targetMax: number; name: string; probability: number; color: string }>;
@@ -85,7 +87,7 @@ function computeSMA(closes: number[], period: number): (number | null)[] {
 // ═══════════════════════════════════════════════════════════════════
 
 const TradingViewChartInner = memo(function TradingViewChartInner({
-  symbolName, candles, supports, resistances, ma21, ma100, scenarios,
+  symbolName, candles, supports, resistances, supportStrengths, resistanceStrengths, ma21, ma100, scenarios,
 }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -206,31 +208,33 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
       } catch { /* skip */ }
     };
 
-    // ── Support levels (rounded, green dashed) ──────────────────
-    const roundedSupports = supports.filter(s => s > 0).map(roundNice);
-    const uniqueSupports = [...new Set(roundedSupports)];
-    uniqueSupports.forEach((s, i) => {
-      addPriceLine(candleSeries, s, SUPPORT_COLOR, 2, 2, `حمایت ${i + 1}: ${s.toLocaleString('fa-IR')}`, i < 3);
+    // ── Support levels (with strength) ──────────────────
+    const validSupports = (supportStrengths || []).filter(s => s.price > 0);
+    validSupports.forEach((s, i) => {
+      const lw = s.isTarget ? 3 : Math.max(1, Math.round(s.strength / 3));
+      const ls = s.isTarget ? 0 : 2;
+      addPriceLine(candleSeries, s.price, s.isTarget ? '#6bffb8' : SUPPORT_COLOR, lw, ls as 0 | 1 | 2, `S${i + 1} (${s.strength}/10)`, i < 6);
     });
 
-    // ── Resistance levels (rounded, red dashed) ─────────────────
-    const roundedResistances = resistances.filter(r => r > 0).map(roundNice);
-    const uniqueResistances = [...new Set(roundedResistances)];
-    uniqueResistances.forEach((r, i) => {
-      addPriceLine(candleSeries, r, RESISTANCE_COLOR, 2, 2, `مقاومت ${i + 1}: ${r.toLocaleString('fa-IR')}`, i < 3);
+    // ── Resistance levels (with strength) ─────────────────
+    const validResistances = (resistanceStrengths || []).filter(r => r.price > 0);
+    validResistances.forEach((r, i) => {
+      const lw = r.isTarget ? 3 : Math.max(1, Math.round(r.strength / 3));
+      const ls = r.isTarget ? 0 : 2;
+      addPriceLine(candleSeries, r.price, r.isTarget ? '#ff6b6b' : RESISTANCE_COLOR, lw, ls as 0 | 1 | 2, `R${i + 1} (${r.strength}/10)`, i < 6);
     });
 
     // ── Price targets from scenarios (rounded, colored dotted) ──
     const allTargets: { price: number; color: string; label: string }[] = [];
-    const existingLevels = new Set([...uniqueSupports, ...uniqueResistances].map(l => Math.round(l)));
+    const existingSRPrices = new Set([...validSupports, ...validResistances].map(l => Math.round(l.price)));
 
     for (const [key, s] of Object.entries(scenarios)) {
       const tMin = roundNice(s.targetMin);
       const tMax = roundNice(s.targetMax);
-      if (!existingLevels.has(Math.round(tMin))) {
+      if (!existingSRPrices.has(Math.round(tMin))) {
         allTargets.push({ price: tMin, color: s.color, label: `${s.name} هدف مین` });
       }
-      if (!existingLevels.has(Math.round(tMax)) && Math.abs(tMax - tMin) > 1) {
+      if (!existingSRPrices.has(Math.round(tMax)) && Math.abs(tMax - tMin) > 1) {
         allTargets.push({ price: tMax, color: s.color, label: `${s.name} هدف ماکس` });
       }
     }
@@ -241,7 +245,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
 
     // ── Fit content ─────────────────────────────────────────────
     chart.timeScale().fitContent();
-  }, [candles, supports, resistances, ma21, ma100, scenarios]);
+  }, [candles, supports, resistances, supportStrengths, resistanceStrengths, ma21, ma100, scenarios]);
 
   // ── Effect: build chart ─────────────────────────────────────────
   useEffect(() => {
@@ -260,8 +264,8 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
 
   // ── Collect legend info ─────────────────────────────────────────
   const legendItems = [
-    { color: RESISTANCE_COLOR, label: 'مقاومت' },
-    { color: SUPPORT_COLOR, label: 'حمایت' },
+    { color: RESISTANCE_COLOR, label: 'مقاومت (با قدرت)' },
+    { color: SUPPORT_COLOR, label: 'حمایت (با قدرت)' },
     { color: MA100_COLOR, label: 'MA100' },
     { color: MA21_COLOR, label: 'MA21' },
     { color: '#ffb11b', label: 'هدف قیمتی' },

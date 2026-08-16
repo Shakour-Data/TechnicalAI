@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText } from 'lucide-react';
@@ -65,6 +65,17 @@ export default function Home() {
   const signalColor = data?.ta?.overallSignal === 'bullish' ? 'text-emerald-400' : data?.ta?.overallSignal === 'bearish' ? 'text-red-400' : 'text-amber-400';
   const signalBg = data?.ta?.overallSignal === 'bullish' ? 'bg-emerald-500/20 border-emerald-500/30' : data?.ta?.overallSignal === 'bearish' ? 'bg-red-500/20 border-red-500/30' : 'bg-amber-500/20 border-amber-500/30';
   const SignalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
+
+  // Stable chart ta prop (avoids infinite re-render loop)
+  const chartTa = useMemo(() => data?.ta ? {
+    sma: data.ta.sma,
+    bollingerBands: data.ta.bollingerBands,
+    resistances: data.ta.resistances,
+    supports: data.ta.supports,
+    supportStrengths: data.ta.supportStrengths,
+    resistanceStrengths: data.ta.resistanceStrengths,
+    sar: data.ta.sar,
+  } : null, [data?.ta]);
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#060a13] text-gray-100 flex flex-col">
@@ -200,7 +211,7 @@ export default function Home() {
               </TabsList>
 
               <TabsContent value="chart" className="mt-3">
-                <CandlestickChart data={data.candles} ta={data.ta} height={520} />
+                <CandlestickChart data={data.candles} ta={chartTa} height={520} />
               </TabsContent>
 
               <TabsContent value="indicators" className="mt-3">
@@ -219,6 +230,7 @@ export default function Home() {
                   cci={data.ta.cci}
                   adx={data.ta.adx}
                   trendDirection={data.ta.trend.medium.direction}
+                  bullScore={data.ta.bullScore}
                   scenarios={data.ta.scenarios}
                 />
               </TabsContent>

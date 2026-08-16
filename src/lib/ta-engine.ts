@@ -386,10 +386,9 @@ function roundToNice(price: number): number {
 }
 
 // ─── Helper: Swing Highs/Lows ─────────────────────────────────────────────────
-function findSwingLevels(data: OHLCV[]): { highs: number[]; lows: number[] } {
+function findSwingLevels(data: OHLCV[], lookback: number = 3): { highs: number[]; lows: number[] } {
   const highs: number[] = [];
   const lows: number[] = [];
-  const lookback = 3;
   for (let i = lookback; i < data.length - lookback; i++) {
     let isHigh = true;
     let isLow = true;
@@ -404,7 +403,7 @@ function findSwingLevels(data: OHLCV[]): { highs: number[]; lows: number[] } {
   return { highs, lows };
 }
 
-// ─── Support / Resistance (5 each, rounded, with strength) ──────────────────
+// ─── Support / Resistance (6 each, adaptive gap, multi-source, 10% window strength) ─
 function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistances: number[];
   supports: number[];
@@ -413,8 +412,9 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   priceTargets: LevelStrength[];
 } {
   const allRawLevels: number[] = [];
+  const closes = data.map(d => d.close);
 
-  // 1. Pivot Points from previous day
+  // 1. Pivot Points from previous day (5R + 5S)
   const prev = data[data.length - 2] ?? data[data.length - 1];
   if (prev) {
     const pp = (prev.high + prev.low + prev.close) / 3;
@@ -436,62 +436,98 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
     allRawLevels.push(...pivotR, ...pivotS);
   }
 
-  // 2. Swing levels
-  const swings = findSwingLevels(data);
-  allRawLevels.push(...swings.highs, ...swings.lows);
+  // 2. Swing levels (multiple lookback periods for better coverage)
+  for (const lb of [3, 5, 7, 10]) {
+    const swings = findSwingLevels(data, lb);
+    allRawLevels.push(...swings.highs, ...swings.lows);
+  }
 
-  // 3. Round all and filter invalid
+  // 3. Moving Average levels (potential dynamic S/R)
+  for (const period of [5, 10, 21, 50, 100, 200]) {
+    const v = sma(closes, period);
+    if (v > 0 && Math.abs(v - currentPrice) / currentPrice > 0.01) allRawLevels.push(v);
+  }
+  const ema12 = emaCalc(closes, 12);
+  const ema26 = emaCalc(closes, 26);
+  if (ema12 > 0 && Math.abs(ema12 - currentPrice) / currentPrice > 0.01) allRawLevels.push(ema12);
+  if (ema26 > 0 && Math.abs(ema26 - currentPrice) / currentPrice > 0.01) allRawLevels.push(ema26);
+
+  // 4. Bollinger Band levels
+  const bbLevels = calcBollingerBands(closes);
+  if (bbLevels.upper > 0) allRawLevels.push(bbLevels.upper);
+  if (bbLevels.lower > 0) allRawLevels.push(bbLevels.lower);
+
+  // 5. Round number / psychological levels
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, currentPrice))));
+  for (let mult = 0.80; mult <= 1.25; mult += 0.05) {
+    allRawLevels.push(Math.round(currentPrice * mult / magnitude) * magnitude);
+  }
+
+  // 6. Recent high/low zones (5-day, 22-day, 66-day)
+  for (const window of [5, 22, 66]) {
+    const slice = data.slice(-Math.min(window, data.length));
+    if (slice.length > 0) {
+      allRawLevels.push(Math.max(...slice.map(d => d.high)));
+      allRawLevels.push(Math.min(...slice.map(d => d.low)));
+    }
+  }
+
+  // 7. Round all and filter invalid
   const rounded = allRawLevels.map(roundToNice).filter(l => l > 0);
 
-  // 4. Remove duplicates (within 0.5%)
+  // 8. Remove duplicates (within 0.5%)
   const unique: number[] = [];
   for (const level of rounded) {
-    const isDup = unique.some(u => Math.abs(u - level) / u < 0.005);
+    const isDup = unique.some(u => Math.abs(u - level) / Math.max(u, 1) < 0.005);
     if (!isDup) unique.push(level);
   }
 
-  // 5. Calculate strength for each unique level
-  // Strength = count of other levels within ±5% range
-  // More levels nearby = stronger
+  // 9. Calculate strength for each unique level — 10% window (5% above + 5% below)
   const levelStrengths: LevelStrength[] = unique.map(level => {
-    const range5pct = level * 0.05;
-    const nearbyCount = unique.filter(other => other !== level && Math.abs(other - level) <= range5pct).length;
-    // Base strength: 1 for level itself, +1 for each nearby level (max 10)
-    const strength = Math.min(10, Math.max(1, 1 + nearbyCount * 2));
+    const range10pct = level * 0.10;
+    const nearbyCount = unique.filter(other =>
+      other !== level && Math.abs(other - level) <= range10pct
+    ).length;
+    // Normalize: 0 nearby = 1, each nearby adds ~1.5, max 10
+    const strength = Math.min(10, Math.max(1, Math.round(1 + nearbyCount * 1.5)));
     return { price: level, strength, isTarget: false };
   });
 
-  // 6. Separate above/below and enforce 5% min gap
+  // 10. Separate above/below current price
   const above = levelStrengths.filter(l => l.price > currentPrice).sort((a, b) => a.price - b.price);
   const below = levelStrengths.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
 
-  // Enforce 5% minimum gap between adjacent levels
-  function enforceGap(levels: LevelStrength[], minGapPct: number = 0.05): LevelStrength[] {
-    if (levels.length === 0) return [];
-    const result: LevelStrength[] = [levels[0]];
-    for (let i = 1; i < levels.length; i++) {
-      const prev = result[result.length - 1].price;
-      const curr = levels[i].price;
-      const gap = Math.abs(curr - prev) / prev;
-      if (gap >= minGapPct) {
-        result.push(levels[i]);
-      } else {
-        // Merge: keep the one with higher strength
-        if (levels[i].strength > result[result.length - 1].strength) {
-          result[result.length - 1] = { ...levels[i], strength: Math.min(10, result[result.length - 1].strength + 1) };
+  // 11. Adaptive gap enforcement — try 5% first, reduce until we get enough levels
+  function enforceGap(levels: LevelStrength[], targetCount: number): LevelStrength[] {
+    const gapSteps = [0.05, 0.04, 0.03, 0.025, 0.02, 0.015, 0.01, 0.008, 0.005];
+    for (const gapPct of gapSteps) {
+      if (levels.length === 0) return [];
+      const result: LevelStrength[] = [levels[0]];
+      for (let i = 1; i < levels.length; i++) {
+        if (result.length >= targetCount) break;
+        const prevPrice = result[result.length - 1].price;
+        const currPrice = levels[i].price;
+        const gap = Math.abs(currPrice - prevPrice) / prevPrice;
+        if (gap >= gapPct) {
+          result.push(levels[i]);
         } else {
-          result[result.length - 1] = { ...result[result.length - 1], strength: Math.min(10, result[result.length - 1].strength + 1) };
+          // Merge: combine strengths
+          const mergedStrength = Math.min(10, Math.max(result[result.length - 1].strength, levels[i].strength) + 1);
+          result[result.length - 1] = {
+            ...levels[i].strength > result[result.length - 1].strength ? levels[i] : result[result.length - 1],
+            strength: mergedStrength,
+          };
         }
       }
+      if (result.length >= targetCount) return result;
     }
-    return result;
+    return levels.slice(0, targetCount);
   }
 
-  const finalResistances = enforceGap(above, 0.05).slice(0, 5);
-  const finalSupports = enforceGap(below, 0.05).slice(0, 5);
+  const finalResistances = enforceGap(above, 6);
+  const finalSupports = enforceGap(below, 6);
 
-  // 7. Determine price targets: strength > 7 is a target
-  // If none > 7, pick top 2 strongest
+  // 12. Determine price targets: strength > 7 is a target
   const allLevels = [...finalResistances, ...finalSupports];
   const sortedByStrength = [...allLevels].sort((a, b) => b.strength - a.strength);
   let targets: LevelStrength[];
@@ -607,11 +643,13 @@ export function analyze(data: OHLCV[]): TAResult {
   const R3_level = resistances[2] ?? price * 1.15;
   const R4_level = resistances[3] ?? price * 1.20;
   const R5_level = resistances[4] ?? price * 1.30;
+  const R6_level = resistances[5] ?? price * 1.40;
   const S1_level = supports[0] ?? price * 0.95;
   const S2_level = supports[1] ?? price * 0.90;
   const S3_level = supports[2] ?? price * 0.85;
   const S4_level = supports[3] ?? price * 0.80;
   const S5_level = supports[4] ?? price * 0.75;
+  const S6_level = supports[5] ?? price * 0.70;
 
   // ── Bull Score: weighted average of all 20 signals ──────────────────────
   const signals: number[] = [];
@@ -750,8 +788,8 @@ export function analyze(data: OHLCV[]): TAResult {
     atr,
     bollingerBands: bb,
     obv,
-    resistances: resistances.length ? resistances : [R1_level, R2_level, R3_level, R4_level, R5_level],
-    supports: supports.length ? supports : [S1_level, S2_level, S3_level, S4_level, S5_level],
+    resistances: resistances.length ? resistances : [R1_level, R2_level, R3_level, R4_level, R5_level, R6_level],
+    supports: supports.length ? supports : [S1_level, S2_level, S3_level, S4_level, S5_level, S6_level],
     supportStrengths,
     resistanceStrengths,
     priceTargets,

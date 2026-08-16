@@ -27,6 +27,7 @@ export interface VdssGraphProps {
   cci: number;
   adx: number;
   trendDirection: string;
+  bullScore: number;
   scenarios: {
     R1: Scenario;
     R2: Scenario;
@@ -230,7 +231,7 @@ function findAllPaths(edgeProbs: Record<string, number>): PathInfo[] {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function VdssGraph(props: VdssGraphProps) {
-  const { symbolName, currentPrice, resistances, supports, ma100, scenarios, rsi, adx } = props;
+  const { symbolName, currentPrice, resistances, supports, ma100, scenarios, rsi, adx, bullScore } = props;
   const R1_level = resistances[0] ?? currentPrice * 1.05;
   const S1_level = supports[0] ?? currentPrice * 0.95;
 
@@ -241,25 +242,30 @@ export default function VdssGraph(props: VdssGraphProps) {
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const shellRef = useRef<HTMLDivElement>(null);
 
-  // ── Estimate bull score from indicators ────────────────────────────
-  const bullEstimate = useMemo(() => {
-    let score = 0;
-    let count = 0;
-    if (rsi > 50) { score += (rsi - 50) / 50; count++; } else { score -= (50 - rsi) / 50; count++; }
-    if (props.mfi > 50) { score += (props.mfi - 50) / 50; count++; } else { score -= (50 - props.mfi) / 50; count++; }
-    score += props.trendDirection === 'up' ? 1 : props.trendDirection === 'down' ? -1 : 0; count++;
-    const avg = count > 0 ? (score / count + 1) / 2 : 0.5;
-    return Math.max(0.05, Math.min(0.95, avg));
-  }, [rsi, props.mfi, props.trendDirection]);
-
-  // ── Edge probabilities ────────────────────────────────────────────
+  // ── Edge probabilities (using TA engine's bullScore) ──────────────
   const edgeProbs = useMemo(() =>
-    calcEdgeProbabilities(bullEstimate, adx),
-  [bullEstimate, adx]
+    calcEdgeProbabilities(bullScore, adx),
+  [bullScore, adx]
   );
 
-  // ── All paths with probabilities ──────────────────────────────────
-  const allPaths = useMemo(() => findAllPaths(edgeProbs), [edgeProbs]);
+  // ── All paths with raw probabilities ─────────────────────────────
+  const allPathsRaw = useMemo(() => findAllPaths(edgeProbs), [edgeProbs]);
+
+  // ── Calibrate path probabilities to match TA engine scenario probabilities ──
+  const allPaths = useMemo(() => {
+    // Compute raw sum per target
+    const rawSums: Record<string, number> = {};
+    for (const key of SCENARIO_KEYS) rawSums[key] = 0;
+    for (const p of allPathsRaw) rawSums[p.target] += p.prob;
+
+    // Scale each path so the sum per target matches scenario probability
+    return allPathsRaw.map(p => {
+      const rawSum = rawSums[p.target] || 0.0001;
+      const targetProb = scenarios[p.target as keyof typeof scenarios].probability / 100;
+      const scale = targetProb / rawSum;
+      return { ...p, prob: p.prob * scale };
+    });
+  }, [allPathsRaw, scenarios]);
 
   // ── Filtered paths ────────────────────────────────────────────────
   const filteredPaths = useMemo(() => {
@@ -388,13 +394,14 @@ export default function VdssGraph(props: VdssGraphProps) {
     return () => observer.disconnect();
   }, [drawEdges]);
 
-  // ── Aggregated path probabilities per target ─────────────────────
+  // ── Aggregated path probabilities per target (calibrated = matches scenario prob) ──
   const pathProbsByTarget = useMemo(() => {
     const result: Record<string, number> = {};
     for (const key of SCENARIO_KEYS) result[key] = 0;
     for (const p of filteredPaths) {
       result[p.target] = (result[p.target] ?? 0) + p.prob;
     }
+    // After calibration, these should match scenario probabilities
     return result;
   }, [filteredPaths]);
 

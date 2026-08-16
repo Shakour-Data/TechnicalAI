@@ -222,6 +222,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           candles={candles}
           supports={supports}
           resistances={resistances}
+          supportStrengths={supportStrengths}
+          resistanceStrengths={resistanceStrengths}
           ma21={ma21}
           ma100={ma100}
           scenarios={tvScenarios}
