@@ -1,3 +1,4 @@
+// TGJU-enabled search
 'use client';
 
 import * as React from 'react';
@@ -6,10 +7,10 @@ import { cn } from '@/lib/utils';
 import {
   Search, X, TrendingUp, TrendingDown,
   BarChart3, Landmark, Building2, FileText,
-  ChevronDown, Layers, ArrowUpDown,
+  ChevronDown, Layers, ArrowUpDown, Coins, CircleDollarSign,
 } from 'lucide-react';
 
-/* ─── Types ────────────────────────────────────────────── */
+/* --─ Types ---------------------------------------------- */
 
 interface InstrumentItem {
   l18: string;
@@ -20,8 +21,9 @@ interface InstrumentItem {
   tvol: number;
   tval: number;
   cs: string;
-  category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index';
+  category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index' | 'currency' | 'gold' | 'silver' | 'gold_etf';
   insCode?: string;
+  tgjuKey?: string;
   index?: number;
   indexChange?: number;
   indexChangePercent?: number;
@@ -40,13 +42,21 @@ interface InstrumentsData {
   industries: string[];
 }
 
+interface TgjuData {
+  currencies: InstrumentItem[];
+  gold: InstrumentItem[];
+  silver: InstrumentItem[];
+  goldEtfs: InstrumentItem[];
+  items: InstrumentItem[];
+}
+
 interface SymbolSearchProps {
-  onSelect?: (symbol: string, category?: string, insCode?: string) => void;
+  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string) => void;
   placeholder?: string;
   className?: string;
 }
 
-/* ─── Constants ────────────────────────────────────────── */
+/* --─ Constants ------------------------------------------ */
 
 const MAX_RESULTS = 30;
 
@@ -55,6 +65,9 @@ const CATEGORIES = [
   { key: 'indices', label: 'شاخص‌ها', icon: BarChart3 },
   { key: 'stocks', label: 'سهام', icon: Building2 },
   { key: 'etf', label: 'صندوق‌ها', icon: Landmark },
+  { key: 'currency', label: 'ارزها', icon: CircleDollarSign },
+  { key: 'gold', label: 'طلا و نقره', icon: Coins },
+  { key: 'gold_etf', label: 'صندوق طلا', icon: Coins },
   { key: 'bond', label: 'اوراق بدهی', icon: FileText },
   { key: 'derivative', label: 'مشتقه', icon: ArrowUpDown },
 ] as const;
@@ -69,6 +82,10 @@ const CATEGORY_COLORS: Record<string, string> = {
   salaf: 'bg-amber-500/15 text-amber-400',
   mortgage: 'bg-cyan-500/15 text-cyan-400',
   index: 'bg-rose-500/15 text-rose-400',
+  currency: 'bg-teal-500/15 text-teal-400',
+  gold: 'bg-yellow-500/15 text-yellow-400',
+  silver: 'bg-gray-400/15 text-gray-300',
+  gold_etf: 'bg-amber-500/15 text-amber-400',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -79,9 +96,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   salaf: 'سلف',
   mortgage: 'تسه',
   index: 'شاخص',
+  currency: 'ارز',
+  gold: 'طلا',
+  silver: 'نقره',
+  gold_etf: 'صندوق طلا',
 };
 
-/* ─── Helpers ──────────────────────────────────────────── */
+/* --─ Helpers -------------------------------------------- */
 
 function formatNum(num: number): string {
   if (num == null) return '—';
@@ -102,7 +123,7 @@ function Spinner() {
   );
 }
 
-/* ─── Component ────────────────────────────────────────── */
+/* --─ Component ------------------------------------------ */
 
 export default function SymbolSearch({
   onSelect,
@@ -120,13 +141,15 @@ export default function SymbolSearch({
   const [showIndustryPicker, setShowIndustryPicker] = React.useState(false);
 
   const cacheRef = React.useRef<InstrumentsData | null>(null);
+  const tgjuCacheRef = React.useRef<TgjuData | null>(null);
   const fetchRef = React.useRef<Promise<InstrumentsData> | null>(null);
+  const tgjuFetchRef = React.useRef<Promise<TgjuData> | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const industryScrollRef = React.useRef<HTMLDivElement>(null);
 
-  /* ── Data fetching ── */
+  /* -- Data fetching -- */
   const fetchData = React.useCallback(async (): Promise<InstrumentsData> => {
     if (cacheRef.current) return cacheRef.current;
     if (fetchRef.current) return fetchRef.current;
@@ -145,8 +168,47 @@ export default function SymbolSearch({
     return fetchRef.current;
   }, []);
 
-  /* ── Get all items for current category ── */
-  const getItemsForCategory = React.useCallback((data: InstrumentsData, cat: CategoryKey): InstrumentItem[] => {
+  const fetchTgjuData = React.useCallback(async (): Promise<TgjuData | null> => {
+    if (tgjuCacheRef.current) return tgjuCacheRef.current;
+    if (tgjuFetchRef.current) return tgjuFetchRef.current;
+    const p = async () => {
+      try {
+        const r = await fetch('/api/tgju-instruments');
+        if (!r.ok) return null;
+        const d: TgjuData = await r.json();
+        tgjuCacheRef.current = d;
+        return d;
+      } catch {
+        return null;
+      } finally {
+        tgjuFetchRef.current = null;
+      }
+    };
+    tgjuFetchRef.current = p();
+    return p();
+  }, []);
+
+  /* -- Check if category is TGJU-based -- */
+  const isTgjuCategory = (cat: CategoryKey) =>
+    cat === 'currency' || cat === 'gold' || cat === 'gold_etf' || cat === 'silver';
+
+  /* -- Get all items for current category -- */
+  const getItemsForCategory = React.useCallback(async (cat: CategoryKey): Promise<InstrumentItem[]> => {
+    // TGJU categories
+    if (isTgjuCategory(cat)) {
+      const tgju = tgjuCacheRef.current || await fetchTgjuData();
+      if (!tgju) return [];
+      switch (cat) {
+        case 'currency': return tgju.currencies;
+        case 'gold': return [...tgju.gold, ...tgju.silver];
+        case 'gold_etf': return tgju.goldEtfs;
+        case 'silver': return tgju.silver;
+        default: return [];
+      }
+    }
+
+    // TSE categories
+    const data = cacheRef.current || await fetchData();
     switch (cat) {
       case 'indices': return data.indices;
       case 'stocks':
@@ -157,32 +219,42 @@ export default function SymbolSearch({
       case 'bond': return [...data.bonds, ...data.mortgage];
       case 'derivative': return [...data.futures, ...data.salaf];
       case 'all':
-      default:
+      default: {
+        const tgju = tgjuCacheRef.current;
         return [
           ...data.indices,
           ...data.stocks,
           ...data.etfs,
+          ...(tgju?.currencies || []),
+          ...(tgju?.gold || []),
+          ...(tgju?.silver || []),
+          ...(tgju?.goldEtfs || []),
           ...data.bonds,
           ...data.futures,
           ...data.salaf,
           ...data.mortgage,
         ];
+      }
     }
-  }, [activeIndustry]);
+  }, [activeIndustry, fetchData, fetchTgjuData]);
 
-  /* ── Popular items (top by value) ── */
-  const getPopular = React.useCallback((data: InstrumentsData) => {
+  /* -- Popular items (top by value) -- */
+  const getPopular = React.useCallback(async () => {
+    const data = cacheRef.current || await fetchData();
+    const tgju = tgjuCacheRef.current;
     const all = [
-      ...data.indices.map((i) => ({ ...i, tval: i.index || 0 })),
+      ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))),
       ...data.stocks,
       ...data.etfs,
+      ...(tgju?.currencies || []),
+      ...(tgju?.gold || []).slice(0, 5),
     ];
     const sorted = [...all].sort((a, b) => (b.tval || 0) - (a.tval || 0)).slice(0, 15);
     setResults(sorted);
     setTotalMatched(all.length);
-  }, []);
+  }, [fetchData]);
 
-  /* ── Filter by search query ── */
+  /* -- Filter by search query -- */
   const doFilter = React.useCallback((items: InstrumentItem[], q: string) => {
     const n = q.trim().toLowerCase();
     const f = items.filter(
@@ -196,15 +268,16 @@ export default function SymbolSearch({
     setActiveIndex(-1);
   }, []);
 
-  /* ── Show dropdown with data ── */
+  /* -- Show dropdown with data -- */
   const showDropdown = React.useCallback(async (q: string) => {
     setOpen(true);
-    const data = cacheRef.current || await fetchData();
-    const items = getItemsForCategory(data, activeCategory);
+    // Ensure both data sources are loaded
+    const [,] = await Promise.all([fetchData(), fetchTgjuData()]);
+
+    const items = await getItemsForCategory(activeCategory);
     if (q.trim().length === 0) {
-      // Show popular when no query, or all in category
       if (activeCategory === 'all') {
-        getPopular(data);
+        await getPopular();
       } else {
         setResults(items.slice(0, MAX_RESULTS));
         setTotalMatched(items.length);
@@ -213,29 +286,27 @@ export default function SymbolSearch({
       doFilter(items, q);
     }
     setLoading(false);
-  }, [fetchData, getItemsForCategory, activeCategory, getPopular, doFilter]);
+  }, [fetchData, fetchTgjuData, getItemsForCategory, activeCategory, getPopular, doFilter]);
 
-  /* ── Category change ── */
-  const handleCategoryChange = React.useCallback((cat: CategoryKey) => {
+  /* -- Category change -- */
+  const handleCategoryChange = React.useCallback(async (cat: CategoryKey) => {
     setActiveCategory(cat);
     if (cat !== 'stocks') setActiveIndustry(null);
     setShowIndustryPicker(false);
-    // Re-filter immediately if data is cached
-    if (cacheRef.current) {
-      const items = getItemsForCategory(cacheRef.current, cat);
-      if (query.trim().length > 0) {
-        doFilter(items, query);
-      } else if (cat === 'all') {
-        getPopular(cacheRef.current);
-      } else {
-        setResults(items.slice(0, MAX_RESULTS));
-        setTotalMatched(items.length);
-      }
-      setActiveIndex(-1);
+
+    const items = await getItemsForCategory(cat);
+    if (query.trim().length > 0) {
+      doFilter(items, query);
+    } else if (cat === 'all') {
+      await getPopular();
+    } else {
+      setResults(items.slice(0, MAX_RESULTS));
+      setTotalMatched(items.length);
     }
+    setActiveIndex(-1);
   }, [getItemsForCategory, query, doFilter, getPopular]);
 
-  /* ── Industry change ── */
+  /* -- Industry change -- */
   const handleIndustryChange = React.useCallback((industry: string | null) => {
     setActiveIndustry(industry);
     setShowIndustryPicker(false);
@@ -255,10 +326,9 @@ export default function SymbolSearch({
 
   const handleChange = React.useCallback((value: string) => {
     setQuery(value);
-    if (cacheRef.current) {
-      const items = getItemsForCategory(cacheRef.current, activeCategory);
+    getItemsForCategory(activeCategory).then((items) => {
       if (value.trim().length === 0) {
-        if (activeCategory === 'all') getPopular(cacheRef.current);
+        if (activeCategory === 'all') getPopular();
         else {
           setResults(items.slice(0, MAX_RESULTS));
           setTotalMatched(items.length);
@@ -266,21 +336,18 @@ export default function SymbolSearch({
       } else {
         doFilter(items, value);
       }
-    } else {
-      setLoading(true);
-      showDropdown(value);
-    }
-  }, [cacheRef, activeCategory, getItemsForCategory, getPopular, doFilter, showDropdown]);
+    });
+  }, [activeCategory, getItemsForCategory, getPopular, doFilter]);
 
   const handleFocus = React.useCallback(() => {
-    setLoading(!cacheRef.current);
+    setLoading(true);
     showDropdown(query);
-  }, [query, cacheRef.current, showDropdown]);
+  }, [query, showDropdown]);
 
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18);
     setOpen(false);
-    onSelect?.(s.l18, s.category, s.insCode);
+    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey);
     inputRef.current?.blur();
   }, [onSelect]);
 
@@ -316,8 +383,9 @@ export default function SymbolSearch({
   const isPopular = query.trim().length === 0 && activeCategory === 'all';
   const isSearch = query.trim().length > 0;
 
-  /* ── Render instrument price ── */
+  /* -- Render instrument price -- */
   const renderPrice = (item: InstrumentItem) => {
+    const isTgju = isTgjuCategory(item.category as CategoryKey);
     if (item.category === 'index') {
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
@@ -336,7 +404,7 @@ export default function SymbolSearch({
     const isDown = item.pcp < 0;
     return (
       <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
-        <span className='text-xs font-semibold text-gray-200'>{formatNum(item.pl)}</span>
+        <span className='text-xs font-semibold text-gray-200'>{isTgju ? formatNum(item.pl) : formatNum(item.pl)}</span>
         <span className={cn(
           'text-[11px] font-bold px-1.5 py-0.5 rounded',
           isUp ? 'bg-emerald-500/15 text-emerald-400' :
@@ -352,7 +420,7 @@ export default function SymbolSearch({
 
   return (
     <div dir='rtl' className={cn('relative', className)}>
-      {/* ── Search Input ── */}
+
       <div className='relative'>
         <Search className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none' />
         <Input
@@ -363,6 +431,7 @@ export default function SymbolSearch({
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          suppressHydrationWarning
           className={cn(
             'h-10 w-full rounded-lg border border-gray-700/80 bg-gray-900/90',
             'text-sm text-gray-100 placeholder:text-gray-500',
@@ -379,18 +448,19 @@ export default function SymbolSearch({
         )}
       </div>
 
-      {/* ── Dropdown ── */}
+
       {open && (
         <div
           ref={dropdownRef}
           className='absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-gray-700/60 bg-[#0d1520] shadow-2xl shadow-black/50 overflow-hidden'
-          style={{ width: 'min(620px, 94vw)' }}
+          style={{ width: 'min(660px, 94vw)' }}
         >
-          {/* ── Category Tabs ── */}
+
           <div className='flex items-center gap-1 px-3 py-2 border-b border-white/5 overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
             {CATEGORIES.map((cat) => {
               const Icon = cat.icon;
               const isActive = activeCategory === cat.key;
+              const isTgjuCat = isTgjuCategory(cat.key);
               return (
                 <button
                   key={cat.key}
@@ -398,7 +468,9 @@ export default function SymbolSearch({
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0',
                     isActive
-                      ? 'bg-amber-500/20 text-amber-400'
+                      ? isTgjuCat
+                        ? 'bg-teal-500/20 text-teal-400'
+                        : 'bg-amber-500/20 text-amber-400'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5',
                   )}
                   type='button'
@@ -410,7 +482,7 @@ export default function SymbolSearch({
             })}
           </div>
 
-          {/* ── Industry Sub-filter (only for stocks) ── */}
+
           {activeCategory === 'stocks' && (
             <div className='relative px-3 py-2 border-b border-white/5'>
               <div className='flex items-center gap-2 overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
@@ -427,7 +499,6 @@ export default function SymbolSearch({
                   <Layers className='w-3 h-3' />
                   همه صنایع
                 </button>
-                {/* Show first 8 industries inline, rest in picker */}
                 {industries.slice(0, 8).map((ind) => (
                   <button
                     key={ind}
@@ -490,8 +561,13 @@ export default function SymbolSearch({
             </div>
           )}
 
-          {/* ── Results Header ── */}
-          {loading && results.length === 0 && (
+          {isTgjuCategory(activeCategory) && loading && results.length === 0 && (
+            <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-gray-400'>
+              <Spinner /><span>در حال بارگذاری ...</span>
+            </div>
+          )}
+
+          {!isTgjuCategory(activeCategory) && loading && results.length === 0 && (
             <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-gray-400'>
               <Spinner /><span>در حال بارگذاری ...</span>
             </div>
@@ -527,9 +603,10 @@ export default function SymbolSearch({
                   const isActive = index === activeIndex;
                   const isUp = item.pcp > 0;
                   const isDown = item.pcp < 0;
+                  const isTgjuItem = isTgjuCategory(item.category as CategoryKey);
                   return (
                     <div
-                      key={`${item.category}-${item.l18}`}
+                      key={`${item.category}-${item.l18}-${item.tgjuKey || ''}`}
                       ref={(el) => { itemRefs.current[index] = el; }}
                       role='option'
                       aria-selected={isActive}
@@ -538,7 +615,7 @@ export default function SymbolSearch({
                       className={cn(
                         'flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm transition-all',
                         'border-b border-white/[0.03] last:border-b-0',
-                        isActive ? 'bg-amber-500/15 text-gray-100' : 'text-gray-300 hover:bg-white/[0.04]',
+                        isActive ? (isTgjuItem ? 'bg-teal-500/15 text-gray-100' : 'bg-amber-500/15 text-gray-100') : 'text-gray-300 hover:bg-white/[0.04]',
                       )}
                     >
                       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
@@ -546,16 +623,22 @@ export default function SymbolSearch({
                           <span className='truncate font-bold text-sm text-gray-100'>{item.l18}</span>
                           {isUp && <TrendingUp className='w-3 h-3 text-emerald-400 shrink-0' />}
                           {isDown && <TrendingDown className='w-3 h-3 text-red-400 shrink-0' />}
-                          {/* Category badge */}
                           <span className={cn(
                             'text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium',
                             CATEGORY_COLORS[item.category],
                           )}>
                             {CATEGORY_LABELS[item.category]}
                           </span>
+                          {isTgjuItem && (
+                            <span className='text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium bg-teal-500/10 text-teal-500/70'>
+                              TGJU
+                            </span>
+                          )}
                         </div>
-                        {item.l30 && <span className='truncate text-[11px] text-gray-500 leading-tight'>{item.l30}</span>}
-                        {item.cs && item.category !== 'etf' && item.category !== 'index' && (
+                        {item.l30 && item.l30 !== item.l18 && (
+                          <span className='truncate text-[11px] text-gray-500 leading-tight'>{item.l30}</span>
+                        )}
+                        {item.cs && item.category === 'stock' && (
                           <span className='truncate text-[10px] text-gray-600 leading-tight'>{item.cs}</span>
                         )}
                       </div>

@@ -3,12 +3,12 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, BarChart2, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, BarChart2, Info, Coins } from 'lucide-react';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
-import VdssGraph, { VdssGraphSkeleton } from '@/components/tse/vdss-graph';
-import VdesAnalysis, { VdesAnalysisSkeleton } from '@/components/tse/vdes-analysis';
+import VdssGraph from '@/components/tse/vdss-graph';
+import VdesAnalysis from '@/components/tse/vdes-analysis';
 
 interface AnalysisData {
   symbol: string;
@@ -31,6 +31,7 @@ interface AnalysisData {
     pe: number;
   } | null;
   ta: import('@/lib/ta-engine').TAResult;
+  isTgju?: boolean;
 }
 
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
@@ -45,14 +46,45 @@ interface IndexData {
   max: number;
 }
 
+const TGJU_CATEGORIES = new Set(['currency', 'gold', 'silver', 'gold_etf']);
+
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
   const [indexData, setIndexData] = useState<IndexData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('chart');
 
-  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string) => {
+  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string) => {
+    // TGJU instrument: fetch historical data via tgju.org chart API
+    if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
+      setLoading(true);
+      setLoadingMessage('در حال دریافت داده‌های تاریخی از TGJU ... (حدود ۱۵ ثانیه)');
+      setError(null);
+      setData(null);
+      setIndexData(null);
+      try {
+        const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(tgjuKey)}`);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'خطا در دریافت داده‌های تاریخی');
+        }
+        const json = await res.json();
+        if (!json.candles || json.candles.length === 0 || !json.ta) {
+          throw new Error(json.error || 'داده‌های تاریخی کافی برای تحلیل وجود ندارد');
+        }
+        setData({ ...json, isTgju: true });
+        setActiveTab('chart');
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoading(false);
+        setLoadingMessage(null);
+      }
+      return;
+    }
+
     // Index: try TSETMC TA first, fall back to static overview
     if (category === 'index') {
       setLoading(true);
@@ -60,7 +92,6 @@ export default function Home() {
       setData(null);
       setIndexData(null);
       try {
-        // Try fetching TA analysis via TSETMC if insCode is available
         if (insCode) {
           const analysisRes = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}&indexInsCode=${encodeURIComponent(insCode)}`);
           if (analysisRes.ok) {
@@ -73,8 +104,6 @@ export default function Home() {
             }
           }
         }
-
-        // Fallback: show static index overview (no historical data)
         const r = await fetch('/api/instruments');
         if (r.ok) {
           const d = await r.json();
@@ -97,7 +126,7 @@ export default function Home() {
       return;
     }
 
-    // Regular instrument: full TA analysis
+    // Regular TSE instrument: full TA analysis
     setLoading(true);
     setError(null);
     setData(null);
@@ -123,7 +152,6 @@ export default function Home() {
   const signalBg = data?.ta?.overallSignal === 'bullish' ? 'bg-emerald-500/20 border-emerald-500/30' : data?.ta?.overallSignal === 'bearish' ? 'bg-red-500/20 border-red-500/30' : 'bg-amber-500/20 border-amber-500/30';
   const SignalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
 
-  // Stable chart ta prop (avoids infinite re-render loop)
   const chartTa = useMemo(() => data?.ta ? {
     sma: data.ta.sma,
     bollingerBands: data.ta.bollingerBands,
@@ -134,28 +162,28 @@ export default function Home() {
     sar: data.ta.sar,
   } : null, [data?.ta]);
 
+  // Build stats bar for TGJU (no volume/value data)
+  const isTgjuData = data?.isTgju;
+
   return (
     <div dir="rtl" className="min-h-screen bg-[#060a13] text-gray-100 flex flex-col">
       {/* ── HEADER ────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#060a13]/95 backdrop-blur-xl">
         <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-4 flex-wrap">
-          {/* Logo & Title */}
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20 border border-amber-500/30 flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-amber-400 leading-tight">Tse Technical Analysis</h1>
-              <p className="text-[10px] text-gray-500">تحلیل تکنیکال بورس ایران</p>
+              <h1 className="text-base font-bold text-amber-400 leading-tight">تحلیل تکنیکال بازار</h1>
+              <p className="text-[10px] text-gray-500">بورس + ارز + طلا (TSETMC &amp; TGJU)</p>
             </div>
           </div>
 
-          {/* Search */}
           <div className="flex-1 min-w-[240px] max-w-xl">
-            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، شاخص، صندوق، اوراق ...' />
+            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، ارز، طلا، شاخص، صندوق ...' />
           </div>
 
-          {/* Index Info (header) */}
           {indexData && (
             <div className="flex items-center gap-4 text-sm shrink-0">
               <div className="text-left">
@@ -173,7 +201,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Price Info (after selection) */}
           {data?.info && (
             <div className="flex items-center gap-4 text-sm shrink-0">
               <div className="text-left">
@@ -185,6 +212,11 @@ export default function Home() {
                   </span>
                 </div>
               </div>
+              {isTgjuData && (
+                <span className="px-2 py-1 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-400 text-[10px] font-bold flex items-center gap-1">
+                  <Coins className="w-3 h-3" /> TGJU
+                </span>
+              )}
               <div className={`px-3 py-1.5 rounded-lg border ${signalBg}`}>
                 <div className={`flex items-center gap-1.5 text-xs font-bold ${signalColor}`}>
                   <SignalIcon className="w-3.5 h-3.5" />
@@ -198,7 +230,6 @@ export default function Home() {
 
       {/* ── MAIN CONTENT ──────────────────────────────────────── */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4">
-        {/* Index Overview */}
         {indexData && !loading && (
           <div className="max-w-2xl mx-auto py-12">
             <div className="bg-[#111d2e]/60 border border-white/5 rounded-2xl p-8 text-center">
@@ -223,37 +254,42 @@ export default function Home() {
               </div>
               <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500">
                 <Info className="w-3.5 h-3.5" />
-                <span>داده‌های تاریخی شاخص‌ها از طریق API فعلی قابل دسترسی نیستند. تحلیل تکنیکال فقط برای ابزارهای دارای داده کندل‌استیک در دسترس است.</span>
+                <span>داده‌های تاریخی شاخص‌ها از طریق API فعلی قابل دسترسی نیستند.</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Empty State */}
         {!data && !indexData && !loading && !error && (
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-400/10 to-amber-600/5 border border-amber-500/20 flex items-center justify-center mb-6">
               <BarChart3 className="w-12 h-12 text-amber-400/60" />
             </div>
-            <h2 className="text-xl font-bold text-gray-200 mb-2">تحلیل تکنیکال بورس ایران</h2>
+            <h2 className="text-xl font-bold text-gray-200 mb-2">تحلیل تکنیکال بازار ایران</h2>
             <p className="text-gray-500 max-w-md mb-6">
-              نماد، شاخص، صندوق، اوراق بدهی یا ابزار مشتقه مورد نظر خود را جستجو کنید
+              نماد بورسی، ارز، طلا، شاخص یا صندوق مورد نظر خود را جستجو کنید
               تا تحلیل کامل تکنیکال نمایش داده شود.
             </p>
             <div className="flex flex-wrap justify-center gap-2 text-xs text-gray-600">
               <span className="px-3 py-1.5 rounded-full bg-white/5">سهام</span>
+              <span className="px-3 py-1.5 rounded-full bg-teal-500/10 text-teal-400/60">ارزها</span>
+              <span className="px-3 py-1.5 rounded-full bg-yellow-500/10 text-yellow-400/60">طلا و نقره</span>
+              <span className="px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-400/60">صندوق طلا</span>
               <span className="px-3 py-1.5 rounded-full bg-rose-500/10 text-rose-400/60">شاخص‌ها</span>
               <span className="px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-400/60">صندوق‌ها</span>
-              <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400/60">اوراق بدهی</span>
-              <span className="px-3 py-1.5 rounded-full bg-orange-500/10 text-orange-400/60">مشتقه</span>
               <span className="px-3 py-1.5 rounded-full bg-white/5">RSI, MACD, BB, VDss</span>
             </div>
           </div>
         )}
 
-        {/* Loading State */}
         {loading && (
           <div className="space-y-4 py-8">
+            {loadingMessage && (
+              <div className="flex items-center justify-center gap-3 py-6">
+                <div className="w-5 h-5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+                <span className="text-sm text-teal-400">{loadingMessage}</span>
+              </div>
+            )}
             <Skeleton className="h-8 w-48 bg-white/5" />
             <Skeleton className="h-[500px] w-full bg-white/5 rounded-xl" />
             <div className="grid grid-cols-3 gap-4">
@@ -264,41 +300,45 @@ export default function Home() {
           </div>
         )}
 
-        {/* Error State */}
         {error && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
               <TrendingDown className="w-8 h-8 text-red-400" />
             </div>
-            <h3 className="text-lg font-bold text-red-400 mb-2">خطا در دریافت داده‌ها</h3>
+            <h3 className="text-lg font-bold text-red-400 mb-2">خطا</h3>
             <p className="text-gray-500 text-sm max-w-md">{error}</p>
           </div>
         )}
 
-        {/* Analysis Results */}
         {data && !loading && !indexData && (
           <div className="space-y-4">
-            {/* Quick Stats Bar */}
             {data.info && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { label: 'اولین', value: toFa(data.info.openPrice) },
                   { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-400' },
                   { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-400' },
-                  { label: 'حجم معاملات', value: (data.info.volume / 1e6).toFixed(1) + 'M' },
-                  { label: 'ارزش معاملات', value: (data.info.value / 1e9).toFixed(1) + 'B' },
-                  { label: 'تعداد معاملات', value: toFa(data.info.trades) },
-                  { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
+                  ...(isTgjuData ? [] : [
+                    { label: 'حجم معاملات', value: (data.info.volume / 1e6).toFixed(1) + 'M' },
+                    { label: 'ارزش معاملات', value: (data.info.value / 1e9).toFixed(1) + 'B' },
+                    { label: 'تعداد معاملات', value: toFa(data.info.trades) },
+                    { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
+                  ]),
                 ].map((s) => (
                   <div key={s.label} className="bg-[#111d2e]/60 border border-white/5 rounded-lg px-3 py-2">
                     <div className="text-[10px] text-gray-500 mb-0.5">{s.label}</div>
-                    <div className={`text-sm font-bold ${s.cls || 'text-gray-200'}`}>{s.value}</div>
+                    <div className={`text-sm font-bold ${(s as { cls?: string }).cls || 'text-gray-200'}`}>{s.value}</div>
                   </div>
                 ))}
+                {isTgjuData && (
+                  <div className="bg-teal-500/10 border border-teal-500/20 rounded-lg px-3 py-2">
+                    <div className="text-[10px] text-teal-500/70 mb-0.5">منبع داده</div>
+                    <div className="text-sm font-bold text-teal-400">TGJU (تارا)</div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Main Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-[#111d2e]/80 border border-white/5 h-10">
                 <TabsTrigger value="chart" className="text-xs gap-1.5 data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400">
@@ -385,10 +425,8 @@ export default function Home() {
         )}
       </main>
 
-      {/* ── FOOTER ────────────────────────────────────────────── */}
       <footer className="mt-auto border-t border-white/5 py-3 text-center text-[10px] text-gray-600">
-        تمامی تحلیل‌ها بر اساس داده‌های تکنیکال بورس ایران (TSETMC) محاسبه شده است.
-        این محتوا صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری محسوب نمی‌شود.
+        داده‌های بورس از TSETMC | داده‌های ارز و طلا از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست.
       </footer>
     </div>
   );
