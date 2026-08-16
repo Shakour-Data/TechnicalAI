@@ -254,6 +254,9 @@ export default function Home() {
                   trendR2={data.ta.trend.medium.r2}
                   overallSignal={data.ta.overallSignal}
                   scenarios={data.ta.scenarios}
+                  supportStrengths={data.ta.supportStrengths}
+                  resistanceStrengths={data.ta.resistanceStrengths}
+                  priceTargets={data.ta.priceTargets}
                 />
               </TabsContent>
             </Tabs>

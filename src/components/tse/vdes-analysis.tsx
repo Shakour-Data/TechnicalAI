@@ -53,6 +53,9 @@ export interface VdesAnalysisProps {
     R4: Scenario;
     R5: Scenario;
   };
+  supportStrengths: { price: number; strength: number; isTarget: boolean }[];
+  resistanceStrengths: { price: number; strength: number; isTarget: boolean }[];
+  priceTargets: { price: number; strength: number; isTarget: boolean }[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -89,6 +92,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
     diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
+    supportStrengths, resistanceStrengths, priceTargets,
   } = props;
 
   const R1_level = resistances[0] ?? currentPrice * 1.05;
@@ -296,30 +300,42 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
                 : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
             </p>
 
-            {/* ── Key Levels ── */}
+            {/* ── Key Levels with Strength ── */}
             <div className="rounded-xl px-4 py-3 border-r-4 border-red-400/70" style={{ background: 'rgba(248,227,101,0.06)' }}>
-              <strong className="text-red-400 text-sm">🔴 سطوح کلیدی پیش رو (رند شده):</strong>
+              <strong className="text-red-400 text-sm">🔴 سطوح کلیدی پیش رو (با قدرت ۱-۱۰):</strong>
               <ul className="mt-2 space-y-1.5 text-xs text-gray-300 leading-[1.85] list-disc list-inside">
-                <li>
-                  <b>مقاومت {toFa(R1_level)} ریال (R1):</b> نخستین سد پیش روی سهم. عبور با تثبیت از این سطح، راه را برای صعود تا {toFa(R2_level)} ریال هموار می‌کند.
-                </li>
-                <li>
-                  <b>مقاومت {toFa(R2_level)} ریال (R2):</b> سد بعدی در مسیر صعودی. شکست این سطح به معنای تأیید روند تا {toFa(targetMax)} ریال است.
-                </li>
-                {resistances.length > 2 && (
-                  <li><b>مقاومت‌های بعدی:</b> {resistances.slice(2).map(toFa).join(' ، ')} ریال</li>
-                )}
-                <li>
-                  <b>حمایت {toFa(S1_level)} ریال (S1):</b> حمایت نخست و کلیدی. در صورت اصلاح، این سطح مرز تفکیک پولبک سالم از اصلاح عمیق‌تر است.
-                </li>
-                <li>
-                  <b>حمایت {toFa(S2_level)} ریال (S2):</b> حمایت دوم. حفظ این سطح برای جلوگیری از افت بیشتر حیاتی است.
-                </li>
-                {supports.length > 2 && (
-                  <li><b>حمایت‌های بعدی:</b> {supports.slice(2).map(toFa).join(' ، ')} ریال</li>
-                )}
+                {resistanceStrengths.map((r, i) => (
+                  <li key={i}>
+                    <b>مقاومت {toFa(r.price)} ریال (R{i + 1}):</b>{' '}
+                    <StrengthBadge strength={r.strength} isTarget={r.isTarget} />
+                    {i === 0 ? ' نخستین سد پیش روی سهم.' : i === 1 ? ' سد بعدی در مسیر صعودی.' : ''}
+                  </li>
+                ))}
+                {supportStrengths.map((s, i) => (
+                  <li key={i}>
+                    <b>حمایت {toFa(s.price)} ریال (S{i + 1}):</b>{' '}
+                    <StrengthBadge strength={s.strength} isTarget={s.isTarget} />
+                    {i === 0 ? ' مرز تفکیک پولبک سالم از اصلاح عمیق‌تر.' : i === 1 ? ' حمایت دوم. حفظ این سطح حیاتی است.' : ''}
+                  </li>
+                ))}
               </ul>
             </div>
+
+            {/* ── Price Targets ── */}
+            {priceTargets && priceTargets.length > 0 && (
+              <div className="rounded-xl px-4 py-3 border-r-4 border-amber-400/70" style={{ background: 'rgba(255,177,27,0.06)' }}>
+                <strong className="text-amber-400 text-sm">🎯 اهداف قیمتی (سطوح با قدرت بالا):</strong>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {priceTargets.map((t, i) => (
+                    <div key={i} className="px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                      <span className="text-xs font-bold text-amber-300">{toFa(t.price)} ریال</span>
+                      <StrengthBadge strength={t.strength} isTarget={true} />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">سطوحی که قدرت بالای ۷ دارند یا بالاترین قدرت را دارند، به عنوان اهداف قیمتی شناسایی می‌شوند.</p>
+              </div>
+            )}
 
             {/* ── PARAGRAPH 4: Volume & OBV Analysis ── */}
             <p className="text-sm text-gray-300 leading-[1.85]">
@@ -443,6 +459,22 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         </span>
       </div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sub-components
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function StrengthBadge({ strength, isTarget }: { strength: number; isTarget: boolean }) {
+  const color = strength >= 8 ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
+    : strength >= 5 ? 'text-amber-400 bg-amber-500/15 border-amber-500/30'
+    : 'text-gray-400 bg-gray-500/10 border-gray-500/20';
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border mr-1 ${color}`}>
+      {isTarget && '🎯 '}
+      قدرت: {strength}/10
+    </span>
   );
 }
 

@@ -124,3 +124,19 @@ Stage Summary:
 - globals.css: Added CSS to hide TradingView watermark
 - All verified working via Agent Browser with no errors
 
+---
+Task ID: 2
+Agent: main
+Task: VDss graph improvements + S/R strength calculation
+
+Work Log:
+- Rewrote ta-engine.ts calcSupportResistance: added LevelStrength type, 5% min gap enforcement, strength 1-10 based on nearby level clustering, price target selection (strength>7 or top 2)
+- Completely rewrote vdss-graph.tsx: edge probabilities based on bullScore/ADX, DFS path finder, scenario filter buttons (R1-R5), right panel with path probabilities and top 10 paths, faded non-visible nodes (opacity 0.12, grayscale, blur)
+- Updated vdes-analysis.tsx: added supportStrengths/resistanceStrengths/priceTargets props, StrengthBadge component, Price Targets section, updated Key Levels to show strength per level
+- Updated page.tsx to pass new data fields
+
+Stage Summary:
+- TA engine returns supportStrengths[], resistanceStrengths[], priceTargets[] with price, strength(1-10), isTarget fields
+- VDss graph: 10 filter buttons (5 type + 5 scenario), edge probabilities displayed on each edge, path probabilities on right panel, top 10 paths listed, non-filtered nodes faded to 12% opacity with blur
+- VDes: S/R levels show strength badges (green>=8, amber>=5, gray<5), price targets section highlights levels with strength>7
+

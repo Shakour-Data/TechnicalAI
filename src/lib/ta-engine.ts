@@ -27,6 +27,12 @@ export interface TrendResult {
   r2: number;
 }
 
+export interface LevelStrength {
+  price: number;
+  strength: number; // 1-10
+  isTarget: boolean;
+}
+
 export interface TAResult {
   // Moving Averages
   sma: Record<string, number>;
@@ -52,6 +58,9 @@ export interface TAResult {
   // Support / Resistance (5 each, rounded)
   resistances: number[];
   supports: number[];
+  supportStrengths: LevelStrength[];
+  resistanceStrengths: LevelStrength[];
+  priceTargets: LevelStrength[];
   // Trend Lines
   trend: {
     short: TrendResult;
@@ -395,9 +404,15 @@ function findSwingLevels(data: OHLCV[]): { highs: number[]; lows: number[] } {
   return { highs, lows };
 }
 
-// ─── Support / Resistance (5 each, rounded) ──────────────────────────────────
-function calcSupportResistance(data: OHLCV[], currentPrice: number): { resistances: number[]; supports: number[] } {
-  const allLevels: number[] = [];
+// ─── Support / Resistance (5 each, rounded, with strength) ──────────────────
+function calcSupportResistance(data: OHLCV[], currentPrice: number): {
+  resistances: number[];
+  supports: number[];
+  supportStrengths: LevelStrength[];
+  resistanceStrengths: LevelStrength[];
+  priceTargets: LevelStrength[];
+} {
+  const allRawLevels: number[] = [];
 
   // 1. Pivot Points from previous day
   const prev = data[data.length - 2] ?? data[data.length - 1];
@@ -418,31 +433,91 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): { resistanc
       prev.low - 2 * (prev.high - pp) - hl,
       prev.low - 2 * (prev.high - pp) - hl - (prev.high - pp),
     ];
-    allLevels.push(...pivotR, ...pivotS);
+    allRawLevels.push(...pivotR, ...pivotS);
   }
 
   // 2. Swing levels
   const swings = findSwingLevels(data);
-  allLevels.push(...swings.highs, ...swings.lows);
+  allRawLevels.push(...swings.highs, ...swings.lows);
 
-  // 3. Round all
-  const rounded = allLevels.map(roundToNice);
+  // 3. Round all and filter invalid
+  const rounded = allRawLevels.map(roundToNice).filter(l => l > 0);
 
   // 4. Remove duplicates (within 0.5%)
   const unique: number[] = [];
   for (const level of rounded) {
-    if (level <= 0) continue;
     const isDup = unique.some(u => Math.abs(u - level) / u < 0.005);
     if (!isDup) unique.push(level);
   }
 
-  // 5. Separate and sort
-  const above = unique.filter(l => l > currentPrice).sort((a, b) => a - b);
-  const below = unique.filter(l => l < currentPrice).sort((a, b) => b - a);
+  // 5. Calculate strength for each unique level
+  // Strength = count of other levels within ±5% range
+  // More levels nearby = stronger
+  const levelStrengths: LevelStrength[] = unique.map(level => {
+    const range5pct = level * 0.05;
+    const nearbyCount = unique.filter(other => other !== level && Math.abs(other - level) <= range5pct).length;
+    // Base strength: 1 for level itself, +1 for each nearby level (max 10)
+    const strength = Math.min(10, Math.max(1, 1 + nearbyCount * 2));
+    return { price: level, strength, isTarget: false };
+  });
+
+  // 6. Separate above/below and enforce 5% min gap
+  const above = levelStrengths.filter(l => l.price > currentPrice).sort((a, b) => a.price - b.price);
+  const below = levelStrengths.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
+
+  // Enforce 5% minimum gap between adjacent levels
+  function enforceGap(levels: LevelStrength[], minGapPct: number = 0.05): LevelStrength[] {
+    if (levels.length === 0) return [];
+    const result: LevelStrength[] = [levels[0]];
+    for (let i = 1; i < levels.length; i++) {
+      const prev = result[result.length - 1].price;
+      const curr = levels[i].price;
+      const gap = Math.abs(curr - prev) / prev;
+      if (gap >= minGapPct) {
+        result.push(levels[i]);
+      } else {
+        // Merge: keep the one with higher strength
+        if (levels[i].strength > result[result.length - 1].strength) {
+          result[result.length - 1] = { ...levels[i], strength: Math.min(10, result[result.length - 1].strength + 1) };
+        } else {
+          result[result.length - 1] = { ...result[result.length - 1], strength: Math.min(10, result[result.length - 1].strength + 1) };
+        }
+      }
+    }
+    return result;
+  }
+
+  const finalResistances = enforceGap(above, 0.05).slice(0, 5);
+  const finalSupports = enforceGap(below, 0.05).slice(0, 5);
+
+  // 7. Determine price targets: strength > 7 is a target
+  // If none > 7, pick top 2 strongest
+  const allLevels = [...finalResistances, ...finalSupports];
+  const sortedByStrength = [...allLevels].sort((a, b) => b.strength - a.strength);
+  let targets: LevelStrength[];
+  if (sortedByStrength.some(l => l.strength > 7)) {
+    targets = sortedByStrength.filter(l => l.strength > 7);
+  } else {
+    targets = sortedByStrength.slice(0, 2);
+  }
+
+  // Mark targets
+  targets = targets.map(t => ({ ...t, isTarget: true }));
+
+  // Also mark in final arrays
+  finalResistances.forEach(r => {
+    if (targets.some(t => t.price === r.price)) r.isTarget = true;
+  });
+  finalSupports.forEach(s => {
+    if (targets.some(t => t.price === s.price)) s.isTarget = true;
+  });
 
   return {
-    resistances: above.slice(0, 5),
-    supports: below.slice(0, 5),
+    resistances: finalResistances.map(l => l.price),
+    supports: finalSupports.map(l => l.price),
+    supportStrengths: finalSupports,
+    resistanceStrengths: finalResistances,
+    priceTargets: targets,
   };
 }
 
@@ -470,6 +545,7 @@ export function analyze(data: OHLCV[]): TAResult {
       adx: 0, diPlus: 0, diMinus: 0, sar: 0, atr: 0,
       bollingerBands: { upper: 0, middle: 0, lower: 0 }, obv: 0,
       resistances: [], supports: [],
+      supportStrengths: [], resistanceStrengths: [], priceTargets: [],
       trend: {
         short: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
         medium: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
@@ -513,7 +589,7 @@ export function analyze(data: OHLCV[]): TAResult {
   const obv = calcOBV(data);
 
   // ── Support / Resistance ────────────────────────────────────────────────
-  const { resistances, supports } = calcSupportResistance(data, price);
+  const { resistances, supports, supportStrengths, resistanceStrengths, priceTargets } = calcSupportResistance(data, price);
 
   // ── Trend Lines ─────────────────────────────────────────────────────────
   const trend = {
@@ -676,6 +752,9 @@ export function analyze(data: OHLCV[]): TAResult {
     obv,
     resistances: resistances.length ? resistances : [R1_level, R2_level, R3_level, R4_level, R5_level],
     supports: supports.length ? supports : [S1_level, S2_level, S3_level, S4_level, S5_level],
+    supportStrengths,
+    resistanceStrengths,
+    priceTargets,
     trend,
     scenarios,
     bullScore,
