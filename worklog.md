@@ -70,3 +70,38 @@ Stage Summary:
 - Strength values now properly differentiated (resistances: 1-5, supports: 4-10, targets: 8-10)
 - VDes layout restructured with visually appealing S/R boxes below chart
 - All sections verified present via Agent Browser DOM snapshot
+---
+Task ID: 2
+Agent: main
+Task: Implement 7-Layer ML-Based VDss Algorithm (no fixed weights)
+
+Work Log:
+- Created /src/lib/ml-model.ts (~300 lines): Logistic Regression with L2 regularization, StandardScaler, TimeSeriesSplit CV, AdaptiveWeightModel class
+- All ML infrastructure implemented from scratch in TypeScript (no sklearn dependency)
+- Logistic Regression: gradient descent, class-weighted loss, sigmoid activation, predictProba
+- StandardScaler: mean/std normalization with 1e-10 epsilon guard
+- TimeSeriesSplit: chronological train/val splits for time-series data
+- AdaptiveWeightModel: wraps ML pipeline, extracts normalized absolute coefficients as feature weights, manages training history (max 1000 samples), periodic retraining every 10 bars
+- Integrated 640 lines of VDss layer functions into ta-engine.ts:
+  - simplifiedSR(): fast S/R computation for historical bars using swing levels
+  - detectDivergenceSimple(): O(n) divergence detection using momentum proxy (no RSI recomputation)
+  - computeFeaturesAtBar(): 16-feature extraction at any historical bar (Layer 1+2)
+  - createTrainingData(): supervised label creation (1% threshold, sampled every 5 bars for performance)
+  - calculateScenarioProbabilities(): Layer 4 with adaptive ML parameters (momentum/volatility/trend factors from sigmoid of model coefficients)
+  - calculateEdgeWeights(): Layer 5 with ML coefficient-derived trend/momentum/volatility adjustments
+  - calculatePathProbabilities(): Layer 6 iterative DFS through 12-node VDss graph, calibration against Layer 4 probabilities
+- Updated TAResult interface with 7 new ML fields: bullConsensus, isMLTrained, mlAccuracy, mlWeights, edgeWeights, calibrationFactors, scenarioSums, adaptiveFactors
+- Updated analyze() function: replaced old 20-signal fixed-weight system with 7-layer ML pipeline
+- Performance optimizations: simplified divergence detection (removed O(n²) RSI recomputation), training data sampling (every 5 bars), reduced ML iterations (200 vs 1000), increased learning rate (0.1 vs 0.05)
+- Verified: analysis API returns in <60 seconds, probabilities sum to 100%, no console errors
+
+Stage Summary:
+- Complete 7-layer ML-based VDss algorithm implemented in pure TypeScript
+- 16 features extracted per bar: f_rsi, f_mfi, f_cci, s_adx, f_macd, f_stoch, s_bb, s_ma21, s_ma100, s_ema, s_atr, s_trend, s_sr, f_stochCross, f_macdCross, f_div
+- ML model trains on historical data with TimeSeriesSplit CV, extracts adaptive weights
+- Fallback to fixed weights when <70 training samples available
+- Example result (وبملت): bullConsensus=0.681, isMLTrained=true, R1=23% R2=28% R3=27% R4=18% R5=4%
+- ML weights: trend=0.113 (highest), rsi=0.125, macd=0.092, ma21=0.092, stochCross=0.007 (lowest)
+- Zero console errors in browser verification
+- Files: /src/lib/ml-model.ts (new), /src/lib/ta-engine.ts (modified, ~1570 lines)
+
