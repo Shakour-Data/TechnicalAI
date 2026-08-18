@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toPersianDigits } from '@/lib/jalali';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -371,7 +372,7 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       const d = `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`;
       const prob = edgeProbs[String(ei)] ?? 0;
-      const probLabel = (prob * 100).toFixed(0) + '%';
+      const probLabel = toPersianDigits((prob * 100).toFixed(0)) + '٪';
 
       pathsSvg += `<path d="${d}" stroke="${EDGE_COLORS[type]}" stroke-width="${isVisible ? 2 : 1}" opacity="${isVisible ? 0.72 : 0.06}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
 
@@ -424,7 +425,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         <p className="text-xs text-[#6b7280] leading-relaxed">{def.desc}</p>
         {inputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای ورودی ({inputs.length}):</p>
+            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای ورودی ({toFa(inputs.length)}):</p>
             <ul className="space-y-1">
               {inputs.map((e, i) => {
                 const ei = EDGES.indexOf(e);
@@ -432,7 +433,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 return (
                   <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
                     <b className="text-[#374151]">{e[0]} ← {e[1]}</b>
-                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{(ep * 100).toFixed(1)}٪</span>
+                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e[2]}
                   </li>
                 );
@@ -442,7 +443,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
         {outputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای خروجی ({outputs.length}):</p>
+            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای خروجی ({toFa(outputs.length)}):</p>
             <ul className="space-y-1">
               {outputs.map((e, i) => {
                 const ei = EDGES.indexOf(e);
@@ -450,7 +451,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 return (
                   <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
                     <b className="text-[#374151]">{e[0]} → {e[1]}</b>
-                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{(ep * 100).toFixed(1)}٪</span>
+                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e[2]}
                   </li>
                 );
@@ -651,7 +652,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-bold" style={{ color: meta.color }}>{key} | {meta.label}</span>
-                        <span className="text-lg font-black" style={{ color: meta.color }}>{(pathProb * 100).toFixed(1)}٪</span>
+                        <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((pathProb * 100).toFixed(1))}٪</span>
                       </div>
                       {/* Probability bar */}
                       <div className="w-full h-1.5 rounded-full bg-[#e5e7eb] mb-2">
@@ -677,19 +678,19 @@ export default function VdssGraph(props: VdssGraphProps) {
                     const meta = SCENARIO_META[p.target];
                     return (
                       <div key={i} className="flex items-center gap-2 text-[10px]">
-                        <span className="w-4 text-center font-bold" style={{ color: meta.color }}>{i + 1}</span>
+                        <span className="w-4 text-center font-bold" style={{ color: meta.color }}>{toFa(i + 1)}</span>
                         <span className="flex-1 text-[#374151]" dir="ltr">
                           {p.nodes.join(' → ')}
                         </span>
                         <span className="font-bold min-w-[40px] text-left" style={{ color: meta.color }}>
-                          {(p.prob * 100).toFixed(1)}٪
+                          {toPersianDigits((p.prob * 100).toFixed(1))}٪
                         </span>
                       </div>
                     );
                   })}
                   {filteredPaths.length > 10 && (
                     <div className="text-[10px] text-[#B0A89E] text-center pt-1">
-                      و {filteredPaths.length - 10} مسیر دیگر...
+                      و {toFa(filteredPaths.length - 10)} مسیر دیگر...
                     </div>
                   )}
                 </div>

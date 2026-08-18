@@ -9,6 +9,7 @@ import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
 import VdssGraph from '@/components/tse/vdss-graph';
 import VdesAnalysis from '@/components/tse/vdes-analysis';
+import { toPersianDigits } from '@/lib/jalali';
 
 interface AnalysisData {
   symbol: string;
@@ -397,8 +398,8 @@ export default function Home() {
                   { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-700' },
                   { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-700' },
                   ...(data.ta.hasVolume ? [
-                    { label: 'حجم معاملات', value: (data.info.volume / 1e6).toFixed(1) + 'M' },
-                    { label: 'ارزش معاملات', value: (data.info.value / 1e9).toFixed(1) + 'B' },
+                    { label: 'حجم معاملات', value: toPersianDigits((data.info.volume / 1e6).toFixed(1)) + 'M' },
+                    { label: 'ارزش معاملات', value: toPersianDigits((data.info.value / 1e9).toFixed(1)) + 'B' },
                     { label: 'تعداد معاملات', value: toFa(data.info.trades) },
                     { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
                   ] : [

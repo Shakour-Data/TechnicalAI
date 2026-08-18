@@ -162,7 +162,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
   const macdBullish = macdLine > macdSignal;
   const bbRange = bollingerUpper - bollingerLower;
-  const bbPos = bbRange > 0 ? ((currentPrice - bollingerLower) / bbRange * 100).toFixed(0) : '50';
+  const bbPos = toPersianDigits(bbRange > 0 ? ((currentPrice - bollingerLower) / bbRange * 100).toFixed(0) : '50');
   const bbSignal = currentPrice > bollingerUpper ? 'بالای باند بالایی (اشباع خرید)'
     : currentPrice < bollingerLower ? 'زیر باند پایینی (اشباع فروش)'
     : `داخل باندها (${bbPos}٪ از بازه)`;
@@ -170,9 +170,9 @@ function generateAnalysisText(ctx: AnalysisContext) {
     ? `DI+ (${toFa(diPlus)}) بالاتر از DI- (${toFa(diMinus)}) — فشار خرید غالب`
     : `DI- (${toFa(diMinus)}) بالاتر از DI+ (${toFa(diPlus)}) — فشار فروش غالب`;
   const trendText = trendDirection === 'up'
-    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
     : trendDirection === 'down'
-    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
     : 'خنثی و بدون جهت مشخص';
 
   const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
@@ -190,7 +190,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       سناریوی غالب برای سهم {symbolName} <b className="text-[#111827]">{dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
       قیمت در محدوده <b className="text-[#111827]">{toFa(currentPrice)} ریال</b> معامله می‌شود و روند میان‌مدت{' '}
       <b className={trendColor}>{trendLabel}</b>
-      {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={+(trendR2 * 100).toFixed(1)}%).
+      {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={toPersianDigits((trendR2 * 100).toFixed(1))}٪).
       قیمت نسبت به MA21 ({toFa(ma21)} ریال){' '}
       <span className={abColor(currentPrice, ma21)}>{aboveBelow(currentPrice, ma21)}</span>
       {' '}و نسبت به MA100 ({toFa(ma100)} ریال){' '}
@@ -216,7 +216,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b>
         {rsi > 70 && <span className="text-red-700"> — با این حال در فاز هیجانی صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
         {' '}قرار دارد.
-        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.
+        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
         استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
         MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با{' '}
@@ -233,7 +233,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — فرصت پولبک:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد
         {rsi < 50 && rsi > 30 && <span> — این سطح ایده‌آل برای ورود در پولبک سالم محسوب می‌شود.</span>}.
-        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش — فرصت ورود</span> : <span>در محدوده طبیعی برای پولبک</span>}.
+        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش — فرصت ورود</span> : <span>در محدوده طبیعی برای پولبک</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span>بالاتر از +100 — حرکت هنوز قوی است</span> : cci < -100 ? <span className="text-emerald-700">پایین‌تر از -100 — منطقه اشباع فروش و ورود جذاب</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
         استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
         MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
@@ -249,7 +249,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       <>
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — بازار بدون جهت:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد.
-        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش</span> : <span>در محدوده خنثی</span>}.
+        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش</span> : <span>در محدوده خنثی</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span>بالاتر از +100</span> : cci < -100 ? <span>پایین‌تر از -100</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
         استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
         MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
@@ -266,7 +266,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — هشدار اصلاح:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد
         {rsi < 40 && <span> — روند نزولی RSI هشدار ادامه اصلاح است.</span>}.
-        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی محتمل</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش شدید — احتمال بازگشت کوتاه‌مدت</span> : <span>در محدوده نزولی</span>}.
+        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی محتمل</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش شدید — احتمال بازگشت کوتاه‌مدت</span> : <span>در محدوده نزولی</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span className="text-red-700">بالاتر از +100 — ممکن است واگرایی منفی باشد</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 — فشار فروش قوی</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
         استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
         MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
@@ -284,7 +284,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — تضعیف شدید ساختار:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد
         {rsi < 40 && <span> — سقوط RSI نشان‌دهنده فشار فروش سنگین است.</span>}.
-        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی خطرناک</span> : mfi < 20 ? <span className="text-red-700">اشباع فروش شدید — خروج پول گسترده</span> : <span>در حال کاهش — هشدار خروج پول</span>}.
+        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی خطرناک</span> : mfi < 20 ? <span className="text-red-700">اشباع فروش شدید — خروج پول گسترده</span> : <span>در حال کاهش — هشدار خروج پول</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span className="text-red-700">بالاتر از +100 — واگرایی قطعی</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 — سقوط آزاد</span> : <span>در محدوده عادی اما رو به پایین</span>}.
         استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
         MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
@@ -318,7 +318,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const p4 = ctx.hasVolume ? (
     <>
       <strong className="text-amber-800">تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
-      شاخص جریان ورودی پول (OBV) در سطح <b className="text-[#111827]">{obv > 0 ? '+' : ''}{(obv / 1e6).toFixed(1)}M</b> قرار دارد
+      شاخص جریان ورودی پول (OBV) در سطح <b className="text-[#111827]">{obv > 0 ? '+' : ''}{toPersianDigits((obv / 1e6).toFixed(1))}M</b> قرار دارد
       {obv > 0
         ? <span> که <b className="text-emerald-700">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است.
           {highestKey === 'R1' || highestKey === 'R2' ? ' این حجم مثبت تأیید‌کننده سناریوی صعودی است.' : ''}
@@ -351,7 +351,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
         با احتمال {toFa(highestProb)}٪ برای سناریوی {dominant}، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی قدرتمند</b> را تأیید می‌کنند.
         {r1r2 > 60 && <span> ترکیب احتمال صعودی {toFa(r1r2)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
-        نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{((R1 - currentPrice) / (currentPrice - S1)).toFixed(1)}:1</b> محاسبه می‌شود.
+        نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
         تلاقی MA21 و MA100{' '}
         {Math.abs(ma21 - ma100) / currentPrice < 0.01
           ? <span className="text-amber-800">بسیار نزدیک به هم — تقاطع طلایی احتمالی</span>
@@ -368,7 +368,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-emerald-700">فرصت خرید در اصلاح</b> است.
         {r1r2 > 60 && <span> مجموع احتمال صعودی {toFa(r1r2)}٪ — بایاس کلی مثبت است.</span>}
         بهترین نقطه ورود، محدوده بین MA21 ({toFa(ma21)}) و حمایت {toFa(S1)} ریال می‌باشد.
-        نسبت ریسک به بازده با حد ضرر زیر {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{((R1 - currentPrice) / (currentPrice - S1)).toFixed(1)}:1</b> محاسبه می‌شود.
+        نسبت ریسک به بازده با حد ضرر زیر {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
         تلاقی MA21 و MA100{' '}
         {Math.abs(ma21 - ma100) / currentPrice < 0.01
           ? <span className="text-amber-800">نزدیک به هم — پایش تقاطع ضروری</span>
@@ -445,7 +445,7 @@ function StrengthBar({ strength }: { strength: number }) {
       <div className="w-16 h-2 rounded-full bg-[#e5e7eb] overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
-      <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{strength}</span>
+      <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{toPersianDigits(String(strength))}</span>
     </div>
   );
 }
@@ -492,9 +492,9 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 
   // ── Trend text ─────────────────────────────────────────────────
   const trendText = trendDirection === 'up'
-    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
     : trendDirection === 'down'
-    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
     : 'خنثی و بدون جهت مشخص';
 
   // ── Shamsi dates ───────────────────────────────────────────────
@@ -541,11 +541,14 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────
-  const strategyText = rsi > 70 || mfi > 80
-    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
-    : rsi < 30 || mfi < 20
-    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
-    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
+  const mfiOverbought = hasVolume && mfi > 80;
+  const mfiOversold = hasVolume && mfi < 20;
+  const mfiNote = hasVolume ? `, MFI: ${toFa(mfi)}` : '';
+  const strategyText = rsi > 70 || mfiOverbought
+    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}${mfiNote}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
+    : rsi < 30 || mfiOversold
+    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
+    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
 
   // ── File name helper ───────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
@@ -869,7 +872,7 @@ ${SCENARIO_KEYS.map(k => {
             {resistanceStrengths.map((r, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-red-600 w-6">R{i + 1}</span>
+                  <span className="text-xs font-bold text-red-600 w-6">R{toFa(i + 1)}</span>
                   <div>
                     <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(r.price)}</span>
                     <span className="text-[10px] text-[#6b7280] mr-1.5">ریال</span>
@@ -895,7 +898,7 @@ ${SCENARIO_KEYS.map(k => {
             {supportStrengths.map((s, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-emerald-600 w-6">S{i + 1}</span>
+                  <span className="text-xs font-bold text-emerald-600 w-6">S{toFa(i + 1)}</span>
                   <div>
                     <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(s.price)}</span>
                     <span className="text-[10px] text-[#6b7280] mr-1.5">ریال</span>
@@ -923,7 +926,7 @@ ${SCENARIO_KEYS.map(k => {
             {priceTargets.map((t, i) => (
               <div key={i} className="flex-1 min-w-[160px] rounded-xl p-4 border border-amber-800/10 bg-amber-50/50">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] text-[#6b7280]">هدف {i + 1}</span>
+                  <span className="text-[10px] text-[#6b7280]">هدف {toFa(i + 1)}</span>
                   <span className="text-[10px]">🎯</span>
                 </div>
                 <p className="text-base font-black text-amber-800 tabular-nums" dir="ltr">{toFa(t.price)}</p>

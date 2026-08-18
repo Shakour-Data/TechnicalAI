@@ -25,7 +25,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { formatJalaliString, toPersianDigits } from '@/lib/jalali';
+import { formatJalaliString, candleDateToJalali, isGregorianDate, toPersianDigits } from '@/lib/jalali';
 
 /* ----------------------------- TYPES ----- */
 
@@ -354,10 +354,10 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       chartRef.current = null;
     }
 
-    // — Build Jalali time map — dates are ALREADY Jalali (Shamsi) from TSETMC/TGJU —
+    // — Build Jalali time map — detect Gregorian vs Jalali dates —
     const jalaliMap = new Map<number, string>();
     data.forEach((d, i) => {
-      jalaliMap.set(i, formatJalaliString(d.date, 'compact'));
+      jalaliMap.set(i, isGregorianDate(d.date) ? candleDateToJalali(d.date, 'compact') : formatJalaliString(d.date, 'compact'));
     });
 
     // — Persian numeral price formatter —

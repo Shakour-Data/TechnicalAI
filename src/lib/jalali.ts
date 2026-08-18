@@ -166,6 +166,13 @@ export function fullPersianDate(dateStr: string): string {
   return `${weekday}، ${datePart}`;
 }
 
+// ─── Detect if a date string is Gregorian (year >= 1900) ──────────────
+export function isGregorianDate(dateStr: string): boolean {
+  const parsed = parseDateString(dateStr);
+  if (!parsed) return false;
+  return parsed.gy >= 1900;
+}
+
 // ─── Build Jalali time map for lightweight-charts (dates already Jalali) ───
 export function buildJalaliTimeMap(candles: Array<{ date: string }>, format: 'compact' | 'short' = 'compact'): Map<number, string> {
   const map = new Map<number, string>();

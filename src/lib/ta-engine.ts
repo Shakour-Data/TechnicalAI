@@ -637,7 +637,21 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
       }
       if (result.length >= targetCount) return result;
     }
-    return levels.slice(0, targetCount);
+    // Fallback: still enforce minimum 5% gap, returning as many as possible
+    if (levels.length === 0) return [];
+    const fallback: LevelStrength[] = [levels[0]];
+    for (let i = 1; i < levels.length; i++) {
+      const prevPrice = fallback[fallback.length - 1].price;
+      const currPrice = levels[i].price;
+      const gap = Math.abs(currPrice - prevPrice) / prevPrice;
+      if (gap >= 0.05) {
+        fallback.push(levels[i]);
+      } else {
+        const keep = levels[i].strength >= fallback[fallback.length - 1].strength ? levels[i] : fallback[fallback.length - 1];
+        fallback[fallback.length - 1] = { ...keep, strength: keep.strength };
+      }
+    }
+    return fallback;
   }
 
   const finalResistances = enforceGap(above, 6);

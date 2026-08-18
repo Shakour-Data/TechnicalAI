@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toPersianDigits } from '@/lib/jalali';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {(ta.resistances ?? []).slice(0, 5).map((r, i) => (
               <div key={i} className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-red-600">R{i + 1}</span>
+                <span className="text-[11px] text-red-600">R{toFa(i + 1)}</span>
                 <p className="text-sm font-medium text-red-700 tabular-nums mt-0.5" dir="ltr">{toFa(r)}</p>
               </div>
             ))}
@@ -225,7 +226,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {(ta.supports ?? []).slice(0, 5).map((s, i) => (
               <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-emerald-600">S{i + 1}</span>
+                <span className="text-[11px] text-emerald-600">S{toFa(i + 1)}</span>
                 <p className="text-sm font-medium text-emerald-700 tabular-nums mt-0.5" dir="ltr">{toFa(s)}</p>
               </div>
             ))}
@@ -249,7 +250,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
                   <span className={`text-lg font-bold ${arrowColor}`}>{arrow}</span>
                   <span className="text-[#374151] tabular-nums" dir="ltr">{toFa(t.angle)}°</span>
                 </div>
-                <span className="text-[11px] text-[#6b7280] tabular-nums" dir="ltr">R²: {(t.r2 * 100).toFixed(1)}%</span>
+                <span className="text-[11px] text-[#6b7280] tabular-nums" dir="ltr">R²: {toPersianDigits((t.r2 * 100).toFixed(1))}٪</span>
               </div>
               {signalDot(trendDirSignal(t.direction))}
             </div>
