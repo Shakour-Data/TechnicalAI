@@ -148,7 +148,7 @@ export function formatJalaliString(dateStr: string, format: 'full' | 'short' | '
   }
 }
 
-// ─── Get weekday name in Persian ────────────────────────────────────────────
+// ─── Get weekday name in Persian (from Gregorian date) ─────────────────
 export function getPersianWeekday(gy: number, gm: number, gd: number): string {
   const d = new Date(gy, gm - 1, gd);
   const day = d.getDay();
@@ -156,14 +156,35 @@ export function getPersianWeekday(gy: number, gm: number, gd: number): string {
   return PERSIAN_WEEKDAYS[persianDayIndex];
 }
 
-// ─── Full Persian date with weekday ────────────────────────────────────────
+// ─── Full Persian date with weekday (auto-detects Gregorian vs Jalali) ───
 export function fullPersianDate(dateStr: string): string {
   const parsed = parseDateString(dateStr);
   if (!parsed) return dateStr;
   const { gy, gm, gd } = parsed;
-  const weekday = getPersianWeekday(gy, gm, gd);
-  const datePart = formatJalali(gy, gm, gd, 'full');
-  return `${weekday}، ${datePart}`;
+
+  if (isGregorianDate(dateStr)) {
+    // Input is Gregorian — convert to Jalali
+    const weekday = getPersianWeekday(gy, gm, gd);
+    const datePart = formatJalali(gy, gm, gd, 'full');
+    return `${weekday}، ${datePart}`;
+  } else {
+    // Input is already Jalali — convert to Gregorian to get weekday, then format Jalali
+    const greg = jalaliToGregorian(gy, gm, gd);
+    const weekday = getPersianWeekday(greg.gy, greg.gm, greg.gd);
+    const datePart = formatJalaliString(dateStr, 'full');
+    return `${weekday}، ${datePart}`;
+  }
+}
+
+// ─── Smart date converter: auto-detects and returns correct Jalali string ───
+// Use this anywhere you need a single Jalali date from an unknown-source date string
+export function smartJalaliDate(dateStr: string, format: 'full' | 'short' | 'compact' = 'short'): string {
+  if (isGregorianDate(dateStr)) {
+    const p = parseDateString(dateStr);
+    if (!p) return dateStr;
+    return formatJalali(p.gy, p.gm, p.gd, format);
+  }
+  return formatJalaliString(dateStr, format);
 }
 
 // ─── Detect if a date string is Gregorian (year >= 1900) ──────────────

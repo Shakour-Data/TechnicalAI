@@ -7,7 +7,7 @@ import { toPng, toSvg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { candleDateToJalali, fullPersianDate, toPersianDigits } from '@/lib/jalali';
+import { smartJalaliDate, fullPersianDate, toPersianDigits } from '@/lib/jalali';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -500,7 +500,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   // ── Shamsi dates ───────────────────────────────────────────────
   const lastCandleDate = candles.length > 0 ? candles[candles.length - 1].date : '';
   const lastCandleJalali = lastCandleDate ? fullPersianDate(lastCandleDate) : '';
-  const chartJalaliDate = lastCandleDate ? candleDateToJalali(lastCandleDate, 'compact') : '';
+  const chartJalaliDate = lastCandleDate ? smartJalaliDate(lastCandleDate, 'compact') : '';
 
   // ── TradingView scenario colors ────────────────────────────────
   const tvScenarios = useMemo(() => {

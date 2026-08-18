@@ -62,7 +62,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('chart');
+  const [activeTab, setActiveTab] = useState('vdes');
   const [refreshing, setRefreshing] = useState(false);
 
   // Store last fetch params for auto-refresh
@@ -89,7 +89,7 @@ export default function Home() {
           throw new Error(json.error || 'داده‌های تاریخی کافی برای تحلیل وجود ندارد');
         }
         setData({ ...json, isTgju: true });
-        setActiveTab('chart');
+        setActiveTab('vdes');
       } catch (err) {
         setError(String(err));
       } finally {
@@ -115,7 +115,7 @@ export default function Home() {
             const finpyJson = await finpyRes.json();
             if (finpyJson.candles && finpyJson.candles.length > 0 && finpyJson.ta) {
               setData(finpyJson);
-              setActiveTab('chart');
+              setActiveTab('vdes');
               setLoading(false);
               setLoadingMessage(null);
               return;
@@ -130,7 +130,7 @@ export default function Home() {
             const analysisJson = await analysisRes.json();
             if (analysisJson.candles && analysisJson.candles.length > 0 && analysisJson.ta) {
               setData(analysisJson);
-              setActiveTab('chart');
+              setActiveTab('vdes');
               setLoading(false);
               setLoadingMessage(null);
               return;
@@ -176,7 +176,7 @@ export default function Home() {
       }
       const json = await res.json();
       setData(json);
-      setActiveTab('chart');
+      setActiveTab('vdes');
     } catch (err) {
       setError(String(err));
     } finally {
@@ -441,7 +441,10 @@ export default function Home() {
               </TabsList>
 
               <TabsContent value="chart" className="mt-3">
-                <CandlestickChart data={data.candles} ta={chartTa} height={520} />
+                <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
+                  <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">نمودار با تمام امکانات در تب VDes موجود است</p>
+                </div>
               </TabsContent>
 
               <TabsContent value="indicators" className="mt-3">
@@ -465,7 +468,8 @@ export default function Home() {
                 />
               </TabsContent>
 
-              <TabsContent value="vdes" className="mt-3">
+              <TabsContent value="vdes" className="mt-3 space-y-4">
+                <CandlestickChart data={data.candles} ta={chartTa} height={520} />
                 <VdesAnalysis
                   symbolName={data.info?.name ?? data.symbol}
                   candles={data.candles}

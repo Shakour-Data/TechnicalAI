@@ -227,3 +227,40 @@ Stage Summary:
 - Each level tagged with its Fibonacci ratio in Persian (e.g. ۰٪ (اوج), ۲۳.۶٪, ۳۸.۲٪, ۵۰٪, ۶۱.۸٪, ۷۸.۶٪, ۱۰۰٪ (کف), ۱۲۷.۲٪, ۱۶۱.۸٪, ۲۰۰٪, ۲۶۱.۸٪, ۳۶۱.۸٪)
 - Multi-swing confluence detection strengthens levels where multiple Fibonacci setups agree
 - All three UIs (chart price lines, indicators panel, VDes analysis) updated with Fibonacci labels
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: 3 changes — VDes-only chart, solid S/R lines, fix Shamsi dates
+
+Work Log:
+- **Task 1: VDes-only chart**
+  - Removed CandlestickChart from "نمودار" tab, replaced with redirect message
+  - Added CandlestickChart to VDes tab (above VdesAnalysis)
+  - Changed default active tab from 'chart' to 'vdes'
+  - All setActiveTab calls now switch to 'vdes' on data load
+- **Task 2: S/R lines solid only, thickness = strength**
+  - Updated `srLineStyle()` in candlestick-chart.tsx:
+    - All lines now `lineStyle: 0` (solid) — no dashes or dots
+    - Thickness mapped to strength: 1→1px, 3→2px, 5→3px, 7→4px, 9→5px, target→4px
+- **Task 3: Fix Shamsi date conversion**
+  - Root cause: `fullPersianDate()` treated ALL dates as Gregorian, converting Jalali 1405→Gregorian→Jalali giving ~783
+  - Fixed `fullPersianDate()` to auto-detect via `isGregorianDate()`:
+    - Gregorian: convert to Jalali, get weekday from Gregorian Date object
+    - Jalali: convert to Gregorian (for weekday), format Jalali directly
+  - Added `smartJalaliDate()` utility that auto-detects and returns correct Jalali string
+  - Fixed `vdes-analysis.tsx`: replaced `candleDateToJalali()` with `smartJalaliDate()` for chartJalaliDate
+  - Fixed `tradingview-chart.tsx`: replaced `candleDateToJalali()` with `smartJalaliDate()` for jalaliMap
+  - Verified: "1405-05-27" → "چهارشنبه، ۲۷ مرداد ۱۴۰۵" (was "783/...")
+  - Verified: "2025-06-18" → "پنجشنبه، ۲۸ خرداد ۱۴۰۴" (Gregorian still converts correctly)
+- Verified via agent-browser:
+  - VDes tab is default and shows chart with toolbar + full analysis below
+  - نمودار tab shows redirect message
+  - Chart date shows ۱۴۰۵/۰۵/۲۷ (correct)
+  - Analysis text shows "چهارشنبه، ۲۷ مرداد ۱۴۰۵" (correct)
+  - ESLint passes cleanly
+
+Stage Summary:
+- Chart with drawing tools only available in VDes tab (default)
+- S/R lines are all solid, thickness proportional to strength (1-5px)
+- Shamsi dates fixed across all components using `smartJalaliDate()` and fixed `fullPersianDate()`

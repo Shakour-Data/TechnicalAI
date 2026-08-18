@@ -16,7 +16,7 @@ import {
   type LineData,
   type HistogramData,
 } from 'lightweight-charts';
-import { candleDateToJalali, toPersianDigits } from '@/lib/jalali';
+import { smartJalaliDate, toPersianDigits } from '@/lib/jalali';
 
 // ═══════════════════════════════════════════════════════════════════
 // Types
@@ -124,7 +124,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     // ── Build Jalali time formatter ────────────────────────────
     const jalaliMap = new Map<number, string>();
     candles.forEach((c, i) => {
-      jalaliMap.set(i, candleDateToJalali(c.date, 'compact'));
+      jalaliMap.set(i, smartJalaliDate(c.date, 'compact'));
     });
 
     // ── Create chart ──────────────────────────────────────────

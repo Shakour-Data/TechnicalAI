@@ -103,16 +103,16 @@ const FIB_LEVELS = [
 
 type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'fibonacci' | 'rectangle' | 'text' | 'brush' | 'measure' | 'arrow';
 
-// — S/R strength-based line styling —————————————─
-function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0 | 1 | 2; color: string } {
+// — S/R strength-based line styling (solid only, thickness = strength) ————
+function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0; color: string } {
   if (isTarget) {
-    return { lineWidth: 3, lineStyle: 0, color: '' };
+    return { lineWidth: 4, lineStyle: 0, color: '' };
   }
-  if (strength >= 9) return { lineWidth: 4, lineStyle: 0, color: '' };
-  if (strength >= 7) return { lineWidth: 3, lineStyle: 0, color: '' };
-  if (strength >= 5) return { lineWidth: 2, lineStyle: 1, color: '' };
-  if (strength >= 3) return { lineWidth: 2, lineStyle: 2, color: '' };
-  return { lineWidth: 1, lineStyle: 2, color: '' };
+  if (strength >= 9) return { lineWidth: 5, lineStyle: 0, color: '' };
+  if (strength >= 7) return { lineWidth: 4, lineStyle: 0, color: '' };
+  if (strength >= 5) return { lineWidth: 3, lineStyle: 0, color: '' };
+  if (strength >= 3) return { lineWidth: 2, lineStyle: 0, color: '' };
+  return { lineWidth: 1, lineStyle: 0, color: '' };
 }
 
 interface ToolDef {
