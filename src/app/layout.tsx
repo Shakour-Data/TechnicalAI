@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "Tse Technical Analysis — تحلیل تکنیکال بورس ایران",
-  description: "تحلیل تکنیکال جامع سهام بورس ایران با اندیکاتورها، حمایت و مقاومت، و گراف تصمیم VDss",
+  description: "تحلیل تکنیکال جامع سهام بورس ایران با اندیکاتورها، گراف تصمیم و توضیح‌دهنده تصویری",
 };
 
 export default function RootLayout({

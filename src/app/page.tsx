@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
@@ -47,17 +46,30 @@ const TGJU_CATEGORIES = new Set([
 // Auto-refresh interval (60 seconds)
 const REFRESH_INTERVAL = 60_000;
 
+// Sidebar items
+const SIDEBAR_ITEMS = [
+  { id: 'indicators', label: 'اندیکاتورها', icon: Activity, color: 'text-cyan-700', activeBg: 'bg-cyan-50 border-cyan-200', hoverBg: 'hover:bg-cyan-50/50' },
+  { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-800', activeBg: 'bg-amber-50 border-amber-200', hoverBg: 'hover:bg-amber-50/50' },
+  { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-700', activeBg: 'bg-purple-50 border-purple-200', hoverBg: 'hover:bg-purple-50/50' },
+] as const;
+
+type SidebarItem = typeof SIDEBAR_ITEMS[number]['id'];
+
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('vdes');
+  const [activePanel, setActivePanel] = useState<SidebarItem>('visual');
   const [refreshing, setRefreshing] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Store last fetch params for auto-refresh
   const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string; finpySector?: string; finpyIndex?: string; webId?: number } | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Chart container ref for image export
+  const chartWrapperRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => {
     // TGJU instrument: fetch historical data via tgju.org chart API
@@ -78,7 +90,7 @@ export default function Home() {
           throw new Error(json.error || 'داده‌های تاریخی کافی برای تحلیل وجود ندارد');
         }
         setData({ ...json, isTgju: true });
-        setActiveTab('vdes');
+        setActivePanel('visual');
       } catch (err) {
         setError(String(err));
       } finally {
@@ -104,7 +116,7 @@ export default function Home() {
             const json = await res.json();
             if (json.candles && json.candles.length > 0 && json.ta) {
               setData(json);
-              setActiveTab('vdes');
+              setActivePanel('visual');
               setLoading(false);
               setLoadingMessage(null);
               return;
@@ -124,7 +136,7 @@ export default function Home() {
             const json = await res.json();
             if (json.candles && json.candles.length > 0 && json.ta) {
               setData(json);
-              setActiveTab('vdes');
+              setActivePanel('visual');
               setLoading(false);
               setLoadingMessage(null);
               return;
@@ -160,7 +172,7 @@ export default function Home() {
       }
       const json = await res.json();
       setData(json);
-      setActiveTab('vdes');
+      setActivePanel('visual');
     } catch (err) {
       setError(String(err));
     } finally {
@@ -224,7 +236,7 @@ export default function Home() {
     <div dir="rtl" className="min-h-screen bg-white text-gray-900 flex flex-col">
       {/* ── HEADER ────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur-xl">
-        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-4 flex-wrap">
+        <div className="max-w-[1800px] mx-auto px-4 py-3 flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-600/30 flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-amber-700" />
@@ -276,7 +288,7 @@ export default function Home() {
       </header>
 
       {/* ── MAIN CONTENT ──────────────────────────────────────── */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4">
+      <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
         {!data && !loading && !error && (
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-700/5 border border-amber-300/30 flex items-center justify-center mb-6">
@@ -298,7 +310,7 @@ export default function Home() {
               <span className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">فلزات</span>
               <span className="px-3 py-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100">شاخص‌ها</span>
               <span className="px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100">صندوق‌ها</span>
-              <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700">RSI, MACD, BB, VDss</span>
+              <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700">اندیکاتورها، گراف تصمیم، توضیح‌دهنده تصویری</span>
             </div>
           </div>
         )}
@@ -332,68 +344,46 @@ export default function Home() {
         )}
 
         {data && !loading && (
-          <div className="space-y-4">
-            {data.info && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { label: 'اولین', value: toFa(data.info.openPrice) },
-                  { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-700' },
-                  { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-700' },
-                  ...(data.ta.hasVolume ? [
-                    { label: 'حجم معاملات', value: toPersianDigits((data.info.volume / 1e6).toFixed(1)) + 'M' },
-                    { label: 'ارزش معاملات', value: toPersianDigits((data.info.value / 1e9).toFixed(1)) + 'B' },
-                    { label: 'تعداد معاملات', value: toFa(data.info.trades) },
-                    { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
-                  ] : [
-                    { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
-                  ]),
-                ].map((s) => (
-                  <div key={s.label} className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
-                    <div className="text-[10px] text-gray-500 mb-0.5">{s.label}</div>
-                    <div className={`text-sm font-bold ${(s as { cls?: string }).cls || 'text-gray-900'}`}>{s.value}</div>
-                  </div>
-                ))}
-                {isTgjuData && (
-                  <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
-                    <div className="text-[10px] text-teal-600 mb-0.5">منبع داده</div>
-                    <div className="text-sm font-bold text-teal-700">TGJU (تارا)</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="bg-white border border-gray-200 h-10 shadow-sm">
-                <TabsTrigger value="chart" className="text-xs gap-1.5 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700">
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  نمودار
-                </TabsTrigger>
-                <TabsTrigger value="indicators" className="text-xs gap-1.5 data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700">
-                  <Activity className="w-3.5 h-3.5" />
-                  اندیکاتورها
-                </TabsTrigger>
-                <TabsTrigger value="vdss" className="text-xs gap-1.5 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-800">
-                  <GitBranch className="w-3.5 h-3.5" />
-                  VDss
-                </TabsTrigger>
-                <TabsTrigger value="vdes" className="text-xs gap-1.5 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700">
-                  <FileText className="w-3.5 h-3.5" />
-                  VDes
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="chart" className="mt-3">
-                <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
-                  <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500">نمودار با تمام امکانات در تب VDes موجود است</p>
+          <div className="flex gap-4 items-start">
+            {/* ── MAIN CONTENT AREA ── */}
+            <div className="flex-1 min-w-0 space-y-4">
+              {/* Info Grid */}
+              {data.info && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label: 'اولین', value: toFa(data.info.openPrice) },
+                    { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-700' },
+                    { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-700' },
+                    ...(data.ta.hasVolume ? [
+                      { label: 'حجم معاملات', value: toPersianDigits((data.info.volume / 1e6).toFixed(1)) + 'M' },
+                      { label: 'ارزش معاملات', value: toPersianDigits((data.info.value / 1e9).toFixed(1)) + 'B' },
+                      { label: 'تعداد معاملات', value: toFa(data.info.trades) },
+                      { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
+                    ] : [
+                      { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
+                    ]),
+                  ].map((s) => (
+                    <div key={s.label} className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+                      <div className="text-[10px] text-gray-500 mb-0.5">{s.label}</div>
+                      <div className={`text-sm font-bold ${(s as { cls?: string }).cls || 'text-gray-900'}`}>{s.value}</div>
+                    </div>
+                  ))}
+                  {isTgjuData && (
+                    <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+                      <div className="text-[10px] text-teal-600 mb-0.5">منبع داده</div>
+                      <div className="text-sm font-bold text-teal-700">TGJU (تارا)</div>
+                    </div>
+                  )}
                 </div>
-              </TabsContent>
+              )}
 
-              <TabsContent value="indicators" className="mt-3">
+              {/* ── PANEL: Indicators ── */}
+              {activePanel === 'indicators' && (
                 <IndicatorsPanel ta={data.ta} />
-              </TabsContent>
+              )}
 
-              <TabsContent value="vdss" className="mt-3">
+              {/* ── PANEL: Decision Graph (گراف تصمیم) ── */}
+              {activePanel === 'graph' && (
                 <VdssGraph
                   symbolName={data.info?.name ?? data.symbol}
                   currentPrice={lastPrice}
@@ -408,53 +398,113 @@ export default function Home() {
                   bullScore={data.ta.bullScore}
                   scenarios={data.ta.scenarios}
                 />
-              </TabsContent>
+              )}
 
-              <TabsContent value="vdes" className="mt-3 space-y-4">
-                <CandlestickChart data={data.candles} ta={chartTa} height={520} />
-                <VdesAnalysis
-                  symbolName={data.info?.name ?? data.symbol}
-                  candles={data.candles}
-                  currentPrice={lastPrice}
-                  resistances={data.ta.resistances}
-                  supports={data.ta.supports}
-                  ma21={data.ta.sma.sma21 || 0}
-                  ma100={data.ta.sma.sma100 || 0}
-                  rsi={data.ta.rsi}
-                  mfi={data.ta.mfi}
-                  cci={data.ta.cci}
-                  adx={data.ta.adx}
-                  stochK={data.ta.stochK}
-                  stochD={data.ta.stochD}
-                  macdLine={data.ta.macd.line}
-                  macdSignal={data.ta.macd.signal}
-                  macdHist={data.ta.macd.histogram}
-                  diPlus={data.ta.diPlus}
-                  diMinus={data.ta.diMinus}
-                  sar={data.ta.sar}
-                  atr={data.ta.atr}
-                  obv={data.ta.obv}
-                  bollingerUpper={data.ta.bollingerBands.upper}
-                  bollingerMiddle={data.ta.bollingerBands.middle}
-                  bollingerLower={data.ta.bollingerBands.lower}
-                  trendDirection={data.ta.trend.medium.direction}
-                  trendAngle={data.ta.trend.medium.angle}
-                  trendR2={data.ta.trend.medium.r2}
-                  overallSignal={data.ta.overallSignal}
-                  scenarios={data.ta.scenarios}
-                  supportStrengths={data.ta.supportStrengths}
-                  resistanceStrengths={data.ta.resistanceStrengths}
-                  priceTargets={data.ta.priceTargets}
-                  hasVolume={data.ta.hasVolume}
-                />
-              </TabsContent>
-            </Tabs>
+              {/* ── PANEL: Visual Describer (توضیح‌دهنده تصویری) ── */}
+              {activePanel === 'visual' && (
+                <div className="space-y-4">
+                  <div id="chart-export-wrapper" ref={chartWrapperRef}>
+                    <CandlestickChart data={data.candles} ta={chartTa} height={520} />
+                  </div>
+                  <VdesAnalysis
+                    symbolName={data.info?.name ?? data.symbol}
+                    candles={data.candles}
+                    currentPrice={lastPrice}
+                    resistances={data.ta.resistances}
+                    supports={data.ta.supports}
+                    ma21={data.ta.sma.sma21 || 0}
+                    ma100={data.ta.sma.sma100 || 0}
+                    rsi={data.ta.rsi}
+                    mfi={data.ta.mfi}
+                    cci={data.ta.cci}
+                    adx={data.ta.adx}
+                    stochK={data.ta.stochK}
+                    stochD={data.ta.stochD}
+                    macdLine={data.ta.macd.line}
+                    macdSignal={data.ta.macd.signal}
+                    macdHist={data.ta.macd.histogram}
+                    diPlus={data.ta.diPlus}
+                    diMinus={data.ta.diMinus}
+                    sar={data.ta.sar}
+                    atr={data.ta.atr}
+                    obv={data.ta.obv}
+                    bollingerUpper={data.ta.bollingerBands.upper}
+                    bollingerMiddle={data.ta.bollingerBands.middle}
+                    bollingerLower={data.ta.bollingerBands.lower}
+                    trendDirection={data.ta.trend.medium.direction}
+                    trendAngle={data.ta.trend.medium.angle}
+                    trendR2={data.ta.trend.medium.r2}
+                    overallSignal={data.ta.overallSignal}
+                    scenarios={data.ta.scenarios}
+                    supportStrengths={data.ta.supportStrengths}
+                    resistanceStrengths={data.ta.resistanceStrengths}
+                    priceTargets={data.ta.priceTargets}
+                    hasVolume={data.ta.hasVolume}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ── RIGHT SIDEBAR ── */}
+            <aside className={`shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden opacity-0' : 'w-56'} hidden lg:block`}>
+              <div className="sticky top-[76px] space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 px-3 mb-3">ابزارهای تحلیلی</h3>
+                {SIDEBAR_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activePanel === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActivePanel(item.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
+                        isActive
+                          ? `${item.activeBg} ${item.color} border-current/20 shadow-sm`
+                          : `border-transparent ${item.hoverBg} text-gray-600 hover:${item.color}`
+                      }`}
+                    >
+                      <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? item.color : 'text-gray-400'}`} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Collapse toggle */}
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="w-full flex items-center justify-center gap-1 px-4 py-2 rounded-xl text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all cursor-pointer mt-4"
+                  title={sidebarCollapsed ? 'نمایش سایدبار' : 'بستن سایدبار'}
+                >
+                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
+                  <span>جمع‌شوندگی</span>
+                </button>
+              </div>
+            </aside>
+
+            {/* Mobile bottom nav */}
+            <div className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-200 px-2 py-2 flex items-center gap-1">
+              {SIDEBAR_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = activePanel === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActivePanel(item.id)}
+                    className={`flex-1 flex flex-col items-center gap-1 py-1.5 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
+                      isActive ? `${item.color} ${item.activeBg}` : 'text-gray-500'
+                    }`}
+                  >
+                    <Icon className="w-4.5 h-4.5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </main>
 
-      <footer className="mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500">
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v3.1 — ابزارهای تریدینگ ویو
+      <footer className={`mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500 ${data ? 'lg:mb-14' : ''}`}>
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v4.0 — سایدبار + خروجی تصویر نمودار
       </footer>
     </div>
   );

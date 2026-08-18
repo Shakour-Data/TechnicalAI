@@ -555,3 +555,42 @@ Stage Summary:
 - 40 sector indices supported via finpy-tse Get_SectorIndex_History()
 - Error handling: 20s timeout in Next.js API route, clear Persian error messages
 - No runtime errors in browser
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: UI overhaul: sidebar layout, rename VDss/VDes, fix CSV per-day indicators, chart image export, AI word count
+
+Work Log:
+- Created `src/lib/indicator-arrays.ts` — per-day indicator calculator for CSV/Excel exports
+  - Computes SMA, RSI, MFI, CCI, ADX, MACD, Stochastic, SAR, ATR, Bollinger Bands for every candle
+  - Exports `computeDailyIndicators(candles)` returning `DailyIndicators[]`
+- Updated `src/app/api/ai-analysis/route.ts`:
+  - System prompt now requires 700-1500 word count (minimum 7 paragraphs, 3+ sentences each)
+  - All numbers in user message converted to Persian with 3-digit grouping via `toPersianNum()`
+  - Data context uses Persian names for indicators (ام‌ای, آر‌اس‌آی, مک‌دی, etc.)
+  - VDss/VDes names removed from AI-facing text
+- Rewrote `src/app/page.tsx`:
+  - Replaced 4-tab layout with right sidebar + main content area
+  - Sidebar items: اندیکاتورها, گراف تصمیم (was VDss), توضیح‌دهنده تصویری (was VDes)
+  - Mobile bottom navigation bar for responsive design
+  - Sidebar is collapsible with toggle button
+  - Chart wrapped in `#chart-export-wrapper` div for image export
+  - Default panel is "توضیح‌دهنده تصویری" (visual describer)
+- Updated `src/components/tse/vdes-analysis.tsx`:
+  - CSV export now uses per-day indicator values (from `computeDailyIndicators`) instead of repeating last value
+  - Excel export similarly updated with per-day values
+  - Chart image export enabled (was disabled) — captures `#chart-export-wrapper` via html-to-image
+  - Replaced Camera icon with ImageIcon for chart export
+  - Export file base renamed from `_VDes_` to `_تحلیل_`
+  - HTML/Text export titles updated to use "توضیح‌دهنده تصویری" instead of "VDes"
+- Updated `src/app/layout.tsx`:
+  - Description meta updated to use new Persian names
+
+Stage Summary:
+- Right sidebar with 3 panels working (verified via browser automation)
+- All VDss/VDes user-visible text renamed to گراف تصمیم / توضیح‌دهنده تصویری
+- CSV/Excel now show correct per-day indicator values
+- Chart image export (PNG) is functional
+- AI analysis returns Persian numbers with 3-digit grouping
+- AI prompt strengthened for 700+ word count requirement

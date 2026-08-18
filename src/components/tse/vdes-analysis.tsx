@@ -2,8 +2,8 @@
 
 import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-// Chart is rendered in page.tsx — not duplicated here (v3.0)
-import { toPng, toSvg } from 'html-to-image';
+// Chart is rendered in page.tsx with id="chart-export-wrapper"
+import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -20,10 +20,11 @@ import {
   FileDown,
   Table,
   FileSpreadsheet,
-  Camera,
   Download,
   ChevronDown,
+  ImageIcon,
 } from 'lucide-react';
+import { computeDailyIndicators } from '@/lib/indicator-arrays';
 
 // ═══════════════════════════════════════════════════════════════════
 // Types
@@ -616,7 +617,10 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 
   // ── File name helper ───────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
-  const fileBase = `${symbolName}_VDes_${today}`;
+  const fileBase = `${symbolName}_تحلیل_${today}`;
+
+  // ── Per-day indicators for CSV/Excel ──────────────────────────
+  const dailyIndicators = useMemo(() => computeDailyIndicators(candles), [candles]);
 
   // ═══ EXPORT FUNCTIONS ═══════════════════════════════════════════
 
@@ -627,7 +631,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تحلیل تکنیکال ${symbolName} — VDes</title>
+<title>تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Vazirmatn', sans-serif; background: #f3f4f6; color: #111827; padding: 24px; line-height: 1.8; }
@@ -700,7 +704,7 @@ ${SCENARIO_KEYS.map(k => {
 
   const exportText = useCallback(() => {
     const lines: string[] = [];
-    lines.push(`تحلیل تکنیکال ${symbolName} — VDes`);
+    lines.push(`تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری`);
     if (lastCandleJalali) lines.push(`تاریخ: ${lastCandleJalali}`);
     lines.push('');
     lines.push(`قیمت مرجع: ${toFa(currentPrice)} ریال`);
@@ -757,30 +761,30 @@ ${SCENARIO_KEYS.map(k => {
   }, [fileBase]);
 
   const exportExcel = useCallback(() => {
-    const rows = candles.map((c, i) => ({
+    const rows = dailyIndicators.map((d, i) => ({
       '#': i + 1,
-      'تاریخ': c.date,
-      'باز': Math.round(c.open),
-      'بالا': Math.round(c.high),
-      'پایین': Math.round(c.low),
-      'بسته': Math.round(c.close),
-      'حجم': c.volume,
-      'MA21': Math.round(ma21),
-      'MA100': Math.round(ma100),
-      'RSI': Math.round(rsi * 10) / 10,
-      'MFI': Math.round(mfi * 10) / 10,
-      'CCI': Math.round(cci * 10) / 10,
-      'ADX': Math.round(adx * 10) / 10,
-      'MACD': Math.round(macdLine * 10) / 10,
-      'MACD_Signal': Math.round(macdSignal * 10) / 10,
-      'MACD_Hist': Math.round(macdHist * 10) / 10,
-      'Stoch_K': Math.round(stochK * 10) / 10,
-      'Stoch_D': Math.round(stochD * 10) / 10,
-      'SAR': Math.round(sar),
-      'ATR': Math.round(atr),
-      'BB_Upper': Math.round(bollingerUpper),
-      'BB_Middle': Math.round(bollingerMiddle),
-      'BB_Lower': Math.round(bollingerLower),
+      'تاریخ': d.date,
+      'باز': d.open,
+      'بالا': d.high,
+      'پایین': d.low,
+      'بسته': d.close,
+      'حجم': d.volume,
+      'MA21': d.ma21,
+      'MA100': d.ma100,
+      'RSI': d.rsi,
+      'MFI': d.mfi,
+      'CCI': d.cci,
+      'ADX': d.adx,
+      'MACD': d.macd,
+      'MACD_Signal': d.macdSignal,
+      'MACD_Hist': d.macdHist,
+      'Stoch_K': d.stochK,
+      'Stoch_D': d.stochD,
+      'SAR': d.sar,
+      'ATR': d.atr,
+      'BB_Upper': d.bbUpper,
+      'BB_Middle': d.bbMiddle,
+      'BB_Lower': d.bbLower,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -796,26 +800,36 @@ ${SCENARIO_KEYS.map(k => {
     const ws2 = XLSX.utils.json_to_sheet(scenarioRows);
     XLSX.utils.book_append_sheet(wb, ws2, 'سناریوها');
     XLSX.writeFile(wb, `${fileBase}.xlsx`);
-  }, [candles, ma21, ma100, rsi, mfi, cci, adx, macdLine, macdSignal, macdHist, stochK, stochD, sar, atr, bollingerUpper, bollingerMiddle, bollingerLower, scenarios, fileBase]);
+  }, [dailyIndicators, scenarios, fileBase]);
 
   const exportCSV = useCallback(() => {
     const headers = ['تاریخ', 'باز', 'بالا', 'پایین', 'بسته', 'حجم', 'MA21', 'MA100', 'RSI', 'MFI', 'CCI', 'ADX', 'MACD', 'MACD_Signal', 'MACD_Hist', 'SAR', 'ATR', 'BB_Upper', 'BB_Middle', 'BB_Lower'];
     const csvRows: string[] = [headers.join(',')];
-    for (const c of candles) {
+    for (const d of dailyIndicators) {
       csvRows.push([
-        c.date, Math.round(c.open), Math.round(c.high), Math.round(c.low), Math.round(c.close), c.volume,
-        Math.round(ma21), Math.round(ma100), (Math.round(rsi * 10) / 10), (Math.round(mfi * 10) / 10),
-        (Math.round(cci * 10) / 10), (Math.round(adx * 10) / 10), (Math.round(macdLine * 10) / 10),
-        (Math.round(macdSignal * 10) / 10), (Math.round(macdHist * 10) / 10), Math.round(sar), Math.round(atr),
-        Math.round(bollingerUpper), Math.round(bollingerMiddle), Math.round(bollingerLower),
+        d.date, d.open, d.high, d.low, d.close, d.volume,
+        d.ma21, d.ma100, d.rsi, d.mfi,
+        d.cci, d.adx, d.macd,
+        d.macdSignal, d.macdHist, d.sar, d.atr,
+        d.bbUpper, d.bbMiddle, d.bbLower,
       ].join(','));
     }
     const csv = csvRows.join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     saveAs(blob, `${fileBase}.csv`);
-  }, [candles, ma21, ma100, rsi, mfi, cci, adx, macdLine, macdSignal, macdHist, sar, atr, bollingerUpper, bollingerMiddle, bollingerLower, fileBase]);
+  }, [dailyIndicators, fileBase]);
 
-  // exportChartImage removed — chart lives in page.tsx (v3.0)
+  // ── Chart Image Export ─────────────────────────────────────────
+  const exportChartImage = useCallback(async () => {
+    const chartEl = document.getElementById('chart-export-wrapper');
+    if (!chartEl) return;
+    try {
+      const dataUrl = await toPng(chartEl, { backgroundColor: '#ffffff', pixelRatio: 2 });
+      saveAs(dataUrl, `${fileBase}_نمودار.png`);
+    } catch (err) {
+      console.warn('Chart image export failed:', err);
+    }
+  }, [fileBase]);
 
   return (
     <div ref={vdesRef} className="space-y-5" dir="rtl">
@@ -881,9 +895,9 @@ ${SCENARIO_KEYS.map(k => {
               <FileSpreadsheet className="w-4 h-4 text-amber-800" />
               <span className="text-xs">CSV</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="flex items-center gap-3 text-[#9ca3af] cursor-not-allowed">
-              <Camera className="w-4 h-4 text-[#9ca3af]" />
-              <span className="text-xs">عکس نمودار (در نمودار بالا)</span>
+            <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
+              <ImageIcon className="w-4 h-4 text-amber-800" />
+              <span className="text-xs">عکس نمودار (PNG)</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
