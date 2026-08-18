@@ -155,6 +155,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const csRef = useRef<any>(null);
   const subscriberRef = useRef<{ dispose: () => void } | null>(null);
   const crosshairSubRef = useRef<{ dispose: () => void } | null>(null);
 
@@ -186,7 +187,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     const rect = container.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const price = (chart.priceScale('right') as any).coordinateToPrice(y);
+    const price = csRef.current?.coordinateToPrice(y) ?? null;
     const time = chart.timeScale().coordinateToTime(x);
     if (price === null || time === null) return null;
     return { time: time as number, price };
@@ -454,6 +455,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       wickDownColor: BEAR,
     });
     cs.setData(candles);
+    csRef.current = cs;
 
     // Volume
     const vol = chart.addSeries(HistogramSeries, {

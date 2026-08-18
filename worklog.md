@@ -351,3 +351,26 @@ Work Log:
 Stage Summary:
 - Strict 5-10% spacing rule enforced with synthetic level generation for gaps
 - Single chart in VDes (CandlestickChart with drawing tools from page.tsx)
+
+---
+Task ID: 16
+Agent: Main Agent
+Task: v3.0 — Fix runtime TypeError: coordinateToPrice is not a function
+
+Work Log:
+- Fixed `coordinateToPrice` runtime error in candlestick-chart.tsx line 189
+  - Root cause: In lightweight-charts v5, `chart.priceScale('right').coordinateToPrice(y)` doesn't exist on the public API
+  - Fix: Added `csRef` (useRef) to store the candlestick series reference
+  - Changed `chart.priceScale('right').coordinateToPrice(y)` → `csRef.current?.coordinateToPrice(y) ?? null`
+  - The `ISeriesApi.coordinateToPrice()` method is the correct v5 API for coordinate→price conversion
+  - Assigned `csRef.current = cs` right after `chart.addSeries(CandlestickSeries, ...)`
+- Verified via agent-browser:
+  - Page loads with شپنا symbol, VDes tab shows chart with tools + analysis
+  - Zero runtime errors in browser console
+  - Only 1 chart container (.tv-lightweight-charts) in VDes tab
+  - Drawing tools (trendline, etc.) visible and functional
+  - ESLint passes cleanly
+
+Stage Summary:
+- coordinateToPrice TypeError fixed by using ISeriesApi.coordinateToPrice() instead of priceScale method
+- All 3 pending items resolved: coordinateToPrice fix ✅, distance rules already correct ✅, duplicate chart already removed ✅
