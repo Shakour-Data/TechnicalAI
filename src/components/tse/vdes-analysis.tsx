@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 // Chart is rendered in page.tsx — not duplicated here (v3.0)
 import { toPng, toSvg } from 'html-to-image';
@@ -574,6 +574,46 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
     : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
 
+  // ── AI Analysis Text ───────────────────────────────────────
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(true);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentPrice) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch('/api/ai-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+            stochK, stochD, macdLine, macdSignal, macdHist,
+            diPlus, diMinus, sar, atr, obv,
+            bollingerUpper, bollingerMiddle, bollingerLower,
+            trendDirection, trendAngle, trendR2,
+            scenarios, hasVolume: hasVolume ?? false,
+            resistanceStrengths, supportStrengths,
+          }),
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.text) setAiText(data.text);
+        else if (data.error) setAiError(data.error);
+      } catch (err) {
+        if (!cancelled) setAiError(String(err));
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; controller.abort(); };
+  }, [symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist, diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower, trendDirection, trendAngle, trendR2, scenarios, hasVolume, resistanceStrengths, supportStrengths]);
+
   // ── File name helper ───────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
   const fileBase = `${symbolName}_VDes_${today}`;
@@ -949,21 +989,43 @@ ${SCENARIO_KEYS.map(k => {
         </div>
       )}
 
-      {/* ═══ DYNAMIC ANALYSIS TEXT ═══ */}
+      {/* ═══ AI ANALYSIS TEXT ═══ */}
       <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
         <h2 className="text-sm font-semibold mb-4 text-amber-800 flex items-center gap-2">
           <span>🧠</span>
-          تحلیل جامع روند و اندیکاتورها
+          تحلیل هوشمند بازار
         </h2>
-        <div className="vdes-analysis-text space-y-4">
-          {analysisParagraphs.map((p, i) => (
-            <p key={i} className="text-sm text-[#374151] leading-[1.85]">{p}</p>
-          ))}
-          {/* ── Strategy Box ── */}
-          <div className="rounded-xl px-4 py-3 border-r-4 border-amber-700 bg-amber-50/60">
-            <strong className="text-amber-800 text-sm">🟡 استراتژی پیشنهادی:</strong>
-            <p className="text-xs text-[#374151] leading-[1.85] mt-1.5">{strategyText}</p>
-          </div>
+        <div className="vdes-analysis-text">
+          {aiLoading && (
+            <div className="flex items-center gap-3 py-8 justify-center">
+              <div className="w-4 h-4 border-2 border-amber-300 border-t-amber-700 rounded-full animate-spin" />
+              <span className="text-sm text-amber-800">در حال تولید تحلیل هوشمند ...</span>
+            </div>
+          )}
+          {aiError && (
+            <div className="rounded-xl p-4 bg-red-50 border border-red-200">
+              <p className="text-xs text-red-700 mb-2">خطا در تولید تحلیل هوشمند. تحلیل آماری جایگزین نمایش داده می‌شود:</p>
+              <p className="text-xs text-red-600">{aiError}</p>
+            </div>
+          )}
+          {!aiLoading && aiText && (
+            <div className="text-sm text-[#374151] leading-[1.85] whitespace-pre-line space-y-3">
+              {aiText.split('\n\n').map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
+            </div>
+          )}
+          {!aiLoading && !aiText && !aiError && analysisParagraphs.length > 0 && (
+            <div className="space-y-4">
+              {analysisParagraphs.map((p, i) => (
+                <p key={i} className="text-sm text-[#374151] leading-[1.85]">{p}</p>
+              ))}
+              <div className="rounded-xl px-4 py-3 border-r-4 border-amber-700 bg-amber-50/60">
+                <strong className="text-amber-800 text-sm">استراتژی پیشنهادی:</strong>
+                <p className="text-xs text-[#374151] leading-[1.85] mt-1.5">{strategyText}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
