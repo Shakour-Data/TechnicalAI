@@ -465,7 +465,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     // Set initial chart size (deferred to avoid React batching issue)
     requestAnimationFrame(() => {
       if (chartContainerRef.current) {
-        setChartSize({ w: chartContainerRef.current.clientWidth, h });
+        setChartSize({ w: chartContainerRef.current.clientWidth, h: height });
       }
     });
   }, [data, ta, height]);
