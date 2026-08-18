@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, BarChart2, Info, Coins, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw } from 'lucide-react';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
@@ -38,15 +38,6 @@ interface AnalysisData {
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
 const toFaDecimal = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: 2 });
 
-interface IndexData {
-  name: string;
-  index: number;
-  change: number;
-  changePercent: number;
-  min: number;
-  max: number;
-}
-
 // All TGJU-based categories that use the tgju.org chart API
 const TGJU_CATEGORIES = new Set([
   'currency', 'gold', 'silver', 'gold_etf',
@@ -58,7 +49,6 @@ const REFRESH_INTERVAL = 60_000;
 
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
-  const [indexData, setIndexData] = useState<IndexData | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,18 +56,17 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Store last fetch params for auto-refresh
-  const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string; finpySector?: string; finpyIndex?: string } | null>(null);
+  const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string; finpySector?: string; finpyIndex?: string; webId?: number } | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string) => {
+  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => {
     // TGJU instrument: fetch historical data via tgju.org chart API
     if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
       setLoading(true);
       setLoadingMessage('در حال دریافت داده‌های تاریخی ... (حدود ۱۵ ثانیه)');
       setError(null);
       setData(null);
-      setIndexData(null);
-      lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex };
+      lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
       try {
         const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(tgjuKey)}`);
         if (!res.ok) {
@@ -99,78 +88,59 @@ export default function Home() {
       return;
     }
 
-    // Index: try finpy-tse first (for industry indices), then TSETMC TA, then static overview
+    // Index: fetch historical data via finpy-tse
     if (category === 'index') {
       setLoading(true);
       setLoadingMessage('در حال دریافت داده‌های تاریخی شاخص از finpy-tse ...');
       setError(null);
       setData(null);
-      setIndexData(null);
-      lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex };
+      lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
+      let gotError = false;
       try {
-        // 1. Try finpy-tse service for main indices (CWI, EWI, etc.)
+        // Main indices (CWI, EWI, etc.) via finpy-tse
         if (finpyIndex) {
-          const finpyRes = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(finpyIndex)}`);
-          if (finpyRes.ok) {
-            const finpyJson = await finpyRes.json();
-            if (finpyJson.candles && finpyJson.candles.length > 0 && finpyJson.ta) {
-              setData(finpyJson);
+          const res = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(finpyIndex)}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.candles && json.candles.length > 0 && json.ta) {
+              setData(json);
               setActiveTab('vdes');
               setLoading(false);
               setLoadingMessage(null);
               return;
             }
+            if (json.error) {
+              setError(json.error);
+              gotError = true;
+            }
           }
         }
 
-        // 2. Try finpy-tse service for industry sector indices
+        // Sector indices via finpy-tse (uses sector name)
         if (finpySector) {
-          const finpyRes = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
-          if (finpyRes.ok) {
-            const finpyJson = await finpyRes.json();
-            if (finpyJson.candles && finpyJson.candles.length > 0 && finpyJson.ta) {
-              setData(finpyJson);
+          setLoadingMessage('در حال دریافت داده‌های شاخص گروه از finpy-tse ...');
+          const res = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.candles && json.candles.length > 0 && json.ta) {
+              setData(json);
               setActiveTab('vdes');
               setLoading(false);
               setLoadingMessage(null);
               return;
             }
-          }
-        }
-
-        // 3. Try TSETMC for main indices with insCode
-        if (insCode) {
-          const analysisRes = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}&indexInsCode=${encodeURIComponent(insCode)}`);
-          if (analysisRes.ok) {
-            const analysisJson = await analysisRes.json();
-            if (analysisJson.candles && analysisJson.candles.length > 0 && analysisJson.ta) {
-              setData(analysisJson);
-              setActiveTab('vdes');
-              setLoading(false);
-              setLoadingMessage(null);
-              return;
+            if (json.error) {
+              setError(json.error);
+              gotError = true;
             }
           }
         }
 
-        // 4. Fall back to static overview
-        const r = await fetch('/api/instruments');
-        if (r.ok) {
-          const d = await r.json();
-          const found = (d.indices || []).find((i: { l18: string }) => i.l18 === symbol);
-          if (found) {
-            setIndexData({
-              name: found.l30 || found.l18,
-              index: found.pl,
-              change: found.indexChange || 0,
-              changePercent: found.indexChangePercent || 0,
-              min: found.indexMin || 0,
-              max: found.indexMax || 0,
-            });
-          }
+        if (!gotError) {
+          setError('داده‌های تاریخی این شاخص در حال حاضر قابل دسترسی نیست.');
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        setError(String(err));
       }
       setLoading(false);
       setLoadingMessage(null);
@@ -181,8 +151,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setData(null);
-    setIndexData(null);
-    lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex };
+    lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
     try {
       const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}`);
       if (!res.ok) {
@@ -206,7 +175,7 @@ export default function Home() {
     if (loading || refreshing) return;
     setRefreshing(true);
     try {
-      await handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector, params.finpyIndex);
+      await handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector, params.finpyIndex, params.webId);
     } finally {
       setRefreshing(false);
     }
@@ -270,23 +239,6 @@ export default function Home() {
             <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، ارز، طلا، کریپتو، شاخص ...' />
           </div>
 
-          {indexData && (
-            <div className="flex items-center gap-4 text-sm shrink-0">
-              <div className="text-left">
-                <div className="text-gray-500 text-xs">{indexData.name}</div>
-                <div className="font-bold text-lg text-gray-900">
-                  {toFaDecimal(indexData.index)}
-                  <span className={`text-xs mr-2 ${indexData.changePercent >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {indexData.changePercent >= 0 ? '▲' : '▼'} {toFaDecimal(Math.abs(indexData.changePercent))}%
-                  </span>
-                </div>
-              </div>
-              <span className="px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">
-                شاخص
-              </span>
-            </div>
-          )}
-
           {data?.info && (
             <div className="flex items-center gap-4 text-sm shrink-0">
               <div className="text-left">
@@ -325,37 +277,7 @@ export default function Home() {
 
       {/* ── MAIN CONTENT ──────────────────────────────────────── */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4">
-        {indexData && !loading && (
-          <div className="max-w-2xl mx-auto py-12">
-            <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center shadow-sm">
-              <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto mb-5">
-                <BarChart2 className="w-8 h-8 text-rose-600" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-1">{indexData.name}</h2>
-              <div className="text-3xl font-black text-gray-900 my-4 tabular-nums">{toFaDecimal(indexData.index)}</div>
-              <div className={`inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl ${indexData.changePercent >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                {indexData.changePercent >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                {toFaDecimal(Math.abs(indexData.change))} ({indexData.changePercent >= 0 ? '+' : ''}{toFaDecimal(indexData.changePercent)}%)
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-8 max-w-sm mx-auto">
-                <div className="bg-gray-50 rounded-xl px-4 py-3">
-                  <div className="text-[10px] text-gray-500 mb-1">بیشترین امروز</div>
-                  <div className="text-sm font-bold text-emerald-700 tabular-nums">{toFaDecimal(indexData.max)}</div>
-                </div>
-                <div className="bg-gray-50 rounded-xl px-4 py-3">
-                  <div className="text-[10px] text-gray-500 mb-1">کمترین امروز</div>
-                  <div className="text-sm font-bold text-red-700 tabular-nums">{toFaDecimal(indexData.min)}</div>
-                </div>
-              </div>
-              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500">
-                <Info className="w-3.5 h-3.5" />
-                <span>داده‌های تاریخی شاخص‌ها از طریق API فعلی قابل دسترسی نیستند.</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!data && !indexData && !loading && !error && (
+        {!data && !loading && !error && (
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-700/5 border border-amber-300/30 flex items-center justify-center mb-6">
               <BarChart3 className="w-12 h-12 text-amber-600/50" />
@@ -409,7 +331,7 @@ export default function Home() {
           </div>
         )}
 
-        {data && !loading && !indexData && (
+        {data && !loading && (
           <div className="space-y-4">
             {data.info && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -532,7 +454,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500">
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v3.1 — ابزارهای تریدینگ ویو
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v3.1 — ابزارهای تریدینگ ویو
       </footer>
     </div>
   );

@@ -29,6 +29,7 @@ interface InstrumentItem {
   tgjuKey?: string;
   finpySector?: string;  // finpy-tse sector name for industry indices
   finpyIndex?: string;   // finpy-tse index function key (CWI, EWI, etc.)
+  webId?: number;        // TSETMC web ID for cdn.tsetmc.com API
   isMainIndex?: boolean; // True for main market indices
   index?: number;
   indexChange?: number;
@@ -63,7 +64,7 @@ interface TgjuData {
 }
 
 interface SymbolSearchProps {
-  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string) => void;
+  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => void;
   placeholder?: string;
   className?: string;
 }
@@ -391,7 +392,7 @@ export default function SymbolSearch({
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18);
     setOpen(false);
-    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex);
+    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex, s.webId);
     inputRef.current?.blur();
   }, [onSelect]);
 

@@ -18,6 +18,7 @@ interface InstrumentItem {
   insCode?: string;
   finpySector?: string;  // finpy-tse sector name for industry indices
   finpyIndex?: string;   // finpy-tse index function key (CWI, EWI, etc.)
+  webId?: number;        // TSETMC web ID for cdn.tsetmc.com API
   isMainIndex?: boolean; // True for main market indices (شاخص کل, etc.)
   index?: number;
   indexChange?: number;
@@ -133,6 +134,7 @@ export async function GET() {
           category: 'index',
           finpySector: idx.finpySector || undefined,
           finpyIndex: idx.finpyIndex || undefined,
+          webId: idx.webId || undefined,
           isMainIndex: idx.isMainIndex || undefined,
         });
       }

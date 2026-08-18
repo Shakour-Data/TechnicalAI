@@ -7,26 +7,26 @@ export interface IndustryIndex {
   name: string;          // Full Persian name
   finpySector?: string;  // finpy-tse sector name (for industry groups → Get_SectorIndex_History)
   finpyIndex?: string;   // finpy-tse index function key (for main indices → e.g. 'CWI')
-  webId?: number;        // TSETMC web ID (used by finpy-tse internally)
+  webId?: number;        // TSETMC web ID (used by finpy-tse internally AND cdn.tsetmc.com API)
   group: string;         // Group/sector category
   isMainIndex?: boolean; // True for main market indices
 }
 
 /**
- * Main market indices — data source: finpy-tse dedicated index functions
- * finpyIndex maps to: CWI, EWI, CWPI, EWPI, FFI, MKT1I, MKT2I, INDI, ACT50, LCI30
+ * Main market indices — data source: cdn.tsetmc.com via z-ai-web-dev-sdk
+ * webId maps to TSETMC index web IDs (same as finpy-tse internally uses)
  */
 export const MAIN_INDICES: IndustryIndex[] = [
-  { symbol: 'شاخص کل', name: 'شاخص کل بورس (TEPIX)', finpyIndex: 'CWI', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص کل هم‌وزن', name: 'شاخص کل هم‌وزن', finpyIndex: 'EWI', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص قیمت وزنی', name: 'شاخص قیمت وزنی-ارزشی', finpyIndex: 'CWPI', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص قیمت هم‌وزن', name: 'شاخص قیمت هم‌وزن', finpyIndex: 'EWPI', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص سهام شناور', name: 'شاخص سهام آزاد شناور', finpyIndex: 'FFI', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص بازار اول', name: 'شاخص بازار اول', finpyIndex: 'MKT1I', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص بازار دوم', name: 'شاخص بازار دوم', finpyIndex: 'MKT2I', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص صنعت', name: 'شاخص صنعت', finpyIndex: 'INDI', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص ۵۰ شرکت', name: 'شاخص ۵۰ شرکت فعال‌تر', finpyIndex: 'ACT50', group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص ۳۰ شرکت', name: 'شاخص ۳۰ شرکت بزرگ', finpyIndex: 'LCI30', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص کل', name: 'شاخص کل بورس (TEPIX)', finpyIndex: 'CWI', webId: 32097828799138957, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص کل هم‌وزن', name: 'شاخص کل هم‌وزن', finpyIndex: 'EWI', webId: 67130298613737946, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص قیمت وزنی', name: 'شاخص قیمت وزنی-ارزشی', finpyIndex: 'CWPI', webId: 5798407779416661, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص قیمت هم‌وزن', name: 'شاخص قیمت هم‌وزن', finpyIndex: 'EWPI', webId: 8384385859414435, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص سهام شناور', name: 'شاخص سهام آزاد شناور', finpyIndex: 'FFI', webId: 49579049405614711, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص بازار اول', name: 'شاخص بازار اول', finpyIndex: 'MKT1I', webId: 62752761908615603, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص بازار دوم', name: 'شاخص بازار دوم', finpyIndex: 'MKT2I', webId: 71704845530629737, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص صنعت', name: 'شاخص صنعت', finpyIndex: 'INDI', webId: 43754960038275285, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص ۵۰ شرکت', name: 'شاخص ۵۰ شرکت فعال‌تر', finpyIndex: 'ACT50', webId: 46342955726788357, group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص ۳۰ شرکت', name: 'شاخص ۳۰ شرکت بزرگ', finpyIndex: 'LCI30', webId: 10523825119011581, group: 'کل بازار', isMainIndex: true },
 ];
 
 /**

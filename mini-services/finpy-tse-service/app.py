@@ -26,7 +26,6 @@ def health():
 
 
 # ── Index function mapping ─────────────────────────────────────────
-# Maps the index key (used by Next.js) to the finpy-tse function name
 INDEX_FUNCTIONS = {
     "CWI":   tse.Get_CWI_History,      # شاخص کل
     "EWI":   tse.Get_EWI_History,      # شاخص کل هم‌وزن
@@ -39,6 +38,24 @@ INDEX_FUNCTIONS = {
     "ACT50": tse.Get_ACT50_History,    # شاخص ۵۰ شرکت فعال‌تر
     "LCI30": tse.Get_LCI30_History,    # شاخص ۳۰ شرکت بزرگ
 }
+
+
+def _df_to_candles(df):
+    """Convert a DataFrame to a list of candle dicts."""
+    candles = []
+    for idx, row in df.iterrows():
+        date_str = str(idx).replace("-", "/") if "-" in str(idx) else str(idx)
+        candles.append({
+            "date": date_str,
+            "open": float(row.get("Open", 0) or 0),
+            "high": float(row.get("High", 0) or 0),
+            "low": float(row.get("Low", 0) or 0),
+            "close": float(row.get("Close", 0) or 0),
+            "adj_close": float(row.get("Adj Close", 0) or 0),
+            "volume": int(row.get("Volume", 0) or 0),
+        })
+    candles.sort(key=lambda x: x["date"])
+    return candles
 
 
 @app.route("/api/index-history")
@@ -83,32 +100,16 @@ def index_history():
         )
 
         if df is None or df.empty:
-            return jsonify({"error": f"No data for index: {key}", "candles": []}), 404
+            return jsonify({"error": f"داده‌ای برای شاخص {key} یافت نشد", "candles": []}), 404
 
-        # Convert DataFrame to candle list
-        candles = []
-        for idx, row in df.iterrows():
-            date_str = str(idx).replace("-", "/") if "-" in str(idx) else str(idx)
-            candles.append({
-                "date": date_str,
-                "open": float(row.get("Open", 0) or 0),
-                "high": float(row.get("High", 0) or 0),
-                "low": float(row.get("Low", 0) or 0),
-                "close": float(row.get("Close", 0) or 0),
-                "adj_close": float(row.get("Adj Close", 0) or 0),
-                "volume": int(row.get("Volume", 0) or 0),
-            })
-
-        # Sort oldest first
-        candles.sort(key=lambda x: x["date"])
-
+        candles = _df_to_candles(df)
         result = {"index_key": key, "count": len(candles), "candles": candles}
         _cache[cache_key] = (result, now)
         return jsonify(result)
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e), "candles": []}), 500
+        return jsonify({"error": f"خطا در دریافت داده: {str(e)}", "candles": []}), 500
 
 
 @app.route("/api/sector-history")
@@ -149,31 +150,16 @@ def sector_history():
         )
 
         if df is None or df.empty:
-            return jsonify({"error": f"No data found for sector: {sector}", "candles": []}), 404
+            return jsonify({"error": f"داده‌ای برای گروه {sector} یافت نشد", "candles": []}), 404
 
-        # Convert DataFrame to list of candle objects
-        candles = []
-        for idx, row in df.iterrows():
-            date_str = str(idx).replace("-", "/") if "-" in str(idx) else str(idx)
-            candles.append({
-                "date": date_str,
-                "open": float(row.get("Open", 0) or 0),
-                "high": float(row.get("High", 0) or 0),
-                "low": float(row.get("Low", 0) or 0),
-                "close": float(row.get("Close", 0) or 0),
-                "adj_close": float(row.get("Adj Close", 0) or 0),
-                "volume": int(row.get("Volume", 0) or 0),
-            })
-
-        candles.sort(key=lambda x: x["date"])
-
+        candles = _df_to_candles(df)
         result = {"sector": sector, "count": len(candles), "candles": candles}
         _cache[cache_key] = (result, now)
         return jsonify(result)
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e), "candles": []}), 500
+        return jsonify({"error": f"خطا در دریافت داده: {str(e)}", "candles": []}), 500
 
 
 @app.route("/api/sector-list")

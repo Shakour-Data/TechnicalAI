@@ -5,106 +5,38 @@ export const dynamic = 'force-dynamic';
 
 const FINPY_SERVICE_URL = `http://localhost:3031`;
 
-export async function GET(req: NextRequest) {
-  const url = req.nextUrl;
-  const sector = url.searchParams.get('sector');
-  const indexKey = url.searchParams.get('indexKey');
-
-  // ── Route A: Main index via finpy-tse index function (CWI, EWI, ...) ──
-  if (indexKey) {
-    return handleIndexRequest(indexKey);
-  }
-
-  // ── Route B: Sector/industry via finpy-tse Get_SectorIndex_History ──
-  if (sector) {
-    return handleSectorRequest(sector);
-  }
-
-  return NextResponse.json({ error: 'sector or indexKey parameter is required' }, { status: 400 });
+// ── Types ───────────────────────────────────────────────────────
+interface FinpyCandle {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  adj_close?: number;
+  volume: number;
 }
 
-async function handleIndexRequest(indexKey: string) {
+// ── Helper: Call finpy-tse service ───────────────────────────────
+async function fetchFromFinpy(url: string): Promise<FinpyCandle[] | null> {
   try {
-    const url = `${FINPY_SERVICE_URL}/api/index-history?key=${encodeURIComponent(indexKey)}&ignore_date=true`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'finpy-tse service error' }));
-      return NextResponse.json({ error: err.error || 'خطا در دریافت داده‌های شاخص', candles: [] }, { status: 502 });
-    }
-
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return null;
     const json = await res.json();
-    const candles = json.candles as Array<{
-      date: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      adj_close?: number;
-      volume: number;
-    }>;
-
-    if (!candles || candles.length === 0) {
-      return NextResponse.json({ error: 'داده‌ای یافت نشد', candles: [] }, { status: 404 });
+    if (json.error) {
+      console.error(`[finpy-tse] Error: ${json.error}`);
+      return null;
     }
-
-    return buildResponse(candles, indexKey);
+    const candles = json.candles as FinpyCandle[] | undefined;
+    return candles && candles.length > 0 ? candles : null;
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'TimeoutError') {
-      return NextResponse.json({ error: 'خطای زمان‌بندی در دریافت داده‌های شاخص', candles: [] }, { status: 504 });
-    }
-    return NextResponse.json({ error: String(err), candles: [] }, { status: 500 });
+    console.error(`[finpy-tse] Request failed:`, err);
+    return null;
   }
 }
 
-async function handleSectorRequest(sector: string) {
-  try {
-    const url = `${FINPY_SERVICE_URL}/api/sector-history?sector=${encodeURIComponent(sector)}&ignore_date=true`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'finpy-tse service error' }));
-      return NextResponse.json({ error: err.error || 'خطا در دریافت داده‌های finpy-tse', candles: [] }, { status: 502 });
-    }
-
-    const json = await res.json();
-    const candles = json.candles as Array<{
-      date: string;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      adj_close?: number;
-      volume: number;
-    }>;
-
-    if (!candles || candles.length === 0) {
-      return NextResponse.json({ error: 'داده‌ای یافت نشد', candles: [] }, { status: 404 });
-    }
-
-    return buildResponse(candles, sector);
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'TimeoutError') {
-      return NextResponse.json({ error: 'خطای زمان‌بندی در دریافت داده‌های finpy-tse', candles: [] }, { status: 504 });
-    }
-    return NextResponse.json({ error: String(err), candles: [] }, { status: 500 });
-  }
-}
-
-function buildResponse(
-  candles: Array<{
-    date: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    adj_close?: number;
-    volume: number;
-  }>,
-  label: string,
-) {
-  // Use adj_close if available (from finpy-tse), otherwise use close
-  const ohlcv: OHLCV[] = candles.map((c) => ({
+// ── Helper: Map finpy candle to our format ───────────────────────
+function mapCandles(candles: FinpyCandle[]) {
+  return candles.map((c) => ({
     date: c.date,
     open: c.open || c.close,
     high: c.high || c.close,
@@ -112,25 +44,32 @@ function buildResponse(
     close: c.adj_close || c.close,
     volume: c.volume || 0,
   }));
+}
 
-  // Run TA analysis
+// ── Helper: Build full response with TA analysis ────────────────
+function buildResponse(
+  candles: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>,
+  label: string,
+) {
+  const ohlcv: OHLCV[] = candles.map((c) => ({
+    date: c.date,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.volume,
+  }));
+
   const ta = analyze(ohlcv);
 
   const lastCandle = candles[candles.length - 1];
   const prevCandle = candles.length > 1 ? candles[candles.length - 2] : lastCandle;
-  const lastClose = lastCandle?.adj_close || lastCandle?.close || 0;
-  const prevClose = prevCandle?.adj_close || prevCandle?.close || 0;
+  const lastClose = lastCandle?.close || 0;
+  const prevClose = prevCandle?.close || 0;
 
   return NextResponse.json({
     symbol: label,
-    candles: candles.map((c) => ({
-      date: c.date,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.adj_close || c.close,
-      volume: c.volume,
-    })),
+    candles,
     info: {
       name: `شاخص ${label}`,
       symbol: label,
@@ -150,4 +89,61 @@ function buildResponse(
     },
     ta,
   });
+}
+
+export async function GET(req: NextRequest) {
+  const url = req.nextUrl;
+  const sector = url.searchParams.get('sector');
+  const indexKey = url.searchParams.get('indexKey');
+  const webId = url.searchParams.get('webId');
+
+  // ── Main index (CWI, EWI, CWPI, etc.) ──
+  if (indexKey) {
+    const key = indexKey.toUpperCase();
+    const finpyUrl = `${FINPY_SERVICE_URL}/api/index-history?key=${encodeURIComponent(key)}&ignore_date=true`;
+    const candles = await fetchFromFinpy(finpyUrl);
+
+    if (candles && candles.length > 0) {
+      const mapped = mapCandles(candles);
+      return buildResponse(mapped, key);
+    }
+
+    return NextResponse.json(
+      { error: 'خطا در دریافت داده‌های تاریخی شاخص. سرویس finpy-tse پاسخ نداد.', candles: [] },
+      { status: 502 },
+    );
+  }
+
+  // ── Sector/industry index ──
+  if (sector || webId) {
+    // Try finpy-tse sector by name
+    if (sector) {
+      const finpyUrl = `${FINPY_SERVICE_URL}/api/sector-history?sector=${encodeURIComponent(sector)}&ignore_date=true`;
+      const candles = await fetchFromFinpy(finpyUrl);
+
+      if (candles && candles.length > 0) {
+        const mapped = mapCandles(candles);
+        return buildResponse(mapped, sector);
+      }
+    }
+
+    // Try finpy-tse sector by webId (if sector name wasn't enough)
+    // Note: finpy-tse doesn't support webId directly, but we keep it for compatibility
+    if (webId && !sector) {
+      return NextResponse.json(
+        { error: 'نام شاخص گروه (sector) برای دریافت داده الزامی است.', candles: [] },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'خطا در دریافت داده‌های شاخص گروه. سرویس finpy-tse پاسخ نداد.', candles: [] },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json(
+    { error: 'پارامتر indexKey یا sector الزامی است.', candles: [] },
+    { status: 400 },
+  );
 }
