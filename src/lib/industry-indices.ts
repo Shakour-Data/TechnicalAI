@@ -3,32 +3,36 @@
 // ═══════════════════════════════════════════════════════════════════
 
 export interface IndustryIndex {
-  symbol: string;     // Display name in Persian (e.g., 'شاخص خودرو')
-  name: string;       // Full Persian name
-  finpySector: string; // finpy-tse sector name (exact match for API call)
-  webId: number;      // TSETMC web ID (used by finpy-tse internally)
-  group: string;      // Group/sector category
-  isMainIndex?: boolean; // True for main market indices (شاخص کل, etc.)
+  symbol: string;        // Display name in Persian (e.g., 'شاخص کل')
+  name: string;          // Full Persian name
+  finpySector?: string;  // finpy-tse sector name (for industry groups → Get_SectorIndex_History)
+  finpyIndex?: string;   // finpy-tse index function key (for main indices → e.g. 'CWI')
+  webId?: number;        // TSETMC web ID (used by finpy-tse internally)
+  group: string;         // Group/sector category
+  isMainIndex?: boolean; // True for main market indices
 }
 
 /**
- * Industry group indices — data source: finpy-tse
- * Each entry maps to a finpy-tse sector name that is passed to
- * Get_SectorIndex_History() for OHLC price history.
- *
- * Main market indices (شاخص کل, شاخص ۵۰, etc.) use the TSETMC CDN API
- * via the finpy-tse service's /api/main-index-history endpoint.
+ * Main market indices — data source: finpy-tse dedicated index functions
+ * finpyIndex maps to: CWI, EWI, CWPI, EWPI, FFI, MKT1I, MKT2I, INDI, ACT50, LCI30
  */
-export const INDUSTRY_INDICES: IndustryIndex[] = [
-  // ── Main Market Indices ──
-  { symbol: 'شاخص کل', name: 'شاخص کل بورس (TEPIX)', finpySector: '', webId: 0, group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص قیمت', name: 'شاخص قیمت (وزنی-ارزشی)', finpySector: '', webId: 0, group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص ۵۰ شرکت', name: 'شاخص ۵۰ شرکت فعال', finpySector: '', webId: 0, group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص ۳۰ شرکت', name: 'شاخص ۳۰ شرکت بزرگ', finpySector: '', webId: 0, group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص صنعت', name: 'شاخص صنعت', finpySector: '', webId: 0, group: 'کل بازار', isMainIndex: true },
-  { symbol: 'شاخص فرابورس', name: 'شاخص فرابورس', finpySector: '', webId: 0, group: 'فرابورس', isMainIndex: true },
+export const MAIN_INDICES: IndustryIndex[] = [
+  { symbol: 'شاخص کل', name: 'شاخص کل بورس (TEPIX)', finpyIndex: 'CWI', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص کل هم‌وزن', name: 'شاخص کل هم‌وزن', finpyIndex: 'EWI', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص قیمت وزنی', name: 'شاخص قیمت وزنی-ارزشی', finpyIndex: 'CWPI', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص قیمت هم‌وزن', name: 'شاخص قیمت هم‌وزن', finpyIndex: 'EWPI', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص سهام شناور', name: 'شاخص سهام آزاد شناور', finpyIndex: 'FFI', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص بازار اول', name: 'شاخص بازار اول', finpyIndex: 'MKT1I', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص بازار دوم', name: 'شاخص بازار دوم', finpyIndex: 'MKT2I', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص صنعت', name: 'شاخص صنعت', finpyIndex: 'INDI', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص ۵۰ شرکت', name: 'شاخص ۵۰ شرکت فعال‌تر', finpyIndex: 'ACT50', group: 'کل بازار', isMainIndex: true },
+  { symbol: 'شاخص ۳۰ شرکت', name: 'شاخص ۳۰ شرکت بزرگ', finpyIndex: 'LCI30', group: 'کل بازار', isMainIndex: true },
+];
 
-  // ── Industry Group Indices (finpy-tse sectors) ──
+/**
+ * Industry group indices — data source: finpy-tse Get_SectorIndex_History()
+ */
+export const SECTOR_INDICES: IndustryIndex[] = [
   { symbol: 'شاخص فرآورده‌های نفتی', name: 'شاخص گروه فرآورده‌های نفتی', finpySector: 'فرآورده‌های نفتی', webId: 12331083953323969, group: 'فرآورده‌های نفتی' },
   { symbol: 'شاخص شیمیایی', name: 'شاخص گروه مواد و محصولات شیمیایی', finpySector: 'شیمیایی', webId: 33626672012415176, group: 'شیمیایی' },
   { symbol: 'شاخص فلزات اساسی', name: 'شاخص گروه فلزات اساسی', finpySector: 'فلزات اساسی', webId: 32453344048876642, group: 'فلزات اساسی' },
@@ -70,6 +74,9 @@ export const INDUSTRY_INDICES: IndustryIndex[] = [
   { symbol: 'شاخص اداره بازارها', name: 'شاخص گروه اداره بازارهای مالی', finpySector: 'اداره بازارهای مالی', webId: 61985386521682984, group: 'بازار مالی' },
 ];
 
+/** Combined list */
+export const INDUSTRY_INDICES: IndustryIndex[] = [...MAIN_INDICES, ...SECTOR_INDICES];
+
 /**
  * Search industry indices by name or symbol (Persian-aware search)
  */
@@ -83,6 +90,6 @@ export function searchIndustryIndices(query: string): IndustryIndex[] {
       idx.name.toLowerCase().includes(q) ||
       idx.symbol.toLowerCase().includes(q) ||
       idx.group.includes(query) ||
-      idx.finpySector.includes(query),
+      (idx.finpySector?.includes(query) ?? false),
   );
 }

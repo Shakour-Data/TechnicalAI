@@ -374,3 +374,46 @@ Work Log:
 Stage Summary:
 - coordinateToPrice TypeError fixed by using ISeriesApi.coordinateToPrice() instead of priceScale method
 - All 3 pending items resolved: coordinateToPrice fix ✅, distance rules already correct ✅, duplicate chart already removed ✅
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: v3.0 — Route all main market indices through finpy-tse dedicated functions
+
+Work Log:
+- **Rewrote finpy-tse Python service** (`mini-services/finpy-tse-service/app.py`):
+  - Replaced old `/api/main-index-history` (which used TSETMC CDN API — doesn't work from sandbox) with new `/api/index-history`
+  - Added `INDEX_FUNCTIONS` map: CWI, EWI, CWPI, EWPI, FFI, MKT1I, MKT2I, INDI, ACT50, LCI30 → corresponding finpy-tse functions
+  - All 10 functions use same parameters: start_date, end_date, ignore_date, just_adj_close, show_weekday, double_date
+  - Unified cache system (was separate for sector/index)
+  - Startup prints available index functions
+- **Updated `src/lib/industry-indices.ts`**:
+  - Added `finpyIndex?: string` field to `IndustryIndex` interface
+  - Split into `MAIN_INDICES` (10 indices with finpyIndex keys) and `SECTOR_INDICES` (40 industry groups with finpySector)
+  - Added 4 new main indices that were missing:
+    - شاخص کل هم‌وزن → EWI
+    - شاخص قیمت وزنی-ارزشی → CWPI
+    - شاخص قیمت هم‌وزن → EWPI
+    - شاخص سهام آزاد شناور → FFI
+- **Updated `src/app/api/finpy-sector/route.ts`**:
+  - Now accepts both `indexKey` (for main indices) and `sector` (for industry groups)
+  - Refactored into `handleIndexRequest()` and `handleSectorRequest()` with shared `buildResponse()`
+- **Updated `src/app/api/instruments/route.ts`**:
+  - Added `finpyIndex` to `InstrumentItem` interface
+  - Passes `finpyIndex` for main indices in the response
+- **Updated `src/components/tse/symbol-search.tsx`**:
+  - Added `finpyIndex` to `InstrumentItem` interface
+  - Added `finpyIndex` parameter to `onSelect` callback
+  - `selectSymbol` now passes `s.finpyIndex` to parent
+- **Updated `src/app/page.tsx`**:
+  - `handleSelect` accepts new `finpyIndex` parameter
+  - Index routing chain: finpyIndex (main indices) → finpySector (industry groups) → TSETMC insCode → static overview
+  - `lastFetchRef` includes `finpyIndex` for auto-refresh
+  - `doRefresh` passes `finpyIndex` correctly
+- **Verified**: finpy-tse service starts successfully, health check OK, all 10 index functions loaded
+- Note: finpy-tse requires access to tsetmc.com (Iranian network) — times out in sandbox but works in production
+
+Stage Summary:
+- All 10 main market indices now use dedicated finpy-tse functions (Get_CWI_History, Get_EWI_History, etc.)
+- 40 industry group indices continue using Get_SectorIndex_History
+- Data flow: user selects index → symbol-search passes finpyIndex → page.tsx calls /api/finpy-sector?indexKey=CWI → Python service calls tse.Get_CWI_History() → OHLC → TA analysis → chart

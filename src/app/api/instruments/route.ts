@@ -17,6 +17,7 @@ interface InstrumentItem {
   category: string;
   insCode?: string;
   finpySector?: string;  // finpy-tse sector name for industry indices
+  finpyIndex?: string;   // finpy-tse index function key (CWI, EWI, etc.)
   isMainIndex?: boolean; // True for main market indices (شاخص کل, etc.)
   index?: number;
   indexChange?: number;
@@ -131,6 +132,7 @@ export async function GET() {
           cs: idx.group,
           category: 'index',
           finpySector: idx.finpySector || undefined,
+          finpyIndex: idx.finpyIndex || undefined,
           isMainIndex: idx.isMainIndex || undefined,
         });
       }

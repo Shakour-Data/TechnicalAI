@@ -1,9 +1,11 @@
-# ═══════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════
 # finpy-tse Mini Service
-# Wraps finpy-tse library for industry/sector index price history
-# ═══════════════════════════════════════════════════════════════════
+# Wraps finpy-tse library for index & sector price history
+# Supports all market index types from finpy-tse
+# ═════════════════════════════════════════════════════════════════════
 
 import json
+import time
 import traceback
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -13,8 +15,8 @@ import finpy_tse as tse
 app = Flask(__name__)
 CORS(app)
 
-# Cache for sector index data to avoid repeated calls
-_sector_cache = {}
+# Cache
+_cache = {}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
@@ -23,9 +25,160 @@ def health():
     return jsonify({"status": "ok", "service": "finpy-tse-service"})
 
 
+# ── Index function mapping ─────────────────────────────────────────
+# Maps the index key (used by Next.js) to the finpy-tse function name
+INDEX_FUNCTIONS = {
+    "CWI":   tse.Get_CWI_History,      # شاخص کل
+    "EWI":   tse.Get_EWI_History,      # شاخص کل هم‌وزن
+    "CWPI":  tse.Get_CWPI_History,     # شاخص قیمت وزنی-ارزشی
+    "EWPI":  tse.Get_EWPI_History,     # شاخص قیمت هم‌وزن
+    "FFI":   tse.Get_FFI_History,      # شاخص سهام آزاد شناور
+    "MKT1I": tse.Get_MKT1I_History,    # شاخص بازار اول
+    "MKT2I": tse.Get_MKT2I_History,    # شاخص بازار دوم
+    "INDI":  tse.Get_INDI_History,     # شاخص صنعت
+    "ACT50": tse.Get_ACT50_History,    # شاخص ۵۰ شرکت فعال‌تر
+    "LCI30": tse.Get_LCI30_History,    # شاخص ۳۰ شرکت بزرگ
+}
+
+
+@app.route("/api/index-history")
+def index_history():
+    """Get price history for a main market index using finpy-tse.
+
+    Query params:
+        key: (str) Index function key — one of:
+              CWI, EWI, CWPI, EWPI, FFI, MKT1I, MKT2I, INDI, ACT50, LCI30
+        start_date: (str, optional) Shamsi start '1395-01-01'
+        end_date: (str, optional) Shamsi end '1410-12-29'
+        ignore_date: (bool, default true)
+    """
+    key = request.args.get("key", "").strip().upper()
+    if not key or key not in INDEX_FUNCTIONS:
+        return jsonify({
+            "error": f"Invalid index key. Use one of: {', '.join(INDEX_FUNCTIONS.keys())}",
+            "candles": []
+        }), 400
+
+    start_date = request.args.get("start_date", "1395-01-01")
+    end_date = request.args.get("end_date", "1410-12-29")
+    ignore_date = request.args.get("ignore_date", "true").lower() == "true"
+
+    # Check cache
+    cache_key = f"idx_{key}_{start_date}_{end_date}"
+    now = time.time()
+    if cache_key in _cache:
+        cached_data, cached_time = _cache[cache_key]
+        if now - cached_time < CACHE_TTL_SECONDS:
+            return jsonify(cached_data)
+
+    try:
+        func = INDEX_FUNCTIONS[key]
+        df = func(
+            start_date=start_date,
+            end_date=end_date,
+            ignore_date=ignore_date,
+            just_adj_close=False,
+            show_weekday=False,
+            double_date=False,
+        )
+
+        if df is None or df.empty:
+            return jsonify({"error": f"No data for index: {key}", "candles": []}), 404
+
+        # Convert DataFrame to candle list
+        candles = []
+        for idx, row in df.iterrows():
+            date_str = str(idx).replace("-", "/") if "-" in str(idx) else str(idx)
+            candles.append({
+                "date": date_str,
+                "open": float(row.get("Open", 0) or 0),
+                "high": float(row.get("High", 0) or 0),
+                "low": float(row.get("Low", 0) or 0),
+                "close": float(row.get("Close", 0) or 0),
+                "adj_close": float(row.get("Adj Close", 0) or 0),
+                "volume": int(row.get("Volume", 0) or 0),
+            })
+
+        # Sort oldest first
+        candles.sort(key=lambda x: x["date"])
+
+        result = {"index_key": key, "count": len(candles), "candles": candles}
+        _cache[cache_key] = (result, now)
+        return jsonify(result)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e), "candles": []}), 500
+
+
+@app.route("/api/sector-history")
+def sector_history():
+    """Get price history for a sector/industry index using finpy-tse.
+
+    Query params:
+        sector: (str) Sector name in Persian (e.g., 'خودرو')
+        start_date: (str, optional) Start date in Shamsi format '1400-01-01'
+        end_date: (str, optional) End date in Shamsi format '1404-12-29'
+        ignore_date: (bool, default true)
+    """
+    sector = request.args.get("sector", "").strip()
+    if not sector:
+        return jsonify({"error": "sector parameter is required"}), 400
+
+    start_date = request.args.get("start_date", "1395-01-01")
+    end_date = request.args.get("end_date", "1410-12-29")
+    ignore_date = request.args.get("ignore_date", "true").lower() == "true"
+
+    # Check cache
+    cache_key = f"sec_{sector}_{start_date}_{end_date}"
+    now = time.time()
+    if cache_key in _cache:
+        cached_data, cached_time = _cache[cache_key]
+        if now - cached_time < CACHE_TTL_SECONDS:
+            return jsonify(cached_data)
+
+    try:
+        df = tse.Get_SectorIndex_History(
+            sector=sector,
+            start_date=start_date,
+            end_date=end_date,
+            ignore_date=ignore_date,
+            just_adj_close=False,
+            show_weekday=False,
+            double_date=False,
+        )
+
+        if df is None or df.empty:
+            return jsonify({"error": f"No data found for sector: {sector}", "candles": []}), 404
+
+        # Convert DataFrame to list of candle objects
+        candles = []
+        for idx, row in df.iterrows():
+            date_str = str(idx).replace("-", "/") if "-" in str(idx) else str(idx)
+            candles.append({
+                "date": date_str,
+                "open": float(row.get("Open", 0) or 0),
+                "high": float(row.get("High", 0) or 0),
+                "low": float(row.get("Low", 0) or 0),
+                "close": float(row.get("Close", 0) or 0),
+                "adj_close": float(row.get("Adj Close", 0) or 0),
+                "volume": int(row.get("Volume", 0) or 0),
+            })
+
+        candles.sort(key=lambda x: x["date"])
+
+        result = {"sector": sector, "count": len(candles), "candles": candles}
+        _cache[cache_key] = (result, now)
+        return jsonify(result)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e), "candles": []}), 500
+
+
 @app.route("/api/sector-list")
 def sector_list():
-    """Return the list of available sector names and their web IDs from finpy-tse."""
+    """Return the list of available sector names from finpy-tse."""
     sectors = [
         {"name": "زراعت", "web_id": 34408080767216529},
         {"name": "ذغال سنگ", "web_id": 19219679288446732},
@@ -71,142 +224,7 @@ def sector_list():
     return jsonify({"sectors": sectors})
 
 
-@app.route("/api/sector-history")
-def sector_history():
-    """Get price history for a sector/industry index using finpy-tse.
-
-    Query params:
-        sector: (str) Sector name in Persian (e.g., 'خودرو')
-        start_date: (str, optional) Start date in Shamsi format '1400-01-01'
-        end_date: (str, optional) End date in Shamsi format '1404-12-29'
-        ignore_date: (bool, default true) If true, returns all available history
-    """
-    sector = request.args.get("sector", "").strip()
-    if not sector:
-        return jsonify({"error": "sector parameter is required"}), 400
-
-    start_date = request.args.get("start_date", "1395-01-01")
-    end_date = request.args.get("end_date", "1410-12-29")
-    ignore_date = request.args.get("ignore_date", "true").lower() == "true"
-
-    # Check cache
-    cache_key = f"{sector}_{start_date}_{end_date}"
-    import time
-    now = time.time()
-    if cache_key in _sector_cache:
-        cached_data, cached_time = _sector_cache[cache_key]
-        if now - cached_time < CACHE_TTL_SECONDS:
-            return jsonify(cached_data)
-
-    try:
-        df = tse.Get_SectorIndex_History(
-            sector=sector,
-            start_date=start_date,
-            end_date=end_date,
-            ignore_date=ignore_date,
-            just_adj_close=False,
-            show_weekday=False,
-            double_date=False,
-        )
-
-        if df is None or df.empty:
-            return jsonify({"error": f"No data found for sector: {sector}", "candles": []}), 404
-
-        # Convert DataFrame to list of candle objects
-        # Columns: Open, High, Low, Close, Adj Close, Volume
-        candles = []
-        for idx, row in df.iterrows():
-            # idx is J-Date string like '1404/01/15'
-            date_str = str(idx).replace("-", "/") if "-" in str(idx) else str(idx)
-            candles.append({
-                "date": date_str,
-                "open": float(row.get("Open", 0) or 0),
-                "high": float(row.get("High", 0) or 0),
-                "low": float(row.get("Low", 0) or 0),
-                "close": float(row.get("Close", 0) or 0),
-                "adj_close": float(row.get("Adj Close", 0) or 0),
-                "volume": int(row.get("Volume", 0) or 0),
-            })
-
-        # Sort by date (oldest first)
-        candles.sort(key=lambda x: x["date"])
-
-        result = {"sector": sector, "count": len(candles), "candles": candles}
-
-        # Cache result
-        _sector_cache[cache_key] = (result, now)
-
-        return jsonify(result)
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e), "candles": []}), 500
-
-
-@app.route("/api/main-index-history")
-def main_index_history():
-    """Get price history for main market indices using finpy-tse.
-
-    Supported indices: شاخص کل (TEPIX), شاخص ۵۰ شرکت, etc.
-    Uses get_tse_webid to find the instrument code, then fetches price history.
-    """
-    index_name = request.args.get("index", "").strip()
-    if not index_name:
-        return jsonify({"error": "index parameter is required"}), 400
-
-    try:
-        # For main indices like شاخص کل, we use the price history endpoint
-        # First get the web ID
-        webid_df = tse.get_tse_webid(stock=index_name)
-        if webid_df is None or webid_df.empty:
-            return jsonify({"error": f"Could not find web ID for: {index_name}", "candles": []}), 404
-
-        web_id = str(webid_df.iloc[0]["web_id"])
-
-        # Fetch closing price history from TSETMC CDN API
-        import requests
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-
-        url = f"http://cdn.tsetmc.com/api/Index/GetIndexB2History/{web_id}"
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-
-        data = resp.json()
-        entries = data.get("indexB2", [])
-        if not entries:
-            return jsonify({"error": "No history data found", "candles": []}), 404
-
-        candles = []
-        for entry in entries:
-            d_even = str(entry.get("dEven", ""))
-            if len(d_even) < 8:
-                continue
-            # Convert DEven (Jalali) to formatted string
-            date_str = f"{d_even[:4]}/{d_even[4:6]}/{d_even[6:8]}"
-            close_val = entry.get("xNivInuClMresIbs", 0)
-            candles.append({
-                "date": date_str,
-                "open": 0,  # API only provides close
-                "high": 0,
-                "low": 0,
-                "close": float(close_val),
-                "adj_close": float(close_val),
-                "volume": 0,
-            })
-
-        # Sort by date
-        candles.sort(key=lambda x: x["date"])
-
-        result = {"index": index_name, "web_id": web_id, "count": len(candles), "candles": candles}
-        return jsonify(result)
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e), "candles": []}), 500
-
-
 if __name__ == "__main__":
     print("Starting finpy-tse service on port 3031...")
+    print(f"Available index functions: {', '.join(INDEX_FUNCTIONS.keys())}")
     app.run(host="0.0.0.0", port=3031, debug=False)
