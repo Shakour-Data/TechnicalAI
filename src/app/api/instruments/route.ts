@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchAllInstruments, fetchTsetmcInstruments } from '@/lib/tse-api';
+import { INDUSTRY_INDICES } from '@/lib/industry-indices';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -55,21 +56,25 @@ export async function GET() {
     const tsetmcIndices = await tsetmcIndicesPromise;
 
     let indices: InstrumentItem[];
+    let existingSymbols = new Set<string>();
 
     if (tsetmcIndices && tsetmcIndices.length > 0) {
       // Use TSETMC indices — they include industry indices with insCode for historical data
-      indices = tsetmcIndices.map((idx) => ({
-        l18: idx.symbol,
-        l30: idx.name,
-        pl: 0, // No real-time price from TSETMC instruments list
-        pcp: 0,
-        tno: 0,
-        tvol: 0,
-        tval: 0,
-        cs: idx.group || '',
-        category: 'index',
-        insCode: idx.insCode,
-      }));
+      indices = tsetmcIndices.map((idx) => {
+        existingSymbols.add(idx.symbol);
+        return {
+          l18: idx.symbol,
+          l30: idx.name,
+          pl: 0,
+          pcp: 0,
+          tno: 0,
+          tvol: 0,
+          tval: 0,
+          cs: idx.group || '',
+          category: 'index',
+          insCode: idx.insCode,
+        };
+      });
 
       // Merge real-time values from BrsApi indices where names match
       for (const brsIdx of data.indices) {
@@ -88,22 +93,43 @@ export async function GET() {
       }
     } else {
       // Fallback to BrsApi 7 indices (no insCode = no historical TA)
-      indices = data.indices.map((idx) => ({
-        l18: idx.name,
-        l30: '',
-        pl: idx.index,
-        pcp: idx.index_change_percent,
-        tno: 0,
-        tvol: 0,
-        tval: 0,
-        cs: '',
-        category: 'index',
-        index: idx.index,
-        indexChange: idx.index_change,
-        indexChangePercent: idx.index_change_percent,
-        indexMin: idx.min,
-        indexMax: idx.max,
-      }));
+      indices = data.indices.map((idx) => {
+        existingSymbols.add(idx.name);
+        return {
+          l18: idx.name,
+          l30: '',
+          pl: idx.index,
+          pcp: idx.index_change_percent,
+          tno: 0,
+          tvol: 0,
+          tval: 0,
+          cs: '',
+          category: 'index',
+          index: idx.index,
+          indexChange: idx.index_change,
+          indexChangePercent: idx.index_change_percent,
+          indexMin: idx.min,
+          indexMax: idx.max,
+        };
+      });
+    }
+
+    // ── Add finpy-tse industry indices not already in the list ──
+    for (const idx of INDUSTRY_INDICES) {
+      if (!existingSymbols.has(idx.symbol)) {
+        indices.push({
+          l18: idx.symbol,
+          l30: idx.name,
+          pl: 0,
+          pcp: 0,
+          tno: 0,
+          tvol: 0,
+          tval: 0,
+          cs: idx.group,
+          category: 'index',
+          insCode: idx.insCode,
+        });
+      }
     }
 
     return NextResponse.json({

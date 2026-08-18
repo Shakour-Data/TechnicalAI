@@ -23,6 +23,7 @@ interface IndicatorsPanelProps {
     atr: number;
     bollingerBands: { upper: number; middle: number; lower: number };
     obv: number;
+    hasVolume?: boolean;
     resistances: number[];
     supports: number[];
     trend: {
@@ -164,7 +165,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
       <SectionHeader title="اوسسیلاتورها" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
         <IndicatorCard label="RSI" value={toFa(ta.rsi)} signal={rsiSignal(ta.rsi)} />
-        <IndicatorCard label="MFI" value={toFa(ta.mfi)} signal={mfiSignal(ta.mfi)} />
+        {ta.hasVolume !== false && <IndicatorCard label="MFI" value={toFa(ta.mfi)} signal={mfiSignal(ta.mfi)} />}
         <IndicatorCard label="CCI" value={toFa(ta.cci)} signal={ta.cci > 100 ? 'bearish' : ta.cci < -100 ? 'bullish' : 'neutral'} />
         <IndicatorCard label="Stochastic %K" value={toFa(ta.stochK)} signal={stochSignal(ta.stochK)} />
         <IndicatorCard label="Stochastic %D" value={toFa(ta.stochD)} signal={stochSignal(ta.stochD)} />
@@ -200,7 +201,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
       {/* ── حجم (Volume) ──────────────────────────────────────────────── */}
       <SectionHeader title="حجم" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />
+        {ta.hasVolume !== false && <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />}
       </div>
 
       {/* ── حمایت و مقاومت (Support & Resistance) ────────────────────── */}

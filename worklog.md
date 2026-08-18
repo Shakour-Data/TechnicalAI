@@ -180,3 +180,83 @@ Stage Summary:
 - Changes in v1.0: bone theme, 6 VDes export formats, Shamsi dates, dynamic analysis text, S/R strength fix, main path removal
 - No compilation or runtime errors
 - All tabs (chart, indicators, VDss, VDes) verified working in browser
+
+---
+Task ID: v2-1
+Agent: Main Orchestrator
+Task: Version 2 — 6 requirements implementation
+
+Work Log:
+- Read all key source files: page.tsx, ta-engine.ts, tradingview-chart.tsx, candlestick-chart.tsx, vdes-analysis.tsx, indicators-panel.tsx, tse-api.ts, analysis/route.ts, tgju-analysis/route.ts, instruments/route.ts, symbol-search.tsx
+- Analyzed all 6 v2 requirements and planned implementation
+
+### Requirement 1: Industry Indices (finpy-tse)
+- Created /src/lib/industry-indices.ts with 44 industry indices from finpy-tse/TSETMC
+- Each index has: symbol (Persian), name (Persian), insCode (TSETMC code for historical data), group (sector)
+- Includes: 7 main market indices + 37 industry group indices (petroleum, chemicals, metals, automotive, banking, pharma, construction, etc.)
+- Updated /src/app/api/instruments/route.ts to merge INDUSTRY_INDICES into existing indices list
+- Uses Set-based deduplication to avoid duplicates when TSETMC SOAP already returns them
+- Added searchIndustryIndices() utility function
+
+### Requirement 2: S/R Gap 5-10%
+- Updated enforceGap() in ta-engine.ts: gapSteps changed from [0.05..0.005] to [0.10..0.03]
+- Now enforces minimum 5% gap between consecutive S/R lines, relaxing down to 3% if needed
+- This produces fewer, more significant S/R levels
+
+### Requirement 3: Persian Numerals Everywhere
+- candlestick-chart.tsx: Added `localization.priceFormatter` with `toPersianDigits` for lightweight-charts price axis
+- candlestick-chart.tsx: Added `tickMarkFormatter` with `candleDateToJalali` for Shamsi dates on time axis
+- candlestick-chart.tsx: Updated all SVG drawing labels (hline, fibonacci, measure) to use `toPersianDigits`
+- tradingview-chart.tsx: Added `localization.priceFormatter` with `toPersianDigits` for price axis
+- page.tsx: Already used `toFa()` with `fa-IR` locale for most UI numbers
+
+### Requirement 4: S/R Line Styling by Strength
+- Created `srLineStyle()` function with strength-based mapping:
+  - Strength 1-2: thin (1px) dashed (lineStyle=2)
+  - Strength 3-4: medium (2px) dashed (lineStyle=2)
+  - Strength 5-6: medium (2px) dotted (lineStyle=1)
+  - Strength 7-8: thick (3px) solid (lineStyle=0)
+  9-10: very thick (4px) solid (lineStyle=0)
+  - Targets: always thick (3px) solid
+- Applied to both candlestick-chart.tsx and tradingview-chart.tsx
+
+### Requirement 5: Volume Handling
+- Added `hasVolume: boolean` to TAResult interface in ta-engine.ts
+- Detects volume availability: `const hasVolume = data.some(d => d.volume > 0)`
+- MFI: returns neutral 50 when no volume (skips calcMFI)
+- OBV: returns 0 when no volume (skips calcOBV)
+- ML training: computeFeaturesAtBar uses `sliceHasVolume` flag, sets f_mfi to 0.5 (neutral) when no volume
+- Scenario probability: MFI excluded from overboughtRisk/oversoldBounce flags when mfi===50
+- S/R strength: Volume Confirmation factor skipped when no volume in data
+- VDes analysis: Volume paragraph (p4) replaced with ATR-only paragraph when no volume
+- VDes analysis: All volume references in text removed when no volume
+- STRATEGY_MAP: R4 text changed from 'احتیاط و کاهش حجم' to 'احتیاط توصیه می‌شود'
+- page.tsx: Volume info cards (حجم, ارزش, تعداد معاملات) hidden when hasVolume=false
+- indicators-panel.tsx: MFI and OBV cards hidden when hasVolume=false
+
+### Requirement 6: Integration
+- Clean compilation: `bun run lint` returns 0 errors
+- Dev server compiles successfully (verified via dev.log)
+
+### Bonus: candlestick-chart.tsx Bone Theme (was missed in v1!)
+- Changed all dark theme constants: BG #0b0f1a→#FFFCF8, TXT #9db4c2→#5C5650, GRID rgba(255,255,255,0.04)→rgba(0,0,0,0.04)
+- Toolbar: TOOLBAR_BG #111827→#FFFCF8, TOOLBAR_BORDER rgba(255,255,255,0.08)→#E5DFD6
+- Tool buttons: text-gray-400→text-[#8A837B], hover:bg-white/5→hover:bg-[#F5F0E8]
+- Active tool: bg-amber-500/20 text-amber-400→bg-amber-500/20 text-amber-800
+- Color picker border: border-white→border-[#2D2A26]
+- Delete/Clear buttons: text-gray-400 hover:bg-red-500/15 hover:text-red-400→text-[#8A837B] hover:bg-red-50 hover:text-red-700
+- SVG drawings: text/measure/fibonacci backgrounds #0b0f1a→#FFFCF8 with #E5DFD6 borders
+- Text input: bg-[#0b0f1a] border-gray-600 text-white→bg-[#FFFCF8] border-[#E5DFD6] text-[#2D2A26]
+- Chart border: border TOOLBAR_BORDER→border border-[#E5DFD6]
+- Skeleton: bg-white/5→bg-[#FFFCF8], bg-white/5/bg-[#E5DFD6]
+- Footer version updated to v2.0
+
+Stage Summary:
+- Version 2.0 implemented with all 6 requirements
+- Industry indices: 44 finpy-tse indices added to search list
+- S/R gap: 5-10% minimum between consecutive levels
+- Persian numerals: All chart numbers (price axis, time axis, drawings) now in Persian
+- S/R styling: 5-tier strength-based line thickness and dash patterns
+- Volume handling: Complete detection, conditional MFI/OBV, text removal when unavailable
+- candlestick-chart.tsx bone theme fix (was missed in v1)
+- Clean lint and compilation

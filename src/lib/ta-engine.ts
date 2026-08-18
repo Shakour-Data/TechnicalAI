@@ -97,6 +97,8 @@ export interface TAResult {
   calibrationFactors: Record<string, number>;
   scenarioSums: Record<string, number>;
   adaptiveFactors: { momentum: number; volatility: number; trend: number };
+  // Volume availability flag
+  hasVolume: boolean;
 }
 
 // ─── Helper: SMA ──────────────────────────────────────────────────────────────
@@ -571,9 +573,10 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
     else if (recentTouches <= 7) touchScore = 1.2;
     else touchScore = 1.5;
 
-    // Factor 3: Volume Confirmation (0-1.0 pts)
+    // Factor 3: Volume Confirmation (0-1.0 pts) — skip when no volume available
     let volumeScore = 0;
-    if (c.touchCount > 0) {
+    const dataHasVolume = data.some(d => d.volume > 0);
+    if (dataHasVolume && c.touchCount > 0) {
       const avgVolAtTouch = c.totalVolumeAtTouches / c.touchCount;
       const volRatio = avgVolume > 0 ? avgVolAtTouch / avgVolume : 1;
       if (volRatio > 2.0) volumeScore = 1.0;
@@ -613,8 +616,9 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   const below = levelStrengths.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
 
   // 12. Adaptive gap enforcement — keep highest strength in cluster
+  // v2: enforce 5-10% gap between consecutive S/R lines
   function enforceGap(levels: LevelStrength[], targetCount: number): LevelStrength[] {
-    const gapSteps = [0.05, 0.04, 0.03, 0.025, 0.02, 0.015, 0.01, 0.008, 0.005];
+    const gapSteps = [0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.045, 0.04, 0.035, 0.03];
     for (const gapPct of gapSteps) {
       if (levels.length === 0) return [];
       const result: LevelStrength[] = [levels[0]];
@@ -774,7 +778,8 @@ function computeFeaturesAtBar(data: OHLCV[], barIdx: number): Record<string, num
 
   // ── Compute all base indicators ───────────────────────────────────────────
   const rsiVal = calcRSI(closes);
-  const mfiVal = calcMFI(slice);
+  const sliceHasVolume = slice.some(d => d.volume > 0);
+  const mfiVal = sliceHasVolume ? calcMFI(slice) : 50; // neutral when no volume
   const cciVal = calcCCI(slice);
   const stoch = calcStochastic(slice);
   const macd = calcMACD(closes);
@@ -872,12 +877,14 @@ function computeFeaturesAtBar(data: OHLCV[], barIdx: number): Record<string, num
     : rsiCurrent;
   const f_rsi = clamp(s_rsi + (rsiCurrent - rsi5ago) / 100 * 0.08, 0, 1);
 
-  // f_mfi — MFI with momentum correction
+  // f_mfi — MFI with momentum correction (skip when no volume)
   const mfiCurrent = mfiVal;
-  const mfi5ago = barIdx >= 5
+  const mfi5ago = (barIdx >= 5 && sliceHasVolume)
     ? calcMFI(data.slice(0, barIdx - 5 + 1))
     : mfiCurrent;
-  const f_mfi = clamp(s_mfi + (mfiCurrent - mfi5ago) / 100 * 0.08, 0, 1);
+  const f_mfi = sliceHasVolume
+    ? clamp(s_mfi + (mfiCurrent - mfi5ago) / 100 * 0.08, 0, 1)
+    : 0.5; // neutral when no volume
 
   // f_cci — CCI with momentum correction (scale: /200 instead of /100)
   const cciCurrent = cciVal;
@@ -1202,9 +1209,9 @@ function calculateScenarioProbabilities(
   const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
   const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
 
-  // Binary risk flags (per spec)
-  const overboughtRisk = (rsi > 70 || mfi > 80 || stochK > 80) ? 1 : 0;
-  const oversoldBounce = (rsi < 30 || mfi < 20 || stochK < 20) ? 1 : 0;
+  // Binary risk flags (per spec) — MFI only used when volume is available
+  const overboughtRisk = (rsi > 70 || (mfi > 80 && mfi !== 50) || stochK > 80) ? 1 : 0;
+  const oversoldBounce = (rsi < 30 || (mfi < 20 && mfi !== 50) || stochK < 20) ? 1 : 0;
 
   // Extract adaptive factors from ML model if trained
   let momentum = 0.7;
@@ -1288,11 +1295,15 @@ export function analyze(data: OHLCV[]): TAResult {
       calibrationFactors: { R1: 1, R2: 1, R3: 1, R4: 1, R5: 1 },
       scenarioSums: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0 },
       adaptiveFactors: { momentum: 0.7, volatility: 0.5, trend: 0.6 },
+      hasVolume: false,
     };
   }
 
   const closes = data.map(d => d.close);
   const price = closes[closes.length - 1];
+
+  // ── Detect volume availability ──────────────────────────────────────────
+  const hasVolume = data.some(d => d.volume > 0);
 
   // ── Moving Averages ──────────────────────────────────────────────────────
   const smaPeriods = [5, 10, 21, 50, 100, 200];
@@ -1306,7 +1317,8 @@ export function analyze(data: OHLCV[]): TAResult {
 
   // ── Oscillators ──────────────────────────────────────────────────────────
   const rsi = calcRSI(closes);
-  const mfi = calcMFI(data);
+  // MFI requires volume — return neutral 50 when no volume data
+  const mfi = hasVolume ? calcMFI(data) : 50;
   const cci = calcCCI(data);
   const stoch = calcStochastic(data);
   const williamsR = calcWilliamsR(data);
@@ -1321,7 +1333,8 @@ export function analyze(data: OHLCV[]): TAResult {
   const bb = calcBollingerBands(closes);
 
   // ── Volume ───────────────────────────────────────────────────────────────
-  const obv = calcOBV(data);
+  // OBV requires volume — return 0 when no volume data
+  const obv = hasVolume ? calcOBV(data) : 0;
 
   // ── Support / Resistance ────────────────────────────────────────────────
   const { resistances, supports, supportStrengths, resistanceStrengths, priceTargets } = calcSupportResistance(data, price);
@@ -1508,5 +1521,6 @@ export function analyze(data: OHLCV[]): TAResult {
     calibrationFactors: pathResult.calibrationFactors,
     scenarioSums: pathResult.scenarioSums,
     adaptiveFactors: scenarioResult.factors,
+    hasVolume,
   };
 }

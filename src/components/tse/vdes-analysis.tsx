@@ -77,6 +77,7 @@ export interface VdesAnalysisProps {
   supportStrengths: { price: number; strength: number; isTarget: boolean }[];
   resistanceStrengths: { price: number; strength: number; isTarget: boolean }[];
   priceTargets: { price: number; strength: number; isTarget: boolean }[];
+  hasVolume?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -99,7 +100,7 @@ const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
   R1: { text: 'صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
   R2: { text: 'صعود تدریجی — ورود در اصلاح توصیه می‌شود', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
   R3: { text: 'بازار رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
-  R4: { text: 'اصلاحی — احتیاط و کاهش حجم معاملات', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+  R4: { text: 'اصلاحی — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
   R5: { text: 'نزولی قوی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
 };
 
@@ -139,6 +140,7 @@ interface AnalysisContext {
   S1: number;
   R1: number;
   R2: number;
+  hasVolume: boolean;
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -212,7 +214,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — مومنتوم صعودی قوی:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
         <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#5C5650]'}>{rsiSignal}</b>
-        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز هیجانی صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست. عبور از +۱۰۰ معمولاً با حجم بالای خرید همراه است.</span>}
+        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز هیجانی صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
         {' '}قرار دارد.
         MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.
         CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
@@ -255,7 +257,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
           ? <span className="text-emerald-700">صعودی اما ضعیف</span>
           : <span className="text-red-700">نزولی اما ضعیف</span>}.
         هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت</span> : <span className="text-red-700">منفی</span>} — مومنتوم پایین.
-        اندیکاتورها تأییدکننده فاز رنج و عدم قطعیت بازار هستند. خروج از محدوده رنج نیاز به تأیید حجم دارد.
+        اندیکاتورها تأییدکننده فاز رنج و عدم قطعیت بازار هستند. خروج از محدوده رنج نیاز به تأیید مومنتوم دارد.
       </>
     );
   } else if (highestKey === 'R4') {
@@ -312,8 +314,8 @@ function generateAnalysisText(ctx: AnalysisContext) {
     </>
   );
 
-  // ── PARAGRAPH 4: Volume & OBV Analysis (scenario-aware) ──
-  const p4 = (
+  // ── PARAGRAPH 4: Volume & OBV Analysis (scenario-aware) — HIDDEN when no volume ──
+  const p4 = ctx.hasVolume ? (
     <>
       <strong className="text-amber-800">تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
       شاخص جریان ورودی پول (OBV) در سطح <b className="text-[#2D2A26]">{obv > 0 ? '+' : ''}{(obv / 1e6).toFixed(1)}M</b> قرار دارد
@@ -329,7 +331,11 @@ function generateAnalysisText(ctx: AnalysisContext) {
           {highestKey === 'R4' || highestKey === 'R5' ? ' این خروج پول تأیید‌کننده سناریوی نزولی و ضرورت حفظ سرمایه است.' : ''}
         </span>
       }
-      {' '}اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
+    </>
+  ) : (
+    <>
+      <strong className="text-amber-800">تحلیل نوسان پذیری:</strong>{' '}
+      اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
       {atr > currentPrice * 0.03
         ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-800">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
         : <span> نوسان معقول که نشان‌دهنده <b className="text-[#5C5650]">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
@@ -386,7 +392,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
           : ma21 > ma100
           ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
           : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
-        {' '}. حجم معاملات و شکست سطوح کلیدی را پایش کنید.
+        {' '}. شکست سطوح کلیدی و مومنتوم MACD را پایش کنید.
       </>
     );
   } else if (highestKey === 'R4') {
@@ -402,7 +408,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
           : ma21 > ma100
           ? <span className="text-amber-800">به نفع صعودی اما در حال ضعیف شدن</span>
           : <span className="text-red-700">به نفع نزولی — تأیید‌کننده فشار فروش</span>}
-        {' '}. توصیه: کاهش حجم معاملات و انتظار برای بازگشت به محدوده حمایت {toFa(S1)} ریال.
+        {' '}. توصیه: احتیاط و انتظار برای بازگشت به محدوده حمایت {toFa(S1)} ریال.
       </>
     );
   } else {
@@ -454,7 +460,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
     diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
-    supportStrengths, resistanceStrengths, priceTargets,
+    supportStrengths, resistanceStrengths, priceTargets, hasVolume,
   } = props;
 
   const vdesRef = useRef<HTMLDivElement>(null);
@@ -522,6 +528,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       trendDirection, trendAngle, trendR2, overallSignal,
       highestKey, highestProb, scenarios,
       S1: S1_level, R1: R1_level, R2: R2_level,
+      hasVolume: hasVolume ?? false,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -530,7 +537,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal,
     highestKey, highestProb, scenarios,
-    S1_level, R1_level, R2_level,
+    S1_level, R1_level, R2_level, hasVolume,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────
@@ -538,7 +545,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
     : rsi < 30 || mfi < 20
     ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
-    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. حجم معاملات و مومنتوم MACD را برای تأیید سیگنال پایش کنید.`;
+    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
 
   // ── File name helper ───────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);

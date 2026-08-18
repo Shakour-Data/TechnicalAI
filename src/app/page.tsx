@@ -325,10 +325,12 @@ export default function Home() {
                   { label: 'اولین', value: toFa(data.info.openPrice) },
                   { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-700' },
                   { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-700' },
-                  ...(isTgjuData ? [] : [
+                  ...(data.ta.hasVolume ? [
                     { label: 'حجم معاملات', value: (data.info.volume / 1e6).toFixed(1) + 'M' },
                     { label: 'ارزش معاملات', value: (data.info.value / 1e9).toFixed(1) + 'B' },
                     { label: 'تعداد معاملات', value: toFa(data.info.trades) },
+                    { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
+                  ] : [
                     { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
                   ]),
                 ].map((s) => (
@@ -425,6 +427,7 @@ export default function Home() {
                   supportStrengths={data.ta.supportStrengths}
                   resistanceStrengths={data.ta.resistanceStrengths}
                   priceTargets={data.ta.priceTargets}
+                  hasVolume={data.ta.hasVolume}
                 />
               </TabsContent>
             </Tabs>
@@ -433,7 +436,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-auto border-t border-[#E5DFD6] bg-[#F5F0E8] py-3 text-center text-[10px] text-[#8A837B]">
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v1.0
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v2.0
       </footer>
     </div>
   );

@@ -92,6 +92,19 @@ function computeSMA(closes: number[], period: number): (number | null)[] {
   return result;
 }
 
+// ── S/R strength-based line styling ───────────────────────────
+// v2: thickness + dash pattern reflect strength level
+function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0 | 1 | 2 } {
+  if (isTarget) {
+    return { lineWidth: 3, lineStyle: 0 };
+  }
+  if (strength >= 9) return { lineWidth: 4, lineStyle: 0 };      // very thick solid
+  if (strength >= 7) return { lineWidth: 3, lineStyle: 0 };      // thick solid
+  if (strength >= 5) return { lineWidth: 2, lineStyle: 1 };      // medium dotted
+  if (strength >= 3) return { lineWidth: 2, lineStyle: 2 };      // medium dashed
+  return { lineWidth: 1, lineStyle: 2 };                          // thin dashed
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Chart Component
 // ═══════════════════════════════════════════════════════════════════
@@ -140,6 +153,9 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
           const idx = time as number;
           return jalaliMap.get(idx) || String(idx);
         },
+      },
+      localization: {
+        priceFormatter: (price: number) => toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: 0 })),
       },
       width: el.clientWidth,
       height: el.clientHeight,
@@ -221,17 +237,15 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     // ── Support levels (with strength) ─────────────────────────
     const validSupports = (supportStrengths || []).filter(s => s.price > 0);
     validSupports.forEach((s, i) => {
-      const lw = s.isTarget ? 3 : Math.max(1, Math.round(s.strength / 3));
-      const ls = s.isTarget ? 0 : 2;
-      addPriceLine(candleSeries, s.price, s.isTarget ? '#16a34a' : SUPPORT_COLOR, lw, ls as 0 | 1 | 2, `S${i + 1} (${s.strength}/10)`, i < 6);
+      const style = srLineStyle(s.strength, s.isTarget);
+      addPriceLine(candleSeries, s.price, s.isTarget ? '#16a34a' : SUPPORT_COLOR, style.lineWidth, style.lineStyle, `S${i + 1} (${s.strength}/10)`, i < 6);
     });
 
     // ── Resistance levels (with strength) ─────────────────────
     const validResistances = (resistanceStrengths || []).filter(r => r.price > 0);
     validResistances.forEach((r, i) => {
-      const lw = r.isTarget ? 3 : Math.max(1, Math.round(r.strength / 3));
-      const ls = r.isTarget ? 0 : 2;
-      addPriceLine(candleSeries, r.price, r.isTarget ? '#dc2626' : RESISTANCE_COLOR, lw, ls as 0 | 1 | 2, `R${i + 1} (${r.strength}/10)`, i < 6);
+      const style = srLineStyle(r.strength, r.isTarget);
+      addPriceLine(candleSeries, r.price, r.isTarget ? '#dc2626' : RESISTANCE_COLOR, style.lineWidth, style.lineStyle, `R${i + 1} (${r.strength}/10)`, i < 6);
     });
 
     // ── Price targets from scenarios ───────────────────────────

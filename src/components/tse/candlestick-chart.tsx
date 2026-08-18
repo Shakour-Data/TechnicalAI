@@ -25,6 +25,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { candleDateToJalali, toPersianDigits } from '@/lib/jalali';
 
 /* ────────────────────────────────────────────────────────── TYPES ────────── */
 
@@ -72,15 +73,15 @@ interface CandlestickChartProps {
 
 /* ────────────────────────────────────────────────────────── CONSTANTS ──── */
 
-const BULL = '#34c98b';
-const BEAR = '#ef4d62';
-const BG = '#0b0f1a';
-const TXT = '#9db4c2';
-const GRID = 'rgba(255,255,255,0.04)';
-const TOOLBAR_BG = '#111827';
-const TOOLBAR_BORDER = 'rgba(255,255,255,0.08)';
+const BULL = '#22a366';
+const BEAR = '#e04060';
+const BG = '#FFFCF8';
+const TXT = '#5C5650';
+const GRID = 'rgba(0,0,0,0.04)';
+const TOOLBAR_BG = '#FFFCF8';
+const TOOLBAR_BORDER = '#E5DFD6';
 
-const PALETTE = ['#34c98b', '#ef4d62', '#ffb11b', '#3ad5db', '#a04ac5', '#ffffff'];
+const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#2D2A26'];
 
 const SMA_CFG = [
   { key: 'sma21', color: '#3ad5db', title: 'SMA 21' },
@@ -99,6 +100,19 @@ const FIB_LEVELS = [
 ];
 
 type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'fibonacci' | 'rectangle' | 'text' | 'brush' | 'measure' | 'arrow';
+
+// ── S/R strength-based line styling ───────────────────────────
+// v2: thickness + dash pattern reflect strength level
+function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0 | 1 | 2; color: string } {
+  if (isTarget) {
+    return { lineWidth: 3, lineStyle: 0, color: '' }; // caller sets color
+  }
+  if (strength >= 9) return { lineWidth: 4, lineStyle: 0, color: '' };      // very thick solid
+  if (strength >= 7) return { lineWidth: 3, lineStyle: 0, color: '' };      // thick solid
+  if (strength >= 5) return { lineWidth: 2, lineStyle: 1, color: '' };      // medium dotted
+  if (strength >= 3) return { lineWidth: 2, lineStyle: 2, color: '' };      // medium dashed
+  return { lineWidth: 1, lineStyle: 2, color: '' };                          // thin dashed
+}
 
 interface ToolDef {
   id: ToolType;
@@ -124,8 +138,8 @@ const TOOLS: ToolDef[] = [
 export function CandlestickChartSkeleton() {
   return (
     <div className="w-full">
-      <div className="h-10 bg-white/5 rounded-t-lg" />
-      <div className="w-full bg-white/5 rounded-b-lg" style={{ height: 520 }} />
+      <div className="h-10 bg-[#FFFCF8] border-b border-[#E5DFD6] rounded-t-lg" />
+      <div className="w-full bg-[#E5DFD6] rounded-b-lg" style={{ height: 520 }} />
     </div>
   );
 }
@@ -213,7 +227,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const y = chart.priceScale('right').priceToCoordinate(p.price);
           if (y == null) break;
           html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
-          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="sans-serif">${p.price.toFixed(0)}</text>`;
+          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="sans-serif">${toPersianDigits(p.price.toFixed(0))}</text>`;
           break;
         }
         case 'vline': {
@@ -247,8 +261,8 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             const y = chart.priceScale('right').priceToCoordinate(price);
             if (y == null) continue;
             html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
-            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#0b0f1a" rx="2" />`;
-            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="sans-serif">${level.label} ${price.toFixed(0)}</text>`;
+            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#FFFCF8" stroke="#E5DFD6" stroke-width="1" rx="2" />`;
+            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text`;
           }
           break;
         }
@@ -274,7 +288,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const x = chart.timeScale().timeToCoordinate(p.time as Time);
           const y = chart.priceScale('right').priceToCoordinate(p.price);
           if (x == null || y == null) break;
-          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#0b0f1a" stroke="${col}" stroke-width="1" rx="3" />`;
+          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#FFFCF8" stroke="#E5DFD6" stroke-width="1" rx="3" />`;
           html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="sans-serif">${d.text}</text>`;
           break;
         }
@@ -309,9 +323,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const bars = Math.abs(Math.round(p1.time - p0.time));
           const midX = (x0 + x1) / 2;
           const midY = (y0 + y1) / 2;
-          const label = `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} (${pctChg >= 0 ? '+' : ''}${pctChg.toFixed(1)}%) ${bars}bar`;
-          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#0b0f1a" stroke="${col}" stroke-width="1" rx="3" />`;
-          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="sans-serif">${label}</text>`;
+          const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(0))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
+          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#FFFCF8" stroke="#E5DFD6" stroke-width="1" rx="3" />`;
+          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="sans-serif">${label}</text`;
           break;
         }
         case 'arrow': {
@@ -343,15 +357,37 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       chartRef.current = null;
     }
 
+    // ── Build Jalali time map for Shamsi dates ──
+    const jalaliMap = new Map<number, string>();
+    data.forEach((d, i) => {
+      jalaliMap.set(i, candleDateToJalali(d.date, 'compact'));
+    });
+
+    // ── Persian numeral price formatter ──
+    const persianPriceFormatter = (price: number) => {
+      return toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: 0 }));
+    };
+
     const chart = createChart(chartEl, {
       layout: { background: { type: ColorType.Solid, color: BG }, textColor: TXT, fontSize: 11 },
       grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: {
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: '#E5DFD6',
         scaleMargins: { top: 0.05, bottom: 0.3 },
       },
-      timeScale: { borderColor: 'rgba(255,255,255,0.08)', rightOffset: 5, barSpacing: 6 },
+      timeScale: {
+        borderColor: '#E5DFD6',
+        rightOffset: 5,
+        barSpacing: 6,
+        tickMarkFormatter: (time: Time) => {
+          const idx = time as number;
+          return jalaliMap.get(idx) || String(idx);
+        },
+      },
+      localization: {
+        priceFormatter: persianPriceFormatter,
+      },
       width: chartEl.clientWidth,
       height,
     });
@@ -422,14 +458,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
 
       resistanceStrengths.forEach((r, i) => {
         if (r.price <= 0) return;
-        const lw = r.isTarget ? 3 : Math.max(1, Math.round(r.strength / 3));
-        const ls = r.isTarget ? 0 : 2;
+        const style = srLineStyle(r.strength, r.isTarget);
         const title = `R${i + 1} (${r.strength}/10)`;
         cs.createPriceLine({
           price: r.price,
-          color: r.isTarget ? '#ff6b6b' : BEAR,
-          lineWidth: lw,
-          lineStyle: ls as 0 | 1 | 2,
+          color: r.isTarget ? '#dc2626' : BEAR,
+          lineWidth: style.lineWidth,
+          lineStyle: style.lineStyle,
           axisLabelVisible: i < 6,
           title,
         });
@@ -437,14 +472,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
 
       supportStrengths.forEach((s, i) => {
         if (s.price <= 0) return;
-        const lw = s.isTarget ? 3 : Math.max(1, Math.round(s.strength / 3));
-        const ls = s.isTarget ? 0 : 2;
+        const style = srLineStyle(s.strength, s.isTarget);
         const title = `S${i + 1} (${s.strength}/10)`;
         cs.createPriceLine({
           price: s.price,
-          color: s.isTarget ? '#6bffb8' : BULL,
-          lineWidth: lw,
-          lineStyle: ls as 0 | 1 | 2,
+          color: s.isTarget ? '#16a34a' : BULL,
+          lineWidth: style.lineWidth,
+          lineStyle: style.lineStyle,
           axisLabelVisible: i < 6,
           title,
         });
@@ -673,8 +707,8 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             title={tool.label}
             className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all cursor-pointer ${
               activeTool === tool.id
-                ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30'
-                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                ? 'bg-amber-500/20 text-amber-800 ring-1 ring-amber-500/30'
+                : 'text-[#8A837B] hover:bg-[#F5F0E8] hover:text-[#2D2A26]'
             }`}
           >
             {tool.icon}
@@ -682,7 +716,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         ))}
 
         {/* Separator */}
-        <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />
+        <div className="w-px h-6 bg-[#E5DFD6] mx-1 shrink-0" />
 
         {/* Color picker */}
         {PALETTE.map((c) => (
@@ -691,20 +725,20 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             onClick={() => setActiveColor(c)}
             title={c}
             className={`shrink-0 w-6 h-6 rounded-full border-2 transition-all cursor-pointer ${
-              activeColor === c ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+              activeColor === c ? 'border-[#2D2A26] scale-110' : 'border-transparent hover:scale-105'
             }`}
             style={{ backgroundColor: c }}
           />
         ))}
 
         {/* Separator */}
-        <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />
+        <div className="w-px h-6 bg-[#E5DFD6] mx-1 shrink-0" />
 
         {/* Delete last */}
         <button
           onClick={handleDeleteLast}
           title="حذف آخر"
-          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-red-500/15 hover:text-red-400 transition-all cursor-pointer"
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-[#8A837B] hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -713,21 +747,21 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         <button
           onClick={handleClearAll}
           title="پاک کردن همه"
-          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-red-500/15 hover:text-red-400 transition-all cursor-pointer"
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-[#8A837B] hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
         >
           <X className="w-3.5 h-3.5" />
         </button>
 
         {/* Active tool label */}
-        <div className="mr-auto shrink-0 text-xs text-gray-500 font-medium" dir="rtl">
+        <div className="mr-auto shrink-0 text-xs text-[#8A837B] font-medium" dir="rtl">
           {TOOLS.find((t) => t.id === activeTool)?.label}
         </div>
       </div>
 
       {/* ── CHART + SVG OVERLAY ─────────────────────────────── */}
       <div
-        className="relative rounded-b-lg overflow-hidden border"
-        style={{ borderColor: TOOLBAR_BORDER, height }}
+        className="relative rounded-b-lg overflow-hidden border border-[#E5DFD6]"
+        style={{ height }}
       >
         {/* Chart container */}
         <div
@@ -772,7 +806,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
               placeholder="متن..."
               autoFocus
               dir="rtl"
-              className="bg-[#0b0f1a] border border-gray-600 rounded px-2 py-1 text-sm text-white outline-none focus:border-amber-500 w-32"
+              className="bg-[#FFFCF8] border border-[#E5DFD6] rounded px-2 py-1 text-sm text-[#2D2A26] outline-none focus:border-amber-500 w-32"
               onBlur={handleTextSubmit}
             />
           </div>
