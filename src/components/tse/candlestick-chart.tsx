@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import {
   createChart,
   CandlestickSeries,
@@ -150,6 +150,17 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
   const svgRef = useRef<SVGSVGElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const subscriberRef = useRef<{ dispose: () => void } | null>(null);
+  const crosshairSubRef = useRef<{ dispose: () => void } | null>(null);
+
+  // Crosshair legend state
+  const [hoverInfo, setHoverInfo] = useState<{ date: string; o: number; h: number; l: number; c: number; v: number; chg: number } | null>(null);
+
+  // Build Jalali date strings for all candles (memoized)
+  const jalaliDates = useMemo(() => {
+    return data.map((d) =>
+      isGregorianDate(d.date) ? candleDateToJalali(d.date, 'full') : formatJalaliString(d.date, 'full')
+    );
+  }, [data]);
 
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [activeTool, setActiveTool] = useState<ToolType>('cursor');
@@ -344,6 +355,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     svg.innerHTML = html;
   }, [drawings, currentDrawing]);
 
+  // OHLC change color helper
+  const chgColor = useCallback((o: number, c: number) => c >= o ? BULL : BEAR, []);
+
   /* - Chart Build ---------------------- */
   const build = useCallback(() => {
     const chartEl = chartContainerRef.current;
@@ -389,6 +403,32 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       height,
     });
     chartRef.current = chart;
+
+    // Crosshair move handler — show Shamsi date + OHLC legend
+    crosshairSubRef.current?.dispose();
+    crosshairSubRef.current = chart.subscribeCrosshairMove((param) => {
+      if (!param.time || param.time === undefined) {
+        setHoverInfo(null);
+        return;
+      }
+      const idx = param.time as number;
+      const candle = data[idx];
+      if (!candle) {
+        setHoverInfo(null);
+        return;
+      }
+      const prevCandle = idx > 0 ? data[idx - 1] : candle;
+      const chg = prevCandle.close > 0 ? ((candle.close - prevCandle.close) / prevCandle.close) * 100 : 0;
+      setHoverInfo({
+        date: jalaliDates[idx] || candle.date,
+        o: candle.open,
+        h: candle.high,
+        l: candle.low,
+        c: candle.close,
+        v: candle.volume,
+        chg,
+      });
+    }) as unknown as { dispose: () => void };
 
     // Numeric time index
     const candles = data.map((d, i) => ({
@@ -498,7 +538,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         setChartSize({ w: chartContainerRef.current.clientWidth, h: height });
       }
     });
-  }, [data, ta, height]);
+  }, [data, ta, height, jalaliDates]);
 
   /* - Re-render SVG when renderKey changes --------- */
   useEffect(() => {
@@ -524,6 +564,8 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       ro.disconnect();
       subscriberRef.current?.dispose();
       subscriberRef.current = null;
+      crosshairSubRef.current?.dispose();
+      crosshairSubRef.current = null;
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
@@ -671,11 +713,30 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
   }, []);
 
   /* - Render ------------------------- */
+  const fmt = (n: number) => toPersianDigits(n.toLocaleString('en', { maximumFractionDigits: 0 }));
+
   return (
     <div className="w-full">
+      {/* - CROSSHAIR LEGEND (Shamsi date + OHLC) ---------- */}
+      {hoverInfo && (
+        <div className="flex items-center gap-3 px-3 py-1.5 border border-[#e5e7eb] rounded-t-lg bg-[#ffffff] text-[11px]" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+          <span className="text-gray-500 font-medium">{hoverInfo.date}</span>
+          <div className="w-px h-3.5 bg-gray-200" />
+          <span className="text-gray-500">باز: <span className={chgColor(hoverInfo.o, hoverInfo.c) === BULL ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{fmt(hoverInfo.o)}</span></span>
+          <span className="text-gray-500">بالا: <span className="text-emerald-700 font-bold">{fmt(hoverInfo.h)}</span></span>
+          <span className="text-gray-500">پایین: <span className="text-red-700 font-bold">{fmt(hoverInfo.l)}</span></span>
+          <span className="text-gray-500">بسته: <span className={chgColor(hoverInfo.o, hoverInfo.c) === BULL ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{fmt(hoverInfo.c)}</span></span>
+          {hoverInfo.v > 0 && (
+            <span className="text-gray-500">حجم: <span className="text-gray-900 font-bold">{toPersianDigits((hoverInfo.v / 1e6).toFixed(1))}M</span></span>
+          )}
+          <span className={`font-bold ${hoverInfo.chg >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+            {hoverInfo.chg >= 0 ? '▲' : '▼'} {toPersianDigits(Math.abs(hoverInfo.chg).toFixed(2))}٪
+          </span>
+        </div>
+      )}
       {/* - TOOLBAR --------------------- */}
       <div
-        className="flex items-center gap-1 px-2 py-1.5 rounded-t-lg border border-b-0 overflow-x-auto flex-nowrap"
+        className={`flex items-center gap-1 px-2 py-1.5 overflow-x-auto flex-nowrap border ${hoverInfo ? 'border-t-0 rounded-b-lg' : 'rounded-t-lg border-b-0'}`}
         style={{ backgroundColor: TOOLBAR_BG, borderColor: TOOLBAR_BORDER }}
       >
         {TOOLS.map((tool) => (

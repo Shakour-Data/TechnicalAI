@@ -116,6 +116,13 @@
   }
 }
 
+/* ── Force Vazirmatn in lightweight-charts canvas (canvas reads computed font) ── */
+[data-chart],
+[data-chart] *,
+[data-chart] canvas {
+  font-family: 'Vazirmatn', sans-serif !important;
+}
+
 /* Hide lightweight-charts watermark (outside layer for higher priority) */
 a[href*="tradingview.com"] {
   display: none !important;

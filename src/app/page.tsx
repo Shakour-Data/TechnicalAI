@@ -191,7 +191,7 @@ export default function Home() {
     if (loading || refreshing) return;
     setRefreshing(true);
     try {
-      await handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey);
+      await handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector);
     } finally {
       setRefreshing(false);
     }

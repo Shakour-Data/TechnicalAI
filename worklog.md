@@ -143,3 +143,45 @@ Stage Summary:
 - Index/count numbers (R1-R5, S1-S5, path indices, path counts) use `toFa()` 
 - Volume-related text (MFI references in analysis, MFI in strategy) is conditionally hidden when `hasVolume` is false
 - ta-engine.ts MFI/OBV neutral values (50/0) confirmed correct — no changes needed
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Fix remaining L-requirements (L6 crosshair legend, L4 auto-refresh bug, L5 chart font)
+
+Work Log:
+- **L6: Added crosshair date legend with Shamsi dates on chart hover**
+  - In `src/components/tse/candlestick-chart.tsx`:
+    - Added `useMemo` import and `hoverInfo` state for crosshair legend data
+    - Created `jalaliDates` memoized array that pre-computes full Shamsi date strings for all candles
+    - Added `chart.subscribeCrosshairMove()` handler that shows OHLC data + Shamsi date on hover
+    - Added `crosshairSubRef` for proper cleanup on unmount
+    - Rendered crosshair legend bar above toolbar with: Shamsi date (full format), OHLC values in Persian numerals, volume (if available), and change percentage
+    - Legend visually connects to toolbar (no bottom border when legend active, toolbar loses top rounded corners)
+    - All numbers in legend use `toPersianDigits()` for Persian numeral display
+- **L4: Fixed auto-refresh bug for industry indices**
+  - In `src/app/page.tsx`:
+    - `doRefresh()` was missing `params.finpySector` argument when calling `handleSelect()`
+    - Fixed: `handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector)`
+    - This ensures industry indices refresh correctly via finpy-tse instead of falling back
+- **L5: Enforced Vazirmatn font in lightweight-charts canvas text**
+  - In `src/app/globals.css`:
+    - Added CSS rules targeting `[data-chart]`, `[data-chart] *`, and `[data-chart] canvas` with `font-family: 'Vazirmatn', sans-serif !important`
+    - This ensures the canvas-rendered axis labels and price labels use Vazirmatn
+- **Verified all requirements via agent-browser:**
+  - Page loads with GET / 200, no compilation errors
+  - Background: `rgb(255, 255, 255)` = white ✅ (L2)
+  - Font: `Vazirmatn, sans-serif` ✅ (L5)
+  - Text color: `rgb(26, 26, 26)` = dark gray ✅ (L3)
+  - No white text on white/transparent backgrounds ✅ (L3)
+  - Footer has `mt-auto` for sticky behavior ✅
+  - Search dropdown with category tabs works correctly ✅
+  - Mobile responsive layout (375x812) verified ✅
+  - All API routes return 200 (tgju-instruments, instruments) ✅
+  - ESLint passes cleanly ✅
+
+Stage Summary:
+- Crosshair now shows full Shamsi date (e.g., "۱۵ خرداد ۱۴۰۴") + OHLC values + change % on hover
+- Auto-refresh now correctly passes finpySector for industry indices
+- Vazirmatn font enforced via CSS on chart canvas elements
+- All L-requirements verified: L2 (white bg) ✅, L3 (no white text) ✅, L4 (auto-refresh) ✅, L5 (Vazir only) ✅, L6 (Shamsi dates) ✅
