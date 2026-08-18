@@ -236,12 +236,17 @@ export default function Home() {
 
   const chartTa = useMemo(() => data?.ta ? {
     sma: data.ta.sma,
+    ema: data.ta.ema ?? {},
     bollingerBands: data.ta.bollingerBands,
     resistances: data.ta.resistances,
     supports: data.ta.supports,
     supportStrengths: data.ta.supportStrengths,
     resistanceStrengths: data.ta.resistanceStrengths,
     sar: data.ta.sar,
+    smaArray: data.ta.smaArray,
+    emaArray: data.ta.emaArray,
+    ichimokuArrays: data.ta.ichimokuArrays,
+    vwapArray: data.ta.vwapArray,
   } : null, [data?.ta]);
 
   const isTgjuData = data?.isTgju;
@@ -527,7 +532,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500">
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v3.0
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v3.1 — ابزارهای تریدینگ ویو
       </footer>
     </div>
   );

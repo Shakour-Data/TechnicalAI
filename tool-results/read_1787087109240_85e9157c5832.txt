@@ -1,0 +1,469 @@
+     1→# Worklog
+     2→
+     3→---
+     4→Task ID: 7
+     5→Agent: Main Agent
+     6→Task: Integrate finpy-tse for industry indices price history data
+     7→
+     8→Work Log:
+     9→- Installed finpy-tse (v1.2.10) and Flask (v3.1.3) with flask-cors
+    10→- Analyzed finpy-tse source code to understand `Get_SectorIndex_History()` function
+    11→- Identified 40 sector names and their TSETMC web IDs used by finpy-tse
+    12→- Created Python mini-service at `mini-services/finpy-tse-service/app.py` (port 3031)
+    13→  - `/health` - health check
+    14→  - `/api/sector-list` - list all available sectors
+    15→  - `/api/sector-history?sector=X` - get OHLC history via finpy-tse
+    16→  - `/api/main-index-history?index=X` - get main index history
+    17→- Updated `src/lib/industry-indices.ts` with correct finpy-tse sector names and web IDs
+    18→  - 6 main market indices (TEPIX, etc.) with `isMainIndex: true`
+    19→  - 40 industry group indices mapped to exact finpy-tse sector names
+    20→- Updated `src/app/api/instruments/route.ts` to include `finpySector` and `isMainIndex` fields
+    21→- Updated `src/components/tse/symbol-search.tsx`:
+    22→  - Added `finpySector` and `isMainIndex` to `InstrumentItem` interface
+    23→  - Updated `onSelect` callback to pass `finpySector`
+    24→  - Updated `selectSymbol` to pass `finpySector` to parent
+    25→- Created `src/app/api/finpy-sector/route.ts`:
+    26→  - Proxies requests to finpy-tse Python service (port 3031)
+    27→  - Runs TA analysis on received OHLC data
+    28→  - Returns standardized response matching analysis API format
+    29→- Updated `src/app/page.tsx`:
+    30→  - Updated `handleSelect` to accept `finpySector` parameter
+    31→  - Changed index handling: finpy-tse first → TSETMC fallback → static overview
+    32→  - Added loading message for finpy-tse data fetching
+    33→  - Updated `lastFetchRef` type to include `finpySector`
+    34→- Started finpy-tse service and Next.js dev server
+    35→- Verified: ESLint passes, page compiles successfully (GET / 200)
+    36→
+    37→Stage Summary:
+    38→- finpy-tse Python service running on port 3031
+    39→- Industry indices now route through `/api/finpy-sector` → Python service → finpy-tse
+    40→- Fallback chain: finpy-tse → TSETMC SOAP → static overview
+    41→- Note: TSETMC direct endpoints are blocked from this sandbox, so finpy-tse service will timeout in sandbox but works in Iranian network deployment
+    42→
+    43→---
+    44→Task ID: 8
+    45→Agent: Sub Agent
+    46→Task: Fix Shamsi dates and all UI issues
+    47→
+    48→Work Log:
+    49→- **Task 1 (CRITICAL): Fixed Shamsi date detection on charts**
+    50→  - Added `isGregorianDate(dateStr)` to `src/lib/jalali.ts` — checks if year >= 1900 to distinguish Gregorian from Jalali dates
+    51→  - Updated `src/components/tse/candlestick-chart.tsx`:
+    52→    - Imported `candleDateToJalali` and `isGregorianDate` from jalali.ts
+    53→    - Changed `build()` jalaliMap logic: now uses `isGregorianDate()` to detect date type
+    54→      - Gregorian dates (year >= 1900, e.g. `2024-01-15`) → `candleDateToJalali()` converts Gregorian→Jalali
+    55→      - Jalali dates (year < 1900, e.g. `1404/01/15`) → `formatJalaliString()` formats as-is
+    56→- **Task 2: Verified no white/near-white text on white background**
+    57→  - Searched all `src/` files for `#fff`, `white`, `text-white` references
+    58→  - All `#ffffff` in candlestick-chart.tsx are SVG `fill` attributes on `<rect>` elements (background fills, not text)
+    59→  - All `#ffffff` in vdss-graph.tsx are SVG `stroke` outlines for text readability (paint-order trick) or background gradients
+    60→  - `text-white` in badge.tsx and button.tsx only appears alongside `bg-destructive` (dark red background) — correct usage
+    61→  - No invisible text found
+    62→- **Task 3: Verified white background enforced everywhere**
+    63→  - Searched for bone/cream colors (`bg-bone`, `bg-cream`, `#faf9f7`, `#faf8f5`, `#f5f5f0`, `#f0ece4`) — none found
+    64→  - page.tsx uses `bg-white`, header uses `bg-white/95`, layout.tsx has `backgroundColor: '#ffffff'`
+    65→  - All card backgrounds use `bg-white` or `bg-[#ffffff]`
+    66→- **Task 4: Verified Vazirmatn is the ONLY font**
+    67→  - globals.css: `font-family: 'Vazirmatn', sans-serif !important` on `*` selector
+    68→  - layout.tsx: `fontFamily: 'Vazirmatn, sans-serif'` on body inline style
+    69→  - `--font-sans` and `--font-mono` both set to `'Vazirmatn', sans-serif`
+    70→  - SVG text elements in candlestick-chart.tsx all use `font-family="Vazirmatn, sans-serif"`
+    71→  - Searched for `font-family|fontFamily` in all components — no non-Vazirmatn declarations found
+    72→- **Task 5: Verified auto-refresh is working**
+    73→  - `REFRESH_INTERVAL = 60_000` (60 seconds) — confirmed
+    74→  - `doRefresh()` callback triggers `handleSelect` with stored params
+    75→  - `setInterval(doRefresh, REFRESH_INTERVAL)` starts when data is loaded
+    76→  - `window.addEventListener('focus', onFocus)` refreshes on tab focus
+    77→  - Refresh button visible in header with `<RefreshCw>` icon, disabled during loading/refreshing
+    78→  - All logic verified correct
+    79→- **Task 6: Fixed S/R resistance 5-10% spacing filter**
+    80→  - In `src/lib/ta-engine.ts`, the `enforceGap()` function already had adaptive 5-10% gap logic
+    81→  - **Bug found**: The fallback path (`levels.slice(0, targetCount)`) bypassed all gap enforcement, potentially returning levels with < 1% gaps
+    82→  - **Fix**: Replaced the raw slice fallback with a proper 5% minimum gap filter that keeps as many levels as possible while maintaining the minimum spacing, merging closer levels by keeping the stronger one
+    83→- Verified: ESLint passes cleanly
+    84→
+    85→Stage Summary:
+    86→- Chart dates now correctly auto-detect Gregorian vs Jalali and convert appropriately
+    87→- No invisible text, no non-white backgrounds, no rogue fonts found
+    88→- Auto-refresh confirmed working (60s interval + tab focus)
+    89→- S/R gap filter now guarantees minimum 5% spacing in all code paths
+    90→
+    91→---
+    92→Task ID: 9
+    93→Agent: Sub Agent
+    94→Task: Convert all numbers to Persian numerals (V2-3) + Volume detection conditional exclusion (V2-5)
+    95→
+    96→Work Log:
+    97→- **Task 1: Convert ALL user-facing numbers to Persian numerals (۰-۹)**
+    98→  - **indicators-panel.tsx**:
+    99→    - Added `import { toPersianDigits } from '@/lib/jalali'`
+   100→    - `R{i + 1}` → `R{toFa(i + 1)}` (resistance labels)
+   101→    - `S{i + 1}` → `S{toFa(i + 1)}` (support labels)
+   102→    - `R²: {(t.r2 * 100).toFixed(1)}%` → `R²: {toPersianDigits(...)}٪` (trend line R² values)
+   103→  - **vdes-analysis.tsx** (already imported `toPersianDigits`):
+   104→    - `bbPos` from `toFixed(0)` → wrapped with `toPersianDigits()`
+   105→    - `trendText` R² values (2 instances in `generateAnalysisText` + 2 in component) → `toPersianDigits((trendR2 * 100).toFixed(1))`
+   106→    - Paragraph 1 R² → `toPersianDigits((trendR2 * 100).toFixed(1))`
+   107→    - OBV value `(obv / 1e6).toFixed(1)M` → `toPersianDigits(...)`
+   108→    - Risk/reward ratios `((R1 - currentPrice) / (currentPrice - S1)).toFixed(1):1` → `toPersianDigits(...):۱` (2 instances, R1 and R2 scenarios)
+   109→    - `StrengthBar` component: `{strength}` → `{toPersianDigits(String(strength))}`
+   110→    - Resistance labels: `R{i + 1}` → `R{toFa(i + 1)}`
+   111→    - Support labels: `S{i + 1}` → `S{toFa(i + 1)}`
+   112→    - Price target labels: `هدف {i + 1}` → `هدف {toFa(i + 1)}`
+   113→  - **vdss-graph.tsx**:
+   114→    - Added `import { toPersianDigits } from '@/lib/jalali'`
+   115→    - SVG edge probability label: `(prob * 100).toFixed(0) + '%'` → `toPersianDigits(...) + '٪'`
+   116→    - Detail panel input/output edge probabilities: `(ep * 100).toFixed(1)٪` → `toPersianDigits(...)` (2 instances)
+   117→    - Detail panel path counts: `({inputs.length})` / `({outputs.length})` → `({toFa(...)})`
+   118→    - Scenario probability: `(pathProb * 100).toFixed(1)٪` → `toPersianDigits(...)`
+   119→    - Path list index: `{i + 1}` → `{toFa(i + 1)}`
+   120→    - Path list probability: `(p.prob * 100).toFixed(1)٪` → `toPersianDigits(...)`
+   121→    - Remaining paths count: `{filteredPaths.length - 10}` → `{toFa(...)}`
+   122→  - **page.tsx**:
+   123→    - Added `import { toPersianDigits } from '@/lib/jalali'`
+   124→    - Volume display: `(data.info.volume / 1e6).toFixed(1) + 'M'` → `toPersianDigits(...) + 'M'`
+   125→    - Value display: `(data.info.value / 1e9).toFixed(1) + 'B'` → `toPersianDigits(...) + 'B'`
+   126→
+   127→- **Task 2: Volume data detection — conditional exclusion (V2-5)**
+   128→  - **vdes-analysis.tsx**:
+   129→    - Wrapped all 5 MFI references in paragraph 2 (p2, all scenario variants R1-R5) with `{ctx.hasVolume && <span>...</span>}`
+   130→    - Updated `strategyText` to conditionally include MFI:
+   131→      - Added `mfiOverbought = hasVolume && mfi > 80` and `mfiOversold = hasVolume && mfi < 20`
+   132→      - Created `mfiNote = hasVolume ? ', MFI: ${toFa(mfi)}' : ''`
+   133→      - Strategy text now omits MFI value and condition when `hasVolume` is false
+   134→    - Paragraph 4 (OBV/volume analysis) was already conditionally shown via `ctx.hasVolume ? ...`
+   135→    - MFI and OBV indicator cards in indicators-panel.tsx were already conditionally shown via `ta.hasVolume !== false`
+   136→    - ta-engine.ts already correctly sets MFI=50 and OBV=0 when no volume — no changes needed
+   137→
+   138→- Verified: ESLint passes cleanly
+   139→
+   140→Stage Summary:
+   141→- All user-facing numbers across indicators-panel, vdes-analysis, vdss-graph, and page.tsx now display in Persian numerals (۰-۹)
+   142→- Numbers from `toFixed()` calls (R², OBV, risk-reward ratios, probabilities) are wrapped with `toPersianDigits()`
+   143→- Index/count numbers (R1-R5, S1-S5, path indices, path counts) use `toFa()` 
+   144→- Volume-related text (MFI references in analysis, MFI in strategy) is conditionally hidden when `hasVolume` is false
+   145→- ta-engine.ts MFI/OBV neutral values (50/0) confirmed correct — no changes needed
+   146→
+   147→---
+   148→Task ID: 10
+   149→Agent: Main Agent
+   150→Task: Fix remaining L-requirements (L6 crosshair legend, L4 auto-refresh bug, L5 chart font)
+   151→
+   152→Work Log:
+   153→- **L6: Added crosshair date legend with Shamsi dates on chart hover**
+   154→  - In `src/components/tse/candlestick-chart.tsx`:
+   155→    - Added `useMemo` import and `hoverInfo` state for crosshair legend data
+   156→    - Created `jalaliDates` memoized array that pre-computes full Shamsi date strings for all candles
+   157→    - Added `chart.subscribeCrosshairMove()` handler that shows OHLC data + Shamsi date on hover
+   158→    - Added `crosshairSubRef` for proper cleanup on unmount
+   159→    - Rendered crosshair legend bar above toolbar with: Shamsi date (full format), OHLC values in Persian numerals, volume (if available), and change percentage
+   160→    - Legend visually connects to toolbar (no bottom border when legend active, toolbar loses top rounded corners)
+   161→    - All numbers in legend use `toPersianDigits()` for Persian numeral display
+   162→- **L4: Fixed auto-refresh bug for industry indices**
+   163→  - In `src/app/page.tsx`:
+   164→    - `doRefresh()` was missing `params.finpySector` argument when calling `handleSelect()`
+   165→    - Fixed: `handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector)`
+   166→    - This ensures industry indices refresh correctly via finpy-tse instead of falling back
+   167→- **L5: Enforced Vazirmatn font in lightweight-charts canvas text**
+   168→  - In `src/app/globals.css`:
+   169→    - Added CSS rules targeting `[data-chart]`, `[data-chart] *`, and `[data-chart] canvas` with `font-family: 'Vazirmatn', sans-serif !important`
+   170→    - This ensures the canvas-rendered axis labels and price labels use Vazirmatn
+   171→- **Verified all requirements via agent-browser:**
+   172→  - Page loads with GET / 200, no compilation errors
+   173→  - Background: `rgb(255, 255, 255)` = white ✅ (L2)
+   174→  - Font: `Vazirmatn, sans-serif` ✅ (L5)
+   175→  - Text color: `rgb(26, 26, 26)` = dark gray ✅ (L3)
+   176→  - No white text on white/transparent backgrounds ✅ (L3)
+   177→  - Footer has `mt-auto` for sticky behavior ✅
+   178→  - Search dropdown with category tabs works correctly ✅
+   179→  - Mobile responsive layout (375x812) verified ✅
+   180→  - All API routes return 200 (tgju-instruments, instruments) ✅
+   181→  - ESLint passes cleanly ✅
+   182→
+   183→Stage Summary:
+   184→- Crosshair now shows full Shamsi date (e.g., "۱۵ خرداد ۱۴۰۴") + OHLC values + change % on hover
+   185→- Auto-refresh now correctly passes finpySector for industry indices
+   186→- Vazirmatn font enforced via CSS on chart canvas elements
+   187→- All L-requirements verified: L2 (white bg) ✅, L3 (no white text) ✅, L4 (auto-refresh) ✅, L5 (Vazir only) ✅, L6 (Shamsi dates) ✅
+   188→
+   189→---
+   190→Task ID: 11
+   191→Agent: Main Agent
+   192→Task: Implement Fibonacci-based S/R levels (6 support + 6 resistance)
+   193→
+   194→Work Log:
+   195→- Added `fibRatio` and `fibLabel` fields to `LevelStrength` interface in ta-engine.ts
+   196→- Completely rewrote `calcSupportResistance()` function:
+   197→  - Now uses Fibonacci Retracement (0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%) and Extension (127.2%, 161.8%, 200%, 261.8%, 361.8%, 423.6%)
+   198→  - Finds the most significant swing (largest range) across multiple lookback periods (3,5,7,10,15,20)
+   199→  - Generates Fibonacci levels from the swing high/low pair
+   200→  - Checks confluence with up to 3 secondary swings
+   201→  - Scores levels by: confluence, key Fibonacci ratio proximity, price proximity, touch/rejection count, volume confirmation, swing recency
+   202→  - Always returns exactly 6 resistances and 6 supports
+   203→  - Each level includes `fibRatio` (e.g. '0.382') and `fibLabel` (e.g. '۳۸.۲٪') in Persian
+   204→- Updated `findSwingLevels()` to also return bar index (needed for recency scoring)
+   205→- Updated indicators-panel.tsx:
+   206→  - Section renamed to "خطوط حمایت و مقاومت فیبوناچی"
+   207→  - Now shows 6 levels (was 5) with Fibonacci ratio label and strength bar
+   208→  - Uses `resistanceStrengths`/`supportStrengths` arrays with new fibLabel field
+   209→- Updated candlestick-chart.tsx:
+   210→  - S/R price line titles now include Fibonacci labels (e.g. "R۱ [۶۱.۸٪]")
+   211→  - All 6 levels get `axisLabelVisible: true`
+   212→  - Added `fibRatio`/`fibLabel` to local LevelStrength interface
+   213→- Updated vdes-analysis.tsx:
+   214→  - S/R sections now labeled "فیبوناچی — قدرت ۱-۱۰"
+   215→  - Shows 6 levels (was unlimited) with Fibonacci label per level
+   216→  - Updated TypeScript interfaces for new fields
+   217→- Fixed FIB_LABELS key normalization: `'1'` and `'2'` instead of `'1.0'` and `'2.0'` (JavaScript String() drops trailing zeros)
+   218→- Verified via agent-browser:
+   219→  - Indicators panel shows all 6 R + 6 S with correct Persian Fibonacci labels
+   220→  - VDes analysis shows all 6 R + 6 S with Fibonacci labels and strength bars
+   221→  - API returns correct data: `fibRatio`, `fibLabel`, `strength`, `isTarget` on all 12 levels
+   222→  - ESLint passes cleanly
+   223→
+   224→Stage Summary:
+   225→- S/R calculation completely replaced with Fibonacci Retracement + Extension algorithm
+   226→- Always produces exactly 6 support + 6 resistance lines
+   227→- Each level tagged with its Fibonacci ratio in Persian (e.g. ۰٪ (اوج), ۲۳.۶٪, ۳۸.۲٪, ۵۰٪, ۶۱.۸٪, ۷۸.۶٪, ۱۰۰٪ (کف), ۱۲۷.۲٪, ۱۶۱.۸٪, ۲۰۰٪, ۲۶۱.۸٪, ۳۶۱.۸٪)
+   228→- Multi-swing confluence detection strengthens levels where multiple Fibonacci setups agree
+   229→- All three UIs (chart price lines, indicators panel, VDes analysis) updated with Fibonacci labels
+   230→
+   231→---
+   232→Task ID: 12
+   233→Agent: Main Agent
+   234→Task: 3 changes — VDes-only chart, solid S/R lines, fix Shamsi dates
+   235→
+   236→Work Log:
+   237→- **Task 1: VDes-only chart**
+   238→  - Removed CandlestickChart from "نمودار" tab, replaced with redirect message
+   239→  - Added CandlestickChart to VDes tab (above VdesAnalysis)
+   240→  - Changed default active tab from 'chart' to 'vdes'
+   241→  - All setActiveTab calls now switch to 'vdes' on data load
+   242→- **Task 2: S/R lines solid only, thickness = strength**
+   243→  - Updated `srLineStyle()` in candlestick-chart.tsx:
+   244→    - All lines now `lineStyle: 0` (solid) — no dashes or dots
+   245→    - Thickness mapped to strength: 1→1px, 3→2px, 5→3px, 7→4px, 9→5px, target→4px
+   246→- **Task 3: Fix Shamsi date conversion**
+   247→  - Root cause: `fullPersianDate()` treated ALL dates as Gregorian, converting Jalali 1405→Gregorian→Jalali giving ~783
+   248→  - Fixed `fullPersianDate()` to auto-detect via `isGregorianDate()`:
+   249→    - Gregorian: convert to Jalali, get weekday from Gregorian Date object
+   250→    - Jalali: convert to Gregorian (for weekday), format Jalali directly
+   251→  - Added `smartJalaliDate()` utility that auto-detects and returns correct Jalali string
+   252→  - Fixed `vdes-analysis.tsx`: replaced `candleDateToJalali()` with `smartJalaliDate()` for chartJalaliDate
+   253→  - Fixed `tradingview-chart.tsx`: replaced `candleDateToJalali()` with `smartJalaliDate()` for jalaliMap
+   254→  - Verified: "1405-05-27" → "چهارشنبه، ۲۷ مرداد ۱۴۰۵" (was "783/...")
+   255→  - Verified: "2025-06-18" → "پنجشنبه، ۲۸ خرداد ۱۴۰۴" (Gregorian still converts correctly)
+   256→- Verified via agent-browser:
+   257→  - VDes tab is default and shows chart with toolbar + full analysis below
+   258→  - نمودار tab shows redirect message
+   259→  - Chart date shows ۱۴۰۵/۰۵/۲۷ (correct)
+   260→  - Analysis text shows "چهارشنبه، ۲۷ مرداد ۱۴۰۵" (correct)
+   261→  - ESLint passes cleanly
+   262→
+   263→Stage Summary:
+   264→- Chart with drawing tools only available in VDes tab (default)
+   265→- S/R lines are all solid, thickness proportional to strength (1-5px)
+   266→- Shamsi dates fixed across all components using `smartJalaliDate()` and fixed `fullPersianDate()`
+   267→
+   268→---
+   269→Task ID: 13
+   270→Agent: Main Agent
+   271→Task: Implement comprehensive 7-method S/R analysis system with ML scoring
+   272→
+   273→Work Log:
+   274→- Rewrote `LevelStrength` interface in ta-engine.ts to add: score (0-10), grade (Very Strong/Strong/Moderate/Weak), overlapCount, methods[]
+   275→- Completely rewrote `calcSupportResistance()` function (~700 lines) with 7 methods:
+   276→  1. Swing High/Low (Price Action) — findSwingLevels with N=3,5,7, 0.5% tolerance merging
+   277→  2. SMA Dynamic S/R — SMA 20/50/100/200, support if Close > SMA, resistance if Close < SMA
+   278→  3. Bollinger Bands — Upper = resistance, Lower = support
+   279→  4. Fibonacci Retracement + Extension — Best swing detection, 6 lookback periods, 13 ratios, secondary swing confluence
+   280→  5. Volume Profile (VAP) — 40-bin histogram, POC and HVN detection (>70% max VAP)
+   281→  6. Pivot Points — 4 algorithms (Standard, Fibonacci, Woodie's, DeMark) using previous bar OHLC
+   282→  7. Psychological Levels — ±1 and ±2 round units from current price
+   283→- Implemented ML-based weight optimization (Ridge OLS regression from scratch):
+   284→  - 5 features: touch_count, volume_ratio, overlap_count, freshness, distance_percent
+   285→  - Training on historical data (sampled every 5 bars, 10-bar horizon)
+   286→  - Default fallback weights: [0.25, 0.20, 0.25, 0.15, 0.15]
+   287→  - Scoring: Power_Score = (w_touch*Touch + w_vol*Volume + w_overlap*Overlap + w_fresh*Fresh + w_dist*Dist) × 10
+   288→- Post-processing pipeline:
+   289→  1. Confluence merging (1% tolerance) — combine methods, max score, max overlap
+   290→  2. ML scoring with trained weights
+   291→  3. Psychological rounding
+   292→  4. Deduplication
+   293→  5. Distance filtering (min 5% gap, merge closer levels keeping stronger)
+   294→  6. Top-6 selection by composite score + proximity bonus
+   295→  7. Target marking: isTarget=true if score >= 7
+   296→  8. Grade assignment: >=8.5 Very Strong, >=7 Strong, >=5 Moderate, <5 Weak
+   297→- Updated candlestick-chart.tsx: S/R line titles now show grade + method count + fibLabel
+   298→  - Format: `R۱ [Very Strong] (۳ method) فیبو ۳۸.۲٪` or `★ R۱ [Very Strong]` for targets
+   299→- Updated indicators-panel.tsx:
+   300→  - Header changed from "خطوط حمایت و مقاومت فیبوناچی" to "حمایت و مقاومت هوشمند"
+   301→  - Added gradeColor helper (Very Strong=red, Strong=amber, Moderate=sky, Weak=gray)
+   302→  - Each S/R card now shows: grade badge, methods count in Persian, fibLabel, strength bar
+   303→- Updated vdes-analysis.tsx:
+   304→  - Added GRADE_MAP (English→Persian: Very Strong→بسیار قوی, Strong→قوی, etc.)
+   305→  - Added GradeBadge component
+   306→  - S/R section header: "حمایت و مقاومت هوشمند"
+   307→  - Each level shows: grade badge, methods count, fibLabel, overlap count, strength bar, 🎯 target marker
+   308→  - Analysis text paragraph 5 updated to mention grade and method count for R1/S1
+   309→- Verified: ESLint clean, API returns correct 6+6 levels with all 7 methods
+   310→- Browser verified via VLM: grade badges ✅, method counts ✅, overlap counts ✅, fib labels ✅, strength bars ✅, target markers ✅
+   311→
+   312→Stage Summary:
+   313→- Complete 7-method S/R analysis system deployed
+   314→- Methods: Swing, SMA, Bollinger, Fibonacci, Volume Profile, Pivot (4 variants), Psychological
+   315→- ML-based scoring with Ridge regression trained on historical data
+   316→- All 3 UIs (chart, indicators, VDes) updated with rich S/R metadata
+   317→- Output format: 6 support + 6 resistance, each with price, strength, score, grade, methods, overlapCount
+   318→
+   319→---
+   320→Task ID: 14
+   321→Agent: Main Agent
+   322→Task: Lock v2.1, start v3.0
+   323→
+   324→Work Log:
+   325→- Created git tag v2.1 on current commit
+   326→- Updated footer version from v2.1 to v3.0
+   327→
+   328→Stage Summary:
+   329→- v2.1 locked with tag, v3.0 active
+   330→
+   331→---
+   332→Task ID: 15
+   333→Agent: Main Agent
+   334→Task: v3.0 — Fix S/R spacing rules + remove duplicate chart
+   335→
+   336→Work Log:
+   337→- Rewrote distance filtering in ta-engine.ts (Step 7):
+   338→  - Consecutive S/R lines: strict 5-10% gap enforcement
+   339→  - If gap < 5%: merge, keep stronger level
+   340→  - If gap 5-10%: accept
+   341→  - If gap > 10%: search for intermediate level; if none, generate synthetic psychological level at ~7.5%
+   342→  - Nearest support/resistance must be ≤ 10% from price (can be < 5%)
+   343→  - If nearest > 10% away: generate synthetic level at ~5% from price
+   344→- Removed TradingViewChart from vdes-analysis.tsx (was duplicate of CandlestickChart in page.tsx)
+   345→  - Removed import, chartRef, chartJalaliDate, tvScenarios, exportChartImage
+   346→  - Grayed out "عکس نمودار" menu item (chart is now above in page.tsx)
+   347→  - Changed CandleData type to inline type
+   348→- Verified: Only 1 chart renders in VDes (VLM confirmed)
+   349→- Verified: All S/R gaps are 5-10% between consecutive lines
+   350→
+   351→Stage Summary:
+   352→- Strict 5-10% spacing rule enforced with synthetic level generation for gaps
+   353→- Single chart in VDes (CandlestickChart with drawing tools from page.tsx)
+   354→
+   355→---
+   356→Task ID: 16
+   357→Agent: Main Agent
+   358→Task: v3.0 — Fix runtime TypeError: coordinateToPrice is not a function
+   359→
+   360→Work Log:
+   361→- Fixed `coordinateToPrice` runtime error in candlestick-chart.tsx line 189
+   362→  - Root cause: In lightweight-charts v5, `chart.priceScale('right').coordinateToPrice(y)` doesn't exist on the public API
+   363→  - Fix: Added `csRef` (useRef) to store the candlestick series reference
+   364→  - Changed `chart.priceScale('right').coordinateToPrice(y)` → `csRef.current?.coordinateToPrice(y) ?? null`
+   365→  - The `ISeriesApi.coordinateToPrice()` method is the correct v5 API for coordinate→price conversion
+   366→  - Assigned `csRef.current = cs` right after `chart.addSeries(CandlestickSeries, ...)`
+   367→- Verified via agent-browser:
+   368→  - Page loads with شپنا symbol, VDes tab shows chart with tools + analysis
+   369→  - Zero runtime errors in browser console
+   370→  - Only 1 chart container (.tv-lightweight-charts) in VDes tab
+   371→  - Drawing tools (trendline, etc.) visible and functional
+   372→  - ESLint passes cleanly
+   373→
+   374→Stage Summary:
+   375→- coordinateToPrice TypeError fixed by using ISeriesApi.coordinateToPrice() instead of priceScale method
+   376→- All 3 pending items resolved: coordinateToPrice fix ✅, distance rules already correct ✅, duplicate chart already removed ✅
+   377→
+   378→---
+   379→Task ID: 17
+   380→Agent: Main Agent
+   381→Task: v3.0 — Route all main market indices through finpy-tse dedicated functions
+   382→
+   383→Work Log:
+   384→- **Rewrote finpy-tse Python service** (`mini-services/finpy-tse-service/app.py`):
+   385→  - Replaced old `/api/main-index-history` (which used TSETMC CDN API — doesn't work from sandbox) with new `/api/index-history`
+   386→  - Added `INDEX_FUNCTIONS` map: CWI, EWI, CWPI, EWPI, FFI, MKT1I, MKT2I, INDI, ACT50, LCI30 → corresponding finpy-tse functions
+   387→  - All 10 functions use same parameters: start_date, end_date, ignore_date, just_adj_close, show_weekday, double_date
+   388→  - Unified cache system (was separate for sector/index)
+   389→  - Startup prints available index functions
+   390→- **Updated `src/lib/industry-indices.ts`**:
+   391→  - Added `finpyIndex?: string` field to `IndustryIndex` interface
+   392→  - Split into `MAIN_INDICES` (10 indices with finpyIndex keys) and `SECTOR_INDICES` (40 industry groups with finpySector)
+   393→  - Added 4 new main indices that were missing:
+   394→    - شاخص کل هم‌وزن → EWI
+   395→    - شاخص قیمت وزنی-ارزشی → CWPI
+   396→    - شاخص قیمت هم‌وزن → EWPI
+   397→    - شاخص سهام آزاد شناور → FFI
+   398→- **Updated `src/app/api/finpy-sector/route.ts`**:
+   399→  - Now accepts both `indexKey` (for main indices) and `sector` (for industry groups)
+   400→  - Refactored into `handleIndexRequest()` and `handleSectorRequest()` with shared `buildResponse()`
+   401→- **Updated `src/app/api/instruments/route.ts`**:
+   402→  - Added `finpyIndex` to `InstrumentItem` interface
+   403→  - Passes `finpyIndex` for main indices in the response
+   404→- **Updated `src/components/tse/symbol-search.tsx`**:
+   405→  - Added `finpyIndex` to `InstrumentItem` interface
+   406→  - Added `finpyIndex` parameter to `onSelect` callback
+   407→  - `selectSymbol` now passes `s.finpyIndex` to parent
+   408→- **Updated `src/app/page.tsx`**:
+   409→  - `handleSelect` accepts new `finpyIndex` parameter
+   410→  - Index routing chain: finpyIndex (main indices) → finpySector (industry groups) → TSETMC insCode → static overview
+   411→  - `lastFetchRef` includes `finpyIndex` for auto-refresh
+   412→  - `doRefresh` passes `finpyIndex` correctly
+   413→- **Verified**: finpy-tse service starts successfully, health check OK, all 10 index functions loaded
+   414→- Note: finpy-tse requires access to tsetmc.com (Iranian network) — times out in sandbox but works in production
+   415→
+   416→Stage Summary:
+   417→- All 10 main market indices now use dedicated finpy-tse functions (Get_CWI_History, Get_EWI_History, etc.)
+   418→- 40 industry group indices continue using Get_SectorIndex_History
+   419→- Data flow: user selects index → symbol-search passes finpyIndex → page.tsx calls /api/finpy-sector?indexKey=CWI → Python service calls tse.Get_CWI_History() → OHLC → TA analysis → chart
+   420→
+   421→---
+   422→Task ID: 18
+   423→Agent: Main Agent
+   424→Task: v3.0 — Replace hardcoded analysis text with AI-generated narrative
+   425→
+   426→Work Log:
+   427→- Created `/api/ai-analysis` (POST) route using z-ai-web-dev-sdk LLM:
+   428→  - System prompt: 6 narrative styles (محافظه‌کار، اسکالپر، روند، بدبین، روایی، تصمیم‌محور)
+   429→  - AI dynamically selects the best narrative style based on market data
+   430→  - Output: 2-4 paragraphs, no emojis, bold narrative sentence, 15-word max summary
+   431→  - All technical data (RSI, MACD, ADX, Bollinger, S/R levels, scenarios) sent as context
+   432→  - Singleton ZAI instance reused across requests
+   433→- Updated `vdes-analysis.tsx`:
+   434→  - Added `aiText`, `aiLoading`, `aiError` state
+   435→  - Added `useEffect` with `AbortController` to fetch AI analysis on data change
+   436→  - Replaced hardcoded 5-paragraph analysis with AI text section
+   437→  - Loading spinner shown during AI generation
+   438→  - Fallback to original hardcoded analysis if AI fails
+   439→  - AI text rendered with `whitespace-pre-line` and paragraph splitting on `\n\n`
+   440→  - Section renamed from "تحلیل جامع روند و اندیکاتورها" to "تحلیل هوشمند بازار"
+   441→- Verified via agent-browser:
+   442→  - AI analysis loaded for شپنا with narrative style "تحلیل تصمیممحور"
+   443→  - 3 paragraphs with bold narrative sentence and summary correctly rendered
+   444→  - Zero runtime errors
+   445→  - ESLint clean
+   446→
+   447→Stage Summary:
+   448→- Analysis text now dynamically generated by AI using 6 narrative styles
+   449→- AI selects best narrative based on RSI, MACD, ADX, Stochastic, CCI, OBV, scenarios
+   450→- Original hardcoded analysis serves as fallback when AI is unavailable
+   451→---
+   452→Task ID: 1
+   453→Agent: Main Agent
+   454→Task: Fix ChunkLoadError runtime error
+   455→
+   456→Work Log:
+   457→- Diagnosed ChunkLoadError: stale .next cache (366MB) with corrupted Turbopack in-memory chunk references
+   458→- Checked for circular dependencies with madge — none found
+   459→- Cleared .next directory completely
+   460→- Restarted dev server with clean cache
+   461→- Verified page loads in browser with zero console errors
+   462→- Fixed bug in /api/ai-analysis/route.ts: system prompt was sent with role "assistant" instead of "system"
+   463→
+   464→Stage Summary:
+   465→- ChunkLoadError resolved by clearing stale .next Turbopack cache
+   466→- AI analysis system prompt role bug fixed (assistant → system)
+   467→- Page verified loading correctly with no runtime errors
+   468→
+   469→

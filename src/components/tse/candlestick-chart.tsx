@@ -24,6 +24,13 @@ import {
   ArrowUpRight,
   Trash2,
   X,
+  Circle,
+  Waypoints,
+  MessageSquare,
+  TrendingUp,
+  GitBranch,
+  ArrowRight,
+  Spline,
 } from 'lucide-react';
 import { formatJalaliString, candleDateToJalali, isGregorianDate, toPersianDigits } from '@/lib/jalali';
 
@@ -67,12 +74,17 @@ interface CandlestickChartProps {
   }>;
   ta: {
     sma: Record<string, number>;
+    ema: Record<string, number>;
     bollingerBands: { upper: number; middle: number; lower: number };
     resistances: number[];
     supports: number[];
     supportStrengths: LevelStrength[];
     resistanceStrengths: LevelStrength[];
     sar: number;
+    smaArray?: Record<string, number[]>;
+    emaArray?: Record<string, number[]>;
+    ichimokuArrays?: { tenkan: number[]; kijun: number[]; senkouA: number[]; senkouB: number[] };
+    vwapArray?: number[];
   } | null;
   height?: number;
 }
@@ -90,9 +102,18 @@ const TOOLBAR_BORDER = '#e5e7eb';
 const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#374151'];
 
 const SMA_CFG = [
+  { key: 'sma9', color: '#6366f1', title: 'SMA 9' },
   { key: 'sma21', color: '#0891b2', title: 'SMA 21' },
   { key: 'sma50', color: '#d97706', title: 'SMA 50' },
   { key: 'sma100', color: '#e04060', title: 'SMA 100' },
+  { key: 'sma200', color: '#7c3aed', title: 'SMA 200' },
+];
+
+const EMA_CFG = [
+  { key: 'ema9', color: '#6366f1', title: 'EMA 9', dash: [2, 2] as [number, number] },
+  { key: 'ema21', color: '#0d9488', title: 'EMA 21', dash: [2, 2] as [number, number] },
+  { key: 'ema50', color: '#ea580c', title: 'EMA 50', dash: [2, 2] as [number, number] },
+  { key: 'ema200', color: '#9333ea', title: 'EMA 200', dash: [2, 2] as [number, number] },
 ];
 
 const FIB_LEVELS = [
@@ -105,7 +126,20 @@ const FIB_LEVELS = [
   { pct: 1, label: '100%' },
 ];
 
-type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'fibonacci' | 'rectangle' | 'text' | 'brush' | 'measure' | 'arrow';
+const FIB_EXT_LEVELS = [
+  { pct: 0, label: '0%' },
+  { pct: 0.382, label: '38.2%' },
+  { pct: 0.5, label: '50%' },
+  { pct: 0.618, label: '61.8%' },
+  { pct: 0.786, label: '78.6%' },
+  { pct: 1, label: '100%' },
+  { pct: 1.272, label: '127.2%' },
+  { pct: 1.618, label: '161.8%' },
+  { pct: 2.0, label: '200%' },
+  { pct: 2.618, label: '261.8%' },
+];
+
+type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'ray' | 'fibonacci' | 'fibext' | 'rectangle' | 'ellipse' | 'path' | 'text' | 'callout' | 'brush' | 'measure' | 'arrow' | 'pitchfork' | 'channel' | 'regression';
 
 // — S/R strength-based line styling (solid only, thickness = strength) ————
 function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0; color: string } {
@@ -130,12 +164,20 @@ const TOOLS: ToolDef[] = [
   { id: 'trendline', label: 'خط روند', icon: <Minus className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
   { id: 'hline', label: 'خط افقی', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
   { id: 'vline', label: 'خط عمودی', icon: <MoveVertical className="w-3.5 h-3.5" /> },
-  { id: 'fibonacci', label: 'فیبوناچی', icon: <Layers className="w-3.5 h-3.5" /> },
+  { id: 'ray', label: 'پرتو', icon: <ArrowRight className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+  { id: 'fibonacci', label: 'فیبوناچی بازگشتی', icon: <Layers className="w-3.5 h-3.5" /> },
+  { id: 'fibext', label: 'فیبوناچی گشایش', icon: <GitBranch className="w-3.5 h-3.5" /> },
   { id: 'rectangle', label: 'مستطیل', icon: <RectangleHorizontal className="w-3.5 h-3.5" /> },
+  { id: 'ellipse', label: 'بیضی', icon: <Circle className="w-3.5 h-3.5" /> },
+  { id: 'path', label: 'مسیر', icon: <Spline className="w-3.5 h-3.5" /> },
   { id: 'text', label: 'متن', icon: <Type className="w-3.5 h-3.5" /> },
+  { id: 'callout', label: 'یادداشت', icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { id: 'brush', label: 'قلم', icon: <Pencil className="w-3.5 h-3.5" /> },
   { id: 'measure', label: 'اندازه‌گیری', icon: <Ruler className="w-3.5 h-3.5" /> },
   { id: 'arrow', label: 'پیکان', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
+  { id: 'pitchfork', label: 'چنگال اندروز', icon: <Waypoints className="w-3.5 h-3.5" /> },
+  { id: 'channel', label: 'کانال موازی', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { id: 'regression', label: 'خط رگرسیون', icon: <TrendingUp className="w-3.5 h-3.5" style={{ transform: 'scaleX(-1)' }} /> },
 ];
 
 /* ----------------------------- SKELETON ---- */
@@ -356,6 +398,185 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
           break;
         }
+        case 'ray': {
+          if (d.points.length < 2) break;
+          const p0 = d.points[0];
+          const p1 = d.points[d.points.length - 1];
+          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
+          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
+          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+          // Extend the line from p1 to the edge of the chart
+          const dx = x1 - x0;
+          const dy = y1 - y0;
+          const extendFactor = 10;
+          const xEnd = x1 + dx * extendFactor;
+          const yEnd = y1 + dy * extendFactor;
+          html += `<line x1="${x0}" y1="${y0}" x2="${xEnd}" y2="${yEnd}" stroke="${col}" stroke-width="${lw}" />`;
+          break;
+        }
+        case 'fibext': {
+          if (d.points.length < 2) break;
+          const p0 = d.points[0];
+          const p1 = d.points[1];
+          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+          if (x0 == null || x1 == null) break;
+          const priceHigh = Math.max(p0.price, p1.price);
+          const priceLow = Math.min(p0.price, p1.price);
+          const priceRange = priceHigh - priceLow;
+          if (priceRange === 0) break;
+          const yTop = csRef.current?.priceToCoordinate(priceHigh);
+          const yBot = csRef.current?.priceToCoordinate(priceLow);
+          if (yTop == null || yBot == null) break;
+          // Extension base rect (0-100%)
+          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBot - yTop}" fill="${col}" opacity="0.04" />`;
+          // Extension zone (100%+)
+          const extY = csRef.current?.priceToCoordinate(priceHigh - 2.618 * priceRange);
+          if (extY != null) {
+            html += `<rect x="${Math.max(x0,x1)}" y="${yBot}" width="${Math.abs(x1-x0) * 2}" height="${extY - yBot}" fill="${col}" opacity="0.02" />`;
+          }
+          for (const level of FIB_EXT_LEVELS) {
+            const price = priceHigh - level.pct * priceRange;
+            const y = csRef.current?.priceToCoordinate(price);
+            if (y == null) continue;
+            const isExt = level.pct > 1;
+            const xStart = isExt ? Math.max(x0, x1) : Math.min(x0, x1) - 10;
+            const xEnd = isExt ? Math.max(x0, x1) + Math.abs(x1 - x0) * 1.5 : Math.max(x0, x1) + 10;
+            html += `<line x1="${xStart}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="${col}" stroke-width="1" opacity="${isExt ? '0.4' : '0.6'}" ${isExt ? 'stroke-dasharray="4,3"' : ''} />`;
+            html += `<rect x="${xEnd + 2}" y="${y - 8}" width="64" height="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="2" />`;
+            html += `<text x="${xEnd + 4}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
+          }
+          break;
+        }
+        case 'ellipse': {
+          if (d.points.length < 2) break;
+          const p0 = d.points[0];
+          const p1 = d.points[d.points.length - 1];
+          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
+          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
+          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+          const cx = (x0 + x1) / 2;
+          const cy = (y0 + y1) / 2;
+          const rx = Math.abs(x1 - x0) / 2;
+          const ry = Math.abs(y1 - y0) / 2;
+          html += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${col}" fill-opacity="0.06" stroke="${col}" stroke-width="${lw}" />`;
+          break;
+        }
+        case 'path': {
+          if (d.points.length < 2) break;
+          let pts = '';
+          let valid = true;
+          for (const p of d.points) {
+            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+            const y = csRef.current?.priceToCoordinate(p.price);
+            if (x == null || y == null) { valid = false; break; }
+            pts += `${x},${y} `;
+          }
+          if (!valid || pts.length === 0) break;
+          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+          // Draw dots at each vertex
+          for (const p of d.points) {
+            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+            const y = csRef.current?.priceToCoordinate(p.price);
+            if (x == null || y == null) continue;
+            html += `<circle cx="${x}" cy="${y}" r="3" fill="${col}" />`;
+          }
+          break;
+        }
+        case 'callout': {
+          if (d.points.length < 1 || !d.text) break;
+          const p = d.points[0];
+          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+          const y = csRef.current?.priceToCoordinate(p.price);
+          if (x == null || y == null) break;
+          const boxW = Math.max(d.text.length * 8 + 20, 60);
+          const boxH = 28;
+          const boxX = x + 8;
+          const boxY = y - boxH - 8;
+          // Arrow from box to point
+          html += `<line x1="${boxX}" y1="${boxY + boxH}" x2="${x}" y2="${y}" stroke="${col}" stroke-width="1" />`;
+          html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="#ffffff" stroke="${col}" stroke-width="1" rx="4" />`;
+          html += `<text x="${boxX + 6}" y="${boxY + boxH / 2 + 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
+          break;
+        }
+        case 'pitchfork': {
+          if (d.points.length < 3) break;
+          const p0 = d.points[0]; // start of median
+          const p1 = d.points[1]; // end of median
+          const p2 = d.points[2]; // fork point
+          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
+          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
+          const x2 = chart.timeScale().timeToCoordinate(p2.time as Time);
+          const y2 = csRef.current?.priceToCoordinate(p2.price);
+          if (x0 == null || y0 == null || x1 == null || y1 == null || x2 == null || y2 == null) break;
+          // Median line (p0 -> p1 extended)
+          const dx = x1 - x0;
+          const dy = y1 - y0;
+          html += `<line x1="${x0}" y1="${y0}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5}" stroke="${col}" stroke-width="${lw}" />`;
+          // Upper parallel: offset = (p2 - median_line) distance
+          const medianSlope = dx !== 0 ? dy / dx : 0;
+          const medianYatX2 = y0 + medianSlope * (x2 - x0);
+          const offset = y2 - medianYatX2;
+          html += `<line x1="${x0}" y1="${y0 + offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 + offset}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+          // Lower parallel: mirror the offset
+          html += `<line x1="${x0}" y1="${y0 - offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 - offset}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+          break;
+        }
+        case 'channel': {
+          if (d.points.length < 3) break;
+          const p0 = d.points[0];
+          const p1 = d.points[1];
+          const p2 = d.points[2];
+          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
+          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
+          const x2 = chart.timeScale().timeToCoordinate(p2.time as Time);
+          const y2 = csRef.current?.priceToCoordinate(p2.price);
+          if (x0 == null || y0 == null || x1 == null || y1 == null || x2 == null || y2 == null) break;
+          // Line 1: p0 -> p1 (base)
+          const dx = x1 - x0;
+          const dy = y1 - y0;
+          html += `<line x1="${x0}" y1="${y0}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5}" stroke="${col}" stroke-width="${lw}" />`;
+          // Parallel through p2
+          const slope = dx !== 0 ? dy / dx : 0;
+          const lineYatX2 = y0 + slope * (x2 - x0);
+          const offset = y2 - lineYatX2;
+          html += `<line x1="${x0}" y1="${y0 + offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 + offset}" stroke="${col}" stroke-width="${lw}" />`;
+          // Fill the channel
+          const extX = x1 + dx * 5;
+          const extY1 = y1 + dy * 5;
+          const extY2 = y1 + dy * 5 + offset;
+          html += `<polygon points="${x0},${y0} ${extX},${extY1} ${extX},${extY2} ${x0},${y0 + offset}" fill="${col}" fill-opacity="0.05" />`;
+          break;
+        }
+        case 'regression': {
+          if (d.points.length < 2) break;
+          const p0 = d.points[0];
+          const p1 = d.points[d.points.length - 1];
+          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
+          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
+          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+          // Draw a straight line from p0 to p1 (linear regression line)
+          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+          // Show the price change
+          const diff = p1.price - p0.price;
+          const pct = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+          const midX = (x0 + x1) / 2;
+          const midY = (y0 + y1) / 2 - 14;
+          const label = `رگرسیون: ${diff >= 0 ? '+' : ''}${toPersianDigits(pct.toFixed(1))}%`;
+          html += `<rect x="${midX - 50}" y="${midY - 10}" width="100" height="18" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+          html += `<text x="${midX - 46}" y="${midY + 3}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
+          break;
+        }
       }
     }
 
@@ -473,6 +694,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
 
     // TA overlays
     if (ta) {
+      // ── SMA Lines ──
       for (const cfg of SMA_CFG) {
         const v = ta.sma[cfg.key];
         if (v && v > 0)
@@ -485,17 +707,75 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             title: cfg.title,
           });
       }
+
+      // ── Bollinger Bands ──
       const bb = ta.bollingerBands;
       if (bb) {
         if (bb.upper > 0) cs.createPriceLine({ price: bb.upper, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Upper' });
         if (bb.middle > 0) cs.createPriceLine({ price: bb.middle, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Mid' });
         if (bb.lower > 0) cs.createPriceLine({ price: bb.lower, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Lower' });
       }
-      // SAR — use dark color instead of white (white invisible on white bg)
+
+      // ── SAR ──
       if (ta.sar > 0)
         cs.createPriceLine({ price: ta.sar, color: 'rgba(217,119,6,0.7)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
 
-      // S/R Fibonacci levels with strength
+      // ── EMA Lines ──
+      for (const cfg of EMA_CFG) {
+        const v = ta.ema[cfg.key];
+        if (v && v > 0)
+          cs.createPriceLine({
+            price: v,
+            color: cfg.color,
+            lineWidth: 1,
+            lineStyle: 2, // dashed
+            axisLabelVisible: true,
+            title: cfg.title,
+          });
+      }
+
+      // ── Ichimoku Cloud ──
+      if (ta.ichimokuArrays) {
+        const { tenkan, kijun, senkouA, senkouB } = ta.ichimokuArrays;
+        // Senkou A line
+        const senkouALine = chart.addSeries(LineSeries, {
+          color: 'rgba(16,185,129,0.7)',
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: 'Senkou A',
+        });
+        senkouALine.setData(
+          senkouA.map((v, i) => ({ time: i as Time, value: v })).filter(d => d.value > 0)
+        );
+        // Senkou B line
+        const senkouBLine = chart.addSeries(LineSeries, {
+          color: 'rgba(239,68,68,0.7)',
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: 'Senkou B',
+        });
+        senkouBLine.setData(
+          senkouB.map((v, i) => ({ time: i as Time, value: v })).filter(d => d.value > 0)
+        );
+      }
+
+      // ── VWAP Line ──
+      if (ta.vwapArray && ta.vwapArray.some(v => v > 0)) {
+        const vwapLine = chart.addSeries(LineSeries, {
+          color: 'rgba(234,179,8,0.8)',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: 'VWAP',
+        });
+        vwapLine.setData(
+          ta.vwapArray.map((v, i) => ({ time: i as Time, value: v })).filter(d => d.value > 0)
+        );
+      }
+
+      // ── S/R Levels ──
       const resistanceStrengths = ta.resistanceStrengths || [];
       const supportStrengths = ta.supportStrengths || [];
 
@@ -638,6 +918,30 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         return;
       }
 
+      if (activeTool === 'callout') {
+        const chart = chartRef.current;
+        const container = chartContainerRef.current;
+        if (!chart || !container) return;
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const tempDrawing: Drawing = {
+          id: Date.now().toString(),
+          type: 'callout',
+          points: [point],
+          color: activeColor,
+          lineWidth: 1,
+          text: '',
+          completed: false,
+        };
+        setCurrentDrawing(tempDrawing);
+        setTextInput({ x, y, drawingId: tempDrawing.id });
+        setTextValue('');
+        setIsDrawing(true);
+        return;
+      }
+
       const drawing: Drawing = {
         id: Date.now().toString(),
         type: activeTool,
@@ -659,16 +963,28 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       const point = getChartPoint(e.clientX, e.clientY);
       if (!point) return;
 
-      if (currentDrawing.type === 'brush') {
+      if (currentDrawing.type === 'brush' || currentDrawing.type === 'path') {
         setCurrentDrawing({
           ...currentDrawing,
           points: [...currentDrawing.points, point],
         });
-      } else if (currentDrawing.type !== 'text' && currentDrawing.type !== 'hline') {
-        setCurrentDrawing({
-          ...currentDrawing,
-          points: [currentDrawing.points[0], point],
-        });
+      } else if (currentDrawing.type !== 'text' && currentDrawing.type !== 'hline' && currentDrawing.type !== 'callout') {
+        if (currentDrawing.type === 'pitchfork' || currentDrawing.type === 'channel') {
+          // 3-point tools: accumulate points
+          const pts = [...currentDrawing.points, point];
+          if (pts.length > 3) {
+            pts[pts.length - 1] = point;
+          }
+          setCurrentDrawing({
+            ...currentDrawing,
+            points: pts,
+          });
+        } else {
+          setCurrentDrawing({
+            ...currentDrawing,
+            points: [currentDrawing.points[0], point],
+          });
+        }
       }
     },
     [isDrawing, currentDrawing, getChartPoint]
@@ -684,7 +1000,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       completed: true,
     };
 
-    const minPoints = currentDrawing.type === 'hline' ? 1 : 2;
+    const needs3Points = currentDrawing.type === 'pitchfork' || currentDrawing.type === 'channel';
+    const minPoints = currentDrawing.type === 'hline' ? 1 : needs3Points ? 3 : 2;
+    if (needs3Points && completed.points.length < 3) {
+      // Don't finalize yet, keep collecting points
+      setCurrentDrawing(completed);
+      return;
+    }
     if (completed.points.length >= minPoints) {
       setDrawings((prev) => [...prev, completed]);
     }

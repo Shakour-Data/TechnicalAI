@@ -52,6 +52,16 @@ export interface TAResult {
   // Moving Averages
   sma: Record<string, number>;
   ema: Record<string, number>;
+  // SMA arrays for chart overlays
+  smaArray: Record<string, number[]>;
+  emaArray: Record<string, number[]>;
+  ichimokuArrays: {
+    tenkan: number[];
+    kijun: number[];
+    senkouA: number[];
+    senkouB: number[];
+  };
+  vwapArray: number[];
   // Oscillators
   rsi: number;
   mfi: number;
@@ -70,6 +80,16 @@ export interface TAResult {
   bollingerBands: { upper: number; middle: number; lower: number };
   // Volume
   obv: number;
+  // Ichimoku Cloud (TradingView free)
+  ichimoku: {
+    tenkan: number;  // Conversion Line (9)
+    kijun: number;   // Base Line (26)
+    senkouA: number; // Senkou Span A (leading)
+    senkouB: number; // Senkou Span B (leading)
+    chikou: number;  // Chikou Span (lagging)
+  };
+  // VWAP (TradingView free)
+  vwap: number;
   // Support / Resistance (6 each, Fibonacci-based)
   resistances: number[];
   supports: number[];
@@ -370,6 +390,148 @@ function calcOBV(data: OHLCV[]): number {
     else if (data[i].close < data[i - 1].close) obv -= data[i].volume;
   }
   return obv;
+}
+
+// ─── Helper: VWAP ──────────────────────────────────────────────────────────────
+function calcVWAP(data: OHLCV[]): number {
+  if (data.length === 0) return 0;
+  let cumTPV = 0;
+  let cumVol = 0;
+  for (const d of data) {
+    const tp = (d.high + d.low + d.close) / 3;
+    cumTPV += tp * d.volume;
+    cumVol += d.volume;
+  }
+  return cumVol === 0 ? data[data.length - 1].close : cumTPV / cumVol;
+}
+
+function calcVWAPArray(data: OHLCV[]): number[] {
+  const result: number[] = [];
+  let cumTPV = 0;
+  let cumVol = 0;
+  for (const d of data) {
+    const tp = (d.high + d.low + d.close) / 3;
+    cumTPV += tp * d.volume;
+    cumVol += d.volume;
+    result.push(cumVol === 0 ? d.close : cumTPV / cumVol);
+  }
+  return result;
+}
+
+// ─── Helper: Ichimoku Cloud (9, 26, 52) ──────────────────────────────────────
+function calcIchimoku(data: OHLCV[]): {
+  tenkan: number; kijun: number; senkouA: number; senkouB: number; chikou: number;
+} {
+  if (data.length < 52) {
+    const c = data[data.length - 1]?.close ?? 0;
+    return { tenkan: c, kijun: c, senkouA: c, senkouB: c, chikou: c };
+  }
+  const highs = data.map(d => d.high);
+  const lows = data.map(d => d.low);
+  const closes = data.map(d => d.close);
+
+  function donchian(h: number[], l: number[], end: number, period: number): number {
+    const start = end - period + 1;
+    if (start < 0) return (h[end] + l[end]) / 2;
+    let hi = -Infinity, lo = Infinity;
+    for (let i = start; i <= end; i++) {
+      if (h[i] > hi) hi = h[i];
+      if (l[i] < lo) lo = l[i];
+    }
+    return (hi + lo) / 2;
+  }
+
+  const n = data.length;
+  const tenkan = donchian(highs, lows, n - 1, 9);
+  const kijun = donchian(highs, lows, n - 1, 26);
+  // Senkou A = (tenkan + kijun) / 2, shifted 26 periods ahead
+  // We compute it at bar n-27 (shifted to current)
+  const senkouAIdx = Math.max(n - 1 - 26, 0);
+  const tA = donchian(highs, lows, senkouAIdx, 9);
+  const kA = donchian(highs, lows, senkouAIdx, 26);
+  const senkouA = (tA + kA) / 2;
+  // Senkou B = donchian(52), shifted 26 periods ahead
+  const senkouBIdx = Math.max(n - 1 - 26, 0);
+  const senkouB = donchian(highs, lows, senkouBIdx, 52);
+  // Chikou = current close plotted 26 periods back
+  const chikou = closes[n - 1];
+
+  return { tenkan, kijun, senkouA, senkouB, chikou };
+}
+
+function calcIchimokuArrays(data: OHLCV[]): {
+  tenkan: number[]; kijun: number[]; senkouA: number[]; senkouB: number[];
+} {
+  const n = data.length;
+  const highs = data.map(d => d.high);
+  const lows = data.map(d => d.low);
+
+  function donchian(end: number, period: number): number {
+    const start = end - period + 1;
+    if (start < 0) return (highs[end] + lows[end]) / 2;
+    let hi = -Infinity, lo = Infinity;
+    for (let i = start; i <= end; i++) {
+      if (highs[i] > hi) hi = highs[i];
+      if (lows[i] < lo) lo = lows[i];
+    }
+    return (hi + lo) / 2;
+  }
+
+  const tenkan: number[] = [];
+  const kijun: number[] = [];
+  const senkouA: number[] = [];
+  const senkouB: number[] = [];
+
+  for (let i = 0; i < n; i++) {
+    tenkan.push(donchian(i, 9));
+    kijun.push(donchian(i, 26));
+    // Senkou A shifted +26: at bar i, we need tenkan/kijun at bar i-26
+    const sIdx = i - 26;
+    if (sIdx >= 0) {
+      const t = donchian(sIdx, 9);
+      const k = donchian(sIdx, 26);
+      senkouA.push((t + k) / 2);
+    } else {
+      senkouA.push(donchian(i, 9)); // fallback
+    }
+    // Senkou B shifted +26: at bar i, we need donchian(52) at bar i-26
+    if (sIdx >= 0) {
+      senkouB.push(donchian(sIdx, 52));
+    } else {
+      senkouB.push(donchian(i, 52)); // fallback
+    }
+  }
+
+  return { tenkan, kijun, senkouA, senkouB };
+}
+
+// ─── Helper: SMA Array (full series) ──────────────────────────────────────
+function smaArray(closes: number[], period: number): number[] {
+  const result: number[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { result.push(0); continue; }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+    result.push(sum / period);
+  }
+  return result;
+}
+
+// ─── Helper: EMA Array (full series) ──────────────────────────────────────
+function emaArrayCalc(closes: number[], period: number): number[] {
+  const result: number[] = [];
+  if (closes.length < period) return closes.map(() => 0);
+  const k = 2 / (period + 1);
+  let emaVal = 0;
+  for (let i = 0; i < period; i++) emaVal += closes[i];
+  emaVal /= period;
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { result.push(0); continue; }
+    if (i === period) { result.push(emaVal); continue; }
+    emaVal = closes[i] * k + emaVal * (1 - k);
+    result.push(emaVal);
+  }
+  return result;
 }
 
 // ─── Helper: Linear Regression ────────────────────────────────────────────────
@@ -1813,6 +1975,12 @@ export function analyze(data: OHLCV[]): TAResult {
       williamsR: -50, macd: { line: 0, signal: 0, histogram: 0 },
       adx: 0, diPlus: 0, diMinus: 0, sar: 0, atr: 0,
       bollingerBands: { upper: 0, middle: 0, lower: 0 }, obv: 0,
+      ichimoku: { tenkan: 0, kijun: 0, senkouA: 0, senkouB: 0, chikou: 0 },
+      vwap: 0,
+      smaArray: {},
+      emaArray: {},
+      ichimokuArrays: { tenkan: [], kijun: [], senkouA: [], senkouB: [] },
+      vwapArray: [],
       resistances: [], supports: [],
       supportStrengths: [], resistanceStrengths: [], priceTargets: [],
       trend: {
@@ -1838,14 +2006,13 @@ export function analyze(data: OHLCV[]): TAResult {
   const hasVolume = data.some(d => d.volume > 0);
 
   // ── Moving Averages ──────────────────────────────────────────────────────
-  const smaPeriods = [5, 10, 21, 50, 100, 200];
+  const smaPeriods = [5, 9, 10, 21, 50, 100, 200];
   const smaResult: Record<string, number> = {};
   for (const p of smaPeriods) smaResult[`sma${p}`] = sma(closes, p);
 
-  const emaResult: Record<string, number> = {
-    ema12: emaCalc(closes, 12),
-    ema26: emaCalc(closes, 26),
-  };
+  const emaPeriods = [9, 12, 21, 26, 50, 100, 200];
+  const emaResult: Record<string, number> = {};
+  for (const p of emaPeriods) emaResult[`ema${p}`] = emaCalc(closes, p);
 
   // ── Oscillators ──────────────────────────────────────────────────────────
   const rsi = calcRSI(closes);
@@ -1867,6 +2034,21 @@ export function analyze(data: OHLCV[]): TAResult {
   // ── Volume ───────────────────────────────────────────────────────────────
   // OBV requires volume — return 0 when no volume data
   const obv = hasVolume ? calcOBV(data) : 0;
+
+  // ── Ichimoku Cloud ────────────────────────────────────────────────────
+  const ichimoku = calcIchimoku(data);
+  const ichimokuArrays = calcIchimokuArrays(data);
+
+  // ── VWAP ─────────────────────────────────────────────────────────────
+  const vwap = hasVolume ? calcVWAP(data) : 0;
+  const vwapArr = hasVolume ? calcVWAPArray(data) : data.map(() => 0);
+
+  // ── MA Arrays for chart overlays ──────────────────────────────────────
+  const smaArrResult: Record<string, number[]> = {};
+  for (const p of smaPeriods) smaArrResult[`sma${p}`] = smaArray(closes, p);
+
+  const emaArrResult: Record<string, number[]> = {};
+  for (const p of emaPeriods) emaArrResult[`ema${p}`] = emaArrayCalc(closes, p);
 
   // ── Support / Resistance ────────────────────────────────────────────────
   const { resistances, supports, supportStrengths, resistanceStrengths, priceTargets } = calcSupportResistance(data, price);
@@ -2034,6 +2216,12 @@ export function analyze(data: OHLCV[]): TAResult {
     atr,
     bollingerBands: bb,
     obv,
+    ichimoku,
+    vwap,
+    smaArray: smaArrResult,
+    emaArray: emaArrResult,
+    ichimokuArrays,
+    vwapArray: vwapArr,
     resistances: resistances.length ? resistances : [R1_level, R2_level, R3_level, R4_level, R5_level, R6_level],
     supports: supports.length ? supports : [S1_level, S2_level, S3_level, S4_level, S5_level, S6_level],
     supportStrengths,

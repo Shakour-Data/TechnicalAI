@@ -466,3 +466,71 @@ Stage Summary:
 - AI analysis system prompt role bug fixed (assistant → system)
 - Page verified loading correctly with no runtime errors
 
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Add TradingView-style free indicators (Ichimoku Cloud, VWAP) and MA arrays to ta-engine.ts
+
+Work Log:
+- Extended `TAResult` interface with `ichimoku` (tenkan/kijun/senkouA/senkouB/chikou), `vwap`, `smaArray`, `emaArray`, `ichimokuArrays`, and `vwapArray` fields
+- Added `calcVWAP()` and `calcVWAPArray()` helper functions for Volume Weighted Average Price
+- Added `calcIchimoku()` (single-value) and `calcIchimokuArrays()` (full series) helper functions implementing the 9/26/52 Ichimoku Cloud with Donchian channels and 26-period shift for Senkou Spans
+- Added `smaArray()` and `emaArrayCalc()` helper functions for full-series SMA/EMA arrays (chart overlay support)
+- Expanded EMA periods from [12, 26] to [9, 12, 21, 26, 50, 100, 200]
+- Updated empty return object in `analyze()` with default values for all new fields
+- Updated final return object in `analyze()` with computed Ichimoku, VWAP, SMA/EMA arrays, and Ichimoku arrays
+- Ran `bun run lint` — passed with zero errors
+
+Notes:
+- No existing functionality was modified (VDss/ML Layers 1-7 untouched)
+- Named EMA array helper `emaArrayCalc` to avoid conflict with the `emaArray` interface field
+- VWAP gracefully returns 0 / empty array when volume data is unavailable
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: Add TradingView-style drawing tools and chart indicator overlays to candlestick chart
+
+Work Log:
+- Updated lucide-react imports: added Circle, Waypoints, MessageSquare, TrendingUp, GitBranch, ArrowRight, Spline
+- Expanded ToolType union from 10 to 18 tool types: added ray, fibext, ellipse, path, callout, pitchfork, channel, regression
+- Added FIB_EXT_LEVELS constant (10 extension levels: 0% to 261.8%)
+- Replaced SMA_CFG (added sma9, sma200) and added EMA_CFG (ema9, ema21, ema50, ema200 with dash config)
+- Expanded TOOLS array from 10 to 18 tools with Persian labels and appropriate icons
+- Added 8 new SVG drawing render cases in renderDrawings:
+  - ray: extended line from p1 beyond chart edge
+  - fibext: Fibonacci extension levels with base/extension zones and dashed lines
+  - ellipse: SVG ellipse between two points
+  - path: polyline with vertex dots (multi-click)
+  - callout: annotated box with arrow connector to point
+  - pitchfork: Andrews pitchfork (median + 2 parallel dashed lines)
+  - channel: parallel channel with filled polygon between lines
+  - regression: dashed regression line with percentage label in Persian
+- Added callout tool handling in handleMouseDown (opens text input like text tool)
+- Updated handleMouseMove: path tool accumulates points like brush; pitchfork/channel accumulate up to 3 points
+- Updated handleMouseUp: 3-point tools (pitchfork, channel) keep collecting until 3 points reached
+- Updated CandlestickChartProps ta type: added ema, smaArray?, emaArray?, ichimokuArrays?, vwapArray?
+- Replaced TA overlays section in build callback:
+  - SMA lines (5 periods)
+  - Bollinger Bands (3 lines)
+  - SAR (dotted)
+  - EMA lines (4 periods, dashed)
+  - Ichimoku Cloud (Senkou A/B as LineSeries overlays)
+  - VWAP (LineSeries overlay, yellow)
+  - S/R levels with strength-based styling
+- Updated page.tsx chartTa to include `ema: data.ta.ema ?? {}`
+- All lint checks pass cleanly
+---
+Task ID: 2-a
+Agent: Main Agent
+Task: Add TradingView free tools (indicators + drawing tools)
+
+Work Log:
+- Added VWAP, Ichimoku Cloud to ta-engine.ts
+- Added 8 new drawing tools to candlestick-chart.tsx
+- Added chart overlays: Ichimoku, VWAP, more EMAs
+- Updated indicators-panel.tsx with new sections
+- Updated page.tsx to pass new data
+- Lint: 0 errors, Browser: 0 errors
+

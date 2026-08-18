@@ -24,6 +24,10 @@ interface IndicatorsPanelProps {
     atr: number;
     bollingerBands: { upper: number; middle: number; lower: number };
     obv: number;
+    ichimoku: {
+      tenkan: number; kijun: number; senkouA: number; senkouB: number; chikou: number;
+    };
+    vwap: number;
     hasVolume?: boolean;
     resistances: number[];
     supports: number[];
@@ -169,8 +173,11 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
         <IndicatorCard label="SMA ۵۰" value={toFa(ta.sma.sma50 ?? 0)} signal={maSignal} />
         <IndicatorCard label="SMA ۱۰۰" value={toFa(ta.sma.sma100 ?? 0)} signal={maSignal} />
         <IndicatorCard label="SMA ۲۰۰" value={toFa(ta.sma.sma200 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۱۲" value={toFa(ta.ema.ema12 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۲۶" value={toFa(ta.ema.ema26 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۹" value={toFa(ta.ema.ema9 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۲۱" value={toFa(ta.ema.ema21 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۵۰" value={toFa(ta.ema.ema50 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۱۰۰" value={toFa(ta.ema.ema100 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۲۰۰" value={toFa(ta.ema.ema200 ?? 0)} signal={maSignal} />
       </div>
 
       {/* ── اوسسیلاتورها (Oscillators) ───────────────────────────────── */}
@@ -214,6 +221,17 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
       <SectionHeader title="حجم" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
         {ta.hasVolume !== false && <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />}
+        {ta.hasVolume !== false && <IndicatorCard label="VWAP" value={toFa(ta.vwap ?? 0)} signal="neutral" />}
+      </div>
+
+      {/* ── ابر ایچیموکو (Ichimoku Cloud) ─────────────────────────────── */}
+      <SectionHeader title="ابر ایچیموکو" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        <IndicatorCard label="تنکان‌سن (۹)" value={toFa(ta.ichimoku?.tenkan ?? 0)} signal={maSignal} />
+        <IndicatorCard label="کیجون‌سن (۲۶)" value={toFa(ta.ichimoku?.kijun ?? 0)} signal={maSignal} />
+        <IndicatorCard label="سنکو اسپن A" value={toFa(ta.ichimoku?.senkouA ?? 0)} signal={maSignal} />
+        <IndicatorCard label="سنکو اسپن B" value={toFa(ta.ichimoku?.senkouB ?? 0)} signal={maSignal} />
+        <IndicatorCard label="چیکو اسپن" value={toFa(ta.ichimoku?.chikou ?? 0)} signal={maSignal} />
       </div>
 
       {/* ── حمایت و مقاومت هوشمند (Smart S/R) ──────────────────── */}
