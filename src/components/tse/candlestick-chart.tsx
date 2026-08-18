@@ -231,9 +231,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points.length > 1 ? d.points[d.points.length - 1] : p0;
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" />`;
           break;
@@ -241,7 +241,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         case 'hline': {
           if (d.points.length < 1) break;
           const p = d.points[0];
-          const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
+          const y = csRef.current?.priceToCoordinate(p.price);
           if (y == null) break;
           html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
           html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(0))}</text>`;
@@ -267,14 +267,14 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const priceRange = priceHigh - priceLow;
           if (priceRange === 0) break;
 
-          const yTop = (chart.priceScale('right') as any).priceToCoordinate(priceHigh);
-          const yBottom = (chart.priceScale('right') as any).priceToCoordinate(priceLow);
+          const yTop = csRef.current?.priceToCoordinate(priceHigh);
+          const yBottom = csRef.current?.priceToCoordinate(priceLow);
           if (yTop == null || yBottom == null) break;
           html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBottom - yTop}" fill="${col}" opacity="0.04" />`;
 
           for (const level of FIB_LEVELS) {
             const price = priceHigh - level.pct * priceRange;
-            const y = (chart.priceScale('right') as any).priceToCoordinate(price);
+            const y = csRef.current?.priceToCoordinate(price);
             if (y == null) continue;
             html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
             html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="2" />`;
@@ -287,9 +287,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points[d.points.length - 1];
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
           const rx = Math.min(x0, x1);
           const ry = Math.min(y0, y1);
@@ -302,7 +302,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           if (d.points.length < 1 || !d.text) break;
           const p = d.points[0];
           const x = chart.timeScale().timeToCoordinate(p.time as Time);
-          const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
+          const y = csRef.current?.priceToCoordinate(p.price);
           if (x == null || y == null) break;
           html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
           html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
@@ -314,7 +314,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           let valid = true;
           for (const p of d.points) {
             const x = chart.timeScale().timeToCoordinate(p.time as Time);
-            const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
+            const y = csRef.current?.priceToCoordinate(p.price);
             if (x == null || y == null) { valid = false; break; }
             pts += `${x},${y} `;
           }
@@ -327,9 +327,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points[d.points.length - 1];
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
 
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
@@ -348,9 +348,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points[d.points.length - 1];
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+          const y0 = csRef.current?.priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+          const y1 = csRef.current?.priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
           const markerId = `arrow-${col.replace('#','')}`;
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
