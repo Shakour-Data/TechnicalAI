@@ -430,11 +430,11 @@ export default function SymbolSearch({
     if (item.category === 'index') {
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
-          <span className='text-xs font-semibold text-[#2D2A26]'>{formatIdx(item.pl)}</span>
+          <span className='text-xs font-semibold text-[#111827]'>{formatIdx(item.pl)}</span>
           <span className={cn(
             'text-[11px] font-bold px-1.5 py-0.5 rounded',
             item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' :
-            item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#8A837B]',
+            item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]',
           )}>
             {item.pcp > 0 ? '+' : ''}{item.pcp?.toFixed(2)}%
           </span>
@@ -445,7 +445,7 @@ export default function SymbolSearch({
     if (isTgju && item.pl === 0) {
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5'>
-          <span className='text-xs text-[#8A837B]'>—</span>
+          <span className='text-xs text-[#6b7280]'>—</span>
         </div>
       );
     }
@@ -453,11 +453,11 @@ export default function SymbolSearch({
     const isDown = item.pcp < 0;
     return (
       <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
-        <span className='text-xs font-semibold text-[#2D2A26]'>{formatNum(item.pl)}</span>
+        <span className='text-xs font-semibold text-[#111827]'>{formatNum(item.pl)}</span>
         <span className={cn(
           'text-[11px] font-bold px-1.5 py-0.5 rounded',
           isUp ? 'bg-emerald-50 text-emerald-700' :
-          isDown ? 'bg-red-50 text-red-700' : 'text-[#8A837B]',
+          isDown ? 'bg-red-50 text-red-700' : 'text-[#6b7280]',
         )}>
           {isUp ? '+' : ''}{item.pcp?.toFixed(2)}%
         </span>
@@ -471,7 +471,7 @@ export default function SymbolSearch({
     <div dir='rtl' className={cn('relative', className)}>
 
       <div className='relative'>
-        <Search className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A837B] pointer-events-none' />
+        <Search className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280] pointer-events-none' />
         <Input
           ref={inputRef}
           type='text'
@@ -482,8 +482,8 @@ export default function SymbolSearch({
           placeholder={placeholder}
           suppressHydrationWarning
           className={cn(
-            'h-10 w-full rounded-lg border border-[#E5DFD6] bg-white',
-            'text-sm text-[#2D2A26] placeholder:text-[#8A837B]',
+            'h-10 w-full rounded-lg border border-[#e5e7eb] bg-white',
+            'text-sm text-[#111827] placeholder:text-[#6b7280]',
             'transition-all',
             'focus-visible:border-amber-500/60 focus-visible:ring-amber-500/20 focus-visible:ring-[3px]',
             'pr-9',
@@ -491,7 +491,7 @@ export default function SymbolSearch({
           autoComplete='off' spellCheck={false}
         />
         {query && (
-          <button onClick={clear} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#8A837B] hover:text-[#2D2A26] transition-colors' type='button'>
+          <button onClick={clear} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#111827] transition-colors' type='button'>
             <X className='w-4 h-4' />
           </button>
         )}
@@ -501,11 +501,11 @@ export default function SymbolSearch({
       {open && (
         <div
           ref={dropdownRef}
-          className='absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[#E5DFD6] bg-white shadow-xl shadow-black/10 overflow-hidden'
+          className='absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[#e5e7eb] bg-white shadow-xl shadow-black/10 overflow-hidden'
           style={{ width: 'min(660px, 94vw)' }}
         >
 
-          <div className='flex items-center gap-1 px-3 py-2 border-b border-[#E5DFD6] overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
+          <div className='flex items-center gap-1 px-3 py-2 border-b border-[#e5e7eb] overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
             {CATEGORIES.map((cat) => {
               const Icon = cat.icon;
               const isActive = activeCategory === cat.key;
@@ -520,7 +520,7 @@ export default function SymbolSearch({
                       ? isTgjuCat
                         ? 'bg-teal-50 text-teal-700'
                         : 'bg-amber-50 text-amber-800'
-                      : 'text-[#5C5650] hover:text-[#2D2A26] hover:bg-[#F5F0E8]',
+                      : 'text-[#374151] hover:text-[#111827] hover:bg-[#f3f4f6]',
                   )}
                   type='button'
                 >
@@ -533,7 +533,7 @@ export default function SymbolSearch({
 
 
           {activeCategory === 'stocks' && (
-            <div className='relative px-3 py-2 border-b border-[#E5DFD6]'>
+            <div className='relative px-3 py-2 border-b border-[#e5e7eb]'>
               <div className='flex items-center gap-2 overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
                 <button
                   onClick={() => handleIndustryChange(null)}
@@ -541,7 +541,7 @@ export default function SymbolSearch({
                     'flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-all shrink-0',
                     !activeIndustry
                       ? 'bg-blue-50 text-blue-700'
-                      : 'text-[#8A837B] hover:text-[#2D2A26] hover:bg-[#F5F0E8]',
+                      : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]',
                   )}
                   type='button'
                 >
@@ -556,7 +556,7 @@ export default function SymbolSearch({
                       'px-3 py-1 rounded-md text-[11px] whitespace-nowrap transition-all shrink-0',
                       activeIndustry === ind
                         ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-[#8A837B] hover:text-[#2D2A26] hover:bg-[#F5F0E8]',
+                        : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]',
                     )}
                     type='button'
                   >
@@ -569,7 +569,7 @@ export default function SymbolSearch({
                       onClick={() => setShowIndustryPicker(!showIndustryPicker)}
                       className={cn(
                         'flex items-center gap-1 px-3 py-1 rounded-md text-[11px] transition-all',
-                        showIndustryPicker ? 'bg-blue-50 text-blue-700' : 'text-[#8A837B] hover:text-[#2D2A26] hover:bg-[#F5F0E8]',
+                        showIndustryPicker ? 'bg-blue-50 text-blue-700' : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]',
                       )}
                       type='button'
                     >
@@ -577,7 +577,7 @@ export default function SymbolSearch({
                       <ChevronDown className={cn('w-3 h-3 transition-transform', showIndustryPicker && 'rotate-180')} />
                     </button>
                     {showIndustryPicker && (
-                      <div className='absolute top-full mt-1 left-0 right-0 z-10 rounded-lg border border-[#E5DFD6] bg-white shadow-xl p-2 max-h-[200px] overflow-y-auto' style={{ scrollbarWidth: 'thin', scrollbarColor: '#E5DFD6 transparent' }}>
+                      <div className='absolute top-full mt-1 left-0 right-0 z-10 rounded-lg border border-[#e5e7eb] bg-white shadow-xl p-2 max-h-[200px] overflow-y-auto' style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
                         {industries.slice(8).map((ind) => (
                           <button
                             key={ind}
@@ -586,7 +586,7 @@ export default function SymbolSearch({
                               'block w-full text-right px-3 py-1.5 rounded-md text-[11px] transition-all',
                               activeIndustry === ind
                                 ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-[#8A837B] hover:text-[#2D2A26] hover:bg-[#F5F0E8]',
+                                : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]',
                             )}
                             type='button'
                           >
@@ -611,28 +611,28 @@ export default function SymbolSearch({
           )}
 
           {loading && results.length === 0 && (
-            <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-[#8A837B]'>
+            <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-[#6b7280]'>
               <Spinner /><span>در حال بارگذاری ...</span>
             </div>
           )}
 
           {!loading && results.length === 0 && query.trim().length > 0 && (
             <div className='px-4 py-8 text-center'>
-              <div className='text-[#8A837B] text-sm mb-1'>ابزاری با این نام یافت نشد</div>
-              <div className='text-[#B0A89E] text-xs'>نام نماد، شرکت یا صنعت را به فارسی وارد کنید</div>
+              <div className='text-[#6b7280] text-sm mb-1'>ابزاری با این نام یافت نشد</div>
+              <div className='text-[#9ca3af] text-xs'>نام نماد، شرکت یا صنعت را به فارسی وارد کنید</div>
             </div>
           )}
 
           {results.length > 0 && (
             <>
-              <div className='flex items-center justify-between px-4 py-2 border-b border-[#E5DFD6]'>
-                <span className='text-xs text-[#8A837B]'>
+              <div className='flex items-center justify-between px-4 py-2 border-b border-[#e5e7eb]'>
+                <span className='text-xs text-[#6b7280]'>
                   {isPopular && '🔥 محبوب‌ترین‌ها'}
                   {!isPopular && !isSearch && activeCategory !== 'all' && `${activeIndustry || CATEGORIES.find(c => c.key === activeCategory)?.label || ''}`}
                   {isSearch && <>{totalMatched.toLocaleString('fa-IR')} نتیجه</>}
                 </span>
                 {isSearch && (
-                  <span className='text-[10px] text-[#B0A89E]'>↑↓ ناوبری &nbsp; Enter انتخاب &nbsp; Esc بستن</span>
+                  <span className='text-[10px] text-[#9ca3af]'>↑↓ ناوبری &nbsp; Enter انتخاب &nbsp; Esc بستن</span>
                 )}
               </div>
 
@@ -640,7 +640,7 @@ export default function SymbolSearch({
                 ref={industryScrollRef}
                 role='listbox'
                 className='max-h-[360px] overflow-y-auto'
-                style={{ scrollbarWidth: 'thin', scrollbarColor: '#E5DFD6 transparent' }}
+                style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}
               >
                 {results.map((item, index) => {
                   const isActive = index === activeIndex;
@@ -655,13 +655,13 @@ export default function SymbolSearch({
                       onClick={() => selectSymbol(item)}
                       className={cn(
                         'flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm transition-all',
-                        'border-b border-[#E5DFD6]/50 last:border-b-0',
-                        isActive ? (isTgjuItem ? 'bg-teal-50 text-[#2D2A26]' : 'bg-amber-50 text-[#2D2A26]') : 'text-[#2D2A26] hover:bg-[#F5F0E8]',
+                        'border-b border-[#e5e7eb]/50 last:border-b-0',
+                        isActive ? (isTgjuItem ? 'bg-teal-50 text-[#111827]' : 'bg-amber-50 text-[#111827]') : 'text-[#111827] hover:bg-[#f3f4f6]',
                       )}
                     >
                       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
                         <div className='flex items-center gap-2'>
-                          <span className='truncate font-bold text-sm text-[#2D2A26]'>{item.l18}</span>
+                          <span className='truncate font-bold text-sm text-[#111827]'>{item.l18}</span>
                           {item.pcp > 0 && <TrendingUp className='w-3 h-3 text-emerald-600 shrink-0' />}
                           {item.pcp < 0 && <TrendingDown className='w-3 h-3 text-red-600 shrink-0' />}
                           <span className={cn(
@@ -672,10 +672,10 @@ export default function SymbolSearch({
                           </span>
                         </div>
                         {item.l30 && item.l30 !== item.l18 && (
-                          <span className='truncate text-[11px] text-[#8A837B] leading-tight'>{item.l30}</span>
+                          <span className='truncate text-[11px] text-[#6b7280] leading-tight'>{item.l30}</span>
                         )}
                         {item.cs && item.category === 'stock' && (
-                          <span className='truncate text-[10px] text-[#B0A89E] leading-tight'>{item.cs}</span>
+                          <span className='truncate text-[10px] text-[#9ca3af] leading-tight'>{item.cs}</span>
                         )}
                       </div>
                       {renderPrice(item)}
@@ -685,7 +685,7 @@ export default function SymbolSearch({
               </div>
 
               {!isPopular && totalMatched > MAX_RESULTS && (
-                <div className='px-4 py-2 border-t border-[#E5DFD6] text-center text-[11px] text-[#B0A89E]'>
+                <div className='px-4 py-2 border-t border-[#e5e7eb] text-center text-[11px] text-[#9ca3af]'>
                   و {((totalMatched - MAX_RESULTS).toLocaleString('fa-IR'))} مورد دیگر ... عبارت دقیق‌تری وارد کنید
                 </div>
               )}

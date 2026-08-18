@@ -44,13 +44,13 @@ export interface TradingViewChartProps {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Constants — BONE THEME (light)
+// Constants — WHITE/DARK THEME (light)
 // ═══════════════════════════════════════════════════════════════════
 
 const BULL = '#22a366';
 const BEAR = '#e04060';
-const BG = '#FFFCF8';
-const TXT = '#5C5650';
+const BG = '#ffffff';
+const TXT = '#374151';
 const GRID = 'rgba(0,0,0,0.04)';
 const BORDER_COLOR = 'rgba(0,0,0,0.08)';
 const MA21_COLOR = '#0891b2';
@@ -296,7 +296,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
   ];
 
   return (
-    <div dir="ltr" className="relative w-full rounded-2xl overflow-hidden border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm" style={{ height: 550 }}>
+    <div dir="ltr" className="relative w-full rounded-2xl overflow-hidden border border-[#e5e7eb] bg-[#ffffff] shadow-sm" style={{ height: 550 }}>
       {/* ── Chart container ── */}
       <div ref={containerRef} className="w-full h-full" />
 
@@ -328,5 +328,5 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
 export default TradingViewChartInner;
 
 export function TradingViewChartSkeleton() {
-  return <Skeleton className="w-full h-[550px] rounded-2xl bg-[#E5DFD6]" />;
+  return <Skeleton className="w-full h-[550px] rounded-2xl bg-[#e5e7eb]" />;
 }

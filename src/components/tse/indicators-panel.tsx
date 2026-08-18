@@ -97,10 +97,10 @@ function IndicatorCard({
   signal: 'bullish' | 'bearish' | 'neutral';
 }) {
   return (
-    <div className="bg-[#FFFCF8] border border-[#E5DFD6] rounded-xl p-3 flex items-center justify-between gap-2">
+    <div className="bg-[#ffffff] border border-[#e5e7eb] rounded-xl p-3 flex items-center justify-between gap-2">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-[11px] text-[#8A837B] truncate">{label}</span>
-        <span className="text-sm font-medium text-[#2D2A26] tabular-nums" dir="ltr">
+        <span className="text-[11px] text-[#6b7280] truncate">{label}</span>
+        <span className="text-sm font-medium text-[#111827] tabular-nums" dir="ltr">
           {value}
         </span>
       </div>
@@ -123,13 +123,13 @@ function SectionHeader({ title }: { title: string }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="bg-[#FFFCF8] rounded-2xl p-4 space-y-4">
+    <div className="bg-[#ffffff] rounded-2xl p-4 space-y-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-28 bg-[#E5DFD6]" />
+          <Skeleton className="h-4 w-28 bg-[#e5e7eb]" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {Array.from({ length: 3 }).map((_, j) => (
-              <Skeleton key={j} className="h-16 w-full bg-[#E5DFD6] rounded-xl" />
+              <Skeleton key={j} className="h-16 w-full bg-[#e5e7eb] rounded-xl" />
             ))}
           </div>
         </div>
@@ -147,7 +147,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
   const maSignal = 'neutral' as const;
 
   return (
-    <div className="bg-[#FFFCF8] rounded-2xl p-4 space-y-1" dir="rtl">
+    <div className="bg-[#ffffff] rounded-2xl p-4 space-y-1" dir="rtl">
       {/* ── میانگین‌های متحرک (Moving Averages) ─────────────────────── */}
       <SectionHeader title="میانگین‌های متحرک" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -240,16 +240,16 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
           const t = ta.trend[period];
           const labels: Record<string, string> = { short: 'کوتاه‌مدت', medium: 'میان‌مدت', long: 'بلندمدت' };
           const arrow = t.direction === 'up' ? '↑' : t.direction === 'down' ? '↓' : '→';
-          const arrowColor = t.direction === 'up' ? 'text-emerald-700' : t.direction === 'down' ? 'text-red-700' : 'text-[#8A837B]';
+          const arrowColor = t.direction === 'up' ? 'text-emerald-700' : t.direction === 'down' ? 'text-red-700' : 'text-[#6b7280]';
           return (
-            <div key={period} className="bg-[#FFFCF8] border border-[#E5DFD6] rounded-xl p-3 flex items-center justify-between gap-2">
+            <div key={period} className="bg-[#ffffff] border border-[#e5e7eb] rounded-xl p-3 flex items-center justify-between gap-2">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11px] text-[#8A837B]">{labels[period]}</span>
+                <span className="text-[11px] text-[#6b7280]">{labels[period]}</span>
                 <div className="flex items-center gap-2 text-sm">
                   <span className={`text-lg font-bold ${arrowColor}`}>{arrow}</span>
-                  <span className="text-[#5C5650] tabular-nums" dir="ltr">{toFa(t.angle)}°</span>
+                  <span className="text-[#374151] tabular-nums" dir="ltr">{toFa(t.angle)}°</span>
                 </div>
-                <span className="text-[11px] text-[#8A837B] tabular-nums" dir="ltr">R²: {(t.r2 * 100).toFixed(1)}%</span>
+                <span className="text-[11px] text-[#6b7280] tabular-nums" dir="ltr">R²: {(t.r2 * 100).toFixed(1)}%</span>
               </div>
               {signalDot(trendDirSignal(t.direction))}
             </div>
@@ -259,9 +259,9 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
 
       {/* ── امتیاز کلی (Overall Score) ────────────────────────────────── */}
       <SectionHeader title="امتیاز کلی" />
-      <div className="bg-[#FFFCF8] border border-[#E5DFD6] rounded-xl p-4 space-y-3">
+      <div className="bg-[#ffffff] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
         {/* Progress bar */}
-        <div className="relative h-6 w-full rounded-full overflow-hidden bg-[#E5DFD6]">
+        <div className="relative h-6 w-full rounded-full overflow-hidden bg-[#e5e7eb]">
           <div
             className="absolute top-0 right-0 h-full rounded-r-full bg-emerald-600 transition-all duration-500"
             style={{ width: `${ta.bullScore}%` }}
@@ -285,7 +285,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
                 ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-sm font-semibold text-emerald-700'
                 : ta.overallSignal === 'bearish'
                 ? 'inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-4 py-1.5 text-sm font-semibold text-red-700'
-                : 'inline-flex items-center gap-1.5 rounded-full bg-[#E5DFD6]/50 border border-[#E5DFD6] px-4 py-1.5 text-sm font-semibold text-[#8A837B]'
+                : 'inline-flex items-center gap-1.5 rounded-full bg-[#e5e7eb]/50 border border-[#e5e7eb] px-4 py-1.5 text-sm font-semibold text-[#6b7280]'
             }
           >
             {signalDot(ta.overallSignal)}

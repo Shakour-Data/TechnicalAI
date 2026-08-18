@@ -618,7 +618,7 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   // 12. Adaptive gap enforcement — keep highest strength in cluster
   // v2: enforce 5-10% gap between consecutive S/R lines
   function enforceGap(levels: LevelStrength[], targetCount: number): LevelStrength[] {
-    const gapSteps = [0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.045, 0.04, 0.035, 0.03];
+    const gapSteps = [0.10, 0.09, 0.08, 0.07, 0.06, 0.05];
     for (const gapPct of gapSteps) {
       if (levels.length === 0) return [];
       const result: LevelStrength[] = [levels[0]];

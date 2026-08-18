@@ -1,0 +1,1026 @@
+     1→'use client';
+     2→
+     3→import React, { useRef, useMemo, useCallback } from 'react';
+     4→import { Skeleton } from '@/components/ui/skeleton';
+     5→import TradingViewChart, { TradingViewChartSkeleton, type CandleData } from '@/components/tse/tradingview-chart';
+     6→import { toPng, toSvg } from 'html-to-image';
+     7→import { jsPDF } from 'jspdf';
+     8→import * as XLSX from 'xlsx';
+     9→import { saveAs } from 'file-saver';
+    10→import { candleDateToJalali, fullPersianDate, toPersianDigits } from '@/lib/jalali';
+    11→import {
+    12→  DropdownMenu,
+    13→  DropdownMenuContent,
+    14→  DropdownMenuItem,
+    15→  DropdownMenuTrigger,
+    16→} from '@/components/ui/dropdown-menu';
+    17→import {
+    18→  FileCode,
+    19→  FileText,
+    20→  FileDown,
+    21→  Table,
+    22→  FileSpreadsheet,
+    23→  Camera,
+    24→  Download,
+    25→  ChevronDown,
+    26→} from 'lucide-react';
+    27→
+    28→// ═══════════════════════════════════════════════════════════════════
+    29→// Types
+    30→// ═══════════════════════════════════════════════════════════════════
+    31→
+    32→interface Scenario {
+    33→  name: string;
+    34→  nameEn: string;
+    35→  probability: number;
+    36→  targetMin: number;
+    37→  targetMax: number;
+    38→  description: string;
+    39→}
+    40→
+    41→export interface VdesAnalysisProps {
+    42→  symbolName: string;
+    43→  candles: CandleData[];
+    44→  currentPrice: number;
+    45→  resistances: number[];
+    46→  supports: number[];
+    47→  ma21: number;
+    48→  ma100: number;
+    49→  rsi: number;
+    50→  mfi: number;
+    51→  cci: number;
+    52→  adx: number;
+    53→  stochK: number;
+    54→  stochD: number;
+    55→  macdLine: number;
+    56→  macdSignal: number;
+    57→  macdHist: number;
+    58→  diPlus: number;
+    59→  diMinus: number;
+    60→  sar: number;
+    61→  atr: number;
+    62→  obv: number;
+    63→  bollingerUpper: number;
+    64→  bollingerMiddle: number;
+    65→  bollingerLower: number;
+    66→  trendDirection: string;
+    67→  trendAngle: number;
+    68→  trendR2: number;
+    69→  overallSignal: string;
+    70→  scenarios: {
+    71→    R1: Scenario;
+    72→    R2: Scenario;
+    73→    R3: Scenario;
+    74→    R4: Scenario;
+    75→    R5: Scenario;
+    76→  };
+    77→  supportStrengths: { price: number; strength: number; isTarget: boolean }[];
+    78→  resistanceStrengths: { price: number; strength: number; isTarget: boolean }[];
+    79→  priceTargets: { price: number; strength: number; isTarget: boolean }[];
+    80→  hasVolume?: boolean;
+    81→}
+    82→
+    83→// ═══════════════════════════════════════════════════════════════════
+    84→// Constants — BONE THEME
+    85→// ═══════════════════════════════════════════════════════════════════
+    86→
+    87→const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+    88→
+    89→const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;
+    90→
+    91→const SCENARIO_META: Record<string, { label: string; type: string; border: string; badgeBg: string; badgeColor: string }> = {
+    92→  R1: { label: 'تداوم صعود هیجانی', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
+    93→  R2: { label: 'پولبک سالم', type: 'pullback', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
+    94→  R3: { label: 'اصلاح کنترل‌شده', type: 'down', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
+    95→  R4: { label: 'اصلاح عمیق', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
+    96→  R5: { label: 'تضعیف ساختار', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
+    97→};
+    98→
+    99→const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
+   100→  R1: { text: 'صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+   101→  R2: { text: 'صعود تدریجی — ورود در اصلاح توصیه می‌شود', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
+   102→  R3: { text: 'بازار رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
+   103→  R4: { text: 'اصلاحی — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+   104→  R5: { text: 'نزولی قوی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+   105→};
+   106→
+   107→// ═══════════════════════════════════════════════════════════════════
+   108→// Dynamic Analysis Text Generator
+   109→// ═══════════════════════════════════════════════════════════════════
+   110→
+   111→interface AnalysisContext {
+   112→  symbolName: string;
+   113→  currentPrice: number;
+   114→  ma21: number;
+   115→  ma100: number;
+   116→  rsi: number;
+   117→  mfi: number;
+   118→  cci: number;
+   119→  adx: number;
+   120→  stochK: number;
+   121→  stochD: number;
+   122→  macdLine: number;
+   123→  macdSignal: number;
+   124→  macdHist: number;
+   125→  diPlus: number;
+   126→  diMinus: number;
+   127→  sar: number;
+   128→  atr: number;
+   129→  obv: number;
+   130→  bollingerUpper: number;
+   131→  bollingerMiddle: number;
+   132→  bollingerLower: number;
+   133→  trendDirection: string;
+   134→  trendAngle: number;
+   135→  trendR2: number;
+   136→  overallSignal: string;
+   137→  highestKey: string;
+   138→  highestProb: number;
+   139→  scenarios: VdesAnalysisProps['scenarios'];
+   140→  S1: number;
+   141→  R1: number;
+   142→  R2: number;
+   143→  hasVolume: boolean;
+   144→}
+   145→
+   146→function generateAnalysisText(ctx: AnalysisContext) {
+   147→  const {
+   148→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   149→    stochK, stochD, macdLine, macdSignal, macdHist,
+   150→    diPlus, diMinus, sar, atr, obv,
+   151→    bollingerUpper, bollingerMiddle, bollingerLower,
+   152→    trendDirection, trendAngle, trendR2, overallSignal,
+   153→    highestKey, highestProb, scenarios, S1, R1, R2,
+   154→  } = ctx;
+   155→
+   156→  const r1r2 = scenarios.R1.probability + scenarios.R2.probability;
+   157→  const r4r5 = scenarios.R4.probability + scenarios.R5.probability;
+   158→  const r3 = scenarios.R3.probability;
+   159→  const dominant = SCENARIO_META[highestKey].label;
+   160→
+   161→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   162→  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+   163→  const macdBullish = macdLine > macdSignal;
+   164→  const bbRange = bollingerUpper - bollingerLower;
+   165→  const bbPos = bbRange > 0 ? ((currentPrice - bollingerLower) / bbRange * 100).toFixed(0) : '50';
+   166→  const bbSignal = currentPrice > bollingerUpper ? 'بالای باند بالایی (اشباع خرید)'
+   167→    : currentPrice < bollingerLower ? 'زیر باند پایینی (اشباع فروش)'
+   168→    : `داخل باندها (${bbPos}٪ از بازه)`;
+   169→  const diSignal = diPlus > diMinus
+   170→    ? `DI+ (${toFa(diPlus)}) بالاتر از DI- (${toFa(diMinus)}) — فشار خرید غالب`
+   171→    : `DI- (${toFa(diMinus)}) بالاتر از DI+ (${toFa(diPlus)}) — فشار فروش غالب`;
+   172→  const trendText = trendDirection === 'up'
+   173→    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+   174→    : trendDirection === 'down'
+   175→    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+   176→    : 'خنثی و بدون جهت مشخص';
+   177→
+   178→  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+   179→  const trendColor = trendDirection === 'up' ? 'text-emerald-700' : trendDirection === 'down' ? 'text-red-700' : 'text-amber-800';
+   180→  const aboveBelow = (price: number, target: number) => price > target ? 'بالاتر' : 'پایین‌تر';
+   181→  const abColor = (price: number, target: number) => price > target ? 'text-emerald-700' : 'text-red-700';
+   182→
+   183→  const adxText = adx > 40 ? 'روند قدرتمند' : adx > 25 ? 'روند متوسط' : 'روند ضعیف یا رنج';
+   184→  const adxColor = adx > 40 ? 'text-emerald-700' : adx > 25 ? 'text-amber-800' : 'text-[#8A837B]';
+   185→
+   186→  // ── PARAGRAPH 1: General Trend & Price Position ──
+   187→  const p1 = (
+   188→    <>
+   189→      <strong className="text-amber-800">روند کلی و موقعیت قیمت:</strong>{' '}
+   190→      سناریوی غالب برای سهم {symbolName} <b className="text-[#2D2A26]">{dominant}</b> با احتمال <b className="text-[#2D2A26]">{toFa(highestProb)}٪</b> می‌باشد.
+   191→      قیمت در محدوده <b className="text-[#2D2A26]">{toFa(currentPrice)} ریال</b> معامله می‌شود و روند میان‌مدت{' '}
+   192→      <b className={trendColor}>{trendLabel}</b>
+   193→      {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={+(trendR2 * 100).toFixed(1)}%).
+   194→      قیمت نسبت به MA21 ({toFa(ma21)} ریال){' '}
+   195→      <span className={abColor(currentPrice, ma21)}>{aboveBelow(currentPrice, ma21)}</span>
+   196→      {' '}و نسبت به MA100 ({toFa(ma100)} ریال){' '}
+   197→      <span className={abColor(currentPrice, ma100)}>{aboveBelow(currentPrice, ma100)}</span>
+   198→      {' '}قرار دارد.
+   199→      اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
+   200→      {sar < currentPrice
+   201→        ? <><span>زیر قیمت قرار دارد که <b className="text-emerald-700">تأیید روند صعودی</b> است.</span></>
+   202→        : <><span>بالای قیمت قرار دارد که <b className="text-red-700">تأیید روند نزولی</b> است.</span></>
+   203→      }
+   204→      {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده <b className={adxText}>{adxText}</b> می‌باشد.
+   205→      {' '}{diSignal}.
+   206→    </>
+   207→  );
+   208→
+   209→  // ── PARAGRAPH 2: Oscillator & Momentum (scenario-aware) ──
+   210→  let p2: React.ReactNode;
+   211→  if (highestKey === 'R1') {
+   212→    p2 = (
+   213→      <>
+   214→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — مومنتوم صعودی قوی:</strong>{' '}
+   215→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
+   216→        <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#5C5650]'}>{rsiSignal}</b>
+   217→        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز هیجانی صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
+   218→        {' '}قرار دارد.
+   219→        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.
+   220→        CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   221→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
+   222→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با{' '}
+   223→        {macdBullish
+   224→          ? <span className="text-emerald-700">عبور خط اصلی بالای خط سیگنال — تأیید‌کننده مومنتوم صعودی قدرتمند</span>
+   225→          : <span className="text-red-700">خط اصلی زیر خط سیگنال — هشدار کاهش مومنتوم</span>}
+   226→        . هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت و در حال گسترش</span> : <span className="text-red-700">منفی</span>}.
+   227→        در مجموع، اندیکاتورها {r1r2 > 60 ? 'پتانسیل بالای ادامه صعود' : 'مومنتوم صعودی با قدرت متوسط'} را تأیید می‌کنند.
+   228→      </>
+   229→    );
+   230→  } else if (highestKey === 'R2') {
+   231→    p2 = (
+   232→      <>
+   233→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — فرصت پولبک:</strong>{' '}
+   234→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#5C5650]'}>{rsiSignal}</b> قرار دارد
+   235→        {rsi < 50 && rsi > 30 && <span> — این سطح ایده‌آل برای ورود در پولبک سالم محسوب می‌شود.</span>}.
+   236→        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش — فرصت ورود</span> : <span>در محدوده طبیعی برای پولبک</span>}.
+   237→        CCI ({toFa(cci)}) {cci > 100 ? <span>بالاتر از +100 — حرکت هنوز قوی است</span> : cci < -100 ? <span className="text-emerald-700">پایین‌تر از -100 — منطقه اشباع فروش و ورود جذاب</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   238→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
+   239→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+   240→        {macdBullish
+   241→          ? <span className="text-emerald-700">خط اصلی بالای سیگنال — ساختار صعودی حفظ شده</span>
+   242→          : <span className="text-amber-800">احتمال تقاطع نزولی — منتظر تأیید بازگشت بمانید</span>}.
+   243→        هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت</span> : <span className="text-amber-800">در حال کاهش — احتیاط توصیه می‌شود</span>}.
+   244→        اندیکاتورها فرصت خرید در محدوده‌های حمایت را نشان می‌دهند.
+   245→      </>
+   246→    );
+   247→  } else if (highestKey === 'R3') {
+   248→    p2 = (
+   249→      <>
+   250→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — بازار بدون جهت:</strong>{' '}
+   251→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#5C5650]'}>{rsiSignal}</b> قرار دارد.
+   252→        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش</span> : <span>در محدوده خنثی</span>}.
+   253→        CCI ({toFa(cci)}) {cci > 100 ? <span>بالاتر از +100</span> : cci < -100 ? <span>پایین‌تر از -100</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   254→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
+   255→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+   256→        {macdBullish
+   257→          ? <span className="text-emerald-700">صعودی اما ضعیف</span>
+   258→          : <span className="text-red-700">نزولی اما ضعیف</span>}.
+   259→        هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت</span> : <span className="text-red-700">منفی</span>} — مومنتوم پایین.
+   260→        اندیکاتورها تأییدکننده فاز رنج و عدم قطعیت بازار هستند. خروج از محدوده رنج نیاز به تأیید مومنتوم دارد.
+   261→      </>
+   262→    );
+   263→  } else if (highestKey === 'R4') {
+   264→    p2 = (
+   265→      <>
+   266→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — هشدار اصلاح:</strong>{' '}
+   267→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#5C5650]'}>{rsiSignal}</b> قرار دارد
+   268→        {rsi < 40 && <span> — روند نزولی RSI هشدار ادامه اصلاح است.</span>}.
+   269→        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی محتمل</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش شدید — احتمال بازگشت کوتاه‌مدت</span> : <span>در محدوده نزولی</span>}.
+   270→        CCI ({toFa(cci)}) {cci > 100 ? <span className="text-red-700">بالاتر از +100 — ممکن است واگرایی منفی باشد</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 — فشار فروش قوی</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   271→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
+   272→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+   273→        {macdBullish
+   274→          ? <span className="text-amber-800">صعودی اما در روند نزولی — سیگنال ضعیف</span>
+   275→          : <span className="text-red-700">تقاطع نزولی — تأیید‌کننده فشار فروش</span>}.
+   276→        هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-amber-800">مثبت اما ضعیف</span> : <span className="text-red-700">منفی و در حال گسترش</span>}.
+   277→        در مجموع، اندیکاتورها هشدار اصلاح عمیق‌تر را صادر می‌کنند.
+   278→      </>
+   279→    );
+   280→  } else {
+   281→    // R5
+   282→    p2 = (
+   283→      <>
+   284→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — تضعیف شدید ساختار:</strong>{' '}
+   285→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#5C5650]'}>{rsiSignal}</b> قرار دارد
+   286→        {rsi < 40 && <span> — سقوط RSI نشان‌دهنده فشار فروش سنگین است.</span>}.
+   287→        MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی خطرناک</span> : mfi < 20 ? <span className="text-red-700">اشباع فروش شدید — خروج پول گسترده</span> : <span>در حال کاهش — هشدار خروج پول</span>}.
+   288→        CCI ({toFa(cci)}) {cci > 100 ? <span className="text-red-700">بالاتر از +100 — واگرایی قطعی</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 — سقوط آزاد</span> : <span>در محدوده عادی اما رو به پایین</span>}.
+   289→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
+   290→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+   291→        {macdBullish
+   292→          ? <span className="text-amber-800">صعودی موقت — در ساختار نزولی قابل اعتماد نیست</span>
+   293→          : <span className="text-red-700">تقاطع نزولی عمیق — سیگنال خروج فوری</span>}.
+   294→        هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-amber-800">مثبت موقت</span> : <span className="text-red-700">منفی و تشدید شونده</span>}.
+   295→        تمام اندیکاتورها تضعیف ساختاری و هشدار خروج سرمایه را تأیید می‌کنند.
+   296→      </>
+   297→    );
+   298→  }
+   299→
+   300→  // ── PARAGRAPH 3: Bollinger Bands & Volatility ──
+   301→  const p3 = (
+   302→    <>
+   303→      <strong className="text-amber-800">تحلیل نوسانات و باند بولینگر:</strong>{' '}
+   304→      قیمت در باند بولینگر <b className="text-[#2D2A26]">{bbSignal}</b> قرار دارد.
+   305→      باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} ریال.
+   306→      {currentPrice > bollingerUpper
+   307→        ? ' عبور از باند بالایی معمولاً نشان‌دهنده ادامه حرکت صعودی کوتاه‌مدت یا واکنش به باند است.'
+   308→        : currentPrice < bollingerLower
+   309→        ? ' نزدیکی یا عبور از باند پایینی می‌تواند نشانه بازگشت قیمت به سمت باند میانی باشد.'
+   310→        : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
+   311→      {highestKey === 'R1' && ' فاصله قیمت از باند بالایی نشان‌دهنده شتاب صعودی است.'}
+   312→      {highestKey === 'R4' || highestKey === 'R5' ? ' نزدیکی به باند پایینی هشدار ادامه فشار نزولی است.' : ''}
+   313→      {highestKey === 'R3' && ' نوسان در محدوده باندها تأییدکننده فاز رنج بازار است.'}
+   314→    </>
+   315→  );
+   316→
+   317→  // ── PARAGRAPH 4: Volume & OBV Analysis (scenario-aware) — HIDDEN when no volume ──
+   318→  const p4 = ctx.hasVolume ? (
+   319→    <>
+   320→      <strong className="text-amber-800">تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
+   321→      شاخص جریان ورودی پول (OBV) در سطح <b className="text-[#2D2A26]">{obv > 0 ? '+' : ''}{(obv / 1e6).toFixed(1)}M</b> قرار دارد
+   322→      {obv > 0
+   323→        ? <span> که <b className="text-emerald-700">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است.
+   324→          {highestKey === 'R1' || highestKey === 'R2' ? ' این حجم مثبت تأیید‌کننده سناریوی صعودی است.' : ''}
+   325→          {highestKey === 'R3' ? ' اما در فاز رنج، حجم مثبت الزاماً سیگنال صعودی نیست.' : ''}
+   326→          {highestKey === 'R4' || highestKey === 'R5' ? ' اما با وجود حجم مثبت، ساختار قیمت ضعیف است — این تناقض قابل توجه است.' : ''}
+   327→        </span>
+   328→        : <span> که <b className="text-red-700">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد.
+   329→          {highestKey === 'R1' || highestKey === 'R2' ? ' خروج پول با سناریوی صعودی در تضاد است — احتیاط توصیه می‌شود.' : ''}
+   330→          {highestKey === 'R3' ? ' خروج پول در فاز رنج معمولاً پیش‌نشاننده شکست به سمت پایین است.' : ''}
+   331→          {highestKey === 'R4' || highestKey === 'R5' ? ' این خروج پول تأیید‌کننده سناریوی نزولی و ضرورت حفظ سرمایه است.' : ''}
+   332→        </span>
+   333→      }
+   334→    </>
+   335→  ) : (
+   336→    <>
+   337→      <strong className="text-amber-800">تحلیل نوسان پذیری:</strong>{' '}
+   338→      اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
+   339→      {atr > currentPrice * 0.03
+   340→        ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-800">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
+   341→        : <span> نوسان معقول که نشان‌دهنده <b className="text-[#5C5650]">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
+   342→      }
+   343→    </>
+   344→  );
+   345→
+   346→  // ── PARAGRAPH 5: Risk/Reward & Confluence (scenario-aware) ──
+   347→  let p5: React.ReactNode;
+   348→  if (highestKey === 'R1') {
+   349→    p5 = (
+   350→      <>
+   351→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   352→        با احتمال {toFa(highestProb)}٪ برای سناریوی {dominant}، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی قدرتمند</b> را تأیید می‌کنند.
+   353→        {r1r2 > 60 && <span> ترکیب احتمال صعودی {toFa(r1r2)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
+   354→        نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{((R1 - currentPrice) / (currentPrice - S1)).toFixed(1)}:1</b> محاسبه می‌شود.
+   355→        تلاقی MA21 و MA100{' '}
+   356→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   357→          ? <span className="text-amber-800">بسیار نزدیک به هم — تقاطع طلایی احتمالی</span>
+   358→          : ma21 > ma100
+   359→          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+   360→          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
+   361→        {' '}است. توصیه: در صورت شکست مقاومت {toFa(R1)}، هدف بعدی {toFa(R2)} ریال تعیین می‌شود.
+   362→      </>
+   363→    );
+   364→  } else if (highestKey === 'R2') {
+   365→    p5 = (
+   366→      <>
+   367→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   368→        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-emerald-700">فرصت خرید در اصلاح</b> است.
+   369→        {r1r2 > 60 && <span> مجموع احتمال صعودی {toFa(r1r2)}٪ — بایاس کلی مثبت است.</span>}
+   370→        بهترین نقطه ورود، محدوده بین MA21 ({toFa(ma21)}) و حمایت {toFa(S1)} ریال می‌باشد.
+   371→        نسبت ریسک به بازده با حد ضرر زیر {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{((R1 - currentPrice) / (currentPrice - S1)).toFixed(1)}:1</b> محاسبه می‌شود.
+   372→        تلاقی MA21 و MA100{' '}
+   373→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   374→          ? <span className="text-amber-800">نزدیک به هم — پایش تقاطع ضروری</span>
+   375→          : ma21 > ma100
+   376→          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100) — تأیید‌کننده پولبک سالم</span>
+   377→          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100) — هشدار تغییر ساختار</span>}
+   378→        {' '}. صبر و ورود پله‌ای توصیه می‌شود.
+   379→      </>
+   380→    );
+   381→  } else if (highestKey === 'R3') {
+   382→    p5 = (
+   383→      <>
+   384→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   385→        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
+   386→        {r3 > 40 && <span> با {toFa(r3)}٪ احتمال رنج، ورود به معامله <b className="text-amber-800">ریسک بالایی</b> دارد.</span>}
+   387→        سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بهترین استراتژی <b className="text-amber-800">انتظار و مشاهده</b> است.
+   388→        منتظر خروج قیمت از محدوده {toFa(S1)} تا {toFa(R1)} ریال بمانید.
+   389→        تلاقی MA21 و MA100{' '}
+   390→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   391→          ? <span className="text-amber-800">نزدیک به هم — هر گونه تقاطع می‌تواند سیگنال جهت باشد</span>
+   392→          : ma21 > ma100
+   393→          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+   394→          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
+   395→        {' '}. شکست سطوح کلیدی و مومنتوم MACD را پایش کنید.
+   396→      </>
+   397→    );
+   398→  } else if (highestKey === 'R4') {
+   399→    p5 = (
+   400→      <>
+   401→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   402→        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-red-700">ریسک اصلاح عمیق</b> است.
+   403→        {r4r5 > 60 && <span> مجموع احتمال نزولی {toFa(r4r5)}٪ — <b className="text-red-700">بایاس نزولی قوی</b> در بازار حاکم است.</span>}
+   404→        ورود به معامله خرید در این شرایط <b className="text-red-700">ریسک بالایی</b> دارد.
+   405→        تلاقی MA21 و MA100{' '}
+   406→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   407→          ? <span className="text-red-700">نزدیک به هم — احتمال تقاطع مرگ</span>
+   408→          : ma21 > ma100
+   409→          ? <span className="text-amber-800">به نفع صعودی اما در حال ضعیف شدن</span>
+   410→          : <span className="text-red-700">به نفع نزولی — تأیید‌کننده فشار فروش</span>}
+   411→        {' '}. توصیه: احتیاط و انتظار برای بازگشت به محدوده حمایت {toFa(S1)} ریال.
+   412→      </>
+   413→    );
+   414→  } else {
+   415→    // R5
+   416→    p5 = (
+   417→      <>
+   418→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   419→        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-red-700">تضعیف شدید ساختار</b> است.
+   420→        {r4r5 > 60 && <span> مجموع احتمال نزولی {toFa(r4r5)}٪ — <b className="text-red-700">بایاس نزولی بسیار قوی</b> حاکم است.</span>}
+   421→        تمام شاخص‌ها هشدار <b className="text-red-700">خروج فوری</b> را صادر می‌کنند.
+   422→        تلاقی MA21 و MA100{' '}
+   423→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   424→          ? <span className="text-red-700">تقاطع مرگ در حال تکوین</span>
+   425→          : ma21 > ma100
+   426→          ? <span className="text-amber-800">MA21 هنوز بالاتر اما به سرعت در حال نزدیک شدن</span>
+   427→          : <span className="text-red-700">MA21 زیر MA100 — تأیید نهایی ساختار نزولی</span>}
+   428→        {' '}. حفظ سرمایه اولویت اول است. از هرگونه موقعیت خرید جدید خودداری کنید.
+   429→      </>
+   430→    );
+   431→  }
+   432→
+   433→  return [p1, p2, p3, p4, p5];
+   434→}
+   435→
+   436→// ═══════════════════════════════════════════════════════════════════
+   437→// Sub-components
+   438→// ═══════════════════════════════════════════════════════════════════
+   439→
+   440→function StrengthBar({ strength }: { strength: number }) {
+   441→  const pct = (strength / 10) * 100;
+   442→  const color = strength >= 7 ? '#047857' : strength >= 4 ? '#b45309' : '#8A837B';
+   443→  return (
+   444→    <div className="flex items-center gap-2">
+   445→      <div className="w-16 h-2 rounded-full bg-[#E5DFD6] overflow-hidden">
+   446→        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+   447→      </div>
+   448→      <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{strength}</span>
+   449→    </div>
+   450→  );
+   451→}
+   452→
+   453→// ═══════════════════════════════════════════════════════════════════
+   454→// Component
+   455→// ═══════════════════════════════════════════════════════════════════
+   456→
+   457→export default function VdesAnalysis(props: VdesAnalysisProps) {
+   458→  const {
+   459→    symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
+   460→    rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
+   461→    diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
+   462→    trendDirection, trendAngle, trendR2, overallSignal, scenarios,
+   463→    supportStrengths, resistanceStrengths, priceTargets, hasVolume,
+   464→  } = props;
+   465→
+   466→  const vdesRef = useRef<HTMLDivElement>(null);
+   467→  const chartRef = useRef<HTMLDivElement>(null);
+   468→
+   469→  const R1_level = resistances[0] ?? currentPrice * 1.05;
+   470→  const R2_level = resistances[1] ?? currentPrice * 1.10;
+   471→  const S1_level = supports[0] ?? currentPrice * 0.95;
+   472→  const S2_level = supports[1] ?? currentPrice * 0.90;
+   473→  const S3_level = supports[2] ?? currentPrice * 0.85;
+   474→
+   475→  const targetMin = Math.round(R1_level + (R2_level - R1_level) * 0.5);
+   476→  const targetMax = Math.round(R2_level + (R2_level - R1_level) * 0.8);
+   477→
+   478→  // ── Dominant scenario ──────────────────────────────────────────
+   479→  let highestKey = 'R3';
+   480→  let highestProb = 0;
+   481→  for (const key of SCENARIO_KEYS) {
+   482→    if (scenarios[key].probability > highestProb) {
+   483→      highestProb = scenarios[key].probability;
+   484→      highestKey = key;
+   485→    }
+   486→  }
+   487→  const strategy = STRATEGY_MAP[highestKey];
+   488→  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + scenarios[k].probability, 0);
+   489→
+   490→  // ── RSI signal ─────────────────────────────────────────────────
+   491→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   492→
+   493→  // ── Trend text ─────────────────────────────────────────────────
+   494→  const trendText = trendDirection === 'up'
+   495→    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+   496→    : trendDirection === 'down'
+   497→    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${(trendR2 * 100).toFixed(1)}%`
+   498→    : 'خنثی و بدون جهت مشخص';
+   499→
+   500→  // ── Shamsi dates ───────────────────────────────────────────────
+   501→  const lastCandleDate = candles.length > 0 ? candles[candles.length - 1].date : '';
+   502→  const lastCandleJalali = lastCandleDate ? fullPersianDate(lastCandleDate) : '';
+   503→  const chartJalaliDate = lastCandleDate ? candleDateToJalali(lastCandleDate, 'compact') : '';
+   504→
+   505→  // ── TradingView scenario colors ────────────────────────────────
+   506→  const tvScenarios = useMemo(() => {
+   507→    const colors: Record<string, string> = {
+   508→      R1: '#34c98b', R2: '#3ad5db', R3: '#ff7b32', R4: '#ffb11b', R5: '#ef4d62',
+   509→    };
+   510→    return Object.fromEntries(
+   511→      SCENARIO_KEYS.map(k => [k, {
+   512→        targetMin: scenarios[k].targetMin,
+   513→        targetMax: scenarios[k].targetMax,
+   514→        name: scenarios[k].name,
+   515→        probability: scenarios[k].probability,
+   516→        color: colors[k],
+   517→      }])
+   518→    );
+   519→  }, [scenarios]);
+   520→
+   521→  // ── Dynamic analysis text ──────────────────────────────────────
+   522→  const analysisParagraphs = useMemo(() => {
+   523→    return generateAnalysisText({
+   524→      symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   525→      stochK, stochD, macdLine, macdSignal, macdHist,
+   526→      diPlus, diMinus, sar, atr, obv,
+   527→      bollingerUpper, bollingerMiddle, bollingerLower,
+   528→      trendDirection, trendAngle, trendR2, overallSignal,
+   529→      highestKey, highestProb, scenarios,
+   530→      S1: S1_level, R1: R1_level, R2: R2_level,
+   531→      hasVolume: hasVolume ?? false,
+   532→    });
+   533→  }, [
+   534→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   535→    stochK, stochD, macdLine, macdSignal, macdHist,
+   536→    diPlus, diMinus, sar, atr, obv,
+   537→    bollingerUpper, bollingerMiddle, bollingerLower,
+   538→    trendDirection, trendAngle, trendR2, overallSignal,
+   539→    highestKey, highestProb, scenarios,
+   540→    S1_level, R1_level, R2_level, hasVolume,
+   541→  ]);
+   542→
+   543→  // ── Strategy recommendation text ────────────────────────────────
+   544→  const strategyText = rsi > 70 || mfi > 80
+   545→    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
+   546→    : rsi < 30 || mfi < 20
+   547→    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}, MFI: ${toFa(mfi)}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
+   548→    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
+   549→
+   550→  // ── File name helper ───────────────────────────────────────────
+   551→  const today = new Date().toISOString().slice(0, 10);
+   552→  const fileBase = `${symbolName}_VDes_${today}`;
+   553→
+   554→  // ═══ EXPORT FUNCTIONS ═══════════════════════════════════════════
+   555→
+   556→  const exportHTML = useCallback(async () => {
+   557→    if (!vdesRef.current) return;
+   558→    const html = `<!DOCTYPE html>
+   559→<html lang="fa" dir="rtl">
+   560→<head>
+   561→<meta charset="UTF-8">
+   562→<meta name="viewport" content="width=device-width, initial-scale=1.0">
+   563→<title>تحلیل تکنیکال ${symbolName} — VDes</title>
+   564→<style>
+   565→* { box-sizing: border-box; margin: 0; padding: 0; }
+   566→body { font-family: Tahoma, 'Segoe UI', Arial, sans-serif; background: #F5F0E8; color: #2D2A26; padding: 24px; line-height: 1.8; }
+   567→.container { max-width: 960px; margin: 0 auto; }
+   568→.header { background: #FFFCF8; border: 1px solid #E5DFD6; border-radius: 16px; padding: 20px 24px; margin-bottom: 20px; }
+   569→.header h1 { color: #92600A; font-size: 20px; margin-bottom: 8px; }
+   570→.badge { display: inline-block; padding: 4px 12px; border-radius: 20px; border: 1px solid #E5DFD6; background: #F5F0E8; font-size: 12px; margin: 4px; color: #5C5650; }
+   571→.badge strong { color: #2D2A26; }
+   572→.section { background: #FFFCF8; border: 1px solid #E5DFD6; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+   573→.section h2 { color: #92600A; font-size: 14px; margin-bottom: 12px; }
+   574→.section p { font-size: 13px; color: #5C5650; margin-bottom: 12px; }
+   575→.section p strong { color: #92600A; }
+   576→.scenario-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
+   577→.scenario-card { border: 1px solid #E5DFD6; border-top: 3px solid; border-radius: 8px; padding: 12px; text-align: center; background: #F5F0E8; }
+   578→.scenario-card .prob { font-size: 22px; font-weight: 900; margin: 6px 0; }
+   579→.scenario-card .range { font-size: 10px; color: #8A837B; }
+   580→.bar-bg { height: 6px; background: #E5DFD6; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+   581→.bar-fill { height: 100%; border-radius: 3px; }
+   582→.level-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+   583→.level-box { border-radius: 8px; padding: 12px; border: 1px solid; }
+   584→.level-box h3 { font-size: 13px; margin-bottom: 8px; }
+   585→.level-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 8px; margin-bottom: 6px; background: rgba(255,255,255,0.6); border: 1px solid #E5DFD6; }
+   586→.strategy-tag { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid; margin-top: 8px; }
+   587→</style>
+   588→</head>
+   589→<body>
+   590→<div class="container">
+   591→<div class="header">
+   592→<h1>📈 تحلیل تکنیکال ${symbolName}</h1>
+   593→<div style="margin-top:8px">
+   594→<span class="badge">📍 قیمت مرجع: <strong>${toFa(currentPrice)} ریال</strong></span>
+   595→<span class="badge">🎯 هدف کوتاه‌مدت: <strong>${toFa(targetMin)} — ${toFa(targetMax)} ریال</strong></span>
+   596→<span class="badge">📊 روند: <strong>${trendText}</strong></span>
+   597→<span class="badge">RSI: ${toFa(rsi)} (${rsiSignal})</span>
+   598→</div>
+   599→${lastCandleJalali ? `<div style="font-size:11px;color:#8A837B;margin-top:8px">📅 ${lastCandleJalali}</div>` : ''}
+   600→</div>
+   601→
+   602→<div class="section">
+   603→<h2>🧠 تحلیل جامع روند و اندیکاتورها</h2>
+   604→<div>${vdesRef.current.querySelector('.vdes-analysis-text')?.innerHTML || '<p>تحلیل در دسترس نیست</p>'}</div>
+   605→</div>
+   606→
+   607→<div class="section">
+   608→<h2>🏛️ احتمالات سناریوها</h2>
+   609→<div class="scenario-grid">
+   610→${SCENARIO_KEYS.map(k => {
+   611→  const s = scenarios[k];
+   612→  const m = SCENARIO_META[k];
+   613→  return `<div class="scenario-card" style="border-top-color:${m.border}">
+   614→    <div style="display:flex;justify-content:space-between"><strong style="color:${m.badgeColor}">${k}</strong><span style="font-size:10px;color:#8A837B">${m.label}</span></div>
+   615→    <div class="prob" style="color:${m.badgeColor}">${toFa(s.probability)}٪</div>
+   616→    <div class="bar-bg"><div class="bar-fill" style="width:${s.probability}%;background:${m.border}"></div></div>
+   617→    <div class="range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال</div>
+   618→  </div>`;
+   619→}).join('')}
+   620→</div>
+   621→<div style="text-align:center;font-size:11px;color:#8A837B;margin-top:12px">مجموع احتمالات: <strong style="color:#5C5650">${toFa(totalProb)}٪</strong></div>
+   622→</div>
+   623→
+   624→<div style="text-align:center;padding:12px">
+   625→<span class="strategy-tag ${strategy.tagCls}">${strategy.text}</span>
+   626→</div>
+   627→</div>
+   628→</body>
+   629→</html>`;
+   630→    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+   631→    saveAs(blob, `${fileBase}.html`);
+   632→  }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, totalProb, strategy, lastCandleJalali, fileBase]);
+   633→
+   634→  const exportText = useCallback(() => {
+   635→    const lines: string[] = [];
+   636→    lines.push(`تحلیل تکنیکال ${symbolName} — VDes`);
+   637→    if (lastCandleJalali) lines.push(`تاریخ: ${lastCandleJalali}`);
+   638→    lines.push('');
+   639→    lines.push(`قیمت مرجع: ${toFa(currentPrice)} ریال`);
+   640→    lines.push(`هدف کوتاه‌مدت: ${toFa(targetMin)} — ${toFa(targetMax)} ریال`);
+   641→    lines.push(`روند: ${trendText}`);
+   642→    lines.push(`RSI: ${toFa(rsi)} (${rsiSignal})`);
+   643→    lines.push('');
+   644→    lines.push('═══ تحلیل جامع ═══');
+   645→    lines.push('');
+   646→    // Extract text content from the analysis section
+   647→    if (vdesRef.current) {
+   648→      const textEl = vdesRef.current.querySelector('.vdes-analysis-text');
+   649→      if (textEl) lines.push(textEl.textContent || '');
+   650→    }
+   651→    lines.push('');
+   652→    lines.push('═══ احتمالات سناریوها ═══');
+   653→    lines.push('');
+   654→    for (const k of SCENARIO_KEYS) {
+   655→      const s = scenarios[k];
+   656→      const m = SCENARIO_META[k];
+   657→      lines.push(`${k} — ${m.label}: ${toFa(s.probability)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`);
+   658→    }
+   659→    lines.push('');
+   660→    lines.push(`سیگنال غالب: ${strategy.text}`);
+   661→    const text = lines.join('\n');
+   662→    const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
+   663→    saveAs(blob, `${fileBase}.txt`);
+   664→  }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, strategy, lastCandleJalali, fileBase]);
+   665→
+   666→  const exportPDF = useCallback(async () => {
+   667→    if (!vdesRef.current) return;
+   668→    try {
+   669→      const dataUrl = await toPng(vdesRef.current, { backgroundColor: '#F5F0E8', pixelRatio: 2 });
+   670→      const pdf = new jsPDF('p', 'mm', 'a4');
+   671→      const pdfWidth = pdf.internal.pageSize.getWidth();
+   672→      const pdfHeight = pdf.internal.pageSize.getHeight();
+   673→      const imgWidth = pdfWidth;
+   674→      const imgHeight = (vdesRef.current.offsetHeight * imgWidth) / vdesRef.current.offsetWidth;
+   675→      let heightLeft = imgHeight;
+   676→      let position = 0;
+   677→      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+   678→      heightLeft -= pdfHeight;
+   679→      while (heightLeft > 0) {
+   680→        position = heightLeft - imgHeight;
+   681→        pdf.addPage();
+   682→        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+   683→        heightLeft -= pdfHeight;
+   684→      }
+   685→      pdf.save(`${fileBase}.pdf`);
+   686→    } catch {
+   687→      // Fallback: try to capture what we can
+   688→      console.warn('PDF export failed for full VDes capture');
+   689→    }
+   690→  }, [fileBase]);
+   691→
+   692→  const exportExcel = useCallback(() => {
+   693→    const rows = candles.map((c, i) => ({
+   694→      '#': i + 1,
+   695→      'تاریخ': c.date,
+   696→      'باز': Math.round(c.open),
+   697→      'بالا': Math.round(c.high),
+   698→      'پایین': Math.round(c.low),
+   699→      'بسته': Math.round(c.close),
+   700→      'حجم': c.volume,
+   701→      'MA21': Math.round(ma21),
+   702→      'MA100': Math.round(ma100),
+   703→      'RSI': Math.round(rsi * 10) / 10,
+   704→      'MFI': Math.round(mfi * 10) / 10,
+   705→      'CCI': Math.round(cci * 10) / 10,
+   706→      'ADX': Math.round(adx * 10) / 10,
+   707→      'MACD': Math.round(macdLine * 10) / 10,
+   708→      'MACD_Signal': Math.round(macdSignal * 10) / 10,
+   709→      'MACD_Hist': Math.round(macdHist * 10) / 10,
+   710→      'Stoch_K': Math.round(stochK * 10) / 10,
+   711→      'Stoch_D': Math.round(stochD * 10) / 10,
+   712→      'SAR': Math.round(sar),
+   713→      'ATR': Math.round(atr),
+   714→      'BB_Upper': Math.round(bollingerUpper),
+   715→      'BB_Middle': Math.round(bollingerMiddle),
+   716→      'BB_Lower': Math.round(bollingerLower),
+   717→    }));
+   718→    const ws = XLSX.utils.json_to_sheet(rows);
+   719→    const wb = XLSX.utils.book_new();
+   720→    XLSX.utils.book_append_sheet(wb, ws, 'داده‌ها');
+   721→    // Add scenarios sheet
+   722→    const scenarioRows = SCENARIO_KEYS.map(k => ({
+   723→      'سناریو': SCENARIO_META[k].label,
+   724→      'کد': k,
+   725→      'احتمال٪': scenarios[k].probability,
+   726→      'هدف_حداقل': Math.round(scenarios[k].targetMin),
+   727→      'هدف_حداکثر': Math.round(scenarios[k].targetMax),
+   728→    }));
+   729→    const ws2 = XLSX.utils.json_to_sheet(scenarioRows);
+   730→    XLSX.utils.book_append_sheet(wb, ws2, 'سناریوها');
+   731→    XLSX.writeFile(wb, `${fileBase}.xlsx`);
+   732→  }, [candles, ma21, ma100, rsi, mfi, cci, adx, macdLine, macdSignal, macdHist, stochK, stochD, sar, atr, bollingerUpper, bollingerMiddle, bollingerLower, scenarios, fileBase]);
+   733→
+   734→  const exportCSV = useCallback(() => {
+   735→    const headers = ['تاریخ', 'باز', 'بالا', 'پایین', 'بسته', 'حجم', 'MA21', 'MA100', 'RSI', 'MFI', 'CCI', 'ADX', 'MACD', 'MACD_Signal', 'MACD_Hist', 'SAR', 'ATR', 'BB_Upper', 'BB_Middle', 'BB_Lower'];
+   736→    const csvRows: string[] = [headers.join(',')];
+   737→    for (const c of candles) {
+   738→      csvRows.push([
+   739→        c.date, Math.round(c.open), Math.round(c.high), Math.round(c.low), Math.round(c.close), c.volume,
+   740→        Math.round(ma21), Math.round(ma100), (Math.round(rsi * 10) / 10), (Math.round(mfi * 10) / 10),
+   741→        (Math.round(cci * 10) / 10), (Math.round(adx * 10) / 10), (Math.round(macdLine * 10) / 10),
+   742→        (Math.round(macdSignal * 10) / 10), (Math.round(macdHist * 10) / 10), Math.round(sar), Math.round(atr),
+   743→        Math.round(bollingerUpper), Math.round(bollingerMiddle), Math.round(bollingerLower),
+   744→      ].join(','));
+   745→    }
+   746→    const csv = csvRows.join('\n');
+   747→    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+   748→    saveAs(blob, `${fileBase}.csv`);
+   749→  }, [candles, ma21, ma100, rsi, mfi, cci, adx, macdLine, macdSignal, macdHist, sar, atr, bollingerUpper, bollingerMiddle, bollingerLower, fileBase]);
+   750→
+   751→  const exportChartImage = useCallback(async () => {
+   752→    if (!chartRef.current) return;
+   753→    try {
+   754→      const dataUrl = await toPng(chartRef.current, { backgroundColor: '#FFFCF8', pixelRatio: 2 });
+   755→      saveAs(dataUrl, `${fileBase}_chart.png`);
+   756→    } catch {
+   757→      console.warn('Chart image export failed');
+   758→    }
+   759→  }, [fileBase]);
+   760→
+   761→  return (
+   762→    <div ref={vdesRef} className="space-y-5" dir="rtl">
+   763→      {/* ═══ HEADER ═══ */}
+   764→      <div className="rounded-2xl px-6 py-5 border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm">
+   765→        <div className="flex items-center justify-between flex-wrap gap-2">
+   766→          <h1 className="text-xl font-bold text-amber-800">
+   767→            📈 تحلیل تکنیکال {symbolName}
+   768→          </h1>
+   769→          {lastCandleJalali && (
+   770→            <span className="text-xs text-[#8A837B]">📅 {lastCandleJalali}</span>
+   771→          )}
+   772→        </div>
+   773→        <div className="flex flex-wrap gap-2 mt-3">
+   774→          <span className="px-3.5 py-1 rounded-full border border-[#E5DFD6] bg-[#F5F0E8] text-xs text-[#5C5650]">
+   775→            📍 قیمت مرجع: <b className="text-[#2D2A26]">{toFa(currentPrice)} ریال</b>
+   776→          </span>
+   777→          <span className="px-3.5 py-1 rounded-full border border-[#E5DFD6] bg-[#F5F0E8] text-xs text-[#5C5650]">
+   778→            🎯 هدف کوتاه‌مدت: <b className="text-[#2D2A26]">{toFa(targetMin)} — {toFa(targetMax)} ریال</b>
+   779→          </span>
+   780→          <span className="px-3.5 py-1 rounded-full border border-[#E5DFD6] bg-[#F5F0E8] text-xs text-[#5C5650]">
+   781→            📊 روند: <b className="text-[#2D2A26]">{trendText}</b>
+   782→          </span>
+   783→          <span className={`px-3.5 py-1 rounded-full border text-xs font-medium ${
+   784→            rsi > 70 ? 'bg-red-700/10 text-red-700 border-red-700/20'
+   785→            : rsi < 30 ? 'bg-emerald-700/10 text-emerald-700 border-emerald-700/20'
+   786→            : 'bg-amber-800/10 text-amber-800 border-amber-800/20'
+   787→          }`}>
+   788→            RSI: {toFa(rsi)} ({rsiSignal})
+   789→          </span>
+   790→        </div>
+   791→      </div>
+   792→
+   793→      {/* ═══ EXPORT TOOLBAR ═══ */}
+   794→      <div className="flex items-center justify-between">
+   795→        <span className="text-sm font-semibold text-[#5C5650]">خروجی تحلیل</span>
+   796→        <DropdownMenu>
+   797→          <DropdownMenuTrigger asChild>
+   798→            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm text-xs font-medium text-[#2D2A26] hover:bg-[#F5F0E8] transition-colors cursor-pointer">
+   799→              <Download className="w-4 h-4" />
+   800→              <span>دانلود / خروجی</span>
+   801→              <ChevronDown className="w-3.5 h-3.5 text-[#8A837B]" />
+   802→            </button>
+   803→          </DropdownMenuTrigger>
+   804→          <DropdownMenuContent align="end" className="w-52 bg-[#FFFCF8] border-[#E5DFD6]">
+   805→            <DropdownMenuItem onClick={exportHTML} className="flex items-center gap-3 text-[#2D2A26] focus:bg-[#F5F0E8] cursor-pointer">
+   806→              <FileCode className="w-4 h-4 text-amber-800" />
+   807→              <span className="text-xs">HTML+CSS+JS</span>
+   808→            </DropdownMenuItem>
+   809→            <DropdownMenuItem onClick={exportText} className="flex items-center gap-3 text-[#2D2A26] focus:bg-[#F5F0E8] cursor-pointer">
+   810→              <FileText className="w-4 h-4 text-amber-800" />
+   811→              <span className="text-xs">متن (Text)</span>
+   812→            </DropdownMenuItem>
+   813→            <DropdownMenuItem onClick={exportPDF} className="flex items-center gap-3 text-[#2D2A26] focus:bg-[#F5F0E8] cursor-pointer">
+   814→              <FileDown className="w-4 h-4 text-amber-800" />
+   815→              <span className="text-xs">PDF</span>
+   816→            </DropdownMenuItem>
+   817→            <DropdownMenuItem onClick={exportExcel} className="flex items-center gap-3 text-[#2D2A26] focus:bg-[#F5F0E8] cursor-pointer">
+   818→              <Table className="w-4 h-4 text-amber-800" />
+   819→              <span className="text-xs">اکسل (Excel)</span>
+   820→            </DropdownMenuItem>
+   821→            <DropdownMenuItem onClick={exportCSV} className="flex items-center gap-3 text-[#2D2A26] focus:bg-[#F5F0E8] cursor-pointer">
+   822→              <FileSpreadsheet className="w-4 h-4 text-amber-800" />
+   823→              <span className="text-xs">CSV</span>
+   824→            </DropdownMenuItem>
+   825→            <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 text-[#2D2A26] focus:bg-[#F5F0E8] cursor-pointer">
+   826→              <Camera className="w-4 h-4 text-amber-800" />
+   827→              <span className="text-xs">عکس نمودار</span>
+   828→            </DropdownMenuItem>
+   829→          </DropdownMenuContent>
+   830→        </DropdownMenu>
+   831→      </div>
+   832→
+   833→      {/* ═══ TRADINGVIEW CHART ═══ */}
+   834→      <div ref={chartRef} className="rounded-2xl p-4 border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm">
+   835→        <h2 className="text-sm font-semibold mb-3 text-amber-800 flex items-center gap-2">
+   836→          <span>📊</span>
+   837→          نمودار روزانه — {chartJalaliDate ? `${toPersianDigits(chartJalaliDate)}` : 'قیمت'}
+   838→        </h2>
+   839→        <TradingViewChart
+   840→          symbolName={symbolName}
+   841→          candles={candles}
+   842→          supports={supports}
+   843→          resistances={resistances}
+   844→          supportStrengths={supportStrengths}
+   845→          resistanceStrengths={resistanceStrengths}
+   846→          ma21={ma21}
+   847→          ma100={ma100}
+   848→          scenarios={tvScenarios}
+   849→        />
+   850→        <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-[#8A837B]">
+   851→          <span>🔴 خطوط قرمز: مقاومت‌ها ({resistances.map(toFa).join(' ، ')})</span>
+   852→          <span>🟢 خطوط سبز: حمایت‌ها ({supports.map(toFa).join(' ، ')})</span>
+   853→          <span>🟣 خط بنفش: MA100 ({toFa(ma100)})</span>
+   854→          <span>🔵 خط آبی: MA21 ({toFa(ma21)})</span>
+   855→          <span>🟡 خطوط زرد: اهداف قیمتی سناریوها</span>
+   856→        </div>
+   857→      </div>
+   858→
+   859→      {/* ═══ KEY LEVELS ═══ */}
+   860→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   861→        {/* ── Resistances ── */}
+   862→        <div className="rounded-2xl border border-red-700/15 overflow-hidden bg-[#FFFCF8] shadow-sm">
+   863→          <div className="px-5 py-3 flex items-center gap-2 border-b border-red-700/10 bg-red-50">
+   864→            <div className="w-2.5 h-2.5 rounded-full bg-red-600" />
+   865→            <h3 className="text-sm font-bold text-red-700">سطوح مقاومت</h3>
+   866→            <span className="text-[10px] text-[#8A837B] mr-auto">با قدرت ۱-۱۰</span>
+   867→          </div>
+   868→          <div className="p-4 space-y-2.5">
+   869→            {resistanceStrengths.map((r, i) => (
+   870→              <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#E5DFD6] bg-[#F5F0E8]/50">
+   871→                <div className="flex items-center gap-3">
+   872→                  <span className="text-xs font-bold text-red-600 w-6">R{i + 1}</span>
+   873→                  <div>
+   874→                    <span className="text-sm font-bold text-[#2D2A26] tabular-nums" dir="ltr">{toFa(r.price)}</span>
+   875→                    <span className="text-[10px] text-[#8A837B] mr-1.5">ریال</span>
+   876→                  </div>
+   877→                </div>
+   878→                <div className="flex items-center gap-2">
+   879→                  <StrengthBar strength={r.strength} />
+   880→                  {r.isTarget && <span className="text-[10px]">🎯</span>}
+   881→                </div>
+   882→              </div>
+   883→            ))}
+   884→          </div>
+   885→        </div>
+   886→
+   887→        {/* ── Supports ── */}
+   888→        <div className="rounded-2xl border border-emerald-700/15 overflow-hidden bg-[#FFFCF8] shadow-sm">
+   889→          <div className="px-5 py-3 flex items-center gap-2 border-b border-emerald-700/10 bg-emerald-50">
+   890→            <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+   891→            <h3 className="text-sm font-bold text-emerald-700">سطوح حمایت</h3>
+   892→            <span className="text-[10px] text-[#8A837B] mr-auto">با قدرت ۱-۱۰</span>
+   893→          </div>
+   894→          <div className="p-4 space-y-2.5">
+   895→            {supportStrengths.map((s, i) => (
+   896→              <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#E5DFD6] bg-[#F5F0E8]/50">
+   897→                <div className="flex items-center gap-3">
+   898→                  <span className="text-xs font-bold text-emerald-600 w-6">S{i + 1}</span>
+   899→                  <div>
+   900→                    <span className="text-sm font-bold text-[#2D2A26] tabular-nums" dir="ltr">{toFa(s.price)}</span>
+   901→                    <span className="text-[10px] text-[#8A837B] mr-1.5">ریال</span>
+   902→                  </div>
+   903→                </div>
+   904→                <div className="flex items-center gap-2">
+   905→                  <StrengthBar strength={s.strength} />
+   906→                  {s.isTarget && <span className="text-[10px]">🎯</span>}
+   907→                </div>
+   908→              </div>
+   909→            ))}
+   910→          </div>
+   911→        </div>
+   912→      </div>
+   913→
+   914→      {/* ═══ PRICE TARGETS ═══ */}
+   915→      {priceTargets && priceTargets.length > 0 && (
+   916→        <div className="rounded-2xl border border-amber-800/15 overflow-hidden bg-[#FFFCF8] shadow-sm">
+   917→          <div className="px-5 py-3 flex items-center gap-2 border-b border-amber-800/10 bg-amber-50">
+   918→            <div className="w-2.5 h-2.5 rounded-full bg-amber-700" />
+   919→            <h3 className="text-sm font-bold text-amber-800">اهداف قیمتی</h3>
+   920→            <span className="text-[10px] text-[#8A837B] mr-auto">سطوح با قدرت بالا</span>
+   921→          </div>
+   922→          <div className="p-4 flex flex-wrap gap-3">
+   923→            {priceTargets.map((t, i) => (
+   924→              <div key={i} className="flex-1 min-w-[160px] rounded-xl p-4 border border-amber-800/10 bg-amber-50/50">
+   925→                <div className="flex items-center justify-between mb-2">
+   926→                  <span className="text-[10px] text-[#8A837B]">هدف {i + 1}</span>
+   927→                  <span className="text-[10px]">🎯</span>
+   928→                </div>
+   929→                <p className="text-base font-black text-amber-800 tabular-nums" dir="ltr">{toFa(t.price)}</p>
+   930→                <span className="text-[10px] text-[#8A837B]">ریال</span>
+   931→                <div className="mt-3">
+   932→                  <StrengthBar strength={t.strength} />
+   933→                </div>
+   934→              </div>
+   935→            ))}
+   936→          </div>
+   937→        </div>
+   938→      )}
+   939→
+   940→      {/* ═══ DYNAMIC ANALYSIS TEXT ═══ */}
+   941→      <div className="rounded-2xl p-5 border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm">
+   942→        <h2 className="text-sm font-semibold mb-4 text-amber-800 flex items-center gap-2">
+   943→          <span>🧠</span>
+   944→          تحلیل جامع روند و اندیکاتورها
+   945→        </h2>
+   946→        <div className="vdes-analysis-text space-y-4">
+   947→          {analysisParagraphs.map((p, i) => (
+   948→            <p key={i} className="text-sm text-[#5C5650] leading-[1.85]">{p}</p>
+   949→          ))}
+   950→          {/* ── Strategy Box ── */}
+   951→          <div className="rounded-xl px-4 py-3 border-r-4 border-amber-700 bg-amber-50/60">
+   952→            <strong className="text-amber-800 text-sm">🟡 استراتژی پیشنهادی:</strong>
+   953→            <p className="text-xs text-[#5C5650] leading-[1.85] mt-1.5">{strategyText}</p>
+   954→          </div>
+   955→        </div>
+   956→      </div>
+   957→
+   958→      {/* ═══ SCENARIO PROBABILITIES ═══ */}
+   959→      <div className="rounded-2xl p-5 border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm">
+   960→        <h2 className="text-sm font-semibold mb-4 text-amber-800 flex items-center gap-2">
+   961→          <span>🏛️</span>
+   962→          احتمالات سناریوها
+   963→        </h2>
+   964→
+   965→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+   966→          {SCENARIO_KEYS.map(key => {
+   967→            const s = scenarios[key];
+   968→            const meta = SCENARIO_META[key];
+   969→            return (
+   970→              <div
+   971→                key={key}
+   972→                className="rounded-xl p-3.5 bg-[#F5F0E8]/60 border border-[#E5DFD6]"
+   973→                style={{ borderTop: `3px solid ${meta.border}` }}
+   974→              >
+   975→                <div className="flex items-center justify-between mb-1.5">
+   976→                  <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{key}</span>
+   977→                  <span className="text-[10px] text-[#8A837B]">{meta.label}</span>
+   978→                </div>
+   979→                <div className="text-center my-2">
+   980→                  <span
+   981→                    className="inline-block text-2xl font-black tabular-nums"
+   982→                    style={{ color: meta.badgeColor }}
+   983→                  >
+   984→                    {toFa(s.probability)}٪
+   985→                  </span>
+   986→                </div>
+   987→                <div className="h-1.5 w-full rounded-full bg-[#E5DFD6] overflow-hidden mb-2">
+   988→                  <div
+   989→                    className="h-full rounded-full transition-all duration-500"
+   990→                    style={{ width: `${s.probability}%`, backgroundColor: meta.border }}
+   991→                  />
+   992→                </div>
+   993→                <div className="text-[10px] text-[#8A837B] text-center" dir="ltr">
+   994→                  {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
+   995→                </div>
+   996→              </div>
+   997→            );
+   998→          })}
+   999→        </div>
+  1000→
+  1001→        <div className="mt-4 text-center text-xs text-[#8A837B]">
+  1002→          مجموع احتمالات: <b className="text-[#5C5650]">{toFa(totalProb)}٪</b> (برابر ۱۰۰٪)
+  1003→        </div>
+  1004→      </div>
+  1005→
+  1006→      {/* ═══ STRATEGY TAG ═══ */}
+  1007→      <div className="flex flex-wrap items-center gap-3 px-4">
+  1008→        <span className="text-xs text-[#8A837B]">سیگنال غالب:</span>
+  1009→        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold ${strategy.tagCls}`}>
+  1010→          {strategy.text}
+  1011→        </span>
+  1012→      </div>
+  1013→    </div>
+  1014→  );
+  1015→}
+  1016→
+  1017→// ── Loading ────────────────────────────────────────────────────────────────────
+  1018→
+  1019→export function VdesAnalysisSkeleton() {
+  1020→  return (
+  1021→    <div className="space-y-5">
+  1022→      <Skeleton className="h-28 w-full bg-[#E5DFD6] rounded-2xl" />
+  1023→      <Skeleton className="h-[650px] w-full bg-[#E5DFD6] rounded-2xl" />
+  1024→    </div>
+  1025→  );
+  1026→}

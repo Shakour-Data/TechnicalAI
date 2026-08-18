@@ -72,31 +72,21 @@ export function jalaliToGregorian(jy: number, jm: number, jd: number): { gy: num
     gy += Math.floor((days - 1) / 365);
     days = (days - 1) % 365;
   }
-  let gm: number;
-  let gd: number;
   const gdMap = days < 31 ? days + 1 : days < 59 ? days - 30 : days < 90 ? days - 58 : days < 120 ? days - 89 : days < 151 ? days - 119 : days < 181 ? days - 150 : days < 212 ? days - 180 : days < 243 ? days - 212 : days < 273 ? days - 243 : days < 304 ? days - 273 : days < 334 ? days - 304 : days - 334;
   const gmMap = days < 31 ? 1 : days < 59 ? 2 : days < 90 ? 3 : days < 120 ? 4 : days < 151 ? 5 : days < 181 ? 6 : days < 212 ? 7 : days < 243 ? 8 : days < 273 ? 9 : days < 304 ? 10 : days < 334 ? 11 : 12;
-  gm = gmMap;
-  gd = gdMap + 1;
-  return { gy, gm, gd };
+  return { gy, gm: gmMap, gd: gdMap + 1 };
 }
 
 // ─── Is Jalali Leap Year ────────────────────────────────────────────────────
 export function isJalaliLeap(jy: number): boolean {
-  const breaks = [
-    -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210,
-    1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178,
-  ];
-  let bl = breaks.length;
+  const breaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
   let jp = breaks[0];
-  let jump = 0;
-  for (let i = 1; i < bl; i++) {
+  for (let i = 1; i < breaks.length; i++) {
     const jm = breaks[i];
-    jump = jm - jp;
+    const jump = jm - jp;
     if (jy < jm) {
       let n = jy - jp;
-      if (jump - n < 6) { n = n - (jump - n); }
-      // Simplified leap check
+      if (jump - n < 6) n = n - (jump - n);
       return ((jump + 1) * n) % jump < 3;
     }
     jp = jm;
@@ -104,10 +94,9 @@ export function isJalaliLeap(jy: number): boolean {
   return false;
 }
 
-// ─── Format Jalali Date ────────────────────────────────────────────────────
+// ─── Format Jalali Date (from Gregorian input) ──────────────────────────────
 export function formatJalali(gy: number, gm: number, gd: number, format: 'full' | 'short' | 'compact' = 'short'): string {
   const { jy, jm, jd } = gregorianToJalali(gy, gm, gd);
-  
   switch (format) {
     case 'full':
       return `${toPersianDigits(jd)} ${PERSIAN_MONTHS[jm - 1]} ${toPersianDigits(jy)}`;
@@ -119,7 +108,7 @@ export function formatJalali(gy: number, gm: number, gd: number, format: 'full' 
   }
 }
 
-// ─── Parse date string (YYYY/MM/DD or YYYY-MM-DD) to Gregorian components ─
+// ─── Parse date string (YYYY/MM/DD or YYYY-MM-DD) to components ─────────────
 export function parseDateString(dateStr: string): { gy: number; gm: number; gd: number } | null {
   const cleaned = dateStr.replace(/[\\/-]/g, '/');
   const parts = cleaned.split('/');
@@ -134,18 +123,35 @@ export function parseDateString(dateStr: string): { gy: number; gm: number; gd: 
   return null;
 }
 
-// ─── Convert candle date string to Jalali ──────────────────────────────────
+// ─── Convert candle date string (Gregorian) to Jalali ──────────────────────
 export function candleDateToJalali(dateStr: string, format: 'full' | 'short' | 'compact' = 'short'): string {
   const parsed = parseDateString(dateStr);
   if (!parsed) return dateStr;
   return formatJalali(parsed.gy, parsed.gm, parsed.gd, format);
 }
 
+// ─── Format an ALREADY Jalali date string (no conversion needed) ────────────
+// This is the correct function for TSETMC & TGJU data where dates are already Shamsi
+// Input format: "1404/01/15" or "1404-01-15"
+export function formatJalaliString(dateStr: string, format: 'full' | 'short' | 'compact' = 'compact'): string {
+  const parsed = parseDateString(dateStr);
+  if (!parsed) return toPersianDigits(dateStr);
+  const { gy, gm, gd } = parsed;
+  switch (format) {
+    case 'full':
+      return `${toPersianDigits(gd)} ${PERSIAN_MONTHS[gm - 1]} ${toPersianDigits(gy)}`;
+    case 'compact':
+      return `${toPersianDigits(gy)}/${toPersianDigits(String(gm).padStart(2, '0'))}/${toPersianDigits(String(gd).padStart(2, '0'))}`;
+    case 'short':
+    default:
+      return `${toPersianDigits(gd)} ${PERSIAN_MONTHS_SHORT[gm - 1]} ${toPersianDigits(gy)}`;
+  }
+}
+
 // ─── Get weekday name in Persian ────────────────────────────────────────────
 export function getPersianWeekday(gy: number, gm: number, gd: number): string {
   const d = new Date(gy, gm - 1, gd);
-  const day = d.getDay(); // 0=Sun ... 6=Sat
-  // Map to Persian weekday order (Sat=0, Sun=1, ..., Fri=6)
+  const day = d.getDay();
   const persianDayIndex = (day + 1) % 7;
   return PERSIAN_WEEKDAYS[persianDayIndex];
 }
@@ -160,12 +166,11 @@ export function fullPersianDate(dateStr: string): string {
   return `${weekday}، ${datePart}`;
 }
 
-// ─── Convert Jalali array for lightweight-charts time axis ─────────────────
-// Returns a map of index → Jalali date string for the time axis formatter
+// ─── Build Jalali time map for lightweight-charts (dates already Jalali) ───
 export function buildJalaliTimeMap(candles: Array<{ date: string }>, format: 'compact' | 'short' = 'compact'): Map<number, string> {
   const map = new Map<number, string>();
   candles.forEach((c, i) => {
-    map.set(i, candleDateToJalali(c.date, format));
+    map.set(i, formatJalaliString(c.date, format));
   });
   return map;
 }

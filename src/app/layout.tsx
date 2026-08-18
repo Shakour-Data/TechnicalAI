@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Tse Technical Analysis — تحلیل تکنیکال بورس ایران",
@@ -24,9 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fa" dir="rtl" suppressHydrationWarning className="dark">
+    <html lang="fa" dir="rtl" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#060a13] text-gray-100`}
+        className="antialiased"
+        style={{ fontFamily: 'Vazirmatn, sans-serif', backgroundColor: '#ffffff', color: '#1a1a1a' }}
         suppressHydrationWarning
       >
         {children}

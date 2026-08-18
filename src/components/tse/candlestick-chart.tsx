@@ -25,9 +25,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { candleDateToJalali, toPersianDigits } from '@/lib/jalali';
+import { formatJalaliString, toPersianDigits } from '@/lib/jalali';
 
-/* ────────────────────────────────────────────────────────── TYPES ────────── */
+/* ----------------------------- TYPES ----- */
 
 interface DrawingPoint {
   time: number;
@@ -71,22 +71,22 @@ interface CandlestickChartProps {
   height?: number;
 }
 
-/* ────────────────────────────────────────────────────────── CONSTANTS ──── */
+/* ----------------------------- CONSTANTS -- */
 
 const BULL = '#22a366';
 const BEAR = '#e04060';
-const BG = '#FFFCF8';
-const TXT = '#5C5650';
-const GRID = 'rgba(0,0,0,0.04)';
-const TOOLBAR_BG = '#FFFCF8';
-const TOOLBAR_BORDER = '#E5DFD6';
+const BG = '#ffffff';
+const TXT = '#374151';
+const GRID = 'rgba(0,0,0,0.06)';
+const TOOLBAR_BG = '#ffffff';
+const TOOLBAR_BORDER = '#e5e7eb';
 
-const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#2D2A26'];
+const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#374151'];
 
 const SMA_CFG = [
-  { key: 'sma21', color: '#3ad5db', title: 'SMA 21' },
-  { key: 'sma50', color: '#ffb11b', title: 'SMA 50' },
-  { key: 'sma100', color: '#ff7b32', title: 'SMA 100' },
+  { key: 'sma21', color: '#0891b2', title: 'SMA 21' },
+  { key: 'sma50', color: '#d97706', title: 'SMA 50' },
+  { key: 'sma100', color: '#e04060', title: 'SMA 100' },
 ];
 
 const FIB_LEVELS = [
@@ -101,17 +101,16 @@ const FIB_LEVELS = [
 
 type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'fibonacci' | 'rectangle' | 'text' | 'brush' | 'measure' | 'arrow';
 
-// ── S/R strength-based line styling ───────────────────────────
-// v2: thickness + dash pattern reflect strength level
+// — S/R strength-based line styling —————————————─
 function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0 | 1 | 2; color: string } {
   if (isTarget) {
-    return { lineWidth: 3, lineStyle: 0, color: '' }; // caller sets color
+    return { lineWidth: 3, lineStyle: 0, color: '' };
   }
-  if (strength >= 9) return { lineWidth: 4, lineStyle: 0, color: '' };      // very thick solid
-  if (strength >= 7) return { lineWidth: 3, lineStyle: 0, color: '' };      // thick solid
-  if (strength >= 5) return { lineWidth: 2, lineStyle: 1, color: '' };      // medium dotted
-  if (strength >= 3) return { lineWidth: 2, lineStyle: 2, color: '' };      // medium dashed
-  return { lineWidth: 1, lineStyle: 2, color: '' };                          // thin dashed
+  if (strength >= 9) return { lineWidth: 4, lineStyle: 0, color: '' };
+  if (strength >= 7) return { lineWidth: 3, lineStyle: 0, color: '' };
+  if (strength >= 5) return { lineWidth: 2, lineStyle: 1, color: '' };
+  if (strength >= 3) return { lineWidth: 2, lineStyle: 2, color: '' };
+  return { lineWidth: 1, lineStyle: 2, color: '' };
 }
 
 interface ToolDef {
@@ -133,18 +132,18 @@ const TOOLS: ToolDef[] = [
   { id: 'arrow', label: 'پیکان', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
 ];
 
-/* ────────────────────────────────────────────────────────── SKELETON ─────── */
+/* ----------------------------- SKELETON ---- */
 
 export function CandlestickChartSkeleton() {
   return (
     <div className="w-full">
-      <div className="h-10 bg-[#FFFCF8] border-b border-[#E5DFD6] rounded-t-lg" />
-      <div className="w-full bg-[#E5DFD6] rounded-b-lg" style={{ height: 520 }} />
+      <div className="h-10 bg-white border-b border-gray-200 rounded-t-lg" />
+      <div className="w-full bg-gray-200 rounded-b-lg" style={{ height: 520 }} />
     </div>
   );
 }
 
-/* ────────────────────────────────────────────────────────── COMPONENT ───── */
+/* ----------------------------- COMPONENT --- */
 
 export default function CandlestickChart({ data, ta, height = 520 }: CandlestickChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -162,7 +161,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
   const [renderKey, setRenderKey] = useState(0);
   const [chartSize, setChartSize] = useState({ w: 0, h: 0 });
 
-  /* ── Helper: coordinate conversion ─────────────────────────── */
+  /* - Helper: coordinate conversion -------------- */
   const getChartPoint = useCallback((clientX: number, clientY: number): DrawingPoint | null => {
     const chart = chartRef.current;
     const container = chartContainerRef.current;
@@ -170,13 +169,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     const rect = container.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const price = chart.coordinateToPrice(y);
+    const price = (chart.priceScale('right') as any).coordinateToPrice(y);
     const time = chart.timeScale().coordinateToTime(x);
     if (price === null || time === null) return null;
     return { time: time as number, price };
   }, []);
 
-  /* ── SVG Rendering ────────────────────────────────────────── */
+  /* - SVG Rendering --------------------- */
   const renderDrawings = useCallback(() => {
     const chart = chartRef.current;
     const svg = svgRef.current;
@@ -195,7 +194,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
 
     // Defs for arrow markers
     html += `<defs>`;
-    PALETTE.forEach((c, i) => {
+    PALETTE.forEach((c) => {
       html += `<marker id="arrow-${c.replace('#','')}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="${c}" /></marker>`;
     });
     html += `</defs>`;
@@ -214,9 +213,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points.length > 1 ? d.points[d.points.length - 1] : p0;
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" />`;
           break;
@@ -224,10 +223,10 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         case 'hline': {
           if (d.points.length < 1) break;
           const p = d.points[0];
-          const y = chart.priceScale('right').priceToCoordinate(p.price);
+          const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
           if (y == null) break;
           html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
-          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="sans-serif">${toPersianDigits(p.price.toFixed(0))}</text>`;
+          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(0))}</text>`;
           break;
         }
         case 'vline': {
@@ -250,19 +249,18 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const priceRange = priceHigh - priceLow;
           if (priceRange === 0) break;
 
-          // Filled background
-          const yTop = chart.priceScale('right').priceToCoordinate(priceHigh);
-          const yBottom = chart.priceScale('right').priceToCoordinate(priceLow);
+          const yTop = (chart.priceScale('right') as any).priceToCoordinate(priceHigh);
+          const yBottom = (chart.priceScale('right') as any).priceToCoordinate(priceLow);
           if (yTop == null || yBottom == null) break;
           html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBottom - yTop}" fill="${col}" opacity="0.04" />`;
 
           for (const level of FIB_LEVELS) {
             const price = priceHigh - level.pct * priceRange;
-            const y = chart.priceScale('right').priceToCoordinate(price);
+            const y = (chart.priceScale('right') as any).priceToCoordinate(price);
             if (y == null) continue;
             html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
-            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#FFFCF8" stroke="#E5DFD6" stroke-width="1" rx="2" />`;
-            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text`;
+            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="2" />`;
+            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
           }
           break;
         }
@@ -271,9 +269,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points[d.points.length - 1];
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
           const rx = Math.min(x0, x1);
           const ry = Math.min(y0, y1);
@@ -286,10 +284,10 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           if (d.points.length < 1 || !d.text) break;
           const p = d.points[0];
           const x = chart.timeScale().timeToCoordinate(p.time as Time);
-          const y = chart.priceScale('right').priceToCoordinate(p.price);
+          const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
           if (x == null || y == null) break;
-          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#FFFCF8" stroke="#E5DFD6" stroke-width="1" rx="3" />`;
-          html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="sans-serif">${d.text}</text>`;
+          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+          html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
           break;
         }
         case 'brush': {
@@ -298,7 +296,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           let valid = true;
           for (const p of d.points) {
             const x = chart.timeScale().timeToCoordinate(p.time as Time);
-            const y = chart.priceScale('right').priceToCoordinate(p.price);
+            const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
             if (x == null || y == null) { valid = false; break; }
             pts += `${x},${y} `;
           }
@@ -311,21 +309,20 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points[d.points.length - 1];
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
 
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
-          // Price difference
           const diff = p1.price - p0.price;
           const pctChg = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
           const bars = Math.abs(Math.round(p1.time - p0.time));
           const midX = (x0 + x1) / 2;
           const midY = (y0 + y1) / 2;
           const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(0))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
-          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#FFFCF8" stroke="#E5DFD6" stroke-width="1" rx="3" />`;
-          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="sans-serif">${label}</text`;
+          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
           break;
         }
         case 'arrow': {
@@ -333,9 +330,9 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const p0 = d.points[0];
           const p1 = d.points[d.points.length - 1];
           const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
-          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
           const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
-          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
           if (x0 == null || y0 == null || x1 == null || y1 == null) break;
           const markerId = `arrow-${col.replace('#','')}`;
           html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
@@ -347,7 +344,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     svg.innerHTML = html;
   }, [drawings, currentDrawing]);
 
-  /* ── Chart Build ──────────────────────────────────────────── */
+  /* - Chart Build ---------------------- */
   const build = useCallback(() => {
     const chartEl = chartContainerRef.current;
     if (!chartEl || data.length === 0) return;
@@ -357,13 +354,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       chartRef.current = null;
     }
 
-    // ── Build Jalali time map for Shamsi dates ──
+    // — Build Jalali time map — dates are ALREADY Jalali (Shamsi) from TSETMC/TGJU —
     const jalaliMap = new Map<number, string>();
     data.forEach((d, i) => {
-      jalaliMap.set(i, candleDateToJalali(d.date, 'compact'));
+      jalaliMap.set(i, formatJalaliString(d.date, 'compact'));
     });
 
-    // ── Persian numeral price formatter ──
+    // — Persian numeral price formatter —
     const persianPriceFormatter = (price: number) => {
       return toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: 0 }));
     };
@@ -373,11 +370,11 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: {
-        borderColor: '#E5DFD6',
+        borderColor: '#e5e7eb',
         scaleMargins: { top: 0.05, bottom: 0.3 },
       },
       timeScale: {
-        borderColor: '#E5DFD6',
+        borderColor: '#e5e7eb',
         rightOffset: 5,
         barSpacing: 6,
         tickMarkFormatter: (time: Time) => {
@@ -442,15 +439,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       }
       const bb = ta.bollingerBands;
       if (bb) {
-        if (bb.upper > 0)
-          cs.createPriceLine({ price: bb.upper, color: 'rgba(161,98,255,0.5)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Upper' });
-        if (bb.middle > 0)
-          cs.createPriceLine({ price: bb.middle, color: 'rgba(161,98,255,0.5)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Mid' });
-        if (bb.lower > 0)
-          cs.createPriceLine({ price: bb.lower, color: 'rgba(161,98,255,0.5)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Lower' });
+        if (bb.upper > 0) cs.createPriceLine({ price: bb.upper, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Upper' });
+        if (bb.middle > 0) cs.createPriceLine({ price: bb.middle, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Mid' });
+        if (bb.lower > 0) cs.createPriceLine({ price: bb.lower, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Lower' });
       }
+      // SAR — use dark color instead of white (white invisible on white bg)
       if (ta.sar > 0)
-        cs.createPriceLine({ price: ta.sar, color: 'rgba(255,255,255,0.35)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
+        cs.createPriceLine({ price: ta.sar, color: 'rgba(217,119,6,0.7)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
 
       // S/R with strength
       const resistanceStrengths = ta.resistanceStrengths || [];
@@ -459,11 +454,11 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       resistanceStrengths.forEach((r, i) => {
         if (r.price <= 0) return;
         const style = srLineStyle(r.strength, r.isTarget);
-        const title = `R${i + 1} (${r.strength}/10)`;
+        const title = `R${toPersianDigits(String(i + 1))} (${toPersianDigits(String(r.strength))}/10)`;
         cs.createPriceLine({
           price: r.price,
           color: r.isTarget ? '#dc2626' : BEAR,
-          lineWidth: style.lineWidth,
+          lineWidth: style.lineWidth as 1|2|3|4,
           lineStyle: style.lineStyle,
           axisLabelVisible: i < 6,
           title,
@@ -473,11 +468,11 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       supportStrengths.forEach((s, i) => {
         if (s.price <= 0) return;
         const style = srLineStyle(s.strength, s.isTarget);
-        const title = `S${i + 1} (${s.strength}/10)`;
+        const title = `S${toPersianDigits(String(i + 1))} (${toPersianDigits(String(s.strength))}/10)`;
         cs.createPriceLine({
           price: s.price,
           color: s.isTarget ? '#16a34a' : BULL,
-          lineWidth: style.lineWidth,
+          lineWidth: style.lineWidth as 1|2|3|4,
           lineStyle: style.lineStyle,
           axisLabelVisible: i < 6,
           title,
@@ -490,9 +485,10 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     // Subscribe to visible range changes to re-render SVG
     requestAnimationFrame(() => {
       if (chartRef.current) {
-        subscriberRef.current = chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
+        const sub = chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
           setRenderKey((k) => k + 1);
         });
+        subscriberRef.current = sub as unknown as { dispose: () => void };
       }
     });
 
@@ -504,12 +500,12 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     });
   }, [data, ta, height]);
 
-  /* ── Re-render SVG when renderKey changes ────────────────── */
+  /* - Re-render SVG when renderKey changes --------- */
   useEffect(() => {
     renderDrawings();
   }, [renderKey, renderDrawings]);
 
-  /* ── Init chart ───────────────────────────────────────────── */
+  /* - Init chart ----------------------- */
   useEffect(() => {
     const el = chartContainerRef.current;
     if (!el) return;
@@ -535,16 +531,15 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     };
   }, [build]);
 
-  /* ── Mouse event handlers ────────────────────────────────── */
+  /* - Mouse event handlers ----------------- */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (activeTool === 'cursor') return;
-      if (textInput) return; // don't draw while text input is open
+      if (textInput) return;
 
       const point = getChartPoint(e.clientX, e.clientY);
       if (!point) return;
 
-      // Horizontal line: complete on single click
       if (activeTool === 'hline') {
         const drawing: Drawing = {
           id: Date.now().toString(),
@@ -559,7 +554,6 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         return;
       }
 
-      // Text tool: show inline input
       if (activeTool === 'text') {
         const chart = chartRef.current;
         const container = chartContainerRef.current;
@@ -584,7 +578,6 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         return;
       }
 
-      // Other tools: start drawing
       const drawing: Drawing = {
         id: Date.now().toString(),
         type: activeTool,
@@ -607,13 +600,11 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       if (!point) return;
 
       if (currentDrawing.type === 'brush') {
-        // Add points continuously for brush
         setCurrentDrawing({
           ...currentDrawing,
           points: [...currentDrawing.points, point],
         });
       } else if (currentDrawing.type !== 'text' && currentDrawing.type !== 'hline') {
-        // Update last point for other tools
         setCurrentDrawing({
           ...currentDrawing,
           points: [currentDrawing.points[0], point],
@@ -626,17 +617,13 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
   const handleMouseUp = useCallback(() => {
     if (!isDrawing || !currentDrawing) return;
 
-    if (currentDrawing.type === 'text') {
-      // Don't complete text yet - wait for text input submission
-      return;
-    }
+    if (currentDrawing.type === 'text') return;
 
     const completed: Drawing = {
       ...currentDrawing,
       completed: true,
     };
 
-    // Only save if it has enough points
     const minPoints = currentDrawing.type === 'hline' ? 1 : 2;
     if (completed.points.length >= minPoints) {
       setDrawings((prev) => [...prev, completed]);
@@ -646,7 +633,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     setIsDrawing(false);
   }, [isDrawing, currentDrawing]);
 
-  /* ── Text input submit ────────────────────────────────────── */
+  /* - Text input submit ------------------- */
   const handleTextSubmit = useCallback(() => {
     if (!textInput || !textValue.trim() || !currentDrawing) {
       setTextInput(null);
@@ -674,7 +661,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     setIsDrawing(false);
   }, []);
 
-  /* ── Delete / Clear ──────────────────────────────────────── */
+  /* - Delete / Clear -------------------- */
   const handleDeleteLast = useCallback(() => {
     setDrawings((prev) => prev.slice(0, -1));
   }, []);
@@ -683,21 +670,19 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     setDrawings([]);
   }, []);
 
-  /* ── Render ───────────────────────────────────────────────── */
+  /* - Render ------------------------- */
   return (
     <div className="w-full">
-      {/* ── TOOLBAR ────────────────────────────────────────── */}
+      {/* - TOOLBAR --------------------- */}
       <div
         className="flex items-center gap-1 px-2 py-1.5 rounded-t-lg border border-b-0 overflow-x-auto flex-nowrap"
         style={{ backgroundColor: TOOLBAR_BG, borderColor: TOOLBAR_BORDER }}
       >
-        {/* Tool buttons */}
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
             onClick={() => {
               setActiveTool(tool.id);
-              // Cancel ongoing drawing when switching tools
               if (isDrawing) {
                 setIsDrawing(false);
                 setCurrentDrawing(null);
@@ -708,69 +693,60 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all cursor-pointer ${
               activeTool === tool.id
                 ? 'bg-amber-500/20 text-amber-800 ring-1 ring-amber-500/30'
-                : 'text-[#8A837B] hover:bg-[#F5F0E8] hover:text-[#2D2A26]'
+                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
             }`}
           >
             {tool.icon}
           </button>
         ))}
 
-        {/* Separator */}
-        <div className="w-px h-6 bg-[#E5DFD6] mx-1 shrink-0" />
+        <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
 
-        {/* Color picker */}
         {PALETTE.map((c) => (
           <button
             key={c}
             onClick={() => setActiveColor(c)}
             title={c}
             className={`shrink-0 w-6 h-6 rounded-full border-2 transition-all cursor-pointer ${
-              activeColor === c ? 'border-[#2D2A26] scale-110' : 'border-transparent hover:scale-105'
+              activeColor === c ? 'border-gray-900 scale-110' : 'border-transparent hover:scale-105'
             }`}
             style={{ backgroundColor: c }}
           />
         ))}
 
-        {/* Separator */}
-        <div className="w-px h-6 bg-[#E5DFD6] mx-1 shrink-0" />
+        <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
 
-        {/* Delete last */}
         <button
           onClick={handleDeleteLast}
           title="حذف آخر"
-          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-[#8A837B] hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
 
-        {/* Clear all */}
         <button
           onClick={handleClearAll}
           title="پاک کردن همه"
-          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-[#8A837B] hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
         >
           <X className="w-3.5 h-3.5" />
         </button>
 
-        {/* Active tool label */}
-        <div className="mr-auto shrink-0 text-xs text-[#8A837B] font-medium" dir="rtl">
+        <div className="mr-auto shrink-0 text-xs text-gray-500 font-medium" dir="rtl">
           {TOOLS.find((t) => t.id === activeTool)?.label}
         </div>
       </div>
 
-      {/* ── CHART + SVG OVERLAY ─────────────────────────────── */}
       <div
-        className="relative rounded-b-lg overflow-hidden border border-[#E5DFD6]"
+        className="relative rounded-b-lg overflow-hidden border border-gray-200"
         style={{ height }}
       >
-        {/* Chart container */}
         <div
           ref={chartContainerRef}
           className="w-full h-full"
           data-chart
         />
 
-        {/* SVG overlay for drawings */}
         <svg
           ref={svgRef}
           className="absolute top-0 left-0"
@@ -786,7 +762,6 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           onMouseLeave={handleMouseUp}
         />
 
-        {/* Text input overlay */}
         {textInput && (
           <div
             className="absolute z-20"
@@ -806,7 +781,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
               placeholder="متن..."
               autoFocus
               dir="rtl"
-              className="bg-[#FFFCF8] border border-[#E5DFD6] rounded px-2 py-1 text-sm text-[#2D2A26] outline-none focus:border-amber-500 w-32"
+              className="bg-white border border-gray-200 rounded px-2 py-1 text-sm text-gray-900 outline-none focus:border-amber-500 w-32"
               onBlur={handleTextSubmit}
             />
           </div>
