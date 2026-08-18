@@ -16,6 +16,7 @@ import {
   type LineData,
   type HistogramData,
 } from 'lightweight-charts';
+import { candleDateToJalali, toPersianDigits } from '@/lib/jalali';
 
 // ═══════════════════════════════════════════════════════════════════
 // Types
@@ -43,18 +44,27 @@ export interface TradingViewChartProps {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Constants
+// Constants — BONE THEME (light)
 // ═══════════════════════════════════════════════════════════════════
 
-const BULL = '#34c98b';
-const BEAR = '#ef4d62';
-const BG = '#0d1424';
-const TXT = '#9db4c2';
-const GRID = 'rgba(255,255,255,0.04)';
-const MA21_COLOR = '#3ad5db';
-const MA100_COLOR = '#a04ac5';
-const SUPPORT_COLOR = '#34c98b';
-const RESISTANCE_COLOR = '#ef4d62';
+const BULL = '#22a366';
+const BEAR = '#e04060';
+const BG = '#FFFCF8';
+const TXT = '#5C5650';
+const GRID = 'rgba(0,0,0,0.04)';
+const BORDER_COLOR = 'rgba(0,0,0,0.08)';
+const MA21_COLOR = '#0891b2';
+const MA100_COLOR = '#7c3aed';
+const SUPPORT_COLOR = '#22a366';
+const RESISTANCE_COLOR = '#e04060';
+
+// ═══════════════════════════════════════════════════════════════════
+// Helper: Forward ref for parent capture
+// ═══════════════════════════════════════════════════════════════════
+export interface TradingViewChartRef {
+  getChart: () => IChartApi | null;
+  getElement: () => HTMLDivElement | null;
+}
 
 // ── Round number to nice human-readable value ─────────────────────
 function roundNice(n: number): number {
@@ -98,7 +108,13 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
 
     if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
 
-    // ── Create chart ──────────────────────────────────────────────
+    // ── Build Jalali time formatter ────────────────────────────
+    const jalaliMap = new Map<number, string>();
+    candles.forEach((c, i) => {
+      jalaliMap.set(i, candleDateToJalali(c.date, 'compact'));
+    });
+
+    // ── Create chart ──────────────────────────────────────────
     const chart = createChart(el, {
       layout: {
         background: { type: ColorType.Solid, color: BG },
@@ -111,21 +127,26 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: {
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: BORDER_COLOR,
         scaleMargins: { top: 0.05, bottom: 0.25 },
       },
       timeScale: {
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: BORDER_COLOR,
         rightOffset: 5,
         barSpacing: 7,
         minBarSpacing: 2,
+        timeVisible: false,
+        tickMarkFormatter: (time: Time) => {
+          const idx = time as number;
+          return jalaliMap.get(idx) || String(idx);
+        },
       },
       width: el.clientWidth,
       height: el.clientHeight,
     });
     chartRef.current = chart;
 
-    // ── Candlestick series ────────────────────────────────────────
+    // ── Candlestick series ─────────────────────────────────────
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: BULL,
       downColor: BEAR,
@@ -144,7 +165,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     }));
     candleSeries.setData(candleData);
 
-    // ── Volume series ────────────────────────────────────────────
+    // ── Volume series ─────────────────────────────────────────
     const volSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: 'vol',
@@ -152,12 +173,12 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     const volData: HistogramData<Time>[] = candles.map((c, i) => ({
       time: i as Time,
       value: c.volume,
-      color: c.close >= c.open ? 'rgba(52,201,139,0.25)' : 'rgba(239,77,98,0.25)',
+      color: c.close >= c.open ? 'rgba(34,163,102,0.2)' : 'rgba(224,64,96,0.2)',
     }));
     volSeries.setData(volData);
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
-    // ── MA21 line series ─────────────────────────────────────────
+    // ── MA21 line series ──────────────────────────────────────
     const closes = candles.map(c => c.close);
     const ma21Data = computeSMA(closes, 21);
     const ma21Series = chart.addSeries(LineSeries, {
@@ -172,7 +193,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     ma21Data.forEach((v, i) => { if (v !== null) ma21LineData.push({ time: i as Time, value: v }); });
     ma21Series.setData(ma21LineData);
 
-    // ── MA100 line series ────────────────────────────────────────
+    // ── MA100 line series ─────────────────────────────────────
     const ma100Data = computeSMA(closes, 100);
     const ma100Series = chart.addSeries(LineSeries, {
       color: MA100_COLOR,
@@ -186,45 +207,34 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     ma100Data.forEach((v, i) => { if (v !== null) ma100LineData.push({ time: i as Time, value: v }); });
     ma100Series.setData(ma100LineData);
 
-    // ── Helper: add price line to candle series ──────────────────
+    // ── Helper: add price line ────────────────────────────────
     const addPriceLine = (
       series: ISeriesApi<'Candlestick'>,
-      price: number,
-      color: string,
-      lineWidth: number,
-      lineStyle: number,
-      title: string,
-      axisLabelVisible: boolean,
+      price: number, color: string, lineWidth: number,
+      lineStyle: number, title: string, axisLabelVisible: boolean,
     ) => {
       try {
-        series.createPriceLine({
-          price,
-          color,
-          lineWidth,
-          lineStyle,
-          axisLabelVisible,
-          title,
-        });
+        series.createPriceLine({ price, color, lineWidth, lineStyle, axisLabelVisible, title });
       } catch { /* skip */ }
     };
 
-    // ── Support levels (with strength) ──────────────────
+    // ── Support levels (with strength) ─────────────────────────
     const validSupports = (supportStrengths || []).filter(s => s.price > 0);
     validSupports.forEach((s, i) => {
       const lw = s.isTarget ? 3 : Math.max(1, Math.round(s.strength / 3));
       const ls = s.isTarget ? 0 : 2;
-      addPriceLine(candleSeries, s.price, s.isTarget ? '#6bffb8' : SUPPORT_COLOR, lw, ls as 0 | 1 | 2, `S${i + 1} (${s.strength}/10)`, i < 6);
+      addPriceLine(candleSeries, s.price, s.isTarget ? '#16a34a' : SUPPORT_COLOR, lw, ls as 0 | 1 | 2, `S${i + 1} (${s.strength}/10)`, i < 6);
     });
 
-    // ── Resistance levels (with strength) ─────────────────
+    // ── Resistance levels (with strength) ─────────────────────
     const validResistances = (resistanceStrengths || []).filter(r => r.price > 0);
     validResistances.forEach((r, i) => {
       const lw = r.isTarget ? 3 : Math.max(1, Math.round(r.strength / 3));
       const ls = r.isTarget ? 0 : 2;
-      addPriceLine(candleSeries, r.price, r.isTarget ? '#ff6b6b' : RESISTANCE_COLOR, lw, ls as 0 | 1 | 2, `R${i + 1} (${r.strength}/10)`, i < 6);
+      addPriceLine(candleSeries, r.price, r.isTarget ? '#dc2626' : RESISTANCE_COLOR, lw, ls as 0 | 1 | 2, `R${i + 1} (${r.strength}/10)`, i < 6);
     });
 
-    // ── Price targets from scenarios (rounded, colored dotted) ──
+    // ── Price targets from scenarios ───────────────────────────
     const allTargets: { price: number; color: string; label: string }[] = [];
     const existingSRPrices = new Set([...validSupports, ...validResistances].map(l => Math.round(l.price)));
 
@@ -243,7 +253,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
       addPriceLine(candleSeries, t.price, t.color, 1, 1, t.label, i < 6);
     });
 
-    // ── Fit content ─────────────────────────────────────────────
+    // ── Fit content ───────────────────────────────────────────
     chart.timeScale().fitContent();
   }, [candles, supports, resistances, supportStrengths, resistanceStrengths, ma21, ma100, scenarios]);
 
@@ -268,11 +278,11 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     { color: SUPPORT_COLOR, label: 'حمایت (با قدرت)' },
     { color: MA100_COLOR, label: 'MA100' },
     { color: MA21_COLOR, label: 'MA21' },
-    { color: '#ffb11b', label: 'هدف قیمتی' },
+    { color: '#d97706', label: 'هدف قیمتی' },
   ];
 
   return (
-    <div dir="ltr" className="relative w-full rounded-2xl overflow-hidden border border-white/6 bg-[#0d1424]" style={{ height: 550 }}>
+    <div dir="ltr" className="relative w-full rounded-2xl overflow-hidden border border-[#E5DFD6] bg-[#FFFCF8] shadow-sm" style={{ height: 550 }}>
       {/* ── Chart container ── */}
       <div ref={containerRef} className="w-full h-full" />
 
@@ -283,9 +293,9 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
             key={item.label}
             className="px-2 py-0.5 rounded text-[10px] font-bold border"
             style={{
-              background: `${item.color}20`,
+              background: `${item.color}15`,
               color: item.color,
-              borderColor: `${item.color}40`,
+              borderColor: `${item.color}30`,
             }}
           >
             {item.label}
@@ -295,7 +305,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
 
       {/* ── Watermark ── */}
       <div dir="rtl" className="absolute bottom-2 left-2 z-10 pointer-events-none">
-        <span className="text-[10px] text-gray-600 font-medium">{symbolName} — نمودار روزانه</span>
+        <span className="text-[10px] text-[#B0A89E] font-medium">{symbolName} — نمودار روزانه</span>
       </div>
     </div>
   );
@@ -304,5 +314,5 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
 export default TradingViewChartInner;
 
 export function TradingViewChartSkeleton() {
-  return <Skeleton className="w-full h-[550px] rounded-2xl bg-white/5" />;
+  return <Skeleton className="w-full h-[550px] rounded-2xl bg-[#E5DFD6]" />;
 }

@@ -377,8 +377,8 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       // Edge probability label (only for visible edges)
       if (isVisible) {
-        pathsSvg += `<text x="${cx}" y="${cy - 6}" fill="#cde4ef" font-size="9" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3.5" stroke-linejoin="round" opacity="0.85" data-type="${type}" class="edge-label">${label}</text>`;
-        pathsSvg += `<text x="${cx}" y="${cy + 8}" fill="${EDGE_COLORS[type]}" font-size="10" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">${probLabel}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy - 6}" fill="#5C5650" font-size="9" text-anchor="middle" paint-order="stroke" stroke="#FFFCF8" stroke-width="3.5" stroke-linejoin="round" opacity="0.85" data-type="${type}" class="edge-label">${label}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy + 8}" fill="${EDGE_COLORS[type]}" font-size="10" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#FFFCF8" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">${probLabel}</text>`;
       }
     }
 
@@ -418,20 +418,20 @@ export default function VdssGraph(props: VdssGraphProps) {
 
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-gray-100">{def.title}</h3>
-        <p className="text-xs text-gray-300"><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
-        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-white/10 bg-white/5 text-gray-300">{def.type}</span>
-        <p className="text-xs text-gray-400 leading-relaxed">{def.desc}</p>
+        <h3 className="text-sm font-bold text-[#2D2A26]">{def.title}</h3>
+        <p className="text-xs text-[#5C5650]"><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#E5DFD6] bg-[#F5F0E8] text-[#5C5650]">{def.type}</span>
+        <p className="text-xs text-[#8A837B] leading-relaxed">{def.desc}</p>
         {inputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-gray-300 mb-1">مسیرهای ورودی ({inputs.length}):</p>
+            <p className="text-xs font-medium text-[#5C5650] mb-1">مسیرهای ورودی ({inputs.length}):</p>
             <ul className="space-y-1">
               {inputs.map((e, i) => {
                 const ei = EDGES.indexOf(e);
                 const ep = edgeProbs[String(ei)] ?? 0;
                 return (
-                  <li key={i} className="text-[11px] text-gray-500 leading-relaxed border-t border-dashed border-white/10 pt-1.5">
-                    <b className="text-gray-400">{e[0]} ← {e[1]}</b>
+                  <li key={i} className="text-[11px] text-[#8A837B] leading-relaxed border-t border-dashed border-[#E5DFD6] pt-1.5">
+                    <b className="text-[#5C5650]">{e[0]} ← {e[1]}</b>
                     <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{(ep * 100).toFixed(1)}٪</span>
                     <br />{e[2]}
                   </li>
@@ -442,14 +442,14 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
         {outputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-gray-300 mb-1">مسیرهای خروجی ({outputs.length}):</p>
+            <p className="text-xs font-medium text-[#5C5650] mb-1">مسیرهای خروجی ({outputs.length}):</p>
             <ul className="space-y-1">
               {outputs.map((e, i) => {
                 const ei = EDGES.indexOf(e);
                 const ep = edgeProbs[String(ei)] ?? 0;
                 return (
-                  <li key={i} className="text-[11px] text-gray-500 leading-relaxed border-t border-dashed border-white/10 pt-1.5">
-                    <b className="text-gray-400">{e[0]} → {e[1]}</b>
+                  <li key={i} className="text-[11px] text-[#8A837B] leading-relaxed border-t border-dashed border-[#E5DFD6] pt-1.5">
+                    <b className="text-[#5C5650]">{e[0]} → {e[1]}</b>
                     <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{(ep * 100).toFixed(1)}٪</span>
                     <br />{e[2]}
                   </li>
@@ -472,36 +472,36 @@ export default function VdssGraph(props: VdssGraphProps) {
   return (
     <div className="space-y-3" dir="rtl">
       {/* ═══ HEADER ═══ */}
-      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl border border-cyan-500/20"
-        style={{ background: 'linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77))', boxShadow: '0 18px 55px rgba(0,0,0,.35)' }}>
+      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl border border-[#E5DFD6]"
+        style={{ background: 'linear-gradient(105deg, #FFFCF8, #F5F0E8)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl border border-amber-500/60 flex items-center justify-center text-amber-400 text-xl font-bold"
-            style={{ boxShadow: 'inset 0 0 22px rgba(255,177,27,.12), 0 0 22px rgba(255,177,27,.08)' }}>◈</div>
+          <div className="w-10 h-10 rounded-xl border border-amber-200 flex items-center justify-center text-amber-800 text-xl font-bold"
+            style={{ boxShadow: 'inset 0 0 22px rgba(146,64,14,.06), 0 0 22px rgba(146,64,14,.04)' }}>◈</div>
           <div>
-            <h2 className="text-base font-bold text-gray-100">گراف تصمیم {symbolName}</h2>
-            <p className="text-[11px] text-gray-500">مدل ۱۲پایه گره‌ـ‌مسیر | مبتنی بر EMV و مسیرهای بحرانی</p>
+            <h2 className="text-base font-bold text-[#2D2A26]">گراف تصمیم {symbolName}</h2>
+            <p className="text-[11px] text-[#8A837B]">مدل ۱۲پایه گره‌ـ‌مسیر | مبتنی بر EMV و مسیرهای بحرانی</p>
           </div>
         </div>
-        <div className="text-left text-xs text-gray-400 leading-relaxed pr-4 border-r border-cyan-500/20">
-          نقطه مرجع: <b className="text-cyan-400">{toFa(currentPrice)}</b><br />
+        <div className="text-left text-xs text-[#8A837B] leading-relaxed pr-4 border-r border-[#E5DFD6]">
+          نقطه مرجع: <b className="text-cyan-700">{toFa(currentPrice)}</b><br />
           افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
         </div>
       </div>
 
       {/* ═══ Metric Cards ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color="text-cyan-400" />
-        <MetricCard label="مقاومت آنی (R1)" value={toFa(R1_level) + ' ریال'} color="text-amber-400" />
-        <MetricCard label="حمایت تفکیک‌کننده (S1)" value={toFa(S1_level) + ' ریال'} color="text-blue-400" />
-        <MetricCard label="میانگین متحرک ۱۰۰" value={toFa(ma100) + ' ریال'} color="text-gray-200" />
+        <MetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color="text-cyan-700" />
+        <MetricCard label="مقاومت آنی (R1)" value={toFa(R1_level) + ' ریال'} color="text-amber-800" />
+        <MetricCard label="حمایت تفکیک‌کننده (S1)" value={toFa(S1_level) + ' ریال'} color="text-blue-700" />
+        <MetricCard label="میانگین متحرک ۱۰۰" value={toFa(ma100) + ' ریال'} color="text-[#5C5650]" />
       </div>
 
       {/* ═══ Toolbar ═══ */}
-      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl border border-white/10 bg-[#091825]/90">
-        <span className="text-xs text-gray-500 ml-1">فیلتر:</span>
+      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl border border-[#E5DFD6] bg-[#FFFCF8]">
+        <span className="text-xs text-[#8A837B] ml-1">فیلتر:</span>
         {allFilters.map((btn, i) => {
           if ('isSep' in btn && btn.isSep) {
-            return <span key={`sep-${i}`} className="text-gray-700 mx-1">│</span>;
+            return <span key={`sep-${i}`} className="text-[#B0A89E] mx-1">│</span>;
           }
           const isScenario = 'scenarioKey' in btn;
           const isActive = activeFilter === btn.key;
@@ -513,13 +513,13 @@ export default function VdssGraph(props: VdssGraphProps) {
               className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
                 isActive
                   ? isScenario
-                    ? 'text-white border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.2)]'
-                    : 'text-white border-cyan-500/60 bg-cyan-500/14 shadow-[0_0_18px_rgba(58,213,219,.10)]'
-                  : 'text-gray-400 border-white/10 bg-white/4 hover:bg-white/8'
+                    ? 'text-[#2D2A26] border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.06)]'
+                    : 'text-[#2D2A26] border-cyan-500/60 bg-cyan-50 shadow-[0_0_18px_rgba(58,213,219,.10)]'
+                  : 'text-[#5C5650] border-[#E5DFD6] bg-[#F5F0E8]/50 hover:bg-[#E5DFD6]'
               }`}
               style={isActive && isScenario && meta ? {
-                borderColor: meta.color + '99',
-                background: meta.color + '18',
+                borderColor: meta.color + '80',
+                background: meta.color + '12',
                 color: meta.color,
               } : undefined}
             >{btn.label}</button>
@@ -527,7 +527,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         })}
         <button
           onClick={() => { setSelectedNode(null); setActiveFilter('all'); }}
-          className="text-xs px-3 py-1.5 rounded-lg border border-white/10 bg-white/4 text-gray-400 hover:bg-white/8 transition-all cursor-pointer mr-auto"
+          className="text-xs px-3 py-1.5 rounded-lg border border-[#E5DFD6] bg-[#F5F0E8]/50 text-[#5C5650] hover:bg-[#E5DFD6] transition-all cursor-pointer mr-auto"
         >بازنشانی</button>
       </div>
 
@@ -536,10 +536,10 @@ export default function VdssGraph(props: VdssGraphProps) {
         {/* Graph Shell */}
         <div
           ref={shellRef}
-          className="relative overflow-auto border border-white/10 border-t-0 rounded-b-2xl min-h-[500px] max-h-[700px]"
+          className="relative overflow-auto border border-[#E5DFD6] border-t-0 rounded-b-2xl min-h-[500px] max-h-[700px]"
           style={{
-            background: 'radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72)',
-            boxShadow: '0 18px 55px rgba(0,0,0,.35)',
+            background: 'radial-gradient(circle at 49% 49%, rgba(180,200,220,.18), transparent 36%), #FFFCF8',
+            boxShadow: '0 4px 16px rgba(0,0,0,.06)',
           }}
         >
           <div ref={graphRef} className="relative mx-auto" style={{ width: 1100, height: 780, minWidth: 1100, minHeight: 780 }}>
@@ -573,10 +573,10 @@ export default function VdssGraph(props: VdssGraphProps) {
                     borderWidth: isTerminal ? '2px' : '1px',
                     borderRadius: '12px',
                     background: isVisible
-                      ? `linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))`
-                      : 'rgba(6,12,20,0.5)',
+                      ? `linear-gradient(145deg, #FFFCF8, #F5F0E8)`
+                      : 'rgba(245,240,232,0.5)',
                     boxShadow: isVisible
-                      ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 12%, transparent), 0 10px 25px rgba(0,0,0,.25)`
+                      ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
                       : 'none',
                     opacity: isVisible ? 1 : 0.12,
                     transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
@@ -592,8 +592,8 @@ export default function VdssGraph(props: VdssGraphProps) {
                   {!isResultNode && (
                     <span className="block text-[9px] font-bold mb-1" style={{ color: isVisible ? scenarioColor : '#555' }}>{id} | {def.type.split(' ').slice(0, 2).join(' ')}</span>
                   )}
-                  <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-gray-100' : 'text-gray-600'}`}>{def.title}</div>
-                  <div className="text-[10px] text-gray-400 mt-1" dir="ltr">{nodeValues[id] ?? '--'}</div>
+                  <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#2D2A26]' : 'text-[#B0A89E]'}`}>{def.title}</div>
+                  <div className="text-[10px] text-[#8A837B] mt-1" dir="ltr">{nodeValues[id] ?? '--'}</div>
                   {isResultNode && scenarioProb !== null && (
                     <span
                       className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-sm font-bold"
@@ -608,7 +608,7 @@ export default function VdssGraph(props: VdssGraphProps) {
             })}
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-white/10 bg-[#07111b]/80 text-[10px] text-gray-500 leading-7 z-10">
+            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-[#E5DFD6] bg-[#FFFCF8]/90 text-[10px] text-[#5C5650] leading-7 z-10">
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعود و تأیید</div>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />پولبک و بازگشت</div>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />اصلاح</div>
@@ -618,12 +618,12 @@ export default function VdssGraph(props: VdssGraphProps) {
         </div>
 
         {/* ═══ Right Panel: Path Probabilities ═══ */}
-        <div className="rounded-2xl border border-white/10 p-4 flex flex-col"
-          style={{ background: 'linear-gradient(160deg, rgba(16,39,57,.93), rgba(7,19,31,.93))', boxShadow: '0 18px 55px rgba(0,0,0,.35)' }}>
-          <h2 className="text-sm font-bold text-gray-200 mb-3">📋 احتمال مسیرها</h2>
+        <div className="rounded-2xl border border-[#E5DFD6] p-4 flex flex-col"
+          style={{ background: 'linear-gradient(160deg, #FFFCF8, #F5F0E8)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <h2 className="text-sm font-bold text-[#2D2A26] mb-3">📋 احتمال مسیرها</h2>
 
           {selectedNode && detailContent ? (
-            <div className="border-t border-white/10 pt-3 flex-1 overflow-y-auto max-h-[580px] custom-scrollbar">
+            <div className="border-t border-[#E5DFD6] pt-3 flex-1 overflow-y-auto max-h-[580px] custom-scrollbar">
               {detailContent}
             </div>
           ) : (
@@ -642,10 +642,10 @@ export default function VdssGraph(props: VdssGraphProps) {
                       className={`rounded-xl p-3 cursor-pointer transition-all border ${
                         isActive
                           ? 'border-opacity-60'
-                          : 'border-white/6 hover:border-white/15'
+                          : 'border-[#E5DFD6]/60 hover:border-[#E5DFD6]'
                       }`}
                       style={{
-                        background: isActive ? `${meta.color}10` : 'rgba(255,255,255,0.02)',
+                        background: isActive ? `${meta.color}0a` : 'rgba(245,240,232,0.5)',
                         borderColor: isActive ? meta.color + '80' : undefined,
                       }}
                     >
@@ -654,15 +654,15 @@ export default function VdssGraph(props: VdssGraphProps) {
                         <span className="text-lg font-black" style={{ color: meta.color }}>{(pathProb * 100).toFixed(1)}٪</span>
                       </div>
                       {/* Probability bar */}
-                      <div className="w-full h-1.5 rounded-full bg-white/5 mb-2">
+                      <div className="w-full h-1.5 rounded-full bg-[#E5DFD6] mb-2">
                         <div
                           className="h-full rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, pathProb * 100)}%`, background: meta.color }}
                         />
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-gray-500">
+                      <div className="flex items-center justify-between text-[10px] text-[#8A837B]">
                         <span>تعداد مسیرها: {filteredPaths.filter(p => p.target === key).length}</span>
-                        <span>احتمال سناریو: <b className="text-gray-300">{toFa(s.probability)}٪</b></span>
+                        <span>احتمال سناریو: <b className="text-[#5C5650]">{toFa(s.probability)}٪</b></span>
                       </div>
                     </div>
                   );
@@ -670,15 +670,15 @@ export default function VdssGraph(props: VdssGraphProps) {
               </div>
 
               {/* Top paths list */}
-              <div className="border-t border-white/10 pt-3 mt-3">
-                <h3 className="text-xs font-bold text-gray-300 mb-2">مسیرهای اصلی (تا ۱۰ مسیر)</h3>
+              <div className="border-t border-[#E5DFD6] pt-3 mt-3">
+                <h3 className="text-xs font-bold text-[#2D2A26] mb-2">مسیرهای اصلی (تا ۱۰ مسیر)</h3>
                 <div className="space-y-1.5">
                   {filteredPaths.slice(0, 10).map((p, i) => {
                     const meta = SCENARIO_META[p.target];
                     return (
                       <div key={i} className="flex items-center gap-2 text-[10px]">
                         <span className="w-4 text-center font-bold" style={{ color: meta.color }}>{i + 1}</span>
-                        <span className="flex-1 text-gray-400" dir="ltr">
+                        <span className="flex-1 text-[#5C5650]" dir="ltr">
                           {p.nodes.join(' → ')}
                         </span>
                         <span className="font-bold min-w-[40px] text-left" style={{ color: meta.color }}>
@@ -688,15 +688,15 @@ export default function VdssGraph(props: VdssGraphProps) {
                     );
                   })}
                   {filteredPaths.length > 10 && (
-                    <div className="text-[10px] text-gray-600 text-center pt-1">
+                    <div className="text-[10px] text-[#B0A89E] text-center pt-1">
                       و {filteredPaths.length - 10} مسیر دیگر...
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="border-t border-white/10 pt-3 mt-3">
-                <p className="text-[10px] text-gray-500 leading-relaxed">
+              <div className="border-t border-[#E5DFD6] pt-3 mt-3">
+                <p className="text-[10px] text-[#8A837B] leading-relaxed">
                   <b>قاعده:</b> عبور یا شکست هر سطح فقط با تثبیت معتبر تلقی می‌شود.<br />
                   <b>احتمال یال:</b> حاصل توزیع شرطی بر اساس سیگنال‌های تکنیکال.<br />
                   <b>احتمال مسیر:</b> حاصل‌ضرب احتمال یال‌های مسیر.
@@ -708,8 +708,8 @@ export default function VdssGraph(props: VdssGraphProps) {
       </div>
 
       {/* ═══ Scenario Result Cards ═══ */}
-      <div className="mt-4 p-4 rounded-2xl border border-white/10 bg-[#081623]/80">
-        <h2 className="text-sm font-bold text-gray-200 mb-3">گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی</h2>
+      <div className="mt-4 p-4 rounded-2xl border border-[#E5DFD6] bg-[#FFFCF8]">
+        <h2 className="text-sm font-bold text-[#2D2A26] mb-3">گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {SCENARIO_KEYS.map(key => {
             const s = scenarios[key];
@@ -721,19 +721,19 @@ export default function VdssGraph(props: VdssGraphProps) {
                 style={{
                   '--scolor': meta.color,
                   border: `1px solid color-mix(in srgb, ${meta.color} 40%, transparent)`,
-                  background: `linear-gradient(160deg, color-mix(in srgb, ${meta.color} 12%, transparent), rgba(8,22,35,.65))`,
+                  background: `linear-gradient(160deg, color-mix(in srgb, ${meta.color} 8%, #FFFCF8), #FFFCF8)`,
                 } as React.CSSProperties}
               >
                 <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
-                <span className="text-xs font-bold text-gray-300">{key} | {meta.label}</span>
-                <small className="block text-[10px] text-gray-500 leading-relaxed mt-2" dir="ltr">
+                <span className="text-xs font-bold text-[#5C5650]">{key} | {meta.label}</span>
+                <small className="block text-[10px] text-[#8A837B] leading-relaxed mt-2" dir="ltr">
                   {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
                 </small>
               </div>
             );
           })}
         </div>
-        <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-amber-500/80 bg-amber-500/6 text-[11px] text-gray-400 leading-relaxed">
+        <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-amber-700/60 bg-amber-50 text-[11px] text-[#5C5650] leading-relaxed">
           <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی بر اساس فرمول‌های تعریف‌شده (ADX, RSI, MFI, CCI و فاصله از سطوح) محاسبه شده‌اند. احتمال مسیرها از حاصل‌ضرب احتمال شرطی یال‌ها به دست می‌آید.
         </div>
       </div>
@@ -745,9 +745,9 @@ export default function VdssGraph(props: VdssGraphProps) {
 
 function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="px-4 py-3 rounded-xl border border-white/10"
-      style={{ background: 'linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86))' }}>
-      <small className="block text-xs text-gray-500 mb-2">{label}</small>
+    <div className="px-4 py-3 rounded-xl border border-[#E5DFD6]"
+      style={{ background: 'linear-gradient(145deg, #FFFCF8, #F5F0E8)' }}>
+      <small className="block text-xs text-[#8A837B] mb-2">{label}</small>
       <strong className={`text-lg tracking-wide ${color}`}>{value}</strong>
     </div>
   );
@@ -758,16 +758,16 @@ function MetricCard({ label, value, color }: { label: string; value: string; col
 export function VdssGraphSkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-16 w-full bg-white/5 rounded-2xl" />
+      <Skeleton className="h-16 w-full bg-[#E5DFD6] rounded-2xl" />
       <div className="grid grid-cols-4 gap-3">
-        <Skeleton className="h-16 bg-white/5 rounded-xl" />
-        <Skeleton className="h-16 bg-white/5 rounded-xl" />
-        <Skeleton className="h-16 bg-white/5 rounded-xl" />
-        <Skeleton className="h-16 bg-white/5 rounded-xl" />
+        <Skeleton className="h-16 bg-[#E5DFD6] rounded-xl" />
+        <Skeleton className="h-16 bg-[#E5DFD6] rounded-xl" />
+        <Skeleton className="h-16 bg-[#E5DFD6] rounded-xl" />
+        <Skeleton className="h-16 bg-[#E5DFD6] rounded-xl" />
       </div>
-      <Skeleton className="h-10 w-full bg-white/5 rounded-t-2xl" />
-      <Skeleton className="h-[500px] w-full bg-white/5 rounded-b-2xl" />
-      <Skeleton className="h-40 w-full bg-white/5 rounded-2xl" />
+      <Skeleton className="h-10 w-full bg-[#E5DFD6] rounded-t-2xl" />
+      <Skeleton className="h-[500px] w-full bg-[#E5DFD6] rounded-b-2xl" />
+      <Skeleton className="h-40 w-full bg-[#E5DFD6] rounded-2xl" />
     </div>
   );
 }

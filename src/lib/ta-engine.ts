@@ -528,7 +528,7 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
 
   // 9. Count actual price TOUCHES (rejections) and volume at each cluster level
   // A real touch = bar wick reached the level AND bar body closed away from it
-  const touchThreshold = currentPrice * 0.004; // 0.4% tight proximity
+  const touchThreshold = currentPrice * 0.002; // 0.2% tight proximity
   for (let i = 0; i < data.length; i++) {
     const bar = data[i];
     for (const c of clusters) {
@@ -553,57 +553,57 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
 
   // 10. Calculate multi-factor strength (0-10)
   const levelStrengths: LevelStrength[] = clusters.map(c => {
-    // Factor 1: Source Confluence (0-2.5 pts)
-    const sourceScore = Math.min(2.5, c.sources.size * 0.5);
-    const hasSwingAndPivot = c.sources.has('swing') && c.sources.has('pivot') ? 0.5 : 0;
-    const maConfluence = c.sources.has('ma') ? 0.5 : 0;
-    const confluenceScore = Math.min(2.5, sourceScore + hasSwingAndPivot + maConfluence);
+    // Factor 1: Source Confluence (0-2.0 pts)
+    const sourceScore = Math.min(2.0, c.sources.size * 0.4);
+    const hasSwingAndPivot = c.sources.has('swing') && c.sources.has('pivot') ? 0.4 : 0;
+    const maConfluence = c.sources.has('ma') ? 0.4 : 0;
+    const confluenceScore = Math.min(2.0, sourceScore + hasSwingAndPivot + maConfluence);
 
-    // Factor 2: Touch Count — CAPPED by recency (0-2 pts)
+    // Factor 2: Touch Count — CAPPED by recency (0-1.5 pts)
     // Only count touches in the most recent 50% of data to avoid ancient history inflating
     const recentBarStart = Math.floor(data.length * 0.5);
     const recentTouches = c.mostRecentTouchBar >= recentBarStart ? c.touchCount : Math.max(0, c.touchCount - 1);
     let touchScore: number;
     if (recentTouches === 0) touchScore = 0;
-    else if (recentTouches === 1) touchScore = 0.4;
-    else if (recentTouches <= 2) touchScore = 0.8;
-    else if (recentTouches <= 4) touchScore = 1.2;
-    else if (recentTouches <= 7) touchScore = 1.6;
-    else touchScore = 2.0;
+    else if (recentTouches === 1) touchScore = 0.3;
+    else if (recentTouches <= 2) touchScore = 0.6;
+    else if (recentTouches <= 4) touchScore = 0.9;
+    else if (recentTouches <= 7) touchScore = 1.2;
+    else touchScore = 1.5;
 
-    // Factor 3: Volume Confirmation (0-1.5 pts)
+    // Factor 3: Volume Confirmation (0-1.0 pts)
     let volumeScore = 0;
     if (c.touchCount > 0) {
       const avgVolAtTouch = c.totalVolumeAtTouches / c.touchCount;
       const volRatio = avgVolume > 0 ? avgVolAtTouch / avgVolume : 1;
-      if (volRatio > 2.0) volumeScore = 1.5;
-      else if (volRatio > 1.5) volumeScore = 1.2;
-      else if (volRatio > 1.0) volumeScore = 0.8;
-      else if (volRatio > 0.7) volumeScore = 0.4;
-      else volumeScore = 0.2;
+      if (volRatio > 2.0) volumeScore = 1.0;
+      else if (volRatio > 1.5) volumeScore = 0.8;
+      else if (volRatio > 1.0) volumeScore = 0.5;
+      else if (volRatio > 0.7) volumeScore = 0.25;
+      else volumeScore = 0.1;
     }
 
-    // Factor 4: Freshness / Recency (0-1.5 pts)
+    // Factor 4: Freshness / Recency (0-1.0 pts)
     let freshnessScore = 0;
     if (c.touchCount > 0 && data.length > 0) {
       const barsAgo = data.length - 1 - c.mostRecentTouchBar;
-      if (barsAgo <= 3) freshnessScore = 1.5;
-      else if (barsAgo <= 10) freshnessScore = 1.2;
-      else if (barsAgo <= 25) freshnessScore = 0.8;
-      else if (barsAgo <= 50) freshnessScore = 0.4;
-      else freshnessScore = 0.1;
+      if (barsAgo <= 3) freshnessScore = 1.0;
+      else if (barsAgo <= 10) freshnessScore = 0.8;
+      else if (barsAgo <= 25) freshnessScore = 0.5;
+      else if (barsAgo <= 50) freshnessScore = 0.25;
+      else freshnessScore = 0.05;
     }
 
-    // Factor 5: Proximity to current price (0-1 pt)
+    // Factor 5: Proximity to current price (0-0.5 pts)
     const distRatio = Math.abs(c.price - currentPrice) / currentPrice;
     let proximityScore = 0;
-    if (distRatio < 0.015) proximityScore = 1.0;
-    else if (distRatio < 0.03) proximityScore = 0.7;
-    else if (distRatio < 0.06) proximityScore = 0.4;
-    else if (distRatio < 0.10) proximityScore = 0.2;
+    if (distRatio < 0.01) proximityScore = 0.5;
+    else if (distRatio < 0.02) proximityScore = 0.35;
+    else if (distRatio < 0.04) proximityScore = 0.2;
+    else if (distRatio < 0.07) proximityScore = 0.1;
 
     const total = confluenceScore + touchScore + volumeScore + freshnessScore + proximityScore;
-    const strength = Math.min(10, Math.max(1, Math.round(total)));
+    const strength = Math.min(10, Math.max(1, Math.round(total * 10 / 6.0)));
 
     return { price: c.price, strength, isTarget: false };
   });
@@ -626,10 +626,9 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
         if (gap >= gapPct) {
           result.push(levels[i]);
         } else {
-          // Merge: keep stronger level's price, add 0.5 for confluence
+          // Merge: keep stronger level's strength (no inflation)
           const keep = levels[i].strength >= result[result.length - 1].strength ? levels[i] : result[result.length - 1];
-          const mergedStrength = Math.min(10, Math.max(keep.strength, result[result.length - 1].strength) + 0.5);
-          result[result.length - 1] = { ...keep, strength: Math.round(mergedStrength) };
+          result[result.length - 1] = { ...keep, strength: keep.strength };
         }
       }
       if (result.length >= targetCount) return result;

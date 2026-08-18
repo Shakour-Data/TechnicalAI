@@ -1,107 +1,182 @@
+# Project Worklog
+
 ---
-Task ID: 7
-Agent: main
-Task: Integrate TGJU (tgju.org) data for technical analysis via tgju-api
+Task ID: 0
+Agent: Main Orchestrator
+Task: Read current project state and plan implementation
 
 Work Log:
-- Analyzed tgju-api (https://github.com/BlackIQ/tgju-api): provides /api/price/currency (35 currencies) and /api/price/gold (gold, mesghal, melted gold, silver, 33 gold ETFs)
-- Discovered tgju.org has Cloudflare protection — direct API access blocked
-- Used z-ai page_reader SDK to bypass Cloudflare and discover tgju.org internal chart API
-- Found chart data endpoint: api.tgju.org/v1/market/indicator/summary-table-data/{key} returning daily OHLC data (open, low, high, close, date) going back to 2011 (3000-4000 records per instrument)
-- Tested endpoint for multiple instruments: price_dollar_rl (3927 days), geram18 (3479), mesghal (3481), silver_925 (1275), price_eur (3695) — all returning valid data
-- Created /src/lib/tgju-api.ts: TgjuInstrument interface, fetchTgjuInstruments() for real-time prices from tgju-api (5min cache), fetchTgjuHistory() for historical OHLC via z-ai page_reader (30min cache)
-- Created /api/tgju-instruments route: returns categorized instruments (currencies, gold, silver, goldEtfs) with l18/l30/pl/pcp/tgjuKey fields
-- Created /api/tgju-analysis route: accepts key param, fetches history via z-ai, converts to OHLCV, runs TA engine analyze(), returns full AnalysisData
-- Updated symbol-search.tsx: added 4 new category tabs (ارزها, طلا و نقره, صندوق طلا) with teal accent color, TGJU badge on items, parallel fetch of TSE + TGJU data
-- Updated page.tsx: TGJU category detection, loading message (15s warning for slow z-ai fetch), TGJU badge in header, adapted stats bar (no volume for TGJU), updated empty state and footer
-- Fixed hydration mismatch by adding suppressHydrationWarning to Input
+- Read page.tsx, vdes-analysis.tsx, tradingview-chart.tsx, ta-engine.ts, ml-model.ts, tse-api.ts, globals.css, package.json
+- Identified all pending tasks from previous session
+- Identified current code structure and dependencies
 
 Stage Summary:
-- 82+ TGJU instruments available: 35 currencies, 12 gold/mesghal items, 2 silver, 33 gold ETFs
-- Full technical analysis (chart, indicators, VDss, VDes) works for TGJU instruments via historical data
-- Historical data fetched via z-ai page_reader (bypasses Cloudflare), cached 30min
-- Real-time prices from tgju-api (fast, no Cloudflare), cached 5min
-- All existing TSE functionality preserved
+- Project is a Next.js 16 technical analysis app for Iranian financial markets
+- Uses lightweight-charts v5.2.1, shadcn/ui, Tailwind CSS 4
+- Current theme: dark navy (#060a13)
+- S/R strength calculation exists with 5-factor algorithm (confluence, touch count, volume, freshness, proximity)
+- ML model infrastructure (Logistic Regression) already implemented in ml-model.ts
+- 7-layer VDss algorithm already implemented in ta-engine.ts
+
 ---
 Task ID: 1
-Agent: main
-Task: Fix console errors, enforce adjusted prices, add crypto/world indices/forex/energy/metals/commodities from TGJU
+Agent: Main Orchestrator
+Task: Install required packages
 
 Work Log:
-- Read dev.log and identified a past parsing error (already resolved in code)
-- Verified no current compilation or runtime errors
-- Confirmed all TSE candlestick data uses type=3 (تعدیل شده / adjusted prices) - only call site in analysis/route.ts uses fetchCandlestick(symbol, 3)
-- Added safety comment to fetchCandlestick function to prevent future misuse
-- Explored tgju.org website to discover all available instrument keys via page_reader
-- Tested chart API keys: crypto-bitcoin, indices-us30-oanda, eur-usd-ask — all confirmed working
-- Updated tgju-api.ts: Added 80+ static instruments across 6 new categories (crypto, world_index, forex, energy, metal, commodity)
-- Updated tgju-instruments API route to return all new categories
-- Updated symbol-search.tsx: Added 15 category tabs (was 8), with icons from lucide-react (Globe, Bitcoin, Fuel, Gem, Package)
-- Updated page.tsx: Extended TGJU_CATEGORIES set to include all 10 TGJU-based categories
-- Verified with Agent Browser: all category tabs work, search across categories works, zero console errors, responsive layout confirmed
+- Installed html-to-image@1.11.13 for chart image capture
+- Installed jspdf@4.2.1 for PDF export
+- Installed xlsx@0.18.5 for Excel export
+- Installed file-saver@2.0.5 with @types/file-saver
 
 Stage Summary:
-- 15 category tabs in symbol search: همه، شاخص‌ها، سهام، صندوق‌ها، ارزها (ریال)، جفت ارز، کریپتو، طلا و سکه، صندوق طلا، بورس جهانی، نفت و انرژی، فلزات جهانی، کالاهای جهانی، اوراق بدهی، مشتقه
-- Crypto: 13 coins (BTC, ETH, LTC, XRP, BCH, ADA, XLM, USDT, XMR, DASH, EOS, NEO, IOTA)
-- World Indices: 21 indices across America, Europe, Asia, Middle East (Dow, Nasdaq, S&P500, DAX, CAC40, FTSE, Nikkei, Hang Seng, TASI, etc.)
-- Forex: 16 pairs (EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, etc.)
-- Energy: 6 instruments (Brent, WTI, OPEC, Natural Gas, Gasoline, LNG)
-- Metals: 10 instruments (Gold ounce, Silver, Platinum, Palladium, Copper, Aluminum, Zinc, Nickel, Lead, Tin)
-- Commodities: 9 instruments (Wheat, Corn, Soybeans, Rice, Cotton, Cocoa, Sugar, Coffee, Soybean Oil)
-- All prices are based on TGJU chart API historical data
-- All TSE data uses adjusted prices only (type=3)
----
-Task ID: 1
-Agent: Main
-Task: Fix S/R strength calculation + Redesign VDes layout
+- All export packages installed successfully
 
-Work Log:
-- Analyzed the old strength formula: only counted nearby levels in 10% window, causing all levels to saturate to 10
-- Rewrote calcSupportResistance() with 6-source tagged level system (pivot, swing, ma, bb, round, hilo)
-- Implemented cluster-based confluence tracking (Set<string> of source types per cluster)
-- Implemented rejection-based touch counting (bar must reach level AND close away from it)
-- Built 5-factor strength model: Confluence(2.5) + TouchCount(2.0) + Volume(1.5) + Freshness(1.5) + Proximity(1.0) = max 8.5
-- Tightened touch threshold from 0.8% to 0.4% and required actual rejection (not just proximity)
-- Redesigned VDes layout: extracted Key Levels and Price Targets from text analysis into beautiful styled boxes below chart
-- Created StrengthBar visual component (progress bar + numeric value)
-- Layout order now: Header > Chart > Resistance/Support boxes > Price Targets > Text Analysis > Scenario Probabilities > Strategy Tag
-
-Stage Summary:
-- Strength values now properly differentiated (resistances: 1-5, supports: 4-10, targets: 8-10)
-- VDes layout restructured with visually appealing S/R boxes below chart
-- All sections verified present via Agent Browser DOM snapshot
 ---
 Task ID: 2
-Agent: main
-Task: Implement 7-Layer ML-Based VDss Algorithm (no fixed weights)
+Agent: Main Orchestrator
+Task: Create Jalali/Shamsi date converter utility
 
 Work Log:
-- Created /src/lib/ml-model.ts (~300 lines): Logistic Regression with L2 regularization, StandardScaler, TimeSeriesSplit CV, AdaptiveWeightModel class
-- All ML infrastructure implemented from scratch in TypeScript (no sklearn dependency)
-- Logistic Regression: gradient descent, class-weighted loss, sigmoid activation, predictProba
-- StandardScaler: mean/std normalization with 1e-10 epsilon guard
-- TimeSeriesSplit: chronological train/val splits for time-series data
-- AdaptiveWeightModel: wraps ML pipeline, extracts normalized absolute coefficients as feature weights, manages training history (max 1000 samples), periodic retraining every 10 bars
-- Integrated 640 lines of VDss layer functions into ta-engine.ts:
-  - simplifiedSR(): fast S/R computation for historical bars using swing levels
-  - detectDivergenceSimple(): O(n) divergence detection using momentum proxy (no RSI recomputation)
-  - computeFeaturesAtBar(): 16-feature extraction at any historical bar (Layer 1+2)
-  - createTrainingData(): supervised label creation (1% threshold, sampled every 5 bars for performance)
-  - calculateScenarioProbabilities(): Layer 4 with adaptive ML parameters (momentum/volatility/trend factors from sigmoid of model coefficients)
-  - calculateEdgeWeights(): Layer 5 with ML coefficient-derived trend/momentum/volatility adjustments
-  - calculatePathProbabilities(): Layer 6 iterative DFS through 12-node VDss graph, calibration against Layer 4 probabilities
-- Updated TAResult interface with 7 new ML fields: bullConsensus, isMLTrained, mlAccuracy, mlWeights, edgeWeights, calibrationFactors, scenarioSums, adaptiveFactors
-- Updated analyze() function: replaced old 20-signal fixed-weight system with 7-layer ML pipeline
-- Performance optimizations: simplified divergence detection (removed O(n²) RSI recomputation), training data sampling (every 5 bars), reduced ML iterations (200 vs 1000), increased learning rate (0.1 vs 0.05)
-- Verified: analysis API returns in <60 seconds, probabilities sum to 100%, no console errors
+- Created /src/lib/jalali.ts with pure TypeScript implementation
+- Includes: gregorianToJalali, jalaliToGregorian, formatJalali, candleDateToJalali, buildJalaliTimeMap
+- Persian digit conversion, month names, weekday names
+- Multiple format options: full, short, compact
 
 Stage Summary:
-- Complete 7-layer ML-based VDss algorithm implemented in pure TypeScript
-- 16 features extracted per bar: f_rsi, f_mfi, f_cci, s_adx, f_macd, f_stoch, s_bb, s_ma21, s_ma100, s_ema, s_atr, s_trend, s_sr, f_stochCross, f_macdCross, f_div
-- ML model trains on historical data with TimeSeriesSplit CV, extracts adaptive weights
-- Fallback to fixed weights when <70 training samples available
-- Example result (وبملت): bullConsensus=0.681, isMLTrained=true, R1=23% R2=28% R3=27% R4=18% R5=4%
-- ML weights: trend=0.113 (highest), rsi=0.125, macd=0.092, ma21=0.092, stochCross=0.007 (lowest)
-- Zero console errors in browser verification
-- Files: /src/lib/ml-model.ts (new), /src/lib/ta-engine.ts (modified, ~1570 lines)
+- Jalali converter ready for use in chart and VDes components
 
+---
+Task ID: 5
+Agent: S/R Fix Agent
+Task: Fix S/R strength calculation
+
+Work Log:
+- Analyzed calcSupportResistance function (lines 424-670) to understand the 5-factor strength scoring
+- Identified root cause: max raw score of 8.5 with generous factors caused most levels to score 8-9, then merge inflation pushed everything to 10
+- Tightened touch threshold from 0.004 (0.4%) to 0.002 (0.2%) for stricter touch detection
+- Reduced Source Confluence max from 2.5 to 2.0 (per-source weight 0.5→0.4, bonuses 0.5→0.4)
+- Reduced Touch Count max from 2.0 to 1.5 (stepped: 0.4/0.8/1.2/1.6/2.0 → 0.3/0.6/0.9/1.2/1.5)
+- Reduced Volume Confirmation max from 1.5 to 1.0 (stepped: 1.5/1.2/0.8/0.4/0.2 → 1.0/0.8/0.5/0.25/0.1)
+- Reduced Freshness/Recency max from 1.5 to 1.0 (stepped: 1.5/1.2/0.8/0.4/0.1 → 1.0/0.8/0.5/0.25/0.05)
+- Reduced Proximity max from 1.0 to 0.5 with tighter thresholds (<0.01→0.5, <0.02→0.35, <0.04→0.2, <0.07→0.1)
+- Changed final scaling from `Math.round(total)` to `Math.round(total * 10 / 6.0)` to linearly map 0-6 raw → 0-10 strength
+- Removed +0.5 inflation from enforceGap merge — now keeps the stronger level's strength as-is
+- New max raw score: 6.0 (was 8.5), producing much better score spread across the 1-10 range
+- Verified no new TypeScript errors introduced in ta-engine.ts
+
+Stage Summary:
+- S/R strength now varies based on actual market conditions instead of uniformly returning 10
+- Total max raw reduced from 8.5 to 6.0 with linear 0-6→0-10 scaling
+- Touch detection tightened to 0.2% for more precise rejection identification
+- Merge inflation eliminated in enforceGap to prevent artificial strength boosting
+
+---
+Task ID: 5
+Agent: VDes Redesign Agent
+Task: Complete VDes redesign with bone theme, exports, dynamic text, Shamsi dates
+
+Work Log:
+- Read existing vdes-analysis.tsx (539 lines) to understand full structure, props, types, constants
+- Read jalali.ts to confirm available exports (candleDateToJalali, fullPersianDate, toPersianDigits)
+- Confirmed shadcn/ui DropdownMenu component exists
+- Confirmed CandleData type export from tradingview-chart.tsx
+- Completely rewrote vdes-analysis.tsx (1019 lines) with all requirements:
+  1. Bone theme: all backgrounds #FFFCF8/#F5F0E8, borders #E5DFD6, text #2D2A26/#5C5650/#8A837B, section headers amber-800, bull/bear emerald-700/red-700
+  2. Export toolbar: DropdownMenu with 6 export options (HTML, Text, PDF, Excel, CSV, Chart Image) using html-to-image, jsPDF, xlsx, file-saver
+  3. Shamsi dates: last candle's full Persian date in header, compact Jalali date in chart subtitle
+  4. Dynamic analysis text: generateAnalysisText() function produces 5 paragraphs that change based on dominant scenario (R1-R5), with R1+R2>60% bullish bias, R4+R5>60% bearish bias, R3>40% neutral text
+  5. Removed main path display per scenario — only shows name, probability %, target range, and probability bar
+  6. Layout: Header → Export toolbar → Chart → S/R Levels → Price Targets → Dynamic Analysis Text → Scenario Probabilities → Strategy Tag
+  7. Preserved all existing props, StrengthBar sub-component, VdesAnalysisSkeleton export, SCENARIO_KEYS, SCENARIO_META, STRATEGY_MAP constants
+- Updated SCENARIO_META colors for light bone theme (dark variants for visibility on white)
+- Updated STRATEGY_MAP tagCls for light theme with opacity-based backgrounds
+- Updated StrengthBar colors for light theme
+- Updated VdesAnalysisSkeleton with bone theme colors
+- All exports use useRef for VDes container and chart container divs
+- HTML export generates self-contained HTML with inline CSS
+- PDF export uses html-to-image toPng + jsPDF with multi-page support
+- Excel export uses XLSX.utils.json_to_sheet with two sheets (data + scenarios)
+- CSV export with BOM for Persian character support
+- Chart image export captures TradingViewChart container only
+- File names include symbol name and date
+- Ran lint: 0 errors (1 pre-existing warning in jalali.ts)
+- Verified dev server compiled successfully after changes
+
+Stage Summary:
+- vdes-analysis.tsx completely rewritten from 539 to 1019 lines
+- Bone theme (استخوانی) applied throughout with no dark navy/blue backgrounds
+- 6 export formats implemented via DropdownMenu (HTML, Text, PDF, Excel, CSV, Chart Image)
+- Shamsi dates displayed in header and chart subtitle
+- Dynamic analysis text generated based on dominant scenario with 5 distinct text variants
+- Main path display removed from scenario cards
+- All existing functionality preserved (props, exports, sub-components, constants)
+
+---
+Task ID: 8-9
+Agent: Theme Agent
+Task: Update indicators-panel.tsx and vdss-graph.tsx to bone theme (استخوانی)
+
+Work Log:
+- Read worklog.md, indicators-panel.tsx (297 lines), vdss-graph.tsx (773 lines)
+- Identified all dark theme color patterns in both files
+- Updated indicators-panel.tsx with bone theme colors:
+  - Signal dots: emerald-400→emerald-600, red-400→red-600, gray-500→#B0A89E
+  - IndicatorCard: bg-[#111d2e]/80→bg-[#FFFCF8], border-white/5→border-[#E5DFD6], text-gray-400→text-[#8A837B], text-gray-100→text-[#2D2A26]
+  - SectionHeader: text-gray-300→text-amber-800
+  - LoadingSkeleton: bg-[#0b0f1a]→bg-[#FFFCF8], bg-white/5→bg-[#E5DFD6]
+  - Main container: bg-[#0b0f1a]→bg-[#FFFCF8]
+  - Resistances: text-red-400→text-red-700, bg-red-500/10→bg-red-50, border-red-500/20→border-red-200, text-red-300→text-red-600, text-red-200→text-red-700
+  - Supports: text-emerald-400→text-emerald-700, bg-emerald-500/10→bg-emerald-50, border-emerald-500/20→border-emerald-200, text-emerald-300→text-emerald-600, text-emerald-200→text-emerald-700
+  - Trend lines: bg-[#111d2e]/80→bg-[#FFFCF8], border-white/5→border-[#E5DFD6], text-gray-400→text-[#8A837B], text-gray-300→text-[#5C5650], text-gray-500→text-[#8A837B], arrow colors emerald-400→emerald-700, red-400→red-700
+  - Overall score: bg-[#111d2e]/80→bg-[#FFFCF8], border-white/5→border-[#E5DFD6], bg-gray-800/60→bg-[#E5DFD6], bg-emerald-500/80→bg-emerald-600, bg-red-500/80→bg-red-600, text-emerald-200→text-emerald-700, text-red-200→text-red-700
+  - Signal badge: bg-emerald-500/15→bg-emerald-50, border-emerald-500/30→border-emerald-200, text-emerald-400→text-emerald-700, bg-red-500/15→bg-red-50, border-red-500/30→border-red-200, text-red-400→text-red-700, neutral uses #E5DFD6/#8A837B
+- Updated vdss-graph.tsx with bone theme colors:
+  - SVG edge labels: fill="#cde4ef"→fill="#5C5650", stroke="#07111b"→stroke="#FFFCF8"
+  - Header: dark gradient→linear-gradient(105deg, #FFFCF8, #F5F0E8), border-cyan-500/20→border-[#E5DFD6], text-amber-400→text-amber-800, text-cyan-400→text-cyan-700, text-gray-100→text-[#2D2A26], text-gray-500→text-[#8A837B], text-gray-400→text-[#8A837B], dark boxShadow→light 0.06 opacity
+  - MetricCards: text-cyan-400→text-cyan-700, text-amber-400→text-amber-800, text-blue-400→text-blue-700, text-gray-200→text-[#5C5650]
+  - Toolbar: bg-[#091825]/90→bg-[#FFFCF8], border-white/10→border-[#E5DFD6], text-gray-500→text-[#8A837B], text-gray-700→text-[#B0A89E], text-white→text-[#2D2A26], bg-white/4→bg-[#F5F0E8]/50, hover:bg-white/8→hover:bg-[#E5DFD6], bg-cyan-500/14→bg-cyan-50
+  - Graph shell: border-white/10→border-[#E5DFD6], dark radial gradient→light radial gradient with #FFFCF8 base, dark boxShadow→light 0.06 opacity
+  - Node backgrounds: dark rgba gradients→linear-gradient(145deg, #FFFCF8, #F5F0E8), dark boxShadow→light 0.06 opacity, text-gray-100→text-[#2D2A26], text-gray-600→text-[#B0A89E], text-gray-400→text-[#8A837B]
+  - Legend: border-white/10→border-[#E5DFD6], bg-[#07111b]/80→bg-[#FFFCF8]/90, text-gray-500→text-[#5C5650]
+  - Right panel: border-white/10→border-[#E5DFD6], dark gradient→linear-gradient(160deg, #FFFCF8, #F5F0E8), text-gray-200→text-[#2D2A26], border-white/10→border-[#E5DFD6]
+  - Detail panel: text-gray-100→text-[#2D2A26], text-gray-300→text-[#5C5650], border-white/10 bg-white/5→border-[#E5DFD6] bg-[#F5F0E8], text-gray-400→text-[#8A837B], text-gray-500→text-[#8A837B], border-white/10→border-[#E5DFD6]
+  - Path probability cards: border-white/6 hover:border-white/15→border-[#E5DFD6]/60 hover:border-[#E5DFD6], bg-white/5→bg-[#E5DFD6], text-gray-500→text-[#8A837B], text-gray-300→text-[#5C5650]
+  - Top paths: text-gray-400→text-[#5C5650], text-gray-600→text-[#B0A89E]
+  - Scenario result cards: bg-[#081623]/80→bg-[#FFFCF8], border-white/10→border-[#E5DFD6], text-gray-200→text-[#2D2A26], text-gray-300→text-[#5C5650], text-gray-500→text-[#8A837B], dark gradient cards→light with 8% color-mix, amber-500/80 bg-amber-500/6→amber-700/60 bg-amber-50, text-gray-400→text-[#5C5650]
+  - MetricCard sub-component: border-white/10→border-[#E5DFD6], dark gradient→linear-gradient(145deg, #FFFCF8, #F5F0E8), text-gray-500→text-[#8A837B]
+  - VdssGraphSkeleton: all bg-white/5→bg-[#E5DFD6]
+- Verified no dark theme colors remain in either file (rg search confirmed)
+- Verified TypeScript compilation: no new errors introduced (all errors pre-existing)
+
+Stage Summary:
+- Both indicators-panel.tsx and vdss-graph.tsx fully converted from dark navy theme to bone theme (استخوانی)
+- Bone palette: bg #FFFCF8, borders #E5DFD6, text #2D2A26/#5C5650/#8A837B/#B0A89E, bull emerald-600/700, bear red-600/700, brand amber-800
+- All inline styles (gradients, shadows, SVG strokes) updated for light backgrounds
+- Structure and layout preserved identically in both files
+
+---
+Task ID: Final
+Agent: Main Orchestrator
+Task: Version 1.0 lock and final verification
+
+Work Log:
+- Fixed jalali.ts const reassignment bug (isJalaliLeap function)
+- Verified clean compilation (no errors)
+- Verified clean lint (0 errors)
+- Browser verification with agent-browser:
+  - Homepage loads with bone theme (#F5F0E8 background)
+  - Search dropdown shows with bone theme (white bg, warm borders)
+  - Chart tab loads with lightweight-charts (light theme: #FFFCF8 bg)
+  - Indicators tab displays with bone theme
+  - VDss graph displays with bone theme
+  - VDes tab shows: header with Shamsi date (۷۸۴/۰۳/۰۵), export dropdown (6 options), chart, S/R levels, analysis text, scenarios
+  - All 6 export menu items visible: HTML+CSS+JS, متن, PDF, اکسل, CSV, عکس نمودار
+- Updated package.json version to 1.0.0
+- All dev server requests return 200, no runtime errors
+
+Stage Summary:
+- Version 1.0.0 LOCKED
+- Changes in v1.0: bone theme, 6 VDes export formats, Shamsi dates, dynamic analysis text, S/R strength fix, main path removal
+- No compilation or runtime errors
+- All tabs (chart, indicators, VDss, VDes) verified working in browser

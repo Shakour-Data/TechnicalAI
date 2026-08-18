@@ -77,9 +77,9 @@ function trendDirSignal(dir: string): 'bullish' | 'bearish' | 'neutral' {
 
 function signalDot(signal: 'bullish' | 'bearish' | 'neutral') {
   const colors = {
-    bullish: 'bg-emerald-400',
-    bearish: 'bg-red-400',
-    neutral: 'bg-gray-500',
+    bullish: 'bg-emerald-600',
+    bearish: 'bg-red-600',
+    neutral: 'bg-[#B0A89E]',
   };
   return <span className={`inline-block h-2 w-2 rounded-full ${colors[signal]}`} />;
 }
@@ -96,10 +96,10 @@ function IndicatorCard({
   signal: 'bullish' | 'bearish' | 'neutral';
 }) {
   return (
-    <div className="bg-[#111d2e]/80 border border-white/5 rounded-xl p-3 flex items-center justify-between gap-2">
+    <div className="bg-[#FFFCF8] border border-[#E5DFD6] rounded-xl p-3 flex items-center justify-between gap-2">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-[11px] text-gray-400 truncate">{label}</span>
-        <span className="text-sm font-medium text-gray-100 tabular-nums" dir="ltr">
+        <span className="text-[11px] text-[#8A837B] truncate">{label}</span>
+        <span className="text-sm font-medium text-[#2D2A26] tabular-nums" dir="ltr">
           {value}
         </span>
       </div>
@@ -112,7 +112,7 @@ function IndicatorCard({
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h3 className="col-span-full text-xs font-semibold text-gray-300 uppercase tracking-wider mt-4 mb-1 first:mt-0">
+    <h3 className="col-span-full text-xs font-semibold text-amber-800 uppercase tracking-wider mt-4 mb-1 first:mt-0">
       {title}
     </h3>
   );
@@ -122,13 +122,13 @@ function SectionHeader({ title }: { title: string }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="bg-[#0b0f1a] rounded-2xl p-4 space-y-4">
+    <div className="bg-[#FFFCF8] rounded-2xl p-4 space-y-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-28 bg-white/5" />
+          <Skeleton className="h-4 w-28 bg-[#E5DFD6]" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {Array.from({ length: 3 }).map((_, j) => (
-              <Skeleton key={j} className="h-16 w-full bg-white/5 rounded-xl" />
+              <Skeleton key={j} className="h-16 w-full bg-[#E5DFD6] rounded-xl" />
             ))}
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
   const maSignal = 'neutral' as const;
 
   return (
-    <div className="bg-[#0b0f1a] rounded-2xl p-4 space-y-1" dir="rtl">
+    <div className="bg-[#FFFCF8] rounded-2xl p-4 space-y-1" dir="rtl">
       {/* ── میانگین‌های متحرک (Moving Averages) ─────────────────────── */}
       <SectionHeader title="میانگین‌های متحرک" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -208,24 +208,24 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
       <div className="space-y-3">
         {/* Resistances */}
         <div>
-          <p className="text-[11px] text-red-400 mb-1.5 font-medium">مقاومت‌ها</p>
+          <p className="text-[11px] text-red-700 mb-1.5 font-medium">مقاومت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {(ta.resistances ?? []).slice(0, 5).map((r, i) => (
-              <div key={i} className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-red-300">R{i + 1}</span>
-                <p className="text-sm font-medium text-red-200 tabular-nums mt-0.5" dir="ltr">{toFa(r)}</p>
+              <div key={i} className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                <span className="text-[11px] text-red-600">R{i + 1}</span>
+                <p className="text-sm font-medium text-red-700 tabular-nums mt-0.5" dir="ltr">{toFa(r)}</p>
               </div>
             ))}
           </div>
         </div>
         {/* Supports */}
         <div>
-          <p className="text-[11px] text-emerald-400 mb-1.5 font-medium">حمایت‌ها</p>
+          <p className="text-[11px] text-emerald-700 mb-1.5 font-medium">حمایت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {(ta.supports ?? []).slice(0, 5).map((s, i) => (
-              <div key={i} className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-emerald-300">S{i + 1}</span>
-                <p className="text-sm font-medium text-emerald-200 tabular-nums mt-0.5" dir="ltr">{toFa(s)}</p>
+              <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                <span className="text-[11px] text-emerald-600">S{i + 1}</span>
+                <p className="text-sm font-medium text-emerald-700 tabular-nums mt-0.5" dir="ltr">{toFa(s)}</p>
               </div>
             ))}
           </div>
@@ -239,16 +239,16 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
           const t = ta.trend[period];
           const labels: Record<string, string> = { short: 'کوتاه‌مدت', medium: 'میان‌مدت', long: 'بلندمدت' };
           const arrow = t.direction === 'up' ? '↑' : t.direction === 'down' ? '↓' : '→';
-          const arrowColor = t.direction === 'up' ? 'text-emerald-400' : t.direction === 'down' ? 'text-red-400' : 'text-gray-400';
+          const arrowColor = t.direction === 'up' ? 'text-emerald-700' : t.direction === 'down' ? 'text-red-700' : 'text-[#8A837B]';
           return (
-            <div key={period} className="bg-[#111d2e]/80 border border-white/5 rounded-xl p-3 flex items-center justify-between gap-2">
+            <div key={period} className="bg-[#FFFCF8] border border-[#E5DFD6] rounded-xl p-3 flex items-center justify-between gap-2">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11px] text-gray-400">{labels[period]}</span>
+                <span className="text-[11px] text-[#8A837B]">{labels[period]}</span>
                 <div className="flex items-center gap-2 text-sm">
                   <span className={`text-lg font-bold ${arrowColor}`}>{arrow}</span>
-                  <span className="text-gray-300 tabular-nums" dir="ltr">{toFa(t.angle)}°</span>
+                  <span className="text-[#5C5650] tabular-nums" dir="ltr">{toFa(t.angle)}°</span>
                 </div>
-                <span className="text-[11px] text-gray-500 tabular-nums" dir="ltr">R²: {(t.r2 * 100).toFixed(1)}%</span>
+                <span className="text-[11px] text-[#8A837B] tabular-nums" dir="ltr">R²: {(t.r2 * 100).toFixed(1)}%</span>
               </div>
               {signalDot(trendDirSignal(t.direction))}
             </div>
@@ -258,21 +258,21 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
 
       {/* ── امتیاز کلی (Overall Score) ────────────────────────────────── */}
       <SectionHeader title="امتیاز کلی" />
-      <div className="bg-[#111d2e]/80 border border-white/5 rounded-xl p-4 space-y-3">
+      <div className="bg-[#FFFCF8] border border-[#E5DFD6] rounded-xl p-4 space-y-3">
         {/* Progress bar */}
-        <div className="relative h-6 w-full rounded-full overflow-hidden bg-gray-800/60">
+        <div className="relative h-6 w-full rounded-full overflow-hidden bg-[#E5DFD6]">
           <div
-            className="absolute top-0 right-0 h-full rounded-r-full bg-emerald-500/80 transition-all duration-500"
+            className="absolute top-0 right-0 h-full rounded-r-full bg-emerald-600 transition-all duration-500"
             style={{ width: `${ta.bullScore}%` }}
           />
           <div
-            className="absolute top-0 left-0 h-full rounded-l-full bg-red-500/80 transition-all duration-500"
+            className="absolute top-0 left-0 h-full rounded-l-full bg-red-600 transition-all duration-500"
             style={{ width: `${ta.bearScore}%` }}
           />
           {/* Labels inside bar */}
           <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px] font-medium">
-            <span className="text-emerald-200">خرید {toFa(ta.bullScore)}٪</span>
-            <span className="text-red-200">فروش {toFa(ta.bearScore)}٪</span>
+            <span className="text-emerald-700">خرید {toFa(ta.bullScore)}٪</span>
+            <span className="text-red-700">فروش {toFa(ta.bearScore)}٪</span>
           </div>
         </div>
 
@@ -281,10 +281,10 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
           <span
             className={
               ta.overallSignal === 'bullish'
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-4 py-1.5 text-sm font-semibold text-emerald-400'
+                ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-sm font-semibold text-emerald-700'
                 : ta.overallSignal === 'bearish'
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-red-500/15 border border-red-500/30 px-4 py-1.5 text-sm font-semibold text-red-400'
-                : 'inline-flex items-center gap-1.5 rounded-full bg-gray-500/15 border border-gray-500/30 px-4 py-1.5 text-sm font-semibold text-gray-400'
+                ? 'inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-4 py-1.5 text-sm font-semibold text-red-700'
+                : 'inline-flex items-center gap-1.5 rounded-full bg-[#E5DFD6]/50 border border-[#E5DFD6] px-4 py-1.5 text-sm font-semibold text-[#8A837B]'
             }
           >
             {signalDot(ta.overallSignal)}
