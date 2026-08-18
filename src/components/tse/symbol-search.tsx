@@ -27,6 +27,8 @@ interface InstrumentItem {
     | 'crypto' | 'world_index' | 'forex' | 'energy' | 'metal' | 'commodity';
   insCode?: string;
   tgjuKey?: string;
+  finpySector?: string;  // finpy-tse sector name for industry indices
+  isMainIndex?: boolean; // True for main market indices
   index?: number;
   indexChange?: number;
   indexChangePercent?: number;
@@ -60,7 +62,7 @@ interface TgjuData {
 }
 
 interface SymbolSearchProps {
-  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string) => void;
+  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string) => void;
   placeholder?: string;
   className?: string;
 }
@@ -388,7 +390,7 @@ export default function SymbolSearch({
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18);
     setOpen(false);
-    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey);
+    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector);
     inputRef.current?.blur();
   }, [onSelect]);
 

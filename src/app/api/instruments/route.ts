@@ -16,6 +16,8 @@ interface InstrumentItem {
   cs: string;
   category: string;
   insCode?: string;
+  finpySector?: string;  // finpy-tse sector name for industry indices
+  isMainIndex?: boolean; // True for main market indices (شاخص کل, etc.)
   index?: number;
   indexChange?: number;
   indexChangePercent?: number;
@@ -56,7 +58,7 @@ export async function GET() {
     const tsetmcIndices = await tsetmcIndicesPromise;
 
     let indices: InstrumentItem[];
-    let existingSymbols = new Set<string>();
+    const existingSymbols = new Set<string>();
 
     if (tsetmcIndices && tsetmcIndices.length > 0) {
       // Use TSETMC indices — they include industry indices with insCode for historical data
@@ -115,6 +117,7 @@ export async function GET() {
     }
 
     // ── Add finpy-tse industry indices not already in the list ──
+    // These use finpySector instead of insCode for data fetching
     for (const idx of INDUSTRY_INDICES) {
       if (!existingSymbols.has(idx.symbol)) {
         indices.push({
@@ -127,7 +130,8 @@ export async function GET() {
           tval: 0,
           cs: idx.group,
           category: 'index',
-          insCode: idx.insCode,
+          finpySector: idx.finpySector || undefined,
+          isMainIndex: idx.isMainIndex || undefined,
         });
       }
     }

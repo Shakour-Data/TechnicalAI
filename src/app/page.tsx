@@ -65,10 +65,10 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Store last fetch params for auto-refresh
-  const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string } | null>(null);
+  const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string; finpySector?: string } | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string) => {
+  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string) => {
     // TGJU instrument: fetch historical data via tgju.org chart API
     if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
       setLoading(true);
@@ -76,7 +76,7 @@ export default function Home() {
       setError(null);
       setData(null);
       setIndexData(null);
-      lastFetchRef.current = { symbol, category, insCode, tgjuKey };
+      lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector };
       try {
         const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(tgjuKey)}`);
         if (!res.ok) {
@@ -98,14 +98,31 @@ export default function Home() {
       return;
     }
 
-    // Index: try TSETMC TA first, fall back to static overview
+    // Index: try finpy-tse first (for industry indices), then TSETMC TA, then static overview
     if (category === 'index') {
       setLoading(true);
+      setLoadingMessage('در حال دریافت داده‌های تاریخی از finpy-tse ...');
       setError(null);
       setData(null);
       setIndexData(null);
-      lastFetchRef.current = { symbol, category, insCode, tgjuKey };
+      lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector };
       try {
+        // 1. Try finpy-tse service for industry indices
+        if (finpySector) {
+          const finpyRes = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
+          if (finpyRes.ok) {
+            const finpyJson = await finpyRes.json();
+            if (finpyJson.candles && finpyJson.candles.length > 0 && finpyJson.ta) {
+              setData(finpyJson);
+              setActiveTab('chart');
+              setLoading(false);
+              setLoadingMessage(null);
+              return;
+            }
+          }
+        }
+
+        // 2. Try TSETMC for main indices with insCode
         if (insCode) {
           const analysisRes = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}&indexInsCode=${encodeURIComponent(insCode)}`);
           if (analysisRes.ok) {
@@ -114,10 +131,13 @@ export default function Home() {
               setData(analysisJson);
               setActiveTab('chart');
               setLoading(false);
+              setLoadingMessage(null);
               return;
             }
           }
         }
+
+        // 3. Fall back to static overview
         const r = await fetch('/api/instruments');
         if (r.ok) {
           const d = await r.json();
@@ -137,6 +157,7 @@ export default function Home() {
         // ignore
       }
       setLoading(false);
+      setLoadingMessage(null);
       return;
     }
 
@@ -145,7 +166,7 @@ export default function Home() {
     setError(null);
     setData(null);
     setIndexData(null);
-    lastFetchRef.current = { symbol, category, insCode, tgjuKey };
+    lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector };
     try {
       const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}`);
       if (!res.ok) {
