@@ -50,3 +50,23 @@ Stage Summary:
 - Commodities: 9 instruments (Wheat, Corn, Soybeans, Rice, Cotton, Cocoa, Sugar, Coffee, Soybean Oil)
 - All prices are based on TGJU chart API historical data
 - All TSE data uses adjusted prices only (type=3)
+---
+Task ID: 1
+Agent: Main
+Task: Fix S/R strength calculation + Redesign VDes layout
+
+Work Log:
+- Analyzed the old strength formula: only counted nearby levels in 10% window, causing all levels to saturate to 10
+- Rewrote calcSupportResistance() with 6-source tagged level system (pivot, swing, ma, bb, round, hilo)
+- Implemented cluster-based confluence tracking (Set<string> of source types per cluster)
+- Implemented rejection-based touch counting (bar must reach level AND close away from it)
+- Built 5-factor strength model: Confluence(2.5) + TouchCount(2.0) + Volume(1.5) + Freshness(1.5) + Proximity(1.0) = max 8.5
+- Tightened touch threshold from 0.8% to 0.4% and required actual rejection (not just proximity)
+- Redesigned VDes layout: extracted Key Levels and Price Targets from text analysis into beautiful styled boxes below chart
+- Created StrengthBar visual component (progress bar + numeric value)
+- Layout order now: Header > Chart > Resistance/Support boxes > Price Targets > Text Analysis > Scenario Probabilities > Strategy Tag
+
+Stage Summary:
+- Strength values now properly differentiated (resistances: 1-5, supports: 4-10, targets: 8-10)
+- VDes layout restructured with visually appealing S/R boxes below chart
+- All sections verified present via Agent Browser DOM snapshot

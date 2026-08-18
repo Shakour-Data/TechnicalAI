@@ -403,7 +403,7 @@ function findSwingLevels(data: OHLCV[], lookback: number = 3): { highs: number[]
   return { highs, lows };
 }
 
-// ─── Support / Resistance (6 each, adaptive gap, multi-source, 10% window strength) ─
+// ─── Support / Resistance (6 each, adaptive gap, multi-factor strength) ───
 function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistances: number[];
   supports: number[];
@@ -411,93 +411,190 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistanceStrengths: LevelStrength[];
   priceTargets: LevelStrength[];
 } {
-  const allRawLevels: number[] = [];
   const closes = data.map(d => d.close);
+  const avgVolume = data.reduce((s, d) => s + d.volume, 0) / data.length;
 
-  // 1. Pivot Points from previous day (5R + 5S)
+  // Tag each raw level with its source type for confluence scoring
+  interface TaggedLevel { price: number; source: string };
+  const allRaw: TaggedLevel[] = [];
+
+  // 1. Pivot Points (source: 'pivot')
   const prev = data[data.length - 2] ?? data[data.length - 1];
   if (prev) {
     const pp = (prev.high + prev.low + prev.close) / 3;
     const hl = prev.high - prev.low;
     const pivotR = [
-      2 * pp - prev.low,
-      pp + hl,
+      2 * pp - prev.low, pp + hl,
       prev.high + 2 * (pp - prev.low),
       prev.high + 2 * (pp - prev.low) + hl,
       prev.high + 2 * (pp - prev.low) + hl + (pp - prev.low),
     ];
     const pivotS = [
-      2 * pp - prev.high,
-      pp - hl,
+      2 * pp - prev.high, pp - hl,
       prev.low - 2 * (prev.high - pp),
       prev.low - 2 * (prev.high - pp) - hl,
       prev.low - 2 * (prev.high - pp) - hl - (prev.high - pp),
     ];
-    allRawLevels.push(...pivotR, ...pivotS);
+    for (const p of pivotR) allRaw.push({ price: p, source: 'pivot' });
+    for (const p of pivotS) allRaw.push({ price: p, source: 'pivot' });
   }
 
-  // 2. Swing levels (multiple lookback periods for better coverage)
+  // 2. Swing levels (source: 'swing')
   for (const lb of [3, 5, 7, 10]) {
     const swings = findSwingLevels(data, lb);
-    allRawLevels.push(...swings.highs, ...swings.lows);
+    for (const h of swings.highs) allRaw.push({ price: h, source: 'swing' });
+    for (const l of swings.lows) allRaw.push({ price: l, source: 'swing' });
   }
 
-  // 3. Moving Average levels (potential dynamic S/R)
+  // 3. Moving Average levels (source: 'ma')
   for (const period of [5, 10, 21, 50, 100, 200]) {
     const v = sma(closes, period);
-    if (v > 0 && Math.abs(v - currentPrice) / currentPrice > 0.01) allRawLevels.push(v);
+    if (v > 0 && Math.abs(v - currentPrice) / currentPrice > 0.01)
+      allRaw.push({ price: v, source: 'ma' });
   }
   const ema12 = emaCalc(closes, 12);
   const ema26 = emaCalc(closes, 26);
-  if (ema12 > 0 && Math.abs(ema12 - currentPrice) / currentPrice > 0.01) allRawLevels.push(ema12);
-  if (ema26 > 0 && Math.abs(ema26 - currentPrice) / currentPrice > 0.01) allRawLevels.push(ema26);
+  if (ema12 > 0 && Math.abs(ema12 - currentPrice) / currentPrice > 0.01)
+    allRaw.push({ price: ema12, source: 'ma' });
+  if (ema26 > 0 && Math.abs(ema26 - currentPrice) / currentPrice > 0.01)
+    allRaw.push({ price: ema26, source: 'ma' });
 
-  // 4. Bollinger Band levels
+  // 4. Bollinger Band levels (source: 'bb')
   const bbLevels = calcBollingerBands(closes);
-  if (bbLevels.upper > 0) allRawLevels.push(bbLevels.upper);
-  if (bbLevels.lower > 0) allRawLevels.push(bbLevels.lower);
+  if (bbLevels.upper > 0) allRaw.push({ price: bbLevels.upper, source: 'bb' });
+  if (bbLevels.lower > 0) allRaw.push({ price: bbLevels.lower, source: 'bb' });
 
-  // 5. Round number / psychological levels
+  // 5. Round number / psychological levels (source: 'round')
   const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, currentPrice))));
   for (let mult = 0.80; mult <= 1.25; mult += 0.05) {
-    allRawLevels.push(Math.round(currentPrice * mult / magnitude) * magnitude);
+    const p = Math.round(currentPrice * mult / magnitude) * magnitude;
+    allRaw.push({ price: p, source: 'round' });
   }
 
-  // 6. Recent high/low zones (5-day, 22-day, 66-day)
-  for (const window of [5, 22, 66]) {
-    const slice = data.slice(-Math.min(window, data.length));
+  // 6. Recent high/low zones (source: 'hilo')
+  for (const w of [5, 22, 66]) {
+    const slice = data.slice(-Math.min(w, data.length));
     if (slice.length > 0) {
-      allRawLevels.push(Math.max(...slice.map(d => d.high)));
-      allRawLevels.push(Math.min(...slice.map(d => d.low)));
+      allRaw.push({ price: Math.max(...slice.map(d => d.high)), source: 'hilo' });
+      allRaw.push({ price: Math.min(...slice.map(d => d.low)), source: 'hilo' });
     }
   }
 
   // 7. Round all and filter invalid
-  const rounded = allRawLevels.map(roundToNice).filter(l => l > 0);
+  const rounded: TaggedLevel[] = allRaw
+    .map(l => ({ price: roundToNice(l.price), source: l.source }))
+    .filter(l => l.price > 0);
 
-  // 8. Remove duplicates (within 0.5%)
-  const unique: number[] = [];
-  for (const level of rounded) {
-    const isDup = unique.some(u => Math.abs(u - level) / Math.max(u, 1) < 0.005);
-    if (!isDup) unique.push(level);
+  // 8. Cluster nearby levels (within 0.5%) — merge sources, keep most common price
+  interface Cluster {
+    price: number;
+    sources: Set<string>;
+    touchCount: number;
+    totalVolumeAtTouches: number;
+    mostRecentTouchBar: number;
+  }
+  const clusters: Cluster[] = [];
+  for (const lvl of rounded) {
+    let merged = false;
+    for (const c of clusters) {
+      if (Math.abs(c.price - lvl.price) / Math.max(c.price, 1) < 0.005) {
+        c.sources.add(lvl.source);
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) {
+      clusters.push({ price: lvl.price, sources: new Set([lvl.source]), touchCount: 0, totalVolumeAtTouches: 0, mostRecentTouchBar: -1 });
+    }
   }
 
-  // 9. Calculate strength for each unique level — 10% window (5% above + 5% below)
-  const levelStrengths: LevelStrength[] = unique.map(level => {
-    const range10pct = level * 0.10;
-    const nearbyCount = unique.filter(other =>
-      other !== level && Math.abs(other - level) <= range10pct
-    ).length;
-    // Normalize: 0 nearby = 1, each nearby adds ~1.5, max 10
-    const strength = Math.min(10, Math.max(1, Math.round(1 + nearbyCount * 1.5)));
-    return { price: level, strength, isTarget: false };
+  // 9. Count actual price TOUCHES (rejections) and volume at each cluster level
+  // A real touch = bar wick reached the level AND bar body closed away from it
+  const touchThreshold = currentPrice * 0.004; // 0.4% tight proximity
+  for (let i = 0; i < data.length; i++) {
+    const bar = data[i];
+    for (const c of clusters) {
+      const isResistance = c.price > currentPrice;
+      if (isResistance) {
+        // Resistance: bar high reached near the level AND closed below it (rejection)
+        if (bar.high >= c.price - touchThreshold && bar.close < c.price) {
+          c.touchCount++;
+          c.totalVolumeAtTouches += bar.volume;
+          c.mostRecentTouchBar = Math.max(c.mostRecentTouchBar, i);
+        }
+      } else {
+        // Support: bar low reached near the level AND closed above it (rejection)
+        if (bar.low <= c.price + touchThreshold && bar.close > c.price) {
+          c.touchCount++;
+          c.totalVolumeAtTouches += bar.volume;
+          c.mostRecentTouchBar = Math.max(c.mostRecentTouchBar, i);
+        }
+      }
+    }
+  }
+
+  // 10. Calculate multi-factor strength (0-10)
+  const levelStrengths: LevelStrength[] = clusters.map(c => {
+    // Factor 1: Source Confluence (0-2.5 pts)
+    const sourceScore = Math.min(2.5, c.sources.size * 0.5);
+    const hasSwingAndPivot = c.sources.has('swing') && c.sources.has('pivot') ? 0.5 : 0;
+    const maConfluence = c.sources.has('ma') ? 0.5 : 0;
+    const confluenceScore = Math.min(2.5, sourceScore + hasSwingAndPivot + maConfluence);
+
+    // Factor 2: Touch Count — CAPPED by recency (0-2 pts)
+    // Only count touches in the most recent 50% of data to avoid ancient history inflating
+    const recentBarStart = Math.floor(data.length * 0.5);
+    const recentTouches = c.mostRecentTouchBar >= recentBarStart ? c.touchCount : Math.max(0, c.touchCount - 1);
+    let touchScore: number;
+    if (recentTouches === 0) touchScore = 0;
+    else if (recentTouches === 1) touchScore = 0.4;
+    else if (recentTouches <= 2) touchScore = 0.8;
+    else if (recentTouches <= 4) touchScore = 1.2;
+    else if (recentTouches <= 7) touchScore = 1.6;
+    else touchScore = 2.0;
+
+    // Factor 3: Volume Confirmation (0-1.5 pts)
+    let volumeScore = 0;
+    if (c.touchCount > 0) {
+      const avgVolAtTouch = c.totalVolumeAtTouches / c.touchCount;
+      const volRatio = avgVolume > 0 ? avgVolAtTouch / avgVolume : 1;
+      if (volRatio > 2.0) volumeScore = 1.5;
+      else if (volRatio > 1.5) volumeScore = 1.2;
+      else if (volRatio > 1.0) volumeScore = 0.8;
+      else if (volRatio > 0.7) volumeScore = 0.4;
+      else volumeScore = 0.2;
+    }
+
+    // Factor 4: Freshness / Recency (0-1.5 pts)
+    let freshnessScore = 0;
+    if (c.touchCount > 0 && data.length > 0) {
+      const barsAgo = data.length - 1 - c.mostRecentTouchBar;
+      if (barsAgo <= 3) freshnessScore = 1.5;
+      else if (barsAgo <= 10) freshnessScore = 1.2;
+      else if (barsAgo <= 25) freshnessScore = 0.8;
+      else if (barsAgo <= 50) freshnessScore = 0.4;
+      else freshnessScore = 0.1;
+    }
+
+    // Factor 5: Proximity to current price (0-1 pt)
+    const distRatio = Math.abs(c.price - currentPrice) / currentPrice;
+    let proximityScore = 0;
+    if (distRatio < 0.015) proximityScore = 1.0;
+    else if (distRatio < 0.03) proximityScore = 0.7;
+    else if (distRatio < 0.06) proximityScore = 0.4;
+    else if (distRatio < 0.10) proximityScore = 0.2;
+
+    const total = confluenceScore + touchScore + volumeScore + freshnessScore + proximityScore;
+    const strength = Math.min(10, Math.max(1, Math.round(total)));
+
+    return { price: c.price, strength, isTarget: false };
   });
 
-  // 10. Separate above/below current price
+  // 11. Separate above/below current price
   const above = levelStrengths.filter(l => l.price > currentPrice).sort((a, b) => a.price - b.price);
   const below = levelStrengths.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
 
-  // 11. Adaptive gap enforcement — try 5% first, reduce until we get enough levels
+  // 12. Adaptive gap enforcement — keep highest strength in cluster
   function enforceGap(levels: LevelStrength[], targetCount: number): LevelStrength[] {
     const gapSteps = [0.05, 0.04, 0.03, 0.025, 0.02, 0.015, 0.01, 0.008, 0.005];
     for (const gapPct of gapSteps) {
@@ -511,12 +608,10 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
         if (gap >= gapPct) {
           result.push(levels[i]);
         } else {
-          // Merge: combine strengths
-          const mergedStrength = Math.min(10, Math.max(result[result.length - 1].strength, levels[i].strength) + 1);
-          result[result.length - 1] = {
-            ...levels[i].strength > result[result.length - 1].strength ? levels[i] : result[result.length - 1],
-            strength: mergedStrength,
-          };
+          // Merge: keep stronger level's price, add 0.5 for confluence
+          const keep = levels[i].strength >= result[result.length - 1].strength ? levels[i] : result[result.length - 1];
+          const mergedStrength = Math.min(10, Math.max(keep.strength, result[result.length - 1].strength) + 0.5);
+          result[result.length - 1] = { ...keep, strength: Math.round(mergedStrength) };
         }
       }
       if (result.length >= targetCount) return result;
@@ -527,12 +622,12 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   const finalResistances = enforceGap(above, 6);
   const finalSupports = enforceGap(below, 6);
 
-  // 12. Determine price targets: strength > 7 is a target
+  // 13. Determine price targets: top 2 by strength, or any above 7
   const allLevels = [...finalResistances, ...finalSupports];
   const sortedByStrength = [...allLevels].sort((a, b) => b.strength - a.strength);
   let targets: LevelStrength[];
-  if (sortedByStrength.some(l => l.strength > 7)) {
-    targets = sortedByStrength.filter(l => l.strength > 7);
+  if (sortedByStrength.some(l => l.strength >= 7)) {
+    targets = sortedByStrength.filter(l => l.strength >= 7).slice(0, 3);
   } else {
     targets = sortedByStrength.slice(0, 2);
   }

@@ -83,6 +83,23 @@ const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Sub-components
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function StrengthBar({ strength }: { strength: number }) {
+  const pct = (strength / 10) * 100;
+  const color = strength >= 7 ? '#34d399' : strength >= 4 ? '#fbbf24' : '#6b7280';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-16 h-2 rounded-full bg-white/8 overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{strength}</span>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -237,7 +254,97 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         </div>
       </div>
 
-      {/* ═══ DUAL ANALYSIS LAYOUT ═══ */}
+      {/* ═══ KEY LEVELS — Beautiful Boxes Below Chart ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* ── Resistances ── */}
+        <div className="rounded-2xl border border-red-500/20 overflow-hidden"
+          style={{ background: 'rgba(14,22,40,0.8)', boxShadow: '0 8px 32px -8px rgba(239,68,68,0.15)' }}>
+          <div className="px-5 py-3 flex items-center gap-2 border-b border-red-500/15"
+            style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)' }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)]" />
+            <h3 className="text-sm font-bold text-red-300">سطوح مقاومت</h3>
+            <span className="text-[10px] text-red-400/60 mr-auto">با قدرت ۱-۱۰</span>
+          </div>
+          <div className="p-4 space-y-2.5">
+            {resistanceStrengths.map((r, i) => (
+              <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-white/5"
+                style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-red-400/70 w-6">R{i + 1}</span>
+                  <div>
+                    <span className="text-sm font-bold text-gray-100 tabular-nums" dir="ltr">{toFa(r.price)}</span>
+                    <span className="text-[10px] text-gray-500 mr-1.5">ریال</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StrengthBar strength={r.strength} />
+                  {r.isTarget && <span className="text-[10px]">🎯</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Supports ── */}
+        <div className="rounded-2xl border border-emerald-500/20 overflow-hidden"
+          style={{ background: 'rgba(14,22,40,0.8)', boxShadow: '0 8px 32px -8px rgba(52,211,153,0.15)' }}>
+          <div className="px-5 py-3 flex items-center gap-2 border-b border-emerald-500/15"
+            style={{ background: 'linear-gradient(135deg, rgba(52,211,153,0.12) 0%, rgba(52,211,153,0.04) 100%)' }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+            <h3 className="text-sm font-bold text-emerald-300">سطوح حمایت</h3>
+            <span className="text-[10px] text-emerald-400/60 mr-auto">با قدرت ۱-۱۰</span>
+          </div>
+          <div className="p-4 space-y-2.5">
+            {supportStrengths.map((s, i) => (
+              <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-white/5"
+                style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-emerald-400/70 w-6">S{i + 1}</span>
+                  <div>
+                    <span className="text-sm font-bold text-gray-100 tabular-nums" dir="ltr">{toFa(s.price)}</span>
+                    <span className="text-[10px] text-gray-500 mr-1.5">ریال</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StrengthBar strength={s.strength} />
+                  {s.isTarget && <span className="text-[10px]">🎯</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ PRICE TARGETS ═══ */}
+      {priceTargets && priceTargets.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/20 overflow-hidden"
+          style={{ background: 'rgba(14,22,40,0.8)', boxShadow: '0 8px 32px -8px rgba(245,158,11,0.15)' }}>
+          <div className="px-5 py-3 flex items-center gap-2 border-b border-amber-500/15"
+            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.04) 100%)' }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+            <h3 className="text-sm font-bold text-amber-300">اهداف قیمتی</h3>
+            <span className="text-[10px] text-amber-400/60 mr-auto">سطوح با قدرت بالا</span>
+          </div>
+          <div className="p-4 flex flex-wrap gap-3">
+            {priceTargets.map((t, i) => (
+              <div key={i} className="flex-1 min-w-[160px] rounded-xl p-4 border border-amber-500/15"
+                style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.02) 100%)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] text-amber-400/60">هدف {i + 1}</span>
+                  <span className="text-[10px]">🎯</span>
+                </div>
+                <p className="text-base font-black text-amber-200 tabular-nums" dir="ltr">{toFa(t.price)}</p>
+                <span className="text-[10px] text-gray-500">ریال</span>
+                <div className="mt-3">
+                  <StrengthBar strength={t.strength} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TEXT ANALYSIS ═══ */}
       <div className="rounded-[28px] p-5 border border-white/6"
         style={{
           background: 'rgba(14,22,40,0.7)',
@@ -246,210 +353,165 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         }}>
         <h2 className="text-sm font-semibold mb-4 text-gray-200 flex items-center gap-3">
           <span style={{ color: '#f8e365' }}>🧠</span>
-          تحلیل جامع روند و سطوح کلیدی
+          تحلیل جامع روند و اندیکاتورها
+        </h2>
+        <div className="space-y-4">
+          {/* ── PARAGRAPH 1: General Trend & Price Position ── */}
+          <p className="text-sm text-gray-300 leading-[1.85]">
+            <strong style={{ color: '#f8e365' }}>روند کلی و موقعیت قیمت:</strong>{' '}
+            سهم {symbolName} در حال حاضر در محدوده{' '}
+            <b className="text-gray-100">{toFa(currentPrice)} ریال</b> معامله می‌شود و روند میان‌مدت{' '}
+            <b className={trendDirection === 'up' ? 'text-emerald-400' : trendDirection === 'down' ? 'text-red-400' : 'text-amber-400'}>{trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی'}</b>
+            {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={+(trendR2 * 100).toFixed(1)}%).
+            قیمت نسبت به MA21 ({toFa(ma21)} ریال){' '}
+            {currentPrice > ma21 ? <span className="text-emerald-400">بالاتر</span> : <span className="text-red-400">پایین‌تر</span>}
+            {' '}و نسبت به MA100 ({toFa(ma100)} ریال){' '}
+            {currentPrice > ma100 ? <span className="text-emerald-400">بالاتر</span> : <span className="text-red-400">پایین‌تر</span>}
+            {' '}قرار دارد. اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
+            {sar < currentPrice ? <span>زیر قیمت قرار دارد که <b className="text-emerald-400">تأیید روند صعودی</b> است.</span> : <span>بالای قیمت قرار دارد که <b className="text-red-400">تأیید روند نزولی</b> است.</span>}
+            {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده {' '}
+            {adx > 40 ? <b className="text-emerald-400">روند قدرتمند</b> : adx > 25 ? <b className="text-amber-400">روند متوسط</b> : <b className="text-gray-500">روند ضعیف یا رنج</b>}
+            {' '}می‌باشد. {' '}{diSignal}.
+          </p>
+
+          {/* ── PARAGRAPH 2: Oscillator & Momentum Analysis ── */}
+          <p className="text-sm text-gray-300 leading-[1.85]">
+            <strong style={{ color: '#f8e365' }}>تحلیل اسیلاتورها و مومنتوم:</strong>{' '}
+            اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
+            <b className={rsiColor}>{rsiSignal}</b>
+            قرار دارد.
+            اندیکاتور MFI ({toFa(mfi)}) نیز{' '}
+            {mfi > 80 ? <span className="text-red-400">اشباع خرید را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-400">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}
+            . اندیکاتور CCI ({toFa(cci)}){' '}
+            {cci > 100 ? <span className="text-red-400">بالاتر از +100 (قدرت خریداری قوی)</span> : cci < -100 ? <span className="text-emerald-400">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}
+            . استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت{' '}
+            <b className={stochK > 80 ? 'text-red-400' : stochK < 20 ? 'text-emerald-400' : 'text-gray-300'}>{stochSignal}</b> را نشان می‌دهد.
+            {' '}MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با {macdBullish ? <span className="text-emerald-400">عبور خط اصلی بالای خط سیگنال — سیگنال صعودی</span> : <span className="text-red-400">خط اصلی زیر خط سیگنال — سیگنال نزولی</span>}
+            . هیستوگرام MACD ({toFa(macdHist)}) {' '}
+            {macdHist > 0 ? <span className="text-emerald-400">مثبت</span> : <span className="text-red-400">منفی</span>}
+            {' '}و {' '}{macdSignalText}.
+          </p>
+
+          {/* ── PARAGRAPH 3: Bollinger Bands & Volatility ── */}
+          <p className="text-sm text-gray-300 leading-[1.85]">
+            <strong style={{ color: '#f8e365' }}>تحلیل نوسانات و باند بولینگر:</strong>{' '}
+            قیمت در باند بولینگر{' '}
+            <b className="text-gray-200">{bbSignal}</b>
+            {' '}قرار دارد. باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} ریال.
+            {currentPrice > bollingerUpper
+              ? ' عبور از باند بالایی معمولاً نشان‌دهنده ادامه حرکت صعودی کوتاه‌مدت یا واکنش به باند است.'
+              : currentPrice < bollingerLower
+              ? ' نزدیکی یا عبور از باند پایینی می‌تواند نشانه بازگشت قیمت به سمت باند میانی باشد.'
+              : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
+          </p>
+
+          {/* ── PARAGRAPH 4: Volume & OBV Analysis ── */}
+          <p className="text-sm text-gray-300 leading-[1.85]">
+            <strong style={{ color: '#f8e365' }}>تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
+            شاخص جریان ورودی پول (OBV) در سطح <b className="text-gray-200">{obv > 0 ? '+' : ''}{(obv / 1e6).toFixed(1)}M</b> قرار دارد
+            {obv > 0
+              ? <span> که <b className="text-emerald-400">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است. افزایش OBV همزمان با رشد قیمت، تأییدکننده قدرت خریداران واقعی در بازار می‌باشد.</span>
+              : <span> که <b className="text-red-400">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد. کاهش OBV در کنار قیمت ثابت یا صعودی، هشدار واگرایی منفی محسوب می‌شود.</span>
+            }
+            {' '}اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
+            {atr > currentPrice * 0.03
+              ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-400">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
+              : <span> نوسان معقول که نشان‌دهنده <b className="text-gray-400">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
+            }
+          </p>
+
+          {/* ── PARAGRAPH 5: Risk/Reward & Confluence ── */}
+          <p className="text-sm text-gray-300 leading-[1.85]">
+            <strong style={{ color: '#f8e365' }}>تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+            با بررسی همزمان تمام اندیکاتورها، می‌توان نتیجه‌گیری کرد که
+            {overallSignal === 'bullish'
+              ? <span> اکثر شاخص‌ها <b className="text-emerald-400">الگوی صعودی</b> را تأیید می‌کنند. نسبت ریسک به بازده (Risk/Reward) با در نظر گرفتن حد ضرر در حمایت {toFa(S1_level)} و هدف اول {toFa(R1_level)} ریال، حدود <b className="text-emerald-400">{((R1_level - currentPrice) / (currentPrice - S1_level)).toFixed(1)}:1</b> محاسبه می‌شود که{' '}
+              {((R1_level - currentPrice) / (currentPrice - S1_level)) > 2
+                ? <span className="text-emerald-400">نسبت بسیار مطلوبی</span>
+                : ((R1_level - currentPrice) / (currentPrice - S1_level)) > 1
+                ? <span className="text-amber-400">نسبت قابل قبولی</span>
+                : <span className="text-red-400">نسبت نامطلوبی</span>
+              }{' '}برای ورود به معامله محسوب می‌شود.</span>
+              : overallSignal === 'bearish'
+              ? <span> اکثر شاخص‌ها <b className="text-red-400">الگوی نزولی</b> را نشان می‌دهند و ورود به معامله خرید در این شرایط <b className="text-red-400">ریسک بالایی</b> دارد. توصیه می‌شود تا بازگشت قیمت به محدوده حمایت {toFa(S1_level)} ریال و تشکیل سیگنال بازگشتی، از ورود خودداری شود.</span>
+              : <span> سیگنال‌ها <b className="text-amber-400">تضاد</b> دارند و بازار در فاز تردید قرار دارد. در این شرایط، بهترین استراتژی <b className="text-amber-400">انتظار و مشاهده</b> است تا قیمت از محدوده {toFa(S1_level)} تا {toFa(R1_level)} ریال خارج شده و جهت مشخص شود.</span>
+            }
+            {' '}تلاقی MA21 و MA100{' '}
+            {Math.abs(ma21 - ma100) / currentPrice < 0.01
+              ? <span className="text-amber-400">بسیار نزدیک به هم</span>
+              : ma21 > ma100
+              ? <span className="text-emerald-400">به نفع صعودی (MA21 بالاتر از MA100)</span>
+              : <span className="text-red-400">به نفع نزولی (MA21 پایین‌تر از MA100)</span>
+            }
+            {' '}است که {' '}
+            {Math.abs(ma21 - ma100) / currentPrice < 0.01
+              ? 'می‌تواند نشانه تقاطع طلایی یا مرگ در آینده نزدیک باشد و باید با دقت پایش شود.'
+              : trendDirection === 'up' ? 'تأییدکننده قدرت روند صعودی می‌باشد.' : 'هشدار تداوم فشار نزولی را صادر می‌کند.'
+            }
+          </p>
+
+          {/* ── Strategy ── */}
+          <div className="rounded-xl px-4 py-3 border-r-4" style={{ background: 'rgba(255,178,95,0.06)', borderRightColor: '#ffb25f' }}>
+            <strong className="text-amber-400 text-sm">🟡 استراتژی پیشنهادی:</strong>
+            <p className="text-xs text-gray-300 leading-[1.85] mt-1.5">{strategyText}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ SCENARIO PROBABILITIES ═══ */}
+      <div className="rounded-[28px] p-5 border border-white/6"
+        style={{
+          background: 'rgba(14,22,40,0.7)',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 20px 40px -12px rgba(0,0,0,0.5)',
+        }}>
+        <h2 className="text-sm font-semibold mb-4 text-gray-200 flex items-center gap-3">
+          <span style={{ color: '#f8e365' }}>🏛️</span>
+          احتمالات سناریوها
         </h2>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* ── Text Analysis (Right in RTL) ── */}
-          <div className="rounded-2xl p-4 border border-white/4 space-y-4 flex flex-col"
-            style={{ background: 'rgba(8,20,35,0.5)' }}>
-
-            {/* ── PARAGRAPH 1: General Trend & Price Position ── */}
-            <p className="text-sm text-gray-300 leading-[1.85]">
-              <strong style={{ color: '#f8e365' }}>روند کلی و موقعیت قیمت:</strong>{' '}
-              سهم {symbolName} در حال حاضر در محدوده{' '}
-              <b className="text-gray-100">{toFa(currentPrice)} ریال</b> معامله می‌شود و روند میان‌مدت{' '}
-              <b className={trendDirection === 'up' ? 'text-emerald-400' : trendDirection === 'down' ? 'text-red-400' : 'text-amber-400'}>{trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی'}</b>
-              {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={+(trendR2 * 100).toFixed(1)}%).
-              قیمت نسبت به MA21 ({toFa(ma21)} ریال){' '}
-              {currentPrice > ma21 ? <span className="text-emerald-400">بالاتر</span> : <span className="text-red-400">پایین‌تر</span>}
-              {' '}و نسبت به MA100 ({toFa(ma100)} ریال){' '}
-              {currentPrice > ma100 ? <span className="text-emerald-400">بالاتر</span> : <span className="text-red-400">پایین‌تر</span>}
-              {' '}قرار دارد. اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
-              {sar < currentPrice ? <span>زیر قیمت قرار دارد که <b className="text-emerald-400">تأیید روند صعودی</b> است.</span> : <span>بالای قیمت قرار دارد که <b className="text-red-400">تأیید روند نزولی</b> است.</span>}
-              {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده {' '}
-              {adx > 40 ? <b className="text-emerald-400">روند قدرتمند</b> : adx > 25 ? <b className="text-amber-400">روند متوسط</b> : <b className="text-gray-500">روند ضعیف یا رنج</b>}
-              {' '}می‌باشد. {' '}{diSignal}.
-            </p>
-
-            {/* ── PARAGRAPH 2: Oscillator & Momentum Analysis ── */}
-            <p className="text-sm text-gray-300 leading-[1.85]">
-              <strong style={{ color: '#f8e365' }}>تحلیل اسیلاتورها و مومنتوم:</strong>{' '}
-              اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
-              <b className={rsiColor}>{rsiSignal}</b> قرار دارد.
-              اندیکاتور MFI ({toFa(mfi)}) نیز{' '}
-              {mfi > 80 ? <span className="text-red-400">اشباع خرید را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-400">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}
-              . اندیکاتور CCI ({toFa(cci)}){' '}
-              {cci > 100 ? <span className="text-red-400">بالاتر از +100 (قدرت خریداری قوی)</span> : cci < -100 ? <span className="text-emerald-400">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}
-              . استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت{' '}
-              <b className={stochK > 80 ? 'text-red-400' : stochK < 20 ? 'text-emerald-400' : 'text-gray-300'}>{stochSignal}</b> را نشان می‌دهد.
-              {' '}MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با {macdBullish ? <span className="text-emerald-400">عبور خط اصلی بالای خط سیگنال — سیگنال صعودی</span> : <span className="text-red-400">خط اصلی زیر خط سیگنال — سیگنال نزولی</span>}
-              . هیستوگرام MACD ({toFa(macdHist)}) {' '}
-              {macdHist > 0 ? <span className="text-emerald-400">مثبت</span> : <span className="text-red-400">منفی</span>}
-              {' '}و {' '}{macdSignalText}.
-            </p>
-
-            {/* ── PARAGRAPH 3: Bollinger Bands & Volatility ── */}
-            <p className="text-sm text-gray-300 leading-[1.85]">
-              <strong style={{ color: '#f8e365' }}>تحلیل نوسانات و باند بولینگر:</strong>{' '}
-              قیمت در باند بولینگر{' '}
-              <b className="text-gray-200">{bbSignal}</b>
-              {' '}قرار دارد. باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} ریال.
-              {currentPrice > bollingerUpper
-                ? ' عبور از باند بالایی معمولاً نشان‌دهنده ادامه حرکت صعودی کوتاه‌مدت یا واکنش به باند است.'
-                : currentPrice < bollingerLower
-                ? ' نزدیکی یا عبور از باند پایینی می‌تواند نشانه بازگشت قیمت به سمت باند میانی باشد.'
-                : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
-            </p>
-
-            {/* ── Key Levels with Strength ── */}
-            <div className="rounded-xl px-4 py-3 border-r-4 border-red-400/70" style={{ background: 'rgba(248,227,101,0.06)' }}>
-              <strong className="text-red-400 text-sm">🔴 سطوح کلیدی پیش رو (با قدرت ۱-۱۰):</strong>
-              <ul className="mt-2 space-y-1.5 text-xs text-gray-300 leading-[1.85] list-disc list-inside">
-                {resistanceStrengths.map((r, i) => (
-                  <li key={i}>
-                    <b>مقاومت {toFa(r.price)} ریال (R{i + 1}):</b>{' '}
-                    <StrengthBadge strength={r.strength} isTarget={r.isTarget} />
-                    {i === 0 ? ' نخستین سد پیش روی سهم.' : i === 1 ? ' سد بعدی در مسیر صعودی.' : ''}
-                  </li>
-                ))}
-                {supportStrengths.map((s, i) => (
-                  <li key={i}>
-                    <b>حمایت {toFa(s.price)} ریال (S{i + 1}):</b>{' '}
-                    <StrengthBadge strength={s.strength} isTarget={s.isTarget} />
-                    {i === 0 ? ' مرز تفکیک پولبک سالم از اصلاح عمیق‌تر.' : i === 1 ? ' حمایت دوم. حفظ این سطح حیاتی است.' : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* ── Price Targets ── */}
-            {priceTargets && priceTargets.length > 0 && (
-              <div className="rounded-xl px-4 py-3 border-r-4 border-amber-400/70" style={{ background: 'rgba(255,177,27,0.06)' }}>
-                <strong className="text-amber-400 text-sm">🎯 اهداف قیمتی (سطوح با قدرت بالا):</strong>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {priceTargets.map((t, i) => (
-                    <div key={i} className="px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10">
-                      <span className="text-xs font-bold text-amber-300">{toFa(t.price)} ریال</span>
-                      <StrengthBadge strength={t.strength} isTarget={true} />
-                    </div>
-                  ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {SCENARIO_KEYS.map(key => {
+            const s = scenarios[key];
+            const meta = SCENARIO_META[key];
+            return (
+              <div
+                key={key}
+                className="rounded-xl p-3.5"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderTop: `3px solid ${meta.border}`,
+                }}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{key}</span>
+                  <span className="text-[10px] text-gray-500">{meta.label}</span>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-2">سطوحی که قدرت بالای ۷ دارند یا بالاترین قدرت را دارند، به عنوان اهداف قیمتی شناسایی می‌شوند.</p>
-              </div>
-            )}
-
-            {/* ── PARAGRAPH 4: Volume & OBV Analysis ── */}
-            <p className="text-sm text-gray-300 leading-[1.85]">
-              <strong style={{ color: '#f8e365' }}>تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
-              شاخص جریان ورودی پول (OBV) در سطح <b className="text-gray-200">{obv > 0 ? '+' : ''}{(obv / 1e6).toFixed(1)}M</b> قرار دارد
-              {obv > 0
-                ? <span> که <b className="text-emerald-400">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است. افزایش OBV همزمان با رشد قیمت، تأییدکننده قدرت خریداران واقعی در بازار می‌باشد.</span>
-                : <span> که <b className="text-red-400">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد. کاهش OBV در کنار قیمت ثابت یا صعودی، هشدار واگرایی منفی محسوب می‌شود.</span>
-              }
-              {' '}اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
-              {atr > currentPrice * 0.03
-                ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-400">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
-                : <span> نوسان معقول که نشان‌دهنده <b className="text-gray-400">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
-              }
-            </p>
-
-            {/* ── PARAGRAPH 5: Risk/Reward & Confluence ── */}
-            <p className="text-sm text-gray-300 leading-[1.85]">
-              <strong style={{ color: '#f8e365' }}>تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
-              با بررسی همزمان تمام اندیکاتورها، می‌توان نتیجه‌گیری کرد که
-              {overallSignal === 'bullish'
-                ? <span> اکثر شاخص‌ها <b className="text-emerald-400">الگوی صعودی</b> را تأیید می‌کنند. نسبت ریسک به بازده (Risk/Reward) با در نظر گرفتن حد ضرر در حمایت {toFa(S1_level)} و هدف اول {toFa(R1_level)} ریال، حدود <b className="text-emerald-400">{((R1_level - currentPrice) / (currentPrice - S1_level)).toFixed(1)}:1</b> محاسبه می‌شود که{' '}
-                {((R1_level - currentPrice) / (currentPrice - S1_level)) > 2
-                  ? <span className="text-emerald-400">نسبت بسیار مطلوبی</span>
-                  : ((R1_level - currentPrice) / (currentPrice - S1_level)) > 1
-                  ? <span className="text-amber-400">نسبت قابل قبولی</span>
-                  : <span className="text-red-400">نسبت نامطلوبی</span>
-                }{' '}برای ورود به معامله محسوب می‌شود.</span>
-                : overallSignal === 'bearish'
-                ? <span> اکثر شاخص‌ها <b className="text-red-400">الگوی نزولی</b> را نشان می‌دهند و ورود به معامله خرید در این شرایط <b className="text-red-400">ریسک بالایی</b> دارد. توصیه می‌شود تا بازگشت قیمت به محدوده حمایت {toFa(S1_level)} ریال و تشکیل سیگنال بازگشتی، از ورود خودداری شود.</span>
-                : <span> سیگنال‌ها <b className="text-amber-400">تضاد</b> دارند و بازار در فاز تردید قرار دارد. در این شرایط، بهترین استراتژی <b className="text-amber-400">انتظار و مشاهده</b> است تا قیمت از محدوده {toFa(S1_level)} تا {toFa(R1_level)} ریال خارج شده و جهت مشخص شود.</span>
-              }
-              {' '}تلاقی MA21 و MA100{' '}
-              {Math.abs(ma21 - ma100) / currentPrice < 0.01
-                ? <span className="text-amber-400">بسیار نزدیک به هم</span>
-                : ma21 > ma100
-                ? <span className="text-emerald-400">به نفع صعودی (MA21 بالاتر از MA100)</span>
-                : <span className="text-red-400">به نفع نزولی (MA21 پایین‌تر از MA100)</span>
-              }
-              {' '}است که {' '}
-              {Math.abs(ma21 - ma100) / currentPrice < 0.01
-                ? 'می‌تواند نشانه تقاطع طلایی یا مرگ در آینده نزدیک باشد و باید با دقت پایش شود.'
-                : trendDirection === 'up' ? 'تأییدکننده قدرت روند صعودی می‌باشد.' : 'هشدار تداوم فشار نزولی را صادر می‌کند.'
-              }
-            </p>
-
-            {/* ── Scenario Analysis ── */}
-            <p className="text-sm text-gray-300 leading-[1.85]">
-              <strong style={{ color: '#f8e365' }}>تحلیل سناریوها و احتمال وقوع:</strong>{' '}
-              بر اساس تحلیل روند و سطوح کلیدی، پنج سناریوی اصلی پیش روی سهم قابل تصور است.
-              {' '}سناریوی <b className="text-emerald-400">صعودی (R1)</b> با احتمال <b>{toFa(scenarios.R1.probability)}٪</b>،
-              در صورت عبور از مقاومت {toFa(R1_level)} و تثبیت بالای آن، قیمت را به کریدور {toFa(targetMin)} تا {toFa(targetMax)} ریال هدایت می‌کند.
-              {' '}سناریوی <b className="text-cyan-400">پولبک سالم (R2)</b> با احتمال <b>{toFa(scenarios.R2.probability)}٪</b>،
-              بازگشت تا حمایت {toFa(S1_level)} ریال و بازپس‌گیری مقاومت {toFa(R1_level)} را شامل می‌شود.
-              {' '}سناریوهای اصلاح با مجموع احتمالات{' '}
-              <b className="text-red-400">{toFa(scenarios.R3.probability + scenarios.R4.probability + scenarios.R5.probability)}٪</b>
-              {' '}در صورت شکست حمایت {toFa(S1_level)} ریال رخ داده و قیمت را به سمت سطوح {toFa(S2_level)} و {toFa(S3_level)} ریال هدایت خواهد کرد.
-            </p>
-
-            {/* ── Strategy ── */}
-            <div className="rounded-xl px-4 py-3 border-r-4" style={{ background: 'rgba(255,178,95,0.06)', borderRightColor: '#ffb25f' }}>
-              <strong className="text-amber-400 text-sm">🟡 استراتژی پیشنهادی:</strong>
-              <p className="text-xs text-gray-300 leading-[1.85] mt-1.5">{strategyText}</p>
-            </div>
-          </div>
-
-          {/* ── Scenario Summary (Left in RTL) ── */}
-          <div className="rounded-2xl p-4 border border-white/4 flex flex-col"
-            style={{ background: 'rgba(8,20,35,0.5)' }}>
-            <h3 className="text-sm font-bold mb-3 pb-2 border-b border-white/5" style={{ color: '#3ad5db' }}>
-              🏛️ خلاصه سناریوها و احتمالات
-            </h3>
-
-            <div className="space-y-3 flex-1">
-              {SCENARIO_KEYS.map(key => {
-                const s = scenarios[key];
-                const meta = SCENARIO_META[key];
-                return (
-                  <div
-                    key={key}
-                    className="rounded-xl p-3"
-                    style={{
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                      borderRight: `4px solid ${meta.border}`,
-                    }}
+                <div className="text-center my-2">
+                  <span
+                    className="inline-block text-2xl font-black tabular-nums"
+                    style={{ color: meta.badgeColor }}
                   >
-                    <div className="text-sm font-bold text-gray-100 mb-1">
-                      سناریو {key} | {meta.label}
-                    </div>
-                    <div className="text-xs text-[#b0c4dd] leading-relaxed">{s.description}</div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span
-                        className="inline-block px-3.5 py-0.5 rounded-full text-lg font-black"
-                        style={{ background: meta.badgeBg, color: meta.badgeColor }}
-                      >
-                        {toFa(s.probability)}٪
-                      </span>
-                      <span className="text-[10px] text-gray-500" dir="ltr">
-                        هدف: {toFa(s.targetMin)} — {toFa(s.targetMax)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    {toFa(s.probability)}٪
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-gray-700/60 overflow-hidden mb-2">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${s.probability}%`, backgroundColor: meta.border }}
+                  />
+                </div>
+                <div className="text-[10px] text-gray-500 text-center" dir="ltr">
+                  {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-            <div className="mt-3 pt-3 border-t border-white/5 text-left text-xs text-[#5a7395] leading-relaxed">
-              <strong>📌 قانون احتمالات:</strong> مجموع احتمالات پنج سناریوی پیش رو برابر <strong>۱۰۰٪</strong> است.
-              (مجموع فعلی: <b className="text-gray-300">{toFa(totalProb)}٪</b>)
-            </div>
-          </div>
+        <div className="mt-4 text-center text-xs text-gray-500">
+          مجموع احتمالات: <b className="text-gray-300">{toFa(totalProb)}٪</b> (برابر ۱۰۰٪)
         </div>
       </div>
 
@@ -461,22 +523,6 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         </span>
       </div>
     </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Sub-components
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function StrengthBadge({ strength, isTarget }: { strength: number; isTarget: boolean }) {
-  const color = strength >= 8 ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
-    : strength >= 5 ? 'text-amber-400 bg-amber-500/15 border-amber-500/30'
-    : 'text-gray-400 bg-gray-500/10 border-gray-500/20';
-  return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border mr-1 ${color}`}>
-      {isTarget && '🎯 '}
-      قدرت: {strength}/10
-    </span>
   );
 }
 
