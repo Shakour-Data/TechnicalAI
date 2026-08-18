@@ -48,6 +48,10 @@ interface LevelStrength {
   price: number;
   strength: number;
   isTarget: boolean;
+  score: number;
+  grade: string;
+  overlapCount: number;
+  methods: string[];
   fibRatio?: string;
   fibLabel?: string;
 }
@@ -496,8 +500,12 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       resistanceStrengths.slice(0, 6).forEach((r, i) => {
         if (r.price <= 0) return;
         const style = srLineStyle(r.strength, r.isTarget);
-        const fibTag = r.fibLabel ? ` [${r.fibLabel}]` : '';
-        const title = `R${toPersianDigits(String(i + 1))}${fibTag}`;
+        const toFa = (n: number) => String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+        const methodCount = toFa(r.methods?.length ?? 0);
+        const fibTag = r.fibLabel ? ` فیبو ${r.fibLabel}` : '';
+        const title = r.isTarget
+          ? `★ R${toFa(i + 1)} [${r.grade}]`
+          : `R${toFa(i + 1)} [${r.grade}] (${methodCount} method)${fibTag}`;
         cs.createPriceLine({
           price: r.price,
           color: r.isTarget ? '#dc2626' : BEAR,
@@ -511,8 +519,12 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       supportStrengths.slice(0, 6).forEach((s, i) => {
         if (s.price <= 0) return;
         const style = srLineStyle(s.strength, s.isTarget);
-        const fibTag = s.fibLabel ? ` [${s.fibLabel}]` : '';
-        const title = `S${toPersianDigits(String(i + 1))}${fibTag}`;
+        const toFa = (n: number) => String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+        const methodCount = toFa(s.methods?.length ?? 0);
+        const fibTag = s.fibLabel ? ` فیبو ${s.fibLabel}` : '';
+        const title = s.isTarget
+          ? `★ S${toFa(i + 1)} [${s.grade}]`
+          : `S${toFa(i + 1)} [${s.grade}] (${methodCount} method)${fibTag}`;
         cs.createPriceLine({
           price: s.price,
           color: s.isTarget ? '#16a34a' : BULL,

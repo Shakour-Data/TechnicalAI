@@ -38,10 +38,14 @@ export interface TrendResult {
 
 export interface LevelStrength {
   price: number;
-  strength: number; // 1-10
-  isTarget: boolean;
-  fibRatio: string; // e.g. '0.382', '1.618', '2.618'
-  fibLabel: string; // Persian label e.g. 'فیبو ۳۸.۲٪' 
+  strength: number;       // 1-10
+  score: number;          // 0-10 continuous (final_score from ML)
+  grade: string;          // 'Very Strong' | 'Strong' | 'Moderate' | 'Weak'
+  isTarget: boolean;      // true if score >= 7
+  overlapCount: number;   // number of methods that agree at this level
+  methods: string[];      // e.g. ['Swing_High', 'Fibonacci_0.618', 'Pivot_R1']
+  fibRatio: string;       // e.g. '0.382' — keep for backward compat
+  fibLabel: string;       // Persian label e.g. 'فیبو ۳۸.۲٪' — keep for backward compat
 }
 
 export interface TAResult {
@@ -446,10 +450,544 @@ const FIB_LABELS: Record<string, string> = {
   '4.236': '۴۲۳.۶٪',
 };
 
-// Key Fibonacci ratios for strength scoring — closeness to these gets bonus
+// Key Fibonacci ratios for strength scoring
 const KEY_FIB_RATIOS = [0.236, 0.382, 0.5, 0.618, 0.786, 1.272, 1.618, 2.618];
 
-// ─── Support / Resistance (6 each, Fibonacci Retracement + Extension) ───
+// ─── Internal S/R Types ──────────────────────────────────────────────────
+interface RawSRLevel {
+  price: number;
+  method: string;
+  type: 'support' | 'resistance';
+  fibRatio: string;
+  fibLabel: string;
+}
+
+interface MergedSRLevel {
+  price: number;
+  type: 'support' | 'resistance';
+  methods: string[];
+  overlapCount: number;
+  fibRatio: string;
+  fibLabel: string;
+  score: number;
+  strength: number;
+  touchCount: number;
+  volumeRatio: number;
+  freshness: number;
+  distancePercent: number;
+}
+
+// ─── Helper: Psychological Rounding ────────────────────────────────────────
+function psychStep(price: number): number {
+  if (price >= 100000) return 5000;
+  if (price >= 10000) return 1000;
+  if (price >= 1000) return 100;
+  if (price >= 100) return 10;
+  if (price >= 10) return 1;
+  return 0.01;
+}
+
+function psychRound(price: number): number {
+  const step = psychStep(price);
+  return Math.round(price / step) * step;
+}
+
+// ─── Helper: Linear System Solver (Gaussian Elimination) ─────────────────
+function solveLinearSystem(A: number[][], b: number[]): number[] | null {
+  const n = b.length;
+  const aug = A.map((row, i) => [...row, b[i]]);
+
+  for (let col = 0; col < n; col++) {
+    let maxVal = Math.abs(aug[col][col]);
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[row][col]) > maxVal) {
+        maxVal = Math.abs(aug[row][col]);
+        maxRow = row;
+      }
+    }
+    if (maxVal < 1e-10) return null;
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+
+    for (let row = col + 1; row < n; row++) {
+      const factor = aug[row][col] / aug[col][col];
+      for (let j = col; j <= n; j++) {
+        aug[row][j] -= factor * aug[col][j];
+      }
+    }
+  }
+
+  const x = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    x[i] = aug[i][n];
+    for (let j = i + 1; j < n; j++) {
+      x[i] -= aug[i][j] * x[j];
+    }
+    if (Math.abs(aug[i][i]) < 1e-10) return null;
+    x[i] /= aug[i][i];
+  }
+
+  return x;
+}
+
+// ─── Helper: Generate All 7-Method S/R Levels ─────────────────────────────
+function generateAllLevels(data: OHLCV[], endIdx: number): RawSRLevel[] {
+  const levels: RawSRLevel[] = [];
+  if (endIdx < 10) return levels;
+
+  const slice = data.slice(0, endIdx + 1);
+  const currentPrice = slice[slice.length - 1].close;
+  const closes = slice.map(d => d.close);
+  const noFib: [string, string] = ['—', ''];
+
+  // ── Method 1: Swing High/Low (Price Action) ──────────────────────────
+  for (const lookback of [3, 5, 7]) {
+    const swings = findSwingLevels(slice, lookback);
+    const tol = currentPrice * 0.005; // 0.5% tolerance
+
+    // Connect swing highs → resistance
+    const usedHigh = new Set<number>();
+    for (const h of swings.highs) {
+      if (usedHigh.has(h.idx)) continue;
+      let sum = h.price;
+      let count = 1;
+      for (const h2 of swings.highs) {
+        if (h2 === h || usedHigh.has(h2.idx)) continue;
+        if (Math.abs(h2.price - h.price) < tol) {
+          sum += h2.price;
+          count++;
+          usedHigh.add(h2.idx);
+        }
+      }
+      usedHigh.add(h.idx);
+      if (sum / count > currentPrice * 1.005) {
+        levels.push({ price: sum / count, method: 'Swing_High', type: 'resistance', ...noFib });
+      }
+    }
+
+    // Connect swing lows → support
+    const usedLow = new Set<number>();
+    for (const l of swings.lows) {
+      if (usedLow.has(l.idx)) continue;
+      let sum = l.price;
+      let count = 1;
+      for (const l2 of swings.lows) {
+        if (l2 === l || usedLow.has(l2.idx)) continue;
+        if (Math.abs(l2.price - l.price) < tol) {
+          sum += l2.price;
+          count++;
+          usedLow.add(l2.idx);
+        }
+      }
+      usedLow.add(l.idx);
+      if (sum / count < currentPrice * 0.995) {
+        levels.push({ price: sum / count, method: 'Swing_Low', type: 'support', ...noFib });
+      }
+    }
+  }
+
+  // ── Method 2: SMA Dynamic S/R ──────────────────────────────────────
+  for (const period of [20, 50, 100, 200]) {
+    const smaVal = sma(closes, period);
+    if (smaVal <= 0) continue;
+    const type: 'support' | 'resistance' = currentPrice > smaVal ? 'support' : 'resistance';
+    levels.push({ price: smaVal, method: `SMA_${period}`, type, ...noFib });
+  }
+
+  // ── Method 3: Bollinger Bands ───────────────────────────────────────
+  const bb = calcBollingerBands(closes);
+  if (bb.upper > 0 && bb.lower > 0) {
+    levels.push({ price: bb.upper, method: 'BB_Upper', type: 'resistance', ...noFib });
+    levels.push({ price: bb.lower, method: 'BB_Lower', type: 'support', ...noFib });
+  }
+
+  // ── Method 4: Fibonacci Retracement + Extension ─────────────────────
+  interface SwingPair { high: number; highIdx: number; low: number; lowIdx: number; range: number }
+  let bestSwing: SwingPair | null = null;
+
+  for (const lb of [3, 5, 7, 10, 15, 20]) {
+    const sw = findSwingLevels(slice, lb);
+    if (sw.highs.length === 0 || sw.lows.length === 0) continue;
+    for (const h of sw.highs) {
+      for (const l of sw.lows) {
+        if (Math.abs(h.idx - l.idx) < 3) continue;
+        const range = Math.abs(h.price - l.price);
+        if (range / currentPrice < 0.03) continue;
+        if (!bestSwing || range > bestSwing.range) {
+          bestSwing = {
+            high: Math.max(h.price, l.price),
+            highIdx: h.price > l.price ? h.idx : l.idx,
+            low: Math.min(h.price, l.price),
+            lowIdx: h.price < l.price ? l.idx : h.idx,
+            range,
+          };
+        }
+      }
+    }
+  }
+
+  if (bestSwing) {
+    const H = bestSwing.high;
+    const L = bestSwing.low;
+    const range = H - L;
+
+    for (const ratio of FIB_RETRACEMENTS) {
+      const price = H - ratio * range;
+      if (price <= 0) continue;
+      const rounded = roundToNice(price);
+      const type: 'support' | 'resistance' = rounded >= currentPrice ? 'resistance' : 'support';
+      levels.push({
+        price: rounded, method: `Fibonacci_${ratio}`, type,
+        fibRatio: String(ratio), fibLabel: FIB_LABELS[String(ratio)] || '',
+      });
+    }
+
+    for (const extRatio of FIB_EXTENSIONS) {
+      const price = H + (extRatio - 1) * range;
+      if (price <= 0) continue;
+      const rounded = roundToNice(price);
+      const type: 'support' | 'resistance' = rounded >= currentPrice ? 'resistance' : 'support';
+      levels.push({
+        price: rounded, method: `Fibonacci_${extRatio}`, type,
+        fibRatio: String(extRatio), fibLabel: FIB_LABELS[String(extRatio)] || '',
+      });
+    }
+
+    // Inverse extensions (below L)
+    for (const extRatio of FIB_EXTENSIONS) {
+      const price = L - (extRatio - 1) * range;
+      if (price <= 0) continue;
+      const rounded = roundToNice(price);
+      const type: 'support' | 'resistance' = rounded >= currentPrice ? 'resistance' : 'support';
+      levels.push({
+        price: rounded, method: `Fibonacci_${-extRatio}`, type,
+        fibRatio: String(-extRatio), fibLabel: '',
+      });
+    }
+
+    // Secondary swing confluence (check overlap with secondary swings)
+    const secondarySwings: SwingPair[] = [];
+    for (const lb of [3, 5, 7]) {
+      const sw = findSwingLevels(slice, lb);
+      for (const h of sw.highs) {
+        for (const l of sw.lows) {
+          if (Math.abs(h.idx - l.idx) < 3) continue;
+          const r = Math.abs(h.price - l.price);
+          if (r / currentPrice < 0.05) continue;
+          if (bestSwing && Math.abs(r - bestSwing.range) / bestSwing.range < 0.1) continue;
+          secondarySwings.push({
+            high: Math.max(h.price, l.price), highIdx: h.price > l.price ? h.idx : l.idx,
+            low: Math.min(h.price, l.price), lowIdx: h.price < l.price ? l.idx : h.idx,
+            range: r,
+          });
+        }
+      }
+    }
+    // Secondary swings' fib levels are merged via confluence (1% rule in mergeLevels)
+    const confluenceTol = currentPrice * 0.005;
+    for (const sec of secondarySwings.slice(0, 3)) {
+      const sH = sec.high, sL = sec.low, sR = sH - sL;
+      for (const ratio of FIB_RETRACEMENTS) {
+        const price = roundToNice(sH - ratio * sR);
+        if (price <= 0) continue;
+        const type: 'support' | 'resistance' = price >= currentPrice ? 'resistance' : 'support';
+        levels.push({
+          price, method: `Fibonacci_${ratio}`, type,
+          fibRatio: String(ratio), fibLabel: FIB_LABELS[String(ratio)] || '',
+        });
+      }
+      for (const extR of FIB_EXTENSIONS) {
+        const price = roundToNice(sH + (extR - 1) * sR);
+        if (price <= 0) continue;
+        const type: 'support' | 'resistance' = price >= currentPrice ? 'resistance' : 'support';
+        levels.push({
+          price, method: `Fibonacci_${extR}`, type,
+          fibRatio: String(extR), fibLabel: FIB_LABELS[String(extR)] || '',
+        });
+      }
+    }
+  }
+
+  // ── Method 5: Volume Profile (VAP) ──────────────────────────────────
+  const dataHasVolume = slice.some(d => d.volume > 0);
+  if (dataHasVolume) {
+    let minP = Infinity, maxP = -Infinity;
+    for (const d of slice) {
+      if (d.low < minP) minP = d.low;
+      if (d.high > maxP) maxP = d.high;
+    }
+    const numBins = 40;
+    const binSize = Math.max((maxP - minP) / numBins, currentPrice * 0.001);
+    const vap = new Array(numBins).fill(0);
+    const binCenters: number[] = [];
+
+    for (let b = 0; b < numBins; b++) {
+      binCenters.push(minP + (b + 0.5) * binSize);
+    }
+
+    for (const d of slice) {
+      for (let b = 0; b < numBins; b++) {
+        if (d.low <= binCenters[b] && binCenters[b] <= d.high) {
+          vap[b] += d.volume;
+        }
+      }
+    }
+
+    const maxVAP = Math.max(...vap);
+    if (maxVAP > 0) {
+      // POC (Point of Control)
+      let pocIdx = 0;
+      for (let b = 1; b < numBins; b++) {
+        if (vap[b] > vap[pocIdx]) pocIdx = b;
+      }
+      const pocPrice = binCenters[pocIdx];
+      const pocType: 'support' | 'resistance' = pocPrice > currentPrice ? 'resistance' : 'support';
+      levels.push({ price: pocPrice, method: 'VAP_POC', type: pocType, ...noFib });
+
+      // HVN (High Volume Nodes)
+      for (let b = 0; b < numBins; b++) {
+        if (b === pocIdx) continue;
+        if (vap[b] > 0.7 * maxVAP) {
+          const hvnPrice = binCenters[b];
+          const hvnType: 'support' | 'resistance' = hvnPrice > currentPrice ? 'resistance' : 'support';
+          levels.push({ price: hvnPrice, method: 'VAP_HVN', type: hvnType, ...noFib });
+        }
+      }
+    }
+  }
+
+  // ── Method 6: Pivot Points (4 algorithms) ───────────────────────────
+  if (endIdx >= 1) {
+    const prev = slice[endIdx - 1]; // Previous completed bar
+    const pH = prev.high, pL = prev.low, pC = prev.close, pO = prev.open;
+
+    // Standard Pivot
+    {
+      const PP = (pH + pL + pC) / 3;
+      const R1 = 2 * PP - pL, S1 = 2 * PP - pH;
+      const R2 = PP + (pH - pL), S2 = PP - (pH - pL);
+      const R3 = pH + 2 * (PP - pL), S3 = pL - 2 * (pH - PP);
+ if (R1 > 0) levels.push({ price: R1, method: 'Pivot_R1', type: 'resistance', ...noFib });
+      if (R2 > 0) levels.push({ price: R2, method: 'Pivot_R2', type: 'resistance', ...noFib });
+      if (R3 > 0) levels.push({ price: R3, method: 'Pivot_R3', type: 'resistance', ...noFib });
+      if (S1 > 0) levels.push({ price: S1, method: 'Pivot_S1', type: 'support', ...noFib });
+      if (S2 > 0) levels.push({ price: S2, method: 'Pivot_S2', type: 'support', ...noFib });
+      if (S3 > 0) levels.push({ price: S3, method: 'Pivot_S3', type: 'support', ...noFib });
+    }
+
+    // Fibonacci Pivot
+    {
+      const PP = (pH + pL + pC) / 3;
+      const range = pH - pL;
+      for (const [mult, suffix] of [[0.382, '1'], [0.618, '2'], [1.0, '3']] as [number, string][]) {
+        const R = PP + mult * range;
+        const S = PP - mult * range;
+        if (R > 0) levels.push({ price: R, method: `Fib_Pivot_R${suffix}`, type: 'resistance', ...noFib });
+        if (S > 0) levels.push({ price: S, method: `Fib_Pivot_S${suffix}`, type: 'support', ...noFib });
+      }
+    }
+
+    // Woodie's Pivot
+    {
+      const PP = (pH + pL + 2 * pC) / 4;
+      const R1 = 2 * PP - pL, S1 = 2 * PP - pH;
+      const R2 = PP + (pH - pL), S2 = PP - (pH - pL);
+      if (R1 > 0) levels.push({ price: R1, method: 'Woodie_R1', type: 'resistance', ...noFib });
+      if (R2 > 0) levels.push({ price: R2, method: 'Woodie_R2', type: 'resistance', ...noFib });
+      if (S1 > 0) levels.push({ price: S1, method: 'Woodie_S1', type: 'support', ...noFib });
+      if (S2 > 0) levels.push({ price: S2, method: 'Woodie_S2', type: 'support', ...noFib });
+    }
+
+    // DeMark Pivot
+    {
+      const X = pC < pO ? pH + 2 * pL + pC : pC > pO ? 2 * pH + pL + pC : pH + pL + 2 * pC;
+      const PP = X / 4;
+      const R1 = X / 2 - pL;
+      const S1 = X / 2 - pH;
+      if (R1 > 0) levels.push({ price: R1, method: 'DeMark_R1', type: 'resistance', ...noFib });
+      if (S1 > 0) levels.push({ price: S1, method: 'DeMark_S1', type: 'support', ...noFib });
+    }
+  }
+
+  // ── Method 7: Psychological Levels ──────────────────────────────────
+  {
+    const step = psychStep(currentPrice);
+    const base = psychRound(currentPrice);
+    for (const mult of [-2, -1, 1, 2]) {
+      const price = base + mult * step;
+      if (price <= 0) continue;
+      const type: 'support' | 'resistance' = price > currentPrice ? 'resistance' : 'support';
+      levels.push({ price, method: 'Psychological', type, ...noFib });
+    }
+  }
+
+  return levels;
+}
+
+// ─── Helper: Merge Nearby Levels (1% Confluence) ──────────────────────────
+function mergeLevels(rawLevels: RawSRLevel[], currentPrice: number): MergedSRLevel[] {
+  if (rawLevels.length === 0) return [];
+
+  const tol = currentPrice * 0.01; // 1% tolerance
+  const merged: MergedSRLevel[] = [];
+  const used = new Set<number>();
+
+  for (let i = 0; i < rawLevels.length; i++) {
+    if (used.has(i)) continue;
+
+    let sumPrice = rawLevels[i].price;
+    let count = 1;
+    const methods = new Set<string>();
+    methods.add(rawLevels[i].method);
+    let bestFibRatio = rawLevels[i].fibRatio;
+    let bestFibLabel = rawLevels[i].fibLabel;
+
+    for (let j = i + 1; j < rawLevels.length; j++) {
+      if (used.has(j)) continue;
+      if (Math.abs(rawLevels[j].price - rawLevels[i].price) < tol) {
+        sumPrice += rawLevels[j].price;
+        count++;
+        methods.add(rawLevels[j].method);
+        used.add(j);
+        // Prefer Fibonacci label if available
+        if (rawLevels[j].fibRatio !== '—' && bestFibRatio === '—') {
+          bestFibRatio = rawLevels[j].fibRatio;
+          bestFibLabel = rawLevels[j].fibLabel;
+        }
+      }
+    }
+    used.add(i);
+
+    const avgPrice = sumPrice / count;
+    const type: 'support' | 'resistance' = avgPrice >= currentPrice ? 'resistance' : 'support';
+
+    merged.push({
+      price: avgPrice,
+      type,
+      methods: [...methods],
+      overlapCount: methods.size,
+      fibRatio: bestFibRatio,
+      fibLabel: bestFibLabel,
+      score: 0,
+      strength: 1,
+      touchCount: 0,
+      volumeRatio: 0,
+      freshness: 0,
+      distancePercent: 0,
+    });
+  }
+
+  return merged;
+}
+
+// ─── Helper: Compute Level Features (5 ML features) ──────────────────────
+function computeLevelFeatures(
+  levelPrice: number,
+  data: OHLCV[],
+  endIdx: number,
+  currentPrice: number,
+  overlapCount: number,
+): number[] {
+  const lookback = Math.min(30, endIdx);
+  const startIdx = endIdx - lookback;
+  const touchTol = currentPrice * 0.002; // 0.2%
+
+  let touchCount = 0;
+  let totalVolAtTouches = 0;
+  let totalVol = 0;
+  let barsSinceLastTouch = lookback;
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const bar = data[i];
+    totalVol += bar.volume;
+
+    if (bar.low <= levelPrice + touchTol && bar.high >= levelPrice - touchTol) {
+      touchCount++;
+      totalVolAtTouches += bar.volume;
+      barsSinceLastTouch = endIdx - i;
+    }
+  }
+
+  const avgVol = lookback > 0 ? totalVol / lookback : 0;
+  const volumeRatio = (touchCount > 0 && avgVol > 0) ? (totalVolAtTouches / touchCount) / avgVol : 1;
+  const freshness = Math.max(0, Math.min(1, 1 - barsSinceLastTouch / 30));
+  const distancePercent = Math.min(1, Math.abs(levelPrice - currentPrice) / currentPrice);
+
+  // Features: [touch_count, volume_ratio, overlap_count, freshness, distance_percent]
+  return [touchCount, volumeRatio, overlapCount - 1, freshness, distancePercent];
+}
+
+// ─── Helper: Train S/R Scoring Weights (Ridge OLS) ───────────────────────
+function trainSRWeights(data: OHLCV[]): number[] {
+  const defaultWeights = [0.25, 0.20, 0.25, 0.15, 0.15];
+
+  if (data.length < 50) return defaultWeights;
+
+  const X: number[][] = [];
+  const y: number[] = [];
+
+  for (let i = 40; i <= data.length - 11; i += 5) {
+    const barPrice = data[i].close;
+    const rawLevels = generateAllLevels(data, i);
+    if (rawLevels.length === 0) continue;
+    const merged = mergeLevels(rawLevels, barPrice);
+
+    for (const level of merged) {
+      const features = computeLevelFeatures(level.price, data, i, barPrice, level.overlapCount);
+      X.push(features);
+
+      // Label: did price return within 10 bars?
+      let returned = false;
+      const retTol = barPrice * 0.005;
+      for (let j = i + 1; j <= Math.min(i + 10, data.length - 1); j++) {
+        if (data[j].low <= level.price + retTol && data[j].high >= level.price - retTol) {
+          returned = true;
+          break;
+        }
+      }
+      y.push(returned ? 1 : 0);
+    }
+  }
+
+  if (X.length < 20) return defaultWeights;
+
+  // Ridge OLS: w = (X^T X + λI)^(-1) X^T y
+  const n = X.length;
+  const p = 5;
+  const lambda = 0.01;
+
+  const XtX: number[][] = Array.from({ length: p }, () => new Array(p).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let a = 0; a < p; a++) {
+      for (let b = 0; b < p; b++) {
+        XtX[a][b] += X[i][a] * X[i][b];
+      }
+    }
+  }
+  for (let a = 0; a < p; a++) XtX[a][a] += lambda;
+
+  const Xty: number[] = new Array(p).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let a = 0; a < p; a++) {
+      Xty[a] += X[i][a] * y[i];
+    }
+  }
+
+  const weights = solveLinearSystem(XtX, Xty);
+  if (!weights) return defaultWeights;
+  if (weights.some(w => isNaN(w) || !isFinite(w))) return defaultWeights;
+
+  for (let i = 0; i < p; i++) {
+    if (weights[i] < 0) weights[i] = 0;
+  }
+
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return defaultWeights;
+
+  return weights.map(w => w / sum);
+}
+
+// ─── Support / Resistance (7-Method ML-Based System) ─────────────────────
 function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistances: number[];
   supports: number[];
@@ -458,7 +996,6 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   priceTargets: LevelStrength[];
 } {
   if (data.length < 10) {
-    // Not enough data — return empty
     return {
       resistances: [], supports: [],
       supportStrengths: [], resistanceStrengths: [],
@@ -466,304 +1003,156 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
     };
   }
 
-  // ── Step 1: Find the most significant swing for Fibonacci base ──
-  // Use multiple lookback periods and pick the swing with the largest range
-  interface SwingPair { high: number; highIdx: number; low: number; lowIdx: number; range: number };
-  let bestSwing: SwingPair | null = null;
+  // ── Step 1: Generate all levels from 7 methods ────────────────────────
+  const rawLevels = generateAllLevels(data, data.length - 1);
 
-  for (const lookback of [3, 5, 7, 10, 15, 20]) {
-    const swings = findSwingLevels(data, lookback);
-    if (swings.highs.length === 0 || swings.lows.length === 0) continue;
+  // ── Step 2: Merge nearby levels (confluence within 1%) ────────────────
+  let merged = mergeLevels(rawLevels, currentPrice);
 
-    // Try all combinations of a high followed by a low, or low followed by a high
-    for (const h of swings.highs) {
-      for (const l of swings.lows) {
-        if (Math.abs(h.idx - l.idx) < 3) continue; // Too close together
-        const range = Math.abs(h.price - l.price);
-        const relRange = range / currentPrice;
-        if (relRange < 0.03) continue; // Ignore tiny swings (< 3% of price)
+  // ── Step 3: Train ML weights on historical data ───────────────────────
+  const weights = trainSRWeights(data);
 
-        if (!bestSwing || range > bestSwing.range) {
-          bestSwing = {
-            high: Math.max(h.price, l.price),
-            highIdx: h.price > l.price ? h.idx : l.idx,
-            low: Math.min(h.price, l.price),
-            lowIdx: h.price < l.price ? h.idx : l.idx,
-            range,
-          };
-        }
-      }
-    }
+  // ── Step 4: Compute features & score each merged level ────────────────
+  for (const level of merged) {
+    const features = computeLevelFeatures(level.price, data, data.length - 1, currentPrice, level.overlapCount);
+
+    const touchScore = Math.min(features[0] / 5, 1);
+    const volumeScore = Math.min(features[1] / 2, 1);
+    const overlapScore = Math.min(features[2] * 2, 10) / 10;
+    const freshnessScore = features[3];
+    const distanceScore = 1 - features[4];
+
+    const powerScore = (
+      weights[0] * touchScore +
+      weights[1] * volumeScore +
+      weights[2] * overlapScore +
+      weights[3] * freshnessScore +
+      weights[4] * distanceScore
+    ) * 10;
+
+    level.score = Math.max(0, Math.min(10, powerScore));
+    level.strength = Math.max(1, Math.min(10, Math.round(level.score)));
+    level.touchCount = features[0];
+    level.volumeRatio = features[1];
+    level.freshness = features[3];
+    level.distancePercent = features[4];
   }
 
-  // ── Step 2: Also find secondary swings for confluence ──
-  const secondarySwings: SwingPair[] = [];
-  for (const lookback of [3, 5, 7, 10, 15]) {
-    const swings = findSwingLevels(data, lookback);
-    for (const h of swings.highs) {
-      for (const l of swings.lows) {
-        if (Math.abs(h.idx - l.idx) < 3) continue;
-        const range = Math.abs(h.price - l.price);
-        const relRange = range / currentPrice;
-        if (relRange < 0.03) continue;
-        if (bestSwing && Math.abs(range - bestSwing.range) / bestSwing.range < 0.1) continue; // Skip duplicates of best
-        if (range > currentPrice * 0.05) { // Only significant secondary swings
-          secondarySwings.push({
-            high: Math.max(h.price, l.price),
-            highIdx: h.price > l.price ? h.idx : l.idx,
-            low: Math.min(h.price, l.price),
-            lowIdx: h.price < l.price ? l.idx : h.idx,
-            range,
-          });
-        }
-      }
-    }
-  }
-  // Keep top 3 secondary swings by range
-  secondarySwings.sort((a, b) => b.range - a.range);
-  const topSecondary = secondarySwings.slice(0, 3);
-
-  // ── Step 3: Generate ALL Fibonacci levels from the best swing ──
-  interface FibLevel {
-    price: number;
-    ratio: number;
-    ratioStr: string;
-    label: string;
-    source: 'retracement' | 'extension' | 'retracement-inv';
-    confluenceCount: number;
+  // ── Step 5: Psychological rounding of all level prices ─────────────────
+  for (const level of merged) {
+    level.price = psychRound(level.price);
   }
 
-  const allLevels: FibLevel[] = [];
-
-  if (bestSwing) {
-    const H = bestSwing.high;
-    const L = bestSwing.low;
-    const range = H - L;
-
-    // Fibonacci Retracement levels (measured from high downward)
-    // 0% = H, 100% = L
-    for (const ratio of FIB_RETRACEMENTS) {
-      const price = H - ratio * range;
-      if (price > 0) {
-        allLevels.push({
-          price: roundToNice(price),
-          ratio,
-          ratioStr: String(ratio),
-          label: FIB_LABELS[String(ratio)] || `${(ratio * 100).toFixed(1)}٪`,
-          source: 'retracement',
-          confluenceCount: 1,
-        });
-      }
-    }
-
-    // Fibonacci Extension levels (projected above H)
-    for (const extRatio of FIB_EXTENSIONS) {
-      const price = H + (extRatio - 1) * range;
-      if (price > 0) {
-        allLevels.push({
-          price: roundToNice(price),
-          ratio: extRatio,
-          ratioStr: String(extRatio),
-          label: FIB_LABELS[String(extRatio)] || `${(extRatio * 100).toFixed(1)}٪`,
-          source: 'extension',
-          confluenceCount: 1,
-        });
-      }
-    }
-
-    // Fibonacci Extension levels (projected below L — inverse extensions)
-    for (const extRatio of FIB_EXTENSIONS) {
-      const price = L - (extRatio - 1) * range;
-      if (price > 0) {
-        allLevels.push({
-          price: roundToNice(price),
-          ratio: -(extRatio),
-          ratioStr: String(-extRatio),
-          label: `-${FIB_LABELS[String(extRatio)] || `${(extRatio * 100).toFixed(1)}٪`}`,
-          source: 'retracement-inv',
-          confluenceCount: 1,
-        });
-      }
-    }
+  // Re-classify types after rounding
+  for (const level of merged) {
+    level.type = level.price >= currentPrice ? 'resistance' : 'support';
   }
 
-  // ── Step 4: Generate levels from secondary swings and check confluence ──
-  const confluenceThreshold = currentPrice * 0.005; // 0.5%
-
-  for (const sec of topSecondary) {
-    const H = sec.high;
-    const L = sec.low;
-    const range = H - L;
-
-    for (const ratio of FIB_RETRACEMENTS) {
-      const price = roundToNice(H - ratio * range);
-      if (price <= 0) continue;
-      // Check if this level is close to an existing one
-      for (const existing of allLevels) {
-        if (Math.abs(existing.price - price) < confluenceThreshold) {
-          existing.confluenceCount++;
-        }
-      }
-    }
-
-    for (const extRatio of FIB_EXTENSIONS) {
-      const price = roundToNice(H + (extRatio - 1) * range);
-      if (price <= 0) continue;
-      for (const existing of allLevels) {
-        if (Math.abs(existing.price - price) < confluenceThreshold) {
-          existing.confluenceCount++;
-        }
-      }
-    }
-  }
-
-  // ── Step 5: Score each level ──
-  const avgVolume = data.reduce((s, d) => s + d.volume, 0) / data.length;
-  const dataHasVolume = data.some(d => d.volume > 0);
-
-  const scoredLevels: LevelStrength[] = allLevels.map(lvl => {
-    // Factor 1: Confluence (multiple swings agree) — 0-3 pts
-    const confluenceScore = Math.min(3, lvl.confluenceCount * 1.0);
-
-    // Factor 2: Proximity to a KEY Fibonacci ratio — 0-2 pts
-    // Levels at key ratios (0.382, 0.5, 0.618, 1.618, 2.618) are stronger
-    let keyRatioScore = 0;
-    const absRatio = Math.abs(lvl.ratio);
-    for (const keyR of KEY_FIB_RATIOS) {
-      if (Math.abs(absRatio - keyR) < 0.01) {
-        keyRatioScore = 2.0;
-        break;
-      }
-    }
-    // 0% and 100% are the swing extremes — also strong
-    if (absRatio < 0.01 || Math.abs(absRatio - 1.0) < 0.01) keyRatioScore = 1.5;
-
-    // Factor 3: Proximity to current price — 0-2 pts
-    const distRatio = Math.abs(lvl.price - currentPrice) / currentPrice;
-    let proximityScore = 0;
-    if (distRatio < 0.01) proximityScore = 2.0;
-    else if (distRatio < 0.02) proximityScore = 1.7;
-    else if (distRatio < 0.04) proximityScore = 1.3;
-    else if (distRatio < 0.07) proximityScore = 1.0;
-    else if (distRatio < 0.10) proximityScore = 0.6;
-    else if (distRatio < 0.15) proximityScore = 0.3;
-    else proximityScore = 0.1;
-
-    // Factor 4: Touch/rejection count at this level — 0-2 pts
-    let touchScore = 0;
-    const touchThreshold = currentPrice * 0.002;
-    let touchCount = 0;
-    let totalVolAtTouches = 0;
-    for (let i = 0; i < data.length; i++) {
-      const bar = data[i];
-      const isAbove = lvl.price > currentPrice;
-      if (isAbove) {
-        if (bar.high >= lvl.price - touchThreshold && bar.close < lvl.price) {
-          touchCount++;
-          totalVolAtTouches += bar.volume;
+  // Deduplicate after rounding (keep strongest at same price)
+  {
+    const deduped: MergedSRLevel[] = [];
+    for (const level of merged) {
+      const existing = deduped.find(d => Math.abs(d.price - level.price) < currentPrice * 0.001);
+      if (existing) {
+        if (level.score > existing.score) {
+          Object.assign(existing, level);
         }
       } else {
-        if (bar.low <= lvl.price + touchThreshold && bar.close > lvl.price) {
-          touchCount++;
-          totalVolAtTouches += bar.volume;
-        }
+        deduped.push(level);
       }
     }
-    if (touchCount >= 5) touchScore = 2.0;
-    else if (touchCount >= 3) touchScore = 1.5;
-    else if (touchCount >= 2) touchScore = 1.0;
-    else if (touchCount === 1) touchScore = 0.5;
-
-    // Factor 5: Volume at touches — 0-1 pt
-    let volumeTouchScore = 0;
-    if (dataHasVolume && touchCount > 0) {
-      const avgVolAtTouch = totalVolAtTouches / touchCount;
-      const volRatio = avgVolume > 0 ? avgVolAtTouch / avgVolume : 1;
-      if (volRatio > 2.0) volumeTouchScore = 1.0;
-      else if (volRatio > 1.5) volumeTouchScore = 0.7;
-      else if (volRatio > 1.0) volumeTouchScore = 0.4;
-    }
-
-    // Factor 6: Swing recency bonus — 0-1 pt
-    let recencyScore = 0;
-    if (bestSwing) {
-      const barsSinceSwing = data.length - 1 - Math.max(bestSwing.highIdx, bestSwing.lowIdx);
-      if (barsSinceSwing <= 5) recencyScore = 1.0;
-      else if (barsSinceSwing <= 15) recencyScore = 0.7;
-      else if (barsSinceSwing <= 30) recencyScore = 0.4;
-      else if (barsSinceSwing <= 60) recencyScore = 0.2;
-    }
-
-    const total = confluenceScore + keyRatioScore + proximityScore + touchScore + volumeTouchScore + recencyScore;
-    const strength = Math.min(10, Math.max(1, Math.round(total)));
-
-    return {
-      price: lvl.price,
-      strength,
-      isTarget: false,
-      fibRatio: lvl.ratioStr,
-      fibLabel: lvl.label,
-    };
-  });
-
-  // ── Step 6: Separate into above/below current price ──
-  const above = scoredLevels.filter(l => l.price > currentPrice).sort((a, b) => a.price - b.price);
-  const below = scoredLevels.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
-
-  // ── Step 7: Pick top 6 resistances and 6 supports ──
-  // Prefer levels with higher strength, but ensure we pick nearest levels too
-  // Use a composite score: strength * 2 + proximity bonus
-  function pickTop6(levels: LevelStrength[]): LevelStrength[] {
-    if (levels.length <= 6) return levels;
-
-    // Score each level: combine strength with proximity to current price
-    const scored = levels.map((l) => {
-      const dist = Math.abs(l.price - currentPrice) / currentPrice;
-      // Proximity bonus: closer = higher bonus (up to 3 pts)
-      const proxBonus = Math.max(0, 3 - dist * 20);
-      const compositeScore = l.strength * 2 + proxBonus;
-      return { level: l, compositeScore };
-    }); 
-
-    // Sort by composite score descending, take top 6
-    scored.sort((a, b) => b.compositeScore - a.compositeScore);
-    const picked = scored.slice(0, 6).map(s => s.level);
-
-    // Re-sort by price (nearest first)
-    const isAbove = picked[0]?.price > currentPrice;
-    if (isAbove) {
-      picked.sort((a, b) => a.price - b.price);
-    } else {
-      picked.sort((a, b) => b.price - a.price);
-    }
-
-    return picked;
+    merged = deduped;
   }
 
-  const finalResistances = pickTop6(above);
-  const finalSupports = pickTop6(below);
+  // ── Step 6: Separate into supports and resistances ─────────────────────
+  let supports = merged.filter(l => l.type === 'support');
+  let resistances = merged.filter(l => l.type === 'resistance');
 
-  // ── Step 8: Mark price targets (top 2 strongest across all levels) ──
-  const combinedLevels = [...finalResistances, ...finalSupports];
-  const sortedByStrength = [...combinedLevels].sort((a, b) => b.strength - a.strength);
-  const targets = sortedByStrength.slice(0, 2).map(t => ({ ...t, isTarget: true }));
+  // ── Step 7: Distance filtering (5-10% gap) ────────────────────────────
+  const filterByGap = (levels: MergedSRLevel[], ascending: boolean): MergedSRLevel[] => {
+    if (levels.length <= 1) return levels;
 
-  // Mark targets in final arrays
-  finalResistances.forEach(r => {
-    if (targets.some(t => Math.abs(t.price - r.price) < 1)) r.isTarget = true;
-  });
-  finalSupports.forEach(s => {
-    if (targets.some(t => Math.abs(t.price - s.price) < 1)) s.isTarget = true;
-  });
+    const sorted = [...levels].sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
+    const result: MergedSRLevel[] = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prevPrice = result[result.length - 1].price;
+      const currPrice = sorted[i].price;
+      const gap = Math.abs(currPrice - prevPrice) / prevPrice;
+
+      if (gap < 0.05) {
+        // Gap too small — keep the stronger level
+        if (sorted[i].score > result[result.length - 1].score) {
+          result[result.length - 1] = sorted[i];
+        }
+      } else {
+        // Gap is 5-10% or > 10% — allow
+        result.push(sorted[i]);
+      }
+    }
+
+    return result;
+  };
+
+  supports = filterByGap(supports, false);   // Descending (nearest first = highest price)
+  resistances = filterByGap(resistances, true); // Ascending (nearest first = lowest price)
+
+  // ── Step 8: Final selection (top 6 by composite score + proximity) ────
+  const pickTop = (levels: MergedSRLevel[], ascending: boolean): MergedSRLevel[] => {
+    if (levels.length <= 6) return levels;
+
+    const scored = levels.map(l => {
+      const dist = Math.abs(l.price - currentPrice) / currentPrice;
+      const proxBonus = Math.max(0, 5 - dist * 20);
+      return { level: l, composite: l.score * 2 + proxBonus };
+    });
+
+    scored.sort((a, b) => b.composite - a.composite);
+    const picked = scored.slice(0, 6).map(s => s.level);
+
+    // Re-sort by proximity to current price
+    return picked.sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
+  };
+
+  const finalSupports = pickTop(supports, false);
+  const finalResistances = pickTop(resistances, true);
+
+  // ── Step 9: Build LevelStrength objects ────────────────────────────────
+  const toLevelStrength = (m: MergedSRLevel): LevelStrength => {
+    let grade: string;
+    if (m.score >= 8.5) grade = 'Very Strong';
+    else if (m.score >= 7) grade = 'Strong';
+    else if (m.score >= 5) grade = 'Moderate';
+    else grade = 'Weak';
+
+    return {
+      price: m.price,
+      strength: m.strength,
+      score: m.score,
+      grade,
+      isTarget: m.score >= 7,
+      overlapCount: m.overlapCount,
+      methods: m.methods,
+      fibRatio: m.fibRatio,
+      fibLabel: m.fibLabel,
+    };
+  };
+
+  const supportStrengths = finalSupports.map(toLevelStrength);
+  const resistanceStrengths = finalResistances.map(toLevelStrength);
+
+  // Price targets: all levels with isTarget=true
+  const priceTargets = [...supportStrengths, ...resistanceStrengths].filter(l => l.isTarget);
 
   return {
-    resistances: finalResistances.map(l => l.price),
-    supports: finalSupports.map(l => l.price),
-    supportStrengths: finalSupports,
-    resistanceStrengths: finalResistances,
-    priceTargets: targets,
+    resistances: resistanceStrengths.map(l => l.price),
+    supports: supportStrengths.map(l => l.price),
+    supportStrengths,
+    resistanceStrengths,
+    priceTargets,
   };
 }
+
 
 // ─── Trend Analysis ───────────────────────────────────────────────────────────
 function calcTrend(closes: number[], period: number): TrendResult {

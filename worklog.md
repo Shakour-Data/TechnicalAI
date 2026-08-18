@@ -264,3 +264,54 @@ Stage Summary:
 - Chart with drawing tools only available in VDes tab (default)
 - S/R lines are all solid, thickness proportional to strength (1-5px)
 - Shamsi dates fixed across all components using `smartJalaliDate()` and fixed `fullPersianDate()`
+
+---
+Task ID: 13
+Agent: Main Agent
+Task: Implement comprehensive 7-method S/R analysis system with ML scoring
+
+Work Log:
+- Rewrote `LevelStrength` interface in ta-engine.ts to add: score (0-10), grade (Very Strong/Strong/Moderate/Weak), overlapCount, methods[]
+- Completely rewrote `calcSupportResistance()` function (~700 lines) with 7 methods:
+  1. Swing High/Low (Price Action) — findSwingLevels with N=3,5,7, 0.5% tolerance merging
+  2. SMA Dynamic S/R — SMA 20/50/100/200, support if Close > SMA, resistance if Close < SMA
+  3. Bollinger Bands — Upper = resistance, Lower = support
+  4. Fibonacci Retracement + Extension — Best swing detection, 6 lookback periods, 13 ratios, secondary swing confluence
+  5. Volume Profile (VAP) — 40-bin histogram, POC and HVN detection (>70% max VAP)
+  6. Pivot Points — 4 algorithms (Standard, Fibonacci, Woodie's, DeMark) using previous bar OHLC
+  7. Psychological Levels — ±1 and ±2 round units from current price
+- Implemented ML-based weight optimization (Ridge OLS regression from scratch):
+  - 5 features: touch_count, volume_ratio, overlap_count, freshness, distance_percent
+  - Training on historical data (sampled every 5 bars, 10-bar horizon)
+  - Default fallback weights: [0.25, 0.20, 0.25, 0.15, 0.15]
+  - Scoring: Power_Score = (w_touch*Touch + w_vol*Volume + w_overlap*Overlap + w_fresh*Fresh + w_dist*Dist) × 10
+- Post-processing pipeline:
+  1. Confluence merging (1% tolerance) — combine methods, max score, max overlap
+  2. ML scoring with trained weights
+  3. Psychological rounding
+  4. Deduplication
+  5. Distance filtering (min 5% gap, merge closer levels keeping stronger)
+  6. Top-6 selection by composite score + proximity bonus
+  7. Target marking: isTarget=true if score >= 7
+  8. Grade assignment: >=8.5 Very Strong, >=7 Strong, >=5 Moderate, <5 Weak
+- Updated candlestick-chart.tsx: S/R line titles now show grade + method count + fibLabel
+  - Format: `R۱ [Very Strong] (۳ method) فیبو ۳۸.۲٪` or `★ R۱ [Very Strong]` for targets
+- Updated indicators-panel.tsx:
+  - Header changed from "خطوط حمایت و مقاومت فیبوناچی" to "حمایت و مقاومت هوشمند"
+  - Added gradeColor helper (Very Strong=red, Strong=amber, Moderate=sky, Weak=gray)
+  - Each S/R card now shows: grade badge, methods count in Persian, fibLabel, strength bar
+- Updated vdes-analysis.tsx:
+  - Added GRADE_MAP (English→Persian: Very Strong→بسیار قوی, Strong→قوی, etc.)
+  - Added GradeBadge component
+  - S/R section header: "حمایت و مقاومت هوشمند"
+  - Each level shows: grade badge, methods count, fibLabel, overlap count, strength bar, 🎯 target marker
+  - Analysis text paragraph 5 updated to mention grade and method count for R1/S1
+- Verified: ESLint clean, API returns correct 6+6 levels with all 7 methods
+- Browser verified via VLM: grade badges ✅, method counts ✅, overlap counts ✅, fib labels ✅, strength bars ✅, target markers ✅
+
+Stage Summary:
+- Complete 7-method S/R analysis system deployed
+- Methods: Swing, SMA, Bollinger, Fibonacci, Volume Profile, Pivot (4 variants), Psychological
+- ML-based scoring with Ridge regression trained on historical data
+- All 3 UIs (chart, indicators, VDes) updated with rich S/R metadata
+- Output format: 6 support + 6 resistance, each with price, strength, score, grade, methods, overlapCount

@@ -27,8 +27,8 @@ interface IndicatorsPanelProps {
     hasVolume?: boolean;
     resistances: number[];
     supports: number[];
-    supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio: string; fibLabel: string }[];
-    resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio: string; fibLabel: string }[];
+    supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio: string; fibLabel: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
+    resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio: string; fibLabel: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
     trend: {
       short: { direction: string; slope: number; angle: number; r2: number };
       medium: { direction: string; slope: number; angle: number; r2: number };
@@ -77,6 +77,15 @@ function trendDirSignal(dir: string): 'bullish' | 'bearish' | 'neutral' {
   if (dir === 'up') return 'bullish';
   if (dir === 'down') return 'bearish';
   return 'neutral';
+}
+
+function gradeColor(grade: string) {
+  switch (grade) {
+    case 'Very Strong': return { bg: 'bg-red-50', text: 'text-red-700' };
+    case 'Strong': return { bg: 'bg-amber-50', text: 'text-amber-700' };
+    case 'Moderate': return { bg: 'bg-sky-50', text: 'text-sky-700' };
+    default: return { bg: 'bg-gray-50', text: 'text-gray-500' };
+  }
 }
 
 function signalDot(signal: 'bullish' | 'bearish' | 'neutral') {
@@ -207,49 +216,69 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
         {ta.hasVolume !== false && <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />}
       </div>
 
-      {/* ── حمایت و مقاومت فیبوناچی (Fibonacci S/R) ────────────────── */}
-      <SectionHeader title="خطوط حمایت و مقاومت فیبوناچی" />
+      {/* ── حمایت و مقاومت هوشمند (Smart S/R) ──────────────────── */}
+      <SectionHeader title="حمایت و مقاومت هوشمند" />
       <div className="space-y-3">
         {/* Resistances */}
         <div>
           <p className="text-[11px] text-red-700 mb-1.5 font-medium">مقاومت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {(ta.resistanceStrengths ?? []).slice(0, 6).map((r, i) => (
-              <div key={i} className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[11px] text-red-600 font-medium">R{toFa(i + 1)}</span>
-                  {r.fibLabel && <span className="text-[10px] text-red-400">فیبو {r.fibLabel}</span>}
-                </div>
-                <p className="text-sm font-medium text-red-700 tabular-nums" dir="ltr">{toFa(r.price)}</p>
-                <div className="flex items-center justify-center gap-1.5 mt-1">
-                  <div className="h-1.5 w-12 rounded-full bg-red-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${(r.strength / 10) * 100}%` }} />
+            {(ta.resistanceStrengths ?? []).slice(0, 6).map((r, i) => {
+              const gc = gradeColor(r.grade);
+              const faMethods = String(r.methods?.length ?? 0).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+              return (
+                <div key={i} className="bg-red-50 border border-red-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[11px] text-red-600 font-medium">
+                      {r.isTarget ? '★ ' : ''}R{toFa(i + 1)}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${gc.bg} ${gc.text}`}>{r.grade}</span>
                   </div>
-                  <span className="text-[10px] text-red-500 tabular-nums">{toPersianDigits(String(r.strength))}/۱۰</span>
+                  <p className="text-sm font-medium text-red-700 tabular-nums text-center" dir="ltr">{toFa(r.price)}</p>
+                  <div className="flex items-center justify-center gap-2 mt-1">
+                    {r.fibLabel && <span className="text-[10px] text-red-400">فیبو {r.fibLabel}</span>}
+                    <span className="text-[10px] text-red-400">({faMethods} روش)</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <div className="h-1.5 w-12 rounded-full bg-red-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${(r.strength / 10) * 100}%` }} />
+                    </div>
+                    <span className="text-[10px] text-red-500 tabular-nums">{toPersianDigits(String(r.strength))}/۱۰</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         {/* Supports */}
         <div>
           <p className="text-[11px] text-emerald-700 mb-1.5 font-medium">حمایت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {(ta.supportStrengths ?? []).slice(0, 6).map((s, i) => (
-              <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[11px] text-emerald-600 font-medium">S{toFa(i + 1)}</span>
-                  {s.fibLabel && <span className="text-[10px] text-emerald-400">فیبو {s.fibLabel}</span>}
-                </div>
-                <p className="text-sm font-medium text-emerald-700 tabular-nums" dir="ltr">{toFa(s.price)}</p>
-                <div className="flex items-center justify-center gap-1.5 mt-1">
-                  <div className="h-1.5 w-12 rounded-full bg-emerald-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(s.strength / 10) * 100}%` }} />
+            {(ta.supportStrengths ?? []).slice(0, 6).map((s, i) => {
+              const gc = gradeColor(s.grade);
+              const faMethods = String(s.methods?.length ?? 0).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+              return (
+                <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[11px] text-emerald-600 font-medium">
+                      {s.isTarget ? '★ ' : ''}S{toFa(i + 1)}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${gc.bg} ${gc.text}`}>{s.grade}</span>
                   </div>
-                  <span className="text-[10px] text-emerald-500 tabular-nums">{toPersianDigits(String(s.strength))}/۱۰</span>
+                  <p className="text-sm font-medium text-emerald-700 tabular-nums text-center" dir="ltr">{toFa(s.price)}</p>
+                  <div className="flex items-center justify-center gap-2 mt-1">
+                    {s.fibLabel && <span className="text-[10px] text-emerald-400">فیبو {s.fibLabel}</span>}
+                    <span className="text-[10px] text-emerald-400">({faMethods} روش)</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <div className="h-1.5 w-12 rounded-full bg-emerald-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(s.strength / 10) * 100}%` }} />
+                    </div>
+                    <span className="text-[10px] text-emerald-500 tabular-nums">{toPersianDigits(String(s.strength))}/۱۰</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

@@ -74,8 +74,8 @@ export interface VdesAnalysisProps {
     R4: Scenario;
     R5: Scenario;
   };
-  supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
-  resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
+  supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
+  resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
   priceTargets: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
   hasVolume?: boolean;
 }
@@ -96,6 +96,22 @@ const SCENARIO_META: Record<string, { label: string; type: string; border: strin
   R5: { label: 'تضعیف ساختار', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
 };
 
+const GRADE_MAP: Record<string, { label: string; color: string }> = {
+  'Very Strong': { label: 'بسیار قوی', color: 'text-red-700' },
+  'Strong': { label: 'قوی', color: 'text-amber-700' },
+  'Moderate': { label: 'متوسط', color: 'text-sky-700' },
+  'Weak': { label: 'ضعیف', color: 'text-gray-500' },
+};
+
+function GradeBadge({ grade }: { grade: string }) {
+  const g = GRADE_MAP[grade] ?? GRADE_MAP['Weak'];
+  return (
+    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${g.color} ${grade === 'Very Strong' ? 'bg-red-100' : grade === 'Strong' ? 'bg-amber-100' : grade === 'Moderate' ? 'bg-sky-100' : 'bg-gray-100'}`}>
+      {g.label}
+    </span>
+  );
+}
+
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
   R1: { text: 'صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
   R2: { text: 'صعود تدریجی — ورود در اصلاح توصیه می‌شود', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
@@ -107,6 +123,11 @@ const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
 // ═══════════════════════════════════════════════════════════════════
 // Dynamic Analysis Text Generator
 // ═══════════════════════════════════════════════════════════════════
+
+interface LevelStrength {
+  price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string;
+  score: number; grade: string; overlapCount: number; methods: string[];
+}
 
 interface AnalysisContext {
   symbolName: string;
@@ -141,6 +162,8 @@ interface AnalysisContext {
   R1: number;
   R2: number;
   hasVolume: boolean;
+  resistanceStrengths: LevelStrength[];
+  supportStrengths: LevelStrength[];
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -151,7 +174,15 @@ function generateAnalysisText(ctx: AnalysisContext) {
     bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal,
     highestKey, highestProb, scenarios, S1, R1, R2,
+    hasVolume, resistanceStrengths, supportStrengths,
   } = ctx;
+
+  const R1_info = resistanceStrengths[0];
+  const S1_info = supportStrengths[0];
+  const R1_grade = R1_info?.grade ? (GRADE_MAP[R1_info.grade]?.label ?? R1_info.grade) : '';
+  const S1_grade = S1_info?.grade ? (GRADE_MAP[S1_info.grade]?.label ?? S1_info.grade) : '';
+  const R1_methods = R1_info?.methods?.length ? ` با ${toPersianDigits(String(R1_info.methods.length))} روش تأیید شده` : '';
+  const S1_methods = S1_info?.methods?.length ? ` با ${toPersianDigits(String(S1_info.methods.length))} روش تأیید شده` : '';
 
   const r1r2 = scenarios.R1.probability + scenarios.R2.probability;
   const r4r5 = scenarios.R4.probability + scenarios.R5.probability;
@@ -349,6 +380,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         با احتمال {toFa(highestProb)}٪ برای سناریوی {dominant}، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی قدرتمند</b> را تأیید می‌کنند.
         {r1r2 > 60 && <span> ترکیب احتمال صعودی {toFa(r1r2)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
         نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
@@ -365,6 +397,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-emerald-700">فرصت خرید در اصلاح</b> است.
         {r1r2 > 60 && <span> مجموع احتمال صعودی {toFa(r1r2)}٪ — بایاس کلی مثبت است.</span>}
         بهترین نقطه ورود، محدوده بین MA21 ({toFa(ma21)}) و حمایت {toFa(S1)} ریال می‌باشد.
@@ -382,6 +415,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
         {r3 > 40 && <span> با {toFa(r3)}٪ احتمال رنج، ورود به معامله <b className="text-amber-800">ریسک بالایی</b> دارد.</span>}
         سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بهترین استراتژی <b className="text-amber-800">انتظار و مشاهده</b> است.
@@ -399,6 +433,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-red-700">ریسک اصلاح عمیق</b> است.
         {r4r5 > 60 && <span> مجموع احتمال نزولی {toFa(r4r5)}٪ — <b className="text-red-700">بایاس نزولی قوی</b> در بازار حاکم است.</span>}
         ورود به معامله خرید در این شرایط <b className="text-red-700">ریسک بالایی</b> دارد.
@@ -416,6 +451,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-red-700">تضعیف شدید ساختار</b> است.
         {r4r5 > 60 && <span> مجموع احتمال نزولی {toFa(r4r5)}٪ — <b className="text-red-700">بایاس نزولی بسیار قوی</b> حاکم است.</span>}
         تمام شاخص‌ها هشدار <b className="text-red-700">خروج فوری</b> را صادر می‌کنند.
@@ -529,6 +565,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       highestKey, highestProb, scenarios,
       S1: S1_level, R1: R1_level, R2: R2_level,
       hasVolume: hasVolume ?? false,
+      resistanceStrengths, supportStrengths,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -538,6 +575,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     trendDirection, trendAngle, trendR2, overallSignal,
     highestKey, highestProb, scenarios,
     S1_level, R1_level, R2_level, hasVolume,
+    resistanceStrengths, supportStrengths,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────
@@ -866,17 +904,24 @@ ${SCENARIO_KEYS.map(k => {
           <div className="px-5 py-3 flex items-center gap-2 border-b border-red-700/10 bg-red-50">
             <div className="w-2.5 h-2.5 rounded-full bg-red-600" />
             <h3 className="text-sm font-bold text-red-700">سطوح مقاومت</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">فیبوناچی — قدرت ۱-۱۰</span>
+            <span className="text-[10px] text-[#6b7280] mr-auto">حمایت و مقاومت هوشمند</span>
           </div>
           <div className="p-4 space-y-2.5">
             {resistanceStrengths.slice(0, 6).map((r, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <span className="text-xs font-bold text-red-600 w-6">R{toFa(i + 1)}</span>
-                  <div>
-                    <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(r.price)}</span>
-                    <span className="text-[10px] text-[#6b7280] mr-1.5">ریال</span>
-                    {r.fibLabel && <span className="text-[10px] text-red-400 mr-1.5">فیبو {r.fibLabel}</span>}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(r.price)}</span>
+                      <span className="text-[10px] text-[#6b7280]">ریال</span>
+                      {r.grade && <GradeBadge grade={r.grade} />}
+                      {r.methods?.length ? <span className="text-[9px] text-[#6b7280]">({toPersianDigits(String(r.methods.length))} روش)</span> : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {r.fibLabel && <span className="text-[9px] text-red-400">فیبو {r.fibLabel}</span>}
+                      {r.overlapCount > 0 && <span className="text-[9px] text-[#6b7280]">هم‌پوشانی: {toPersianDigits(String(r.overlapCount))}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -893,17 +938,24 @@ ${SCENARIO_KEYS.map(k => {
           <div className="px-5 py-3 flex items-center gap-2 border-b border-emerald-700/10 bg-emerald-50">
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
             <h3 className="text-sm font-bold text-emerald-700">سطوح حمایت</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">فیبوناچی — قدرت ۱-۱۰</span>
+            <span className="text-[10px] text-[#6b7280] mr-auto">حمایت و مقاومت هوشمند</span>
           </div>
           <div className="p-4 space-y-2.5">
             {supportStrengths.slice(0, 6).map((s, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <span className="text-xs font-bold text-emerald-600 w-6">S{toFa(i + 1)}</span>
-                  <div>
-                    <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(s.price)}</span>
-                    <span className="text-[10px] text-[#6b7280] mr-1.5">ریال</span>
-                    {s.fibLabel && <span className="text-[10px] text-emerald-400 mr-1.5">فیبو {s.fibLabel}</span>}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(s.price)}</span>
+                      <span className="text-[10px] text-[#6b7280]">ریال</span>
+                      {s.grade && <GradeBadge grade={s.grade} />}
+                      {s.methods?.length ? <span className="text-[9px] text-[#6b7280]">({toPersianDigits(String(s.methods.length))} روش)</span> : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {s.fibLabel && <span className="text-[9px] text-emerald-400">فیبو {s.fibLabel}</span>}
+                      {s.overlapCount > 0 && <span className="text-[9px] text-[#6b7280]">هم‌پوشانی: {toPersianDigits(String(s.overlapCount))}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

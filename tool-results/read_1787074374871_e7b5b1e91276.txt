@@ -1,0 +1,858 @@
+     1→'use client';
+     2→
+     3→import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+     4→import {
+     5→  createChart,
+     6→  CandlestickSeries,
+     7→  LineSeries,
+     8→  HistogramSeries,
+     9→  ColorType,
+    10→  CrosshairMode,
+    11→  type IChartApi,
+    12→  type Time,
+    13→} from 'lightweight-charts';
+    14→import {
+    15→  MousePointer2,
+    16→  Minus,
+    17→  ArrowLeftRight,
+    18→  MoveVertical,
+    19→  Layers,
+    20→  RectangleHorizontal,
+    21→  Type,
+    22→  Pencil,
+    23→  Ruler,
+    24→  ArrowUpRight,
+    25→  Trash2,
+    26→  X,
+    27→} from 'lucide-react';
+    28→import { formatJalaliString, candleDateToJalali, isGregorianDate, toPersianDigits } from '@/lib/jalali';
+    29→
+    30→/* ----------------------------- TYPES ----- */
+    31→
+    32→interface DrawingPoint {
+    33→  time: number;
+    34→  price: number;
+    35→}
+    36→
+    37→interface Drawing {
+    38→  id: string;
+    39→  type: string;
+    40→  points: DrawingPoint[];
+    41→  color: string;
+    42→  lineWidth: number;
+    43→  text?: string;
+    44→  completed: boolean;
+    45→}
+    46→
+    47→interface LevelStrength {
+    48→  price: number;
+    49→  strength: number;
+    50→  isTarget: boolean;
+    51→  fibRatio?: string;
+    52→  fibLabel?: string;
+    53→}
+    54→
+    55→interface CandlestickChartProps {
+    56→  data: Array<{
+    57→    date: string;
+    58→    open: number;
+    59→    high: number;
+    60→    low: number;
+    61→    close: number;
+    62→    volume: number;
+    63→  }>;
+    64→  ta: {
+    65→    sma: Record<string, number>;
+    66→    bollingerBands: { upper: number; middle: number; lower: number };
+    67→    resistances: number[];
+    68→    supports: number[];
+    69→    supportStrengths: LevelStrength[];
+    70→    resistanceStrengths: LevelStrength[];
+    71→    sar: number;
+    72→  } | null;
+    73→  height?: number;
+    74→}
+    75→
+    76→/* ----------------------------- CONSTANTS -- */
+    77→
+    78→const BULL = '#22a366';
+    79→const BEAR = '#e04060';
+    80→const BG = '#ffffff';
+    81→const TXT = '#374151';
+    82→const GRID = 'rgba(0,0,0,0.06)';
+    83→const TOOLBAR_BG = '#ffffff';
+    84→const TOOLBAR_BORDER = '#e5e7eb';
+    85→
+    86→const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#374151'];
+    87→
+    88→const SMA_CFG = [
+    89→  { key: 'sma21', color: '#0891b2', title: 'SMA 21' },
+    90→  { key: 'sma50', color: '#d97706', title: 'SMA 50' },
+    91→  { key: 'sma100', color: '#e04060', title: 'SMA 100' },
+    92→];
+    93→
+    94→const FIB_LEVELS = [
+    95→  { pct: 0, label: '0%' },
+    96→  { pct: 0.236, label: '23.6%' },
+    97→  { pct: 0.382, label: '38.2%' },
+    98→  { pct: 0.5, label: '50%' },
+    99→  { pct: 0.618, label: '61.8%' },
+   100→  { pct: 0.786, label: '78.6%' },
+   101→  { pct: 1, label: '100%' },
+   102→];
+   103→
+   104→type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'fibonacci' | 'rectangle' | 'text' | 'brush' | 'measure' | 'arrow';
+   105→
+   106→// — S/R strength-based line styling (solid only, thickness = strength) ————
+   107→function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0; color: string } {
+   108→  if (isTarget) {
+   109→    return { lineWidth: 4, lineStyle: 0, color: '' };
+   110→  }
+   111→  if (strength >= 9) return { lineWidth: 5, lineStyle: 0, color: '' };
+   112→  if (strength >= 7) return { lineWidth: 4, lineStyle: 0, color: '' };
+   113→  if (strength >= 5) return { lineWidth: 3, lineStyle: 0, color: '' };
+   114→  if (strength >= 3) return { lineWidth: 2, lineStyle: 0, color: '' };
+   115→  return { lineWidth: 1, lineStyle: 0, color: '' };
+   116→}
+   117→
+   118→interface ToolDef {
+   119→  id: ToolType;
+   120→  label: string;
+   121→  icon: React.ReactNode;
+   122→}
+   123→
+   124→const TOOLS: ToolDef[] = [
+   125→  { id: 'cursor', label: 'مؤشر', icon: <MousePointer2 className="w-3.5 h-3.5" /> },
+   126→  { id: 'trendline', label: 'خط روند', icon: <Minus className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+   127→  { id: 'hline', label: 'خط افقی', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+   128→  { id: 'vline', label: 'خط عمودی', icon: <MoveVertical className="w-3.5 h-3.5" /> },
+   129→  { id: 'fibonacci', label: 'فیبوناچی', icon: <Layers className="w-3.5 h-3.5" /> },
+   130→  { id: 'rectangle', label: 'مستطیل', icon: <RectangleHorizontal className="w-3.5 h-3.5" /> },
+   131→  { id: 'text', label: 'متن', icon: <Type className="w-3.5 h-3.5" /> },
+   132→  { id: 'brush', label: 'قلم', icon: <Pencil className="w-3.5 h-3.5" /> },
+   133→  { id: 'measure', label: 'اندازه‌گیری', icon: <Ruler className="w-3.5 h-3.5" /> },
+   134→  { id: 'arrow', label: 'پیکان', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
+   135→];
+   136→
+   137→/* ----------------------------- SKELETON ---- */
+   138→
+   139→export function CandlestickChartSkeleton() {
+   140→  return (
+   141→    <div className="w-full">
+   142→      <div className="h-10 bg-white border-b border-gray-200 rounded-t-lg" />
+   143→      <div className="w-full bg-gray-200 rounded-b-lg" style={{ height: 520 }} />
+   144→    </div>
+   145→  );
+   146→}
+   147→
+   148→/* ----------------------------- COMPONENT --- */
+   149→
+   150→export default function CandlestickChart({ data, ta, height = 520 }: CandlestickChartProps) {
+   151→  const chartContainerRef = useRef<HTMLDivElement>(null);
+   152→  const svgRef = useRef<SVGSVGElement>(null);
+   153→  const chartRef = useRef<IChartApi | null>(null);
+   154→  const subscriberRef = useRef<{ dispose: () => void } | null>(null);
+   155→  const crosshairSubRef = useRef<{ dispose: () => void } | null>(null);
+   156→
+   157→  // Crosshair legend state
+   158→  const [hoverInfo, setHoverInfo] = useState<{ date: string; o: number; h: number; l: number; c: number; v: number; chg: number } | null>(null);
+   159→
+   160→  // Build Jalali date strings for all candles (memoized)
+   161→  const jalaliDates = useMemo(() => {
+   162→    return data.map((d) =>
+   163→      isGregorianDate(d.date) ? candleDateToJalali(d.date, 'full') : formatJalaliString(d.date, 'full')
+   164→    );
+   165→  }, [data]);
+   166→
+   167→  const [drawings, setDrawings] = useState<Drawing[]>([]);
+   168→  const [activeTool, setActiveTool] = useState<ToolType>('cursor');
+   169→  const [activeColor, setActiveColor] = useState(PALETTE[0]);
+   170→  const [isDrawing, setIsDrawing] = useState(false);
+   171→  const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
+   172→  const [textInput, setTextInput] = useState<{ x: number; y: number; drawingId: string } | null>(null);
+   173→  const [textValue, setTextValue] = useState('');
+   174→  const [renderKey, setRenderKey] = useState(0);
+   175→  const [chartSize, setChartSize] = useState({ w: 0, h: 0 });
+   176→
+   177→  /* - Helper: coordinate conversion -------------- */
+   178→  const getChartPoint = useCallback((clientX: number, clientY: number): DrawingPoint | null => {
+   179→    const chart = chartRef.current;
+   180→    const container = chartContainerRef.current;
+   181→    if (!chart || !container) return null;
+   182→    const rect = container.getBoundingClientRect();
+   183→    const x = clientX - rect.left;
+   184→    const y = clientY - rect.top;
+   185→    const price = (chart.priceScale('right') as any).coordinateToPrice(y);
+   186→    const time = chart.timeScale().coordinateToTime(x);
+   187→    if (price === null || time === null) return null;
+   188→    return { time: time as number, price };
+   189→  }, []);
+   190→
+   191→  /* - SVG Rendering --------------------- */
+   192→  const renderDrawings = useCallback(() => {
+   193→    const chart = chartRef.current;
+   194→    const svg = svgRef.current;
+   195→    const container = chartContainerRef.current;
+   196→    if (!chart || !svg || !container || drawings.length === 0) {
+   197→      if (svg) svg.innerHTML = '';
+   198→      return;
+   199→    }
+   200→
+   201→    const rect = container.getBoundingClientRect();
+   202→    const w = rect.width;
+   203→    const h = rect.height;
+   204→    if (w === 0 || h === 0) return;
+   205→
+   206→    let html = '';
+   207→
+   208→    // Defs for arrow markers
+   209→    html += `<defs>`;
+   210→    PALETTE.forEach((c) => {
+   211→      html += `<marker id="arrow-${c.replace('#','')}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="${c}" /></marker>`;
+   212→    });
+   213→    html += `</defs>`;
+   214→
+   215→    const allDrawings = [...drawings];
+   216→    if (currentDrawing) allDrawings.push(currentDrawing);
+   217→
+   218→    for (const d of allDrawings) {
+   219→      if (!d.completed && d.points.length === 0) continue;
+   220→      const col = d.color;
+   221→      const lw = d.lineWidth;
+   222→
+   223→      switch (d.type) {
+   224→        case 'trendline': {
+   225→          if (d.points.length < 1) break;
+   226→          const p0 = d.points[0];
+   227→          const p1 = d.points.length > 1 ? d.points[d.points.length - 1] : p0;
+   228→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   229→          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+   230→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   231→          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+   232→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   233→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" />`;
+   234→          break;
+   235→        }
+   236→        case 'hline': {
+   237→          if (d.points.length < 1) break;
+   238→          const p = d.points[0];
+   239→          const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
+   240→          if (y == null) break;
+   241→          html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   242→          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(0))}</text>`;
+   243→          break;
+   244→        }
+   245→        case 'vline': {
+   246→          if (d.points.length < 1) break;
+   247→          const p = d.points[0];
+   248→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   249→          if (x == null) break;
+   250→          html += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   251→          break;
+   252→        }
+   253→        case 'fibonacci': {
+   254→          if (d.points.length < 2) break;
+   255→          const p0 = d.points[0];
+   256→          const p1 = d.points[1];
+   257→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   258→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   259→          if (x0 == null || x1 == null) break;
+   260→          const priceHigh = Math.max(p0.price, p1.price);
+   261→          const priceLow = Math.min(p0.price, p1.price);
+   262→          const priceRange = priceHigh - priceLow;
+   263→          if (priceRange === 0) break;
+   264→
+   265→          const yTop = (chart.priceScale('right') as any).priceToCoordinate(priceHigh);
+   266→          const yBottom = (chart.priceScale('right') as any).priceToCoordinate(priceLow);
+   267→          if (yTop == null || yBottom == null) break;
+   268→          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBottom - yTop}" fill="${col}" opacity="0.04" />`;
+   269→
+   270→          for (const level of FIB_LEVELS) {
+   271→            const price = priceHigh - level.pct * priceRange;
+   272→            const y = (chart.priceScale('right') as any).priceToCoordinate(price);
+   273→            if (y == null) continue;
+   274→            html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
+   275→            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="2" />`;
+   276→            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
+   277→          }
+   278→          break;
+   279→        }
+   280→        case 'rectangle': {
+   281→          if (d.points.length < 2) break;
+   282→          const p0 = d.points[0];
+   283→          const p1 = d.points[d.points.length - 1];
+   284→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   285→          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+   286→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   287→          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+   288→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   289→          const rx = Math.min(x0, x1);
+   290→          const ry = Math.min(y0, y1);
+   291→          const rw = Math.abs(x1 - x0);
+   292→          const rh = Math.abs(y1 - y0);
+   293→          html += `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${col}" fill-opacity="0.08" stroke="${col}" stroke-width="${lw}" rx="2" />`;
+   294→          break;
+   295→        }
+   296→        case 'text': {
+   297→          if (d.points.length < 1 || !d.text) break;
+   298→          const p = d.points[0];
+   299→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   300→          const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
+   301→          if (x == null || y == null) break;
+   302→          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+   303→          html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
+   304→          break;
+   305→        }
+   306→        case 'brush': {
+   307→          if (d.points.length < 2) break;
+   308→          let pts = '';
+   309→          let valid = true;
+   310→          for (const p of d.points) {
+   311→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   312→            const y = (chart.priceScale('right') as any).priceToCoordinate(p.price);
+   313→            if (x == null || y == null) { valid = false; break; }
+   314→            pts += `${x},${y} `;
+   315→          }
+   316→          if (!valid || pts.length === 0) break;
+   317→          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+   318→          break;
+   319→        }
+   320→        case 'measure': {
+   321→          if (d.points.length < 2) break;
+   322→          const p0 = d.points[0];
+   323→          const p1 = d.points[d.points.length - 1];
+   324→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   325→          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+   326→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   327→          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+   328→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   329→
+   330→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   331→          const diff = p1.price - p0.price;
+   332→          const pctChg = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+   333→          const bars = Math.abs(Math.round(p1.time - p0.time));
+   334→          const midX = (x0 + x1) / 2;
+   335→          const midY = (y0 + y1) / 2;
+   336→          const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(0))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
+   337→          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+   338→          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
+   339→          break;
+   340→        }
+   341→        case 'arrow': {
+   342→          if (d.points.length < 2) break;
+   343→          const p0 = d.points[0];
+   344→          const p1 = d.points[d.points.length - 1];
+   345→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   346→          const y0 = (chart.priceScale('right') as any).priceToCoordinate(p0.price);
+   347→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   348→          const y1 = (chart.priceScale('right') as any).priceToCoordinate(p1.price);
+   349→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   350→          const markerId = `arrow-${col.replace('#','')}`;
+   351→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
+   352→          break;
+   353→        }
+   354→      }
+   355→    }
+   356→
+   357→    svg.innerHTML = html;
+   358→  }, [drawings, currentDrawing]);
+   359→
+   360→  // OHLC change color helper
+   361→  const chgColor = useCallback((o: number, c: number) => c >= o ? BULL : BEAR, []);
+   362→
+   363→  /* - Chart Build ---------------------- */
+   364→  const build = useCallback(() => {
+   365→    const chartEl = chartContainerRef.current;
+   366→    if (!chartEl || data.length === 0) return;
+   367→
+   368→    if (chartRef.current) {
+   369→      chartRef.current.remove();
+   370→      chartRef.current = null;
+   371→    }
+   372→
+   373→    // — Build Jalali time map — detect Gregorian vs Jalali dates —
+   374→    const jalaliMap = new Map<number, string>();
+   375→    data.forEach((d, i) => {
+   376→      jalaliMap.set(i, isGregorianDate(d.date) ? candleDateToJalali(d.date, 'compact') : formatJalaliString(d.date, 'compact'));
+   377→    });
+   378→
+   379→    // — Persian numeral price formatter —
+   380→    const persianPriceFormatter = (price: number) => {
+   381→      return toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: 0 }));
+   382→    };
+   383→
+   384→    const chart = createChart(chartEl, {
+   385→      layout: { background: { type: ColorType.Solid, color: BG }, textColor: TXT, fontSize: 11 },
+   386→      grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
+   387→      crosshair: { mode: CrosshairMode.Normal },
+   388→      rightPriceScale: {
+   389→        borderColor: '#e5e7eb',
+   390→        scaleMargins: { top: 0.05, bottom: 0.3 },
+   391→      },
+   392→      timeScale: {
+   393→        borderColor: '#e5e7eb',
+   394→        rightOffset: 5,
+   395→        barSpacing: 6,
+   396→        tickMarkFormatter: (time: Time) => {
+   397→          const idx = time as number;
+   398→          return jalaliMap.get(idx) || String(idx);
+   399→        },
+   400→      },
+   401→      localization: {
+   402→        priceFormatter: persianPriceFormatter,
+   403→      },
+   404→      width: chartEl.clientWidth,
+   405→      height,
+   406→    });
+   407→    chartRef.current = chart;
+   408→
+   409→    // Crosshair move handler — show Shamsi date + OHLC legend
+   410→    crosshairSubRef.current?.dispose();
+   411→    crosshairSubRef.current = chart.subscribeCrosshairMove((param) => {
+   412→      if (!param.time || param.time === undefined) {
+   413→        setHoverInfo(null);
+   414→        return;
+   415→      }
+   416→      const idx = param.time as number;
+   417→      const candle = data[idx];
+   418→      if (!candle) {
+   419→        setHoverInfo(null);
+   420→        return;
+   421→      }
+   422→      const prevCandle = idx > 0 ? data[idx - 1] : candle;
+   423→      const chg = prevCandle.close > 0 ? ((candle.close - prevCandle.close) / prevCandle.close) * 100 : 0;
+   424→      setHoverInfo({
+   425→        date: jalaliDates[idx] || candle.date,
+   426→        o: candle.open,
+   427→        h: candle.high,
+   428→        l: candle.low,
+   429→        c: candle.close,
+   430→        v: candle.volume,
+   431→        chg,
+   432→      });
+   433→    }) as unknown as { dispose: () => void };
+   434→
+   435→    // Numeric time index
+   436→    const candles = data.map((d, i) => ({
+   437→      time: i as Time,
+   438→      open: d.open,
+   439→      high: d.high,
+   440→      low: d.low,
+   441→      close: d.close,
+   442→    }));
+   443→
+   444→    const cs = chart.addSeries(CandlestickSeries, {
+   445→      upColor: BULL,
+   446→      downColor: BEAR,
+   447→      borderUpColor: BULL,
+   448→      borderDownColor: BEAR,
+   449→      wickUpColor: BULL,
+   450→      wickDownColor: BEAR,
+   451→    });
+   452→    cs.setData(candles);
+   453→
+   454→    // Volume
+   455→    const vol = chart.addSeries(HistogramSeries, {
+   456→      priceFormat: { type: 'volume' },
+   457→      priceScaleId: 'vol',
+   458→    });
+   459→    vol.setData(
+   460→      data.map((d, i) => ({
+   461→        time: i as Time,
+   462→        value: d.volume,
+   463→        color: d.close >= d.open ? BULL : BEAR,
+   464→      }))
+   465→    );
+   466→    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+   467→
+   468→    // TA overlays
+   469→    if (ta) {
+   470→      for (const cfg of SMA_CFG) {
+   471→        const v = ta.sma[cfg.key];
+   472→        if (v && v > 0)
+   473→          cs.createPriceLine({
+   474→            price: v,
+   475→            color: cfg.color,
+   476→            lineWidth: 1,
+   477→            lineStyle: 0,
+   478→            axisLabelVisible: true,
+   479→            title: cfg.title,
+   480→          });
+   481→      }
+   482→      const bb = ta.bollingerBands;
+   483→      if (bb) {
+   484→        if (bb.upper > 0) cs.createPriceLine({ price: bb.upper, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Upper' });
+   485→        if (bb.middle > 0) cs.createPriceLine({ price: bb.middle, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Mid' });
+   486→        if (bb.lower > 0) cs.createPriceLine({ price: bb.lower, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Lower' });
+   487→      }
+   488→      // SAR — use dark color instead of white (white invisible on white bg)
+   489→      if (ta.sar > 0)
+   490→        cs.createPriceLine({ price: ta.sar, color: 'rgba(217,119,6,0.7)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
+   491→
+   492→      // S/R Fibonacci levels with strength
+   493→      const resistanceStrengths = ta.resistanceStrengths || [];
+   494→      const supportStrengths = ta.supportStrengths || [];
+   495→
+   496→      resistanceStrengths.slice(0, 6).forEach((r, i) => {
+   497→        if (r.price <= 0) return;
+   498→        const style = srLineStyle(r.strength, r.isTarget);
+   499→        const fibTag = r.fibLabel ? ` [${r.fibLabel}]` : '';
+   500→        const title = `R${toPersianDigits(String(i + 1))}${fibTag}`;
+   501→        cs.createPriceLine({
+   502→          price: r.price,
+   503→          color: r.isTarget ? '#dc2626' : BEAR,
+   504→          lineWidth: style.lineWidth as 1|2|3|4,
+   505→          lineStyle: style.lineStyle,
+   506→          axisLabelVisible: true,
+   507→          title,
+   508→        });
+   509→      });
+   510→
+   511→      supportStrengths.slice(0, 6).forEach((s, i) => {
+   512→        if (s.price <= 0) return;
+   513→        const style = srLineStyle(s.strength, s.isTarget);
+   514→        const fibTag = s.fibLabel ? ` [${s.fibLabel}]` : '';
+   515→        const title = `S${toPersianDigits(String(i + 1))}${fibTag}`;
+   516→        cs.createPriceLine({
+   517→          price: s.price,
+   518→          color: s.isTarget ? '#16a34a' : BULL,
+   519→          lineWidth: style.lineWidth as 1|2|3|4,
+   520→          lineStyle: style.lineStyle,
+   521→          axisLabelVisible: true,
+   522→          title,
+   523→        });
+   524→      });
+   525→    }
+   526→
+   527→    chart.timeScale().fitContent();
+   528→
+   529→    // Subscribe to visible range changes to re-render SVG
+   530→    requestAnimationFrame(() => {
+   531→      if (chartRef.current) {
+   532→        const sub = chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
+   533→          setRenderKey((k) => k + 1);
+   534→        });
+   535→        subscriberRef.current = sub as unknown as { dispose: () => void };
+   536→      }
+   537→    });
+   538→
+   539→    // Set initial chart size (deferred to avoid React batching issue)
+   540→    requestAnimationFrame(() => {
+   541→      if (chartContainerRef.current) {
+   542→        setChartSize({ w: chartContainerRef.current.clientWidth, h: height });
+   543→      }
+   544→    });
+   545→  }, [data, ta, height, jalaliDates]);
+   546→
+   547→  /* - Re-render SVG when renderKey changes --------- */
+   548→  useEffect(() => {
+   549→    renderDrawings();
+   550→  }, [renderKey, renderDrawings]);
+   551→
+   552→  /* - Init chart ----------------------- */
+   553→  useEffect(() => {
+   554→    const el = chartContainerRef.current;
+   555→    if (!el) return;
+   556→    const ro = new ResizeObserver((entries) => {
+   557→      for (const e of entries) {
+   558→        const { width: w, height: h } = e.contentRect;
+   559→        if (w > 0 && h > 0) {
+   560→          chartRef.current?.applyOptions({ width: w, height: h });
+   561→          setChartSize({ w, h });
+   562→        }
+   563→      }
+   564→    });
+   565→    ro.observe(el);
+   566→    build();
+   567→    return () => {
+   568→      ro.disconnect();
+   569→      subscriberRef.current?.dispose();
+   570→      subscriberRef.current = null;
+   571→      crosshairSubRef.current?.dispose();
+   572→      crosshairSubRef.current = null;
+   573→      if (chartRef.current) {
+   574→        chartRef.current.remove();
+   575→        chartRef.current = null;
+   576→      }
+   577→    };
+   578→  }, [build]);
+   579→
+   580→  /* - Mouse event handlers ----------------- */
+   581→  const handleMouseDown = useCallback(
+   582→    (e: React.MouseEvent) => {
+   583→      if (activeTool === 'cursor') return;
+   584→      if (textInput) return;
+   585→
+   586→      const point = getChartPoint(e.clientX, e.clientY);
+   587→      if (!point) return;
+   588→
+   589→      if (activeTool === 'hline') {
+   590→        const drawing: Drawing = {
+   591→          id: Date.now().toString(),
+   592→          type: 'hline',
+   593→          points: [point],
+   594→          color: activeColor,
+   595→          lineWidth: 1,
+   596→          completed: true,
+   597→        };
+   598→        setDrawings((prev) => [...prev, drawing]);
+   599→        setIsDrawing(false);
+   600→        return;
+   601→      }
+   602→
+   603→      if (activeTool === 'text') {
+   604→        const chart = chartRef.current;
+   605→        const container = chartContainerRef.current;
+   606→        if (!chart || !container) return;
+   607→        const rect = container.getBoundingClientRect();
+   608→        const x = e.clientX - rect.left;
+   609→        const y = e.clientY - rect.top;
+   610→
+   611→        const tempDrawing: Drawing = {
+   612→          id: Date.now().toString(),
+   613→          type: 'text',
+   614→          points: [point],
+   615→          color: activeColor,
+   616→          lineWidth: 1,
+   617→          text: '',
+   618→          completed: false,
+   619→        };
+   620→        setCurrentDrawing(tempDrawing);
+   621→        setTextInput({ x, y, drawingId: tempDrawing.id });
+   622→        setTextValue('');
+   623→        setIsDrawing(true);
+   624→        return;
+   625→      }
+   626→
+   627→      const drawing: Drawing = {
+   628→        id: Date.now().toString(),
+   629→        type: activeTool,
+   630→        points: [point],
+   631→        color: activeColor,
+   632→        lineWidth: activeTool === 'brush' ? 2 : 1,
+   633→        completed: false,
+   634→      };
+   635→      setCurrentDrawing(drawing);
+   636→      setIsDrawing(true);
+   637→    },
+   638→    [activeTool, activeColor, getChartPoint, textInput]
+   639→  );
+   640→
+   641→  const handleMouseMove = useCallback(
+   642→    (e: React.MouseEvent) => {
+   643→      if (!isDrawing || !currentDrawing) return;
+   644→
+   645→      const point = getChartPoint(e.clientX, e.clientY);
+   646→      if (!point) return;
+   647→
+   648→      if (currentDrawing.type === 'brush') {
+   649→        setCurrentDrawing({
+   650→          ...currentDrawing,
+   651→          points: [...currentDrawing.points, point],
+   652→        });
+   653→      } else if (currentDrawing.type !== 'text' && currentDrawing.type !== 'hline') {
+   654→        setCurrentDrawing({
+   655→          ...currentDrawing,
+   656→          points: [currentDrawing.points[0], point],
+   657→        });
+   658→      }
+   659→    },
+   660→    [isDrawing, currentDrawing, getChartPoint]
+   661→  );
+   662→
+   663→  const handleMouseUp = useCallback(() => {
+   664→    if (!isDrawing || !currentDrawing) return;
+   665→
+   666→    if (currentDrawing.type === 'text') return;
+   667→
+   668→    const completed: Drawing = {
+   669→      ...currentDrawing,
+   670→      completed: true,
+   671→    };
+   672→
+   673→    const minPoints = currentDrawing.type === 'hline' ? 1 : 2;
+   674→    if (completed.points.length >= minPoints) {
+   675→      setDrawings((prev) => [...prev, completed]);
+   676→    }
+   677→
+   678→    setCurrentDrawing(null);
+   679→    setIsDrawing(false);
+   680→  }, [isDrawing, currentDrawing]);
+   681→
+   682→  /* - Text input submit ------------------- */
+   683→  const handleTextSubmit = useCallback(() => {
+   684→    if (!textInput || !textValue.trim() || !currentDrawing) {
+   685→      setTextInput(null);
+   686→      setCurrentDrawing(null);
+   687→      setIsDrawing(false);
+   688→      return;
+   689→    }
+   690→
+   691→    const completed: Drawing = {
+   692→      ...currentDrawing,
+   693→      text: textValue.trim(),
+   694→      completed: true,
+   695→    };
+   696→    setDrawings((prev) => [...prev, completed]);
+   697→    setTextInput(null);
+   698→    setTextValue('');
+   699→    setCurrentDrawing(null);
+   700→    setIsDrawing(false);
+   701→  }, [textInput, textValue, currentDrawing]);
+   702→
+   703→  const handleTextCancel = useCallback(() => {
+   704→    setTextInput(null);
+   705→    setTextValue('');
+   706→    setCurrentDrawing(null);
+   707→    setIsDrawing(false);
+   708→  }, []);
+   709→
+   710→  /* - Delete / Clear -------------------- */
+   711→  const handleDeleteLast = useCallback(() => {
+   712→    setDrawings((prev) => prev.slice(0, -1));
+   713→  }, []);
+   714→
+   715→  const handleClearAll = useCallback(() => {
+   716→    setDrawings([]);
+   717→  }, []);
+   718→
+   719→  /* - Render ------------------------- */
+   720→  const fmt = (n: number) => toPersianDigits(n.toLocaleString('en', { maximumFractionDigits: 0 }));
+   721→
+   722→  return (
+   723→    <div className="w-full">
+   724→      {/* - CROSSHAIR LEGEND (Shamsi date + OHLC) ---------- */}
+   725→      {hoverInfo && (
+   726→        <div className="flex items-center gap-3 px-3 py-1.5 border border-[#e5e7eb] rounded-t-lg bg-[#ffffff] text-[11px]" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+   727→          <span className="text-gray-500 font-medium">{hoverInfo.date}</span>
+   728→          <div className="w-px h-3.5 bg-gray-200" />
+   729→          <span className="text-gray-500">باز: <span className={chgColor(hoverInfo.o, hoverInfo.c) === BULL ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{fmt(hoverInfo.o)}</span></span>
+   730→          <span className="text-gray-500">بالا: <span className="text-emerald-700 font-bold">{fmt(hoverInfo.h)}</span></span>
+   731→          <span className="text-gray-500">پایین: <span className="text-red-700 font-bold">{fmt(hoverInfo.l)}</span></span>
+   732→          <span className="text-gray-500">بسته: <span className={chgColor(hoverInfo.o, hoverInfo.c) === BULL ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{fmt(hoverInfo.c)}</span></span>
+   733→          {hoverInfo.v > 0 && (
+   734→            <span className="text-gray-500">حجم: <span className="text-gray-900 font-bold">{toPersianDigits((hoverInfo.v / 1e6).toFixed(1))}M</span></span>
+   735→          )}
+   736→          <span className={`font-bold ${hoverInfo.chg >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+   737→            {hoverInfo.chg >= 0 ? '▲' : '▼'} {toPersianDigits(Math.abs(hoverInfo.chg).toFixed(2))}٪
+   738→          </span>
+   739→        </div>
+   740→      )}
+   741→      {/* - TOOLBAR --------------------- */}
+   742→      <div
+   743→        className={`flex items-center gap-1 px-2 py-1.5 overflow-x-auto flex-nowrap border ${hoverInfo ? 'border-t-0 rounded-b-lg' : 'rounded-t-lg border-b-0'}`}
+   744→        style={{ backgroundColor: TOOLBAR_BG, borderColor: TOOLBAR_BORDER }}
+   745→      >
+   746→        {TOOLS.map((tool) => (
+   747→          <button
+   748→            key={tool.id}
+   749→            onClick={() => {
+   750→              setActiveTool(tool.id);
+   751→              if (isDrawing) {
+   752→                setIsDrawing(false);
+   753→                setCurrentDrawing(null);
+   754→                setTextInput(null);
+   755→              }
+   756→            }}
+   757→            title={tool.label}
+   758→            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all cursor-pointer ${
+   759→              activeTool === tool.id
+   760→                ? 'bg-amber-500/20 text-amber-800 ring-1 ring-amber-500/30'
+   761→                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+   762→            }`}
+   763→          >
+   764→            {tool.icon}
+   765→          </button>
+   766→        ))}
+   767→
+   768→        <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
+   769→
+   770→        {PALETTE.map((c) => (
+   771→          <button
+   772→            key={c}
+   773→            onClick={() => setActiveColor(c)}
+   774→            title={c}
+   775→            className={`shrink-0 w-6 h-6 rounded-full border-2 transition-all cursor-pointer ${
+   776→              activeColor === c ? 'border-gray-900 scale-110' : 'border-transparent hover:scale-105'
+   777→            }`}
+   778→            style={{ backgroundColor: c }}
+   779→          />
+   780→        ))}
+   781→
+   782→        <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
+   783→
+   784→        <button
+   785→          onClick={handleDeleteLast}
+   786→          title="حذف آخر"
+   787→          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
+   788→        >
+   789→          <Trash2 className="w-3.5 h-3.5" />
+   790→        </button>
+   791→
+   792→        <button
+   793→          onClick={handleClearAll}
+   794→          title="پاک کردن همه"
+   795→          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
+   796→        >
+   797→          <X className="w-3.5 h-3.5" />
+   798→        </button>
+   799→
+   800→        <div className="mr-auto shrink-0 text-xs text-gray-500 font-medium" dir="rtl">
+   801→          {TOOLS.find((t) => t.id === activeTool)?.label}
+   802→        </div>
+   803→      </div>
+   804→
+   805→      <div
+   806→        className="relative rounded-b-lg overflow-hidden border border-gray-200"
+   807→        style={{ height }}
+   808→      >
+   809→        <div
+   810→          ref={chartContainerRef}
+   811→          className="w-full h-full"
+   812→          data-chart
+   813→        />
+   814→
+   815→        <svg
+   816→          ref={svgRef}
+   817→          className="absolute top-0 left-0"
+   818→          style={{
+   819→            width: chartSize.w || '100%',
+   820→            height: chartSize.h || '100%',
+   821→            pointerEvents: activeTool !== 'cursor' ? 'auto' : 'none',
+   822→            zIndex: 10,
+   823→          }}
+   824→          onMouseDown={handleMouseDown}
+   825→          onMouseMove={handleMouseMove}
+   826→          onMouseUp={handleMouseUp}
+   827→          onMouseLeave={handleMouseUp}
+   828→        />
+   829→
+   830→        {textInput && (
+   831→          <div
+   832→            className="absolute z-20"
+   833→            style={{
+   834→              left: textInput.x,
+   835→              top: textInput.y - 8,
+   836→            }}
+   837→          >
+   838→            <input
+   839→              type="text"
+   840→              value={textValue}
+   841→              onChange={(e) => setTextValue(e.target.value)}
+   842→              onKeyDown={(e) => {
+   843→                if (e.key === 'Enter') handleTextSubmit();
+   844→                if (e.key === 'Escape') handleTextCancel();
+   845→              }}
+   846→              placeholder="متن..."
+   847→              autoFocus
+   848→              dir="rtl"
+   849→              className="bg-white border border-gray-200 rounded px-2 py-1 text-sm text-gray-900 outline-none focus:border-amber-500 w-32"
+   850→              onBlur={handleTextSubmit}
+   851→            />
+   852→          </div>
+   853→        )}
+   854→      </div>
+   855→    </div>
+   856→  );
+   857→}
+   858→
