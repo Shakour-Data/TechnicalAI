@@ -146,7 +146,7 @@ ${scenarios ? `- ${scenarios.R1?.nameEn || 'R1'} — ${scenarios.R1?.name || 'ت
 
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: 'assistant', content: SYSTEM_PROMPT },
+        { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage },
       ],
       thinking: { type: 'disabled' },
