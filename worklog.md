@@ -327,3 +327,27 @@ Work Log:
 
 Stage Summary:
 - v2.1 locked with tag, v3.0 active
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: v3.0 — Fix S/R spacing rules + remove duplicate chart
+
+Work Log:
+- Rewrote distance filtering in ta-engine.ts (Step 7):
+  - Consecutive S/R lines: strict 5-10% gap enforcement
+  - If gap < 5%: merge, keep stronger level
+  - If gap 5-10%: accept
+  - If gap > 10%: search for intermediate level; if none, generate synthetic psychological level at ~7.5%
+  - Nearest support/resistance must be ≤ 10% from price (can be < 5%)
+  - If nearest > 10% away: generate synthetic level at ~5% from price
+- Removed TradingViewChart from vdes-analysis.tsx (was duplicate of CandlestickChart in page.tsx)
+  - Removed import, chartRef, chartJalaliDate, tvScenarios, exportChartImage
+  - Grayed out "عکس نمودار" menu item (chart is now above in page.tsx)
+  - Changed CandleData type to inline type
+- Verified: Only 1 chart renders in VDes (VLM confirmed)
+- Verified: All S/R gaps are 5-10% between consecutive lines
+
+Stage Summary:
+- Strict 5-10% spacing rule enforced with synthetic level generation for gaps
+- Single chart in VDes (CandlestickChart with drawing tools from page.tsx)

@@ -2,7 +2,7 @@
 
 import React, { useRef, useMemo, useCallback } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import TradingViewChart, { TradingViewChartSkeleton, type CandleData } from '@/components/tse/tradingview-chart';
+// Chart is rendered in page.tsx — not duplicated here (v3.0)
 import { toPng, toSvg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -40,7 +40,7 @@ interface Scenario {
 
 export interface VdesAnalysisProps {
   symbolName: string;
-  candles: CandleData[];
+  candles: { date: string; open: number; high: number; low: number; close: number; volume: number }[];
   currentPrice: number;
   resistances: number[];
   supports: number[];
@@ -500,7 +500,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   } = props;
 
   const vdesRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
+  // chartRef removed — chart lives in page.tsx (v3.0)
 
   const R1_level = resistances[0] ?? currentPrice * 1.05;
   const R2_level = resistances[1] ?? currentPrice * 1.10;
@@ -536,23 +536,9 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   // ── Shamsi dates ───────────────────────────────────────────────
   const lastCandleDate = candles.length > 0 ? candles[candles.length - 1].date : '';
   const lastCandleJalali = lastCandleDate ? fullPersianDate(lastCandleDate) : '';
-  const chartJalaliDate = lastCandleDate ? smartJalaliDate(lastCandleDate, 'compact') : '';
+  // chartJalaliDate removed — chart lives in page.tsx (v3.0)
 
-  // ── TradingView scenario colors ────────────────────────────────
-  const tvScenarios = useMemo(() => {
-    const colors: Record<string, string> = {
-      R1: '#34c98b', R2: '#3ad5db', R3: '#ff7b32', R4: '#ffb11b', R5: '#ef4d62',
-    };
-    return Object.fromEntries(
-      SCENARIO_KEYS.map(k => [k, {
-        targetMin: scenarios[k].targetMin,
-        targetMax: scenarios[k].targetMax,
-        name: scenarios[k].name,
-        probability: scenarios[k].probability,
-        color: colors[k],
-      }])
-    );
-  }, [scenarios]);
+  // tvScenarios removed — chart lives in page.tsx (v3.0)
 
   // ── Dynamic analysis text ──────────────────────────────────────
   const analysisParagraphs = useMemo(() => {
@@ -789,15 +775,7 @@ ${SCENARIO_KEYS.map(k => {
     saveAs(blob, `${fileBase}.csv`);
   }, [candles, ma21, ma100, rsi, mfi, cci, adx, macdLine, macdSignal, macdHist, sar, atr, bollingerUpper, bollingerMiddle, bollingerLower, fileBase]);
 
-  const exportChartImage = useCallback(async () => {
-    if (!chartRef.current) return;
-    try {
-      const dataUrl = await toPng(chartRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 });
-      saveAs(dataUrl, `${fileBase}_chart.png`);
-    } catch {
-      console.warn('Chart image export failed');
-    }
-  }, [fileBase]);
+  // exportChartImage removed — chart lives in page.tsx (v3.0)
 
   return (
     <div ref={vdesRef} className="space-y-5" dir="rtl">
@@ -863,39 +841,16 @@ ${SCENARIO_KEYS.map(k => {
               <FileSpreadsheet className="w-4 h-4 text-amber-800" />
               <span className="text-xs">CSV</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <Camera className="w-4 h-4 text-amber-800" />
-              <span className="text-xs">عکس نمودار</span>
+            <DropdownMenuItem className="flex items-center gap-3 text-[#9ca3af] cursor-not-allowed">
+              <Camera className="w-4 h-4 text-[#9ca3af]" />
+              <span className="text-xs">عکس نمودار (در نمودار بالا)</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* ═══ TRADINGVIEW CHART ═══ */}
-      <div ref={chartRef} className="rounded-2xl p-4 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
-        <h2 className="text-sm font-semibold mb-3 text-amber-800 flex items-center gap-2">
-          <span>📊</span>
-          نمودار روزانه — {chartJalaliDate ? `${toPersianDigits(chartJalaliDate)}` : 'قیمت'}
-        </h2>
-        <TradingViewChart
-          symbolName={symbolName}
-          candles={candles}
-          supports={supports}
-          resistances={resistances}
-          supportStrengths={supportStrengths}
-          resistanceStrengths={resistanceStrengths}
-          ma21={ma21}
-          ma100={ma100}
-          scenarios={tvScenarios}
-        />
-        <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-[#6b7280]">
-          <span>🔴 خطوط قرمز: مقاومت‌ها ({resistances.map(toFa).join(' ، ')})</span>
-          <span>🟢 خطوط سبز: حمایت‌ها ({supports.map(toFa).join(' ، ')})</span>
-          <span>🟣 خط بنفش: MA100 ({toFa(ma100)})</span>
-          <span>🔵 خط آبی: MA21 ({toFa(ma21)})</span>
-          <span>🟡 خطوط زرد: اهداف قیمتی سناریوها</span>
-        </div>
-      </div>
+      {/* ═══ CHART ═══ */}
+      {/* Chart is rendered above this component in page.tsx (v3.0) */}
 
       {/* ═══ KEY LEVELS ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

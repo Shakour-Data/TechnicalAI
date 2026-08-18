@@ -1068,54 +1068,105 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   let supports = merged.filter(l => l.type === 'support');
   let resistances = merged.filter(l => l.type === 'resistance');
 
-  // ── Step 7: Distance filtering (5-10% gap) ────────────────────────────
-  const filterByGap = (levels: MergedSRLevel[], ascending: boolean): MergedSRLevel[] => {
-    if (levels.length <= 1) return levels;
+  // ── Step 7: Distance filtering (strict 5-10% gap rules) ─────────────
+  // Rules:
+  //   1. Consecutive lines of same type: 5% ≤ gap ≤ 10%
+  //   2. Nearest support ≤ 10% below price (can be < 5%)
+  //   3. Nearest resistance ≤ 10% above price (can be < 5%)
 
-    const sorted = [...levels].sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
+  const filterAndSelectLevels = (
+    levels: MergedSRLevel[],
+    type: 'support' | 'resistance'
+  ): MergedSRLevel[] => {
+    if (levels.length === 0) return [];
+
+    // Sort: supports descending (nearest first), resistances ascending (nearest first)
+    const sorted = [...levels].sort((a, b) =>
+      type === 'support' ? b.price - a.price : a.price - b.price
+    );
+
+    // ── Rule 2/3: Nearest level must be within 10% of price ──
+    const nearest = sorted[0];
+    const distFromPrice = Math.abs(nearest.price - currentPrice) / currentPrice;
+    if (distFromPrice > 0.10) {
+      // Nearest level is too far — generate a synthetic level at ~5% from price
+      const syntheticPrice = type === 'support'
+        ? Math.round(currentPrice * 0.95 / psychStep(currentPrice)) * psychStep(currentPrice)
+        : Math.round(currentPrice * 1.05 / psychStep(currentPrice)) * psychStep(currentPrice);
+      const synthetic: MergedSRLevel = {
+        price: syntheticPrice,
+        type,
+        score: 3,
+        strength: 3,
+        overlapCount: 1,
+        methods: ['Psychological'],
+        fibRatio: '—',
+        fibLabel: '',
+      };
+      sorted.unshift(synthetic);
+    }
+
+    // ── Rule 1: Select levels with 5-10% gaps between consecutive ──
     const result: MergedSRLevel[] = [sorted[0]];
 
-    for (let i = 1; i < sorted.length; i++) {
+    for (let i = 1; i < sorted.length && result.length < 6; i++) {
       const prevPrice = result[result.length - 1].price;
       const currPrice = sorted[i].price;
       const gap = Math.abs(currPrice - prevPrice) / prevPrice;
 
       if (gap < 0.05) {
-        // Gap too small — keep the stronger level
+        // Too close — keep the stronger one
         if (sorted[i].score > result[result.length - 1].score) {
           result[result.length - 1] = sorted[i];
         }
-      } else {
-        // Gap is 5-10% or > 10% — allow
+      } else if (gap <= 0.10) {
+        // Perfect gap (5-10%) — accept
         result.push(sorted[i]);
+      } else {
+        // Gap > 10% — try to find an intermediate level
+        let found = false;
+        for (let j = i + 1; j < sorted.length; j++) {
+          const midPrice = sorted[j].price;
+          const gapFromPrev = Math.abs(midPrice - prevPrice) / prevPrice;
+          const gapToNext = Math.abs(currPrice - midPrice) / midPrice;
+          if (gapFromPrev >= 0.05 && gapFromPrev <= 0.10) {
+            result.push(sorted[j]);
+            found = true;
+            // Skip levels that are too close to the inserted one
+            i = j;
+            break;
+          }
+        }
+        if (!found) {
+          // No intermediate found — generate a synthetic level at ~7.5% from prev
+          const synthGap = 0.075;
+          const syntheticPrice = type === 'support'
+            ? Math.round((prevPrice * (1 - synthGap)) / psychStep(prevPrice)) * psychStep(prevPrice)
+            : Math.round((prevPrice * (1 + synthGap)) / psychStep(prevPrice)) * psychStep(prevPrice);
+          // Make sure it's not too close to next level
+          const gapToNext = Math.abs(currPrice - syntheticPrice) / syntheticPrice;
+          if (gapToNext >= 0.05) {
+            const synthetic: MergedSRLevel = {
+              price: syntheticPrice,
+              type,
+              score: 2,
+              strength: 2,
+              overlapCount: 1,
+              methods: ['Psychological'],
+              fibRatio: '—',
+              fibLabel: '',
+            };
+            result.push(synthetic);
+          }
+        }
       }
     }
 
     return result;
   };
 
-  supports = filterByGap(supports, false);   // Descending (nearest first = highest price)
-  resistances = filterByGap(resistances, true); // Ascending (nearest first = lowest price)
-
-  // ── Step 8: Final selection (top 6 by composite score + proximity) ────
-  const pickTop = (levels: MergedSRLevel[], ascending: boolean): MergedSRLevel[] => {
-    if (levels.length <= 6) return levels;
-
-    const scored = levels.map(l => {
-      const dist = Math.abs(l.price - currentPrice) / currentPrice;
-      const proxBonus = Math.max(0, 5 - dist * 20);
-      return { level: l, composite: l.score * 2 + proxBonus };
-    });
-
-    scored.sort((a, b) => b.composite - a.composite);
-    const picked = scored.slice(0, 6).map(s => s.level);
-
-    // Re-sort by proximity to current price
-    return picked.sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
-  };
-
-  const finalSupports = pickTop(supports, false);
-  const finalResistances = pickTop(resistances, true);
+  const finalSupports = filterAndSelectLevels(supports, 'support');
+  const finalResistances = filterAndSelectLevels(resistances, 'resistance');
 
   // ── Step 9: Build LevelStrength objects ────────────────────────────────
   const toLevelStrength = (m: MergedSRLevel): LevelStrength => {
