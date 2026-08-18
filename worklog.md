@@ -315,3 +315,15 @@ Stage Summary:
 - ML-based scoring with Ridge regression trained on historical data
 - All 3 UIs (chart, indicators, VDes) updated with rich S/R metadata
 - Output format: 6 support + 6 resistance, each with price, strength, score, grade, methods, overlapCount
+
+---
+Task ID: 14
+Agent: Main Agent
+Task: Lock v2.1, start v3.0
+
+Work Log:
+- Created git tag v2.1 on current commit
+- Updated footer version from v2.1 to v3.0
+
+Stage Summary:
+- v2.1 locked with tag, v3.0 active
