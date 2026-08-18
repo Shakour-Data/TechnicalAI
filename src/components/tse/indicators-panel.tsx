@@ -27,6 +27,8 @@ interface IndicatorsPanelProps {
     hasVolume?: boolean;
     resistances: number[];
     supports: number[];
+    supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio: string; fibLabel: string }[];
+    resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio: string; fibLabel: string }[];
     trend: {
       short: { direction: string; slope: number; angle: number; r2: number };
       medium: { direction: string; slope: number; angle: number; r2: number };
@@ -205,17 +207,26 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
         {ta.hasVolume !== false && <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />}
       </div>
 
-      {/* ── حمایت و مقاومت (Support & Resistance) ────────────────────── */}
-      <SectionHeader title="خطوط حمایت و مقاومت" />
+      {/* ── حمایت و مقاومت فیبوناچی (Fibonacci S/R) ────────────────── */}
+      <SectionHeader title="خطوط حمایت و مقاومت فیبوناچی" />
       <div className="space-y-3">
         {/* Resistances */}
         <div>
           <p className="text-[11px] text-red-700 mb-1.5 font-medium">مقاومت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {(ta.resistances ?? []).slice(0, 5).map((r, i) => (
+            {(ta.resistanceStrengths ?? []).slice(0, 6).map((r, i) => (
               <div key={i} className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-red-600">R{toFa(i + 1)}</span>
-                <p className="text-sm font-medium text-red-700 tabular-nums mt-0.5" dir="ltr">{toFa(r)}</p>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[11px] text-red-600 font-medium">R{toFa(i + 1)}</span>
+                  {r.fibLabel && <span className="text-[10px] text-red-400">فیبو {r.fibLabel}</span>}
+                </div>
+                <p className="text-sm font-medium text-red-700 tabular-nums" dir="ltr">{toFa(r.price)}</p>
+                <div className="flex items-center justify-center gap-1.5 mt-1">
+                  <div className="h-1.5 w-12 rounded-full bg-red-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${(r.strength / 10) * 100}%` }} />
+                  </div>
+                  <span className="text-[10px] text-red-500 tabular-nums">{toPersianDigits(String(r.strength))}/۱۰</span>
+                </div>
               </div>
             ))}
           </div>
@@ -224,10 +235,19 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
         <div>
           <p className="text-[11px] text-emerald-700 mb-1.5 font-medium">حمایت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {(ta.supports ?? []).slice(0, 5).map((s, i) => (
+            {(ta.supportStrengths ?? []).slice(0, 6).map((s, i) => (
               <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-emerald-600">S{toFa(i + 1)}</span>
-                <p className="text-sm font-medium text-emerald-700 tabular-nums mt-0.5" dir="ltr">{toFa(s)}</p>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[11px] text-emerald-600 font-medium">S{toFa(i + 1)}</span>
+                  {s.fibLabel && <span className="text-[10px] text-emerald-400">فیبو {s.fibLabel}</span>}
+                </div>
+                <p className="text-sm font-medium text-emerald-700 tabular-nums" dir="ltr">{toFa(s.price)}</p>
+                <div className="flex items-center justify-center gap-1.5 mt-1">
+                  <div className="h-1.5 w-12 rounded-full bg-emerald-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(s.strength / 10) * 100}%` }} />
+                  </div>
+                  <span className="text-[10px] text-emerald-500 tabular-nums">{toPersianDigits(String(s.strength))}/۱۰</span>
+                </div>
               </div>
             ))}
           </div>

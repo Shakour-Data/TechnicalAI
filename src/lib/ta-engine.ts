@@ -40,6 +40,8 @@ export interface LevelStrength {
   price: number;
   strength: number; // 1-10
   isTarget: boolean;
+  fibRatio: string; // e.g. '0.382', '1.618', '2.618'
+  fibLabel: string; // Persian label e.g. 'فیبو ۳۸.۲٪' 
 }
 
 export interface TAResult {
@@ -64,7 +66,7 @@ export interface TAResult {
   bollingerBands: { upper: number; middle: number; lower: number };
   // Volume
   obv: number;
-  // Support / Resistance (5 each, rounded)
+  // Support / Resistance (6 each, Fibonacci-based)
   resistances: number[];
   supports: number[];
   supportStrengths: LevelStrength[];
@@ -406,9 +408,9 @@ function roundToNice(price: number): number {
 }
 
 // ─── Helper: Swing Highs/Lows ─────────────────────────────────────────────────
-function findSwingLevels(data: OHLCV[], lookback: number = 3): { highs: number[]; lows: number[] } {
-  const highs: number[] = [];
-  const lows: number[] = [];
+function findSwingLevels(data: OHLCV[], lookback: number = 3): { highs: { price: number; idx: number }[]; lows: { price: number; idx: number }[] } {
+  const highs: { price: number; idx: number }[] = [];
+  const lows: { price: number; idx: number }[] = [];
   for (let i = lookback; i < data.length - lookback; i++) {
     let isHigh = true;
     let isLow = true;
@@ -417,13 +419,37 @@ function findSwingLevels(data: OHLCV[], lookback: number = 3): { highs: number[]
       if (data[j].high >= data[i].high) isHigh = false;
       if (data[j].low <= data[i].low) isLow = false;
     }
-    if (isHigh) highs.push(data[i].high);
-    if (isLow) lows.push(data[i].low);
+    if (isHigh) highs.push({ price: data[i].high, idx: i });
+    if (isLow) lows.push({ price: data[i].low, idx: i });
   }
   return { highs, lows };
 }
 
-// ─── Support / Resistance (6 each, adaptive gap, multi-factor strength) ───
+// ─── Fibonacci Constants ───────────────────────────────────────────────────
+const FIB_RETRACEMENTS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+const FIB_EXTENSIONS = [1.272, 1.618, 2.0, 2.618, 3.618, 4.236];
+
+// Persian labels for Fibonacci ratios — keys normalized via String(ratio)
+const FIB_LABELS: Record<string, string> = {
+  '0': '۰٪ (اوج)',
+  '0.236': '۲۳.۶٪',
+  '0.382': '۳۸.۲٪',
+  '0.5': '۵۰٪',
+  '0.618': '۶۱.۸٪',
+  '0.786': '۷۸.۶٪',
+  '1': '۱۰۰٪ (کف)',
+  '1.272': '۱۲۷.۲٪',
+  '1.618': '۱۶۱.۸٪',
+  '2': '۲۰۰٪',
+  '2.618': '۲۶۱.۸٪',
+  '3.618': '۳۶۱.۸٪',
+  '4.236': '۴۲۳.۶٪',
+};
+
+// Key Fibonacci ratios for strength scoring — closeness to these gets bonus
+const KEY_FIB_RATIOS = [0.236, 0.382, 0.5, 0.618, 0.786, 1.272, 1.618, 2.618];
+
+// ─── Support / Resistance (6 each, Fibonacci Retracement + Extension) ───
 function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistances: number[];
   supports: number[];
@@ -431,251 +457,303 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistanceStrengths: LevelStrength[];
   priceTargets: LevelStrength[];
 } {
-  const closes = data.map(d => d.close);
-  const avgVolume = data.reduce((s, d) => s + d.volume, 0) / data.length;
-
-  // Tag each raw level with its source type for confluence scoring
-  interface TaggedLevel { price: number; source: string };
-  const allRaw: TaggedLevel[] = [];
-
-  // 1. Pivot Points (source: 'pivot')
-  const prev = data[data.length - 2] ?? data[data.length - 1];
-  if (prev) {
-    const pp = (prev.high + prev.low + prev.close) / 3;
-    const hl = prev.high - prev.low;
-    const pivotR = [
-      2 * pp - prev.low, pp + hl,
-      prev.high + 2 * (pp - prev.low),
-      prev.high + 2 * (pp - prev.low) + hl,
-      prev.high + 2 * (pp - prev.low) + hl + (pp - prev.low),
-    ];
-    const pivotS = [
-      2 * pp - prev.high, pp - hl,
-      prev.low - 2 * (prev.high - pp),
-      prev.low - 2 * (prev.high - pp) - hl,
-      prev.low - 2 * (prev.high - pp) - hl - (prev.high - pp),
-    ];
-    for (const p of pivotR) allRaw.push({ price: p, source: 'pivot' });
-    for (const p of pivotS) allRaw.push({ price: p, source: 'pivot' });
+  if (data.length < 10) {
+    // Not enough data — return empty
+    return {
+      resistances: [], supports: [],
+      supportStrengths: [], resistanceStrengths: [],
+      priceTargets: [],
+    };
   }
 
-  // 2. Swing levels (source: 'swing')
-  for (const lb of [3, 5, 7, 10]) {
-    const swings = findSwingLevels(data, lb);
-    for (const h of swings.highs) allRaw.push({ price: h, source: 'swing' });
-    for (const l of swings.lows) allRaw.push({ price: l, source: 'swing' });
-  }
+  // ── Step 1: Find the most significant swing for Fibonacci base ──
+  // Use multiple lookback periods and pick the swing with the largest range
+  interface SwingPair { high: number; highIdx: number; low: number; lowIdx: number; range: number };
+  let bestSwing: SwingPair | null = null;
 
-  // 3. Moving Average levels (source: 'ma')
-  for (const period of [5, 10, 21, 50, 100, 200]) {
-    const v = sma(closes, period);
-    if (v > 0 && Math.abs(v - currentPrice) / currentPrice > 0.01)
-      allRaw.push({ price: v, source: 'ma' });
-  }
-  const ema12 = emaCalc(closes, 12);
-  const ema26 = emaCalc(closes, 26);
-  if (ema12 > 0 && Math.abs(ema12 - currentPrice) / currentPrice > 0.01)
-    allRaw.push({ price: ema12, source: 'ma' });
-  if (ema26 > 0 && Math.abs(ema26 - currentPrice) / currentPrice > 0.01)
-    allRaw.push({ price: ema26, source: 'ma' });
+  for (const lookback of [3, 5, 7, 10, 15, 20]) {
+    const swings = findSwingLevels(data, lookback);
+    if (swings.highs.length === 0 || swings.lows.length === 0) continue;
 
-  // 4. Bollinger Band levels (source: 'bb')
-  const bbLevels = calcBollingerBands(closes);
-  if (bbLevels.upper > 0) allRaw.push({ price: bbLevels.upper, source: 'bb' });
-  if (bbLevels.lower > 0) allRaw.push({ price: bbLevels.lower, source: 'bb' });
+    // Try all combinations of a high followed by a low, or low followed by a high
+    for (const h of swings.highs) {
+      for (const l of swings.lows) {
+        if (Math.abs(h.idx - l.idx) < 3) continue; // Too close together
+        const range = Math.abs(h.price - l.price);
+        const relRange = range / currentPrice;
+        if (relRange < 0.03) continue; // Ignore tiny swings (< 3% of price)
 
-  // 5. Round number / psychological levels (source: 'round')
-  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, currentPrice))));
-  for (let mult = 0.80; mult <= 1.25; mult += 0.05) {
-    const p = Math.round(currentPrice * mult / magnitude) * magnitude;
-    allRaw.push({ price: p, source: 'round' });
-  }
-
-  // 6. Recent high/low zones (source: 'hilo')
-  for (const w of [5, 22, 66]) {
-    const slice = data.slice(-Math.min(w, data.length));
-    if (slice.length > 0) {
-      allRaw.push({ price: Math.max(...slice.map(d => d.high)), source: 'hilo' });
-      allRaw.push({ price: Math.min(...slice.map(d => d.low)), source: 'hilo' });
+        if (!bestSwing || range > bestSwing.range) {
+          bestSwing = {
+            high: Math.max(h.price, l.price),
+            highIdx: h.price > l.price ? h.idx : l.idx,
+            low: Math.min(h.price, l.price),
+            lowIdx: h.price < l.price ? h.idx : l.idx,
+            range,
+          };
+        }
+      }
     }
   }
 
-  // 7. Round all and filter invalid
-  const rounded: TaggedLevel[] = allRaw
-    .map(l => ({ price: roundToNice(l.price), source: l.source }))
-    .filter(l => l.price > 0);
-
-  // 8. Cluster nearby levels (within 0.5%) — merge sources, keep most common price
-  interface Cluster {
-    price: number;
-    sources: Set<string>;
-    touchCount: number;
-    totalVolumeAtTouches: number;
-    mostRecentTouchBar: number;
+  // ── Step 2: Also find secondary swings for confluence ──
+  const secondarySwings: SwingPair[] = [];
+  for (const lookback of [3, 5, 7, 10, 15]) {
+    const swings = findSwingLevels(data, lookback);
+    for (const h of swings.highs) {
+      for (const l of swings.lows) {
+        if (Math.abs(h.idx - l.idx) < 3) continue;
+        const range = Math.abs(h.price - l.price);
+        const relRange = range / currentPrice;
+        if (relRange < 0.03) continue;
+        if (bestSwing && Math.abs(range - bestSwing.range) / bestSwing.range < 0.1) continue; // Skip duplicates of best
+        if (range > currentPrice * 0.05) { // Only significant secondary swings
+          secondarySwings.push({
+            high: Math.max(h.price, l.price),
+            highIdx: h.price > l.price ? h.idx : l.idx,
+            low: Math.min(h.price, l.price),
+            lowIdx: h.price < l.price ? l.idx : h.idx,
+            range,
+          });
+        }
+      }
+    }
   }
-  const clusters: Cluster[] = [];
-  for (const lvl of rounded) {
-    let merged = false;
-    for (const c of clusters) {
-      if (Math.abs(c.price - lvl.price) / Math.max(c.price, 1) < 0.005) {
-        c.sources.add(lvl.source);
-        merged = true;
+  // Keep top 3 secondary swings by range
+  secondarySwings.sort((a, b) => b.range - a.range);
+  const topSecondary = secondarySwings.slice(0, 3);
+
+  // ── Step 3: Generate ALL Fibonacci levels from the best swing ──
+  interface FibLevel {
+    price: number;
+    ratio: number;
+    ratioStr: string;
+    label: string;
+    source: 'retracement' | 'extension' | 'retracement-inv';
+    confluenceCount: number;
+  }
+
+  const allLevels: FibLevel[] = [];
+
+  if (bestSwing) {
+    const H = bestSwing.high;
+    const L = bestSwing.low;
+    const range = H - L;
+
+    // Fibonacci Retracement levels (measured from high downward)
+    // 0% = H, 100% = L
+    for (const ratio of FIB_RETRACEMENTS) {
+      const price = H - ratio * range;
+      if (price > 0) {
+        allLevels.push({
+          price: roundToNice(price),
+          ratio,
+          ratioStr: String(ratio),
+          label: FIB_LABELS[String(ratio)] || `${(ratio * 100).toFixed(1)}٪`,
+          source: 'retracement',
+          confluenceCount: 1,
+        });
+      }
+    }
+
+    // Fibonacci Extension levels (projected above H)
+    for (const extRatio of FIB_EXTENSIONS) {
+      const price = H + (extRatio - 1) * range;
+      if (price > 0) {
+        allLevels.push({
+          price: roundToNice(price),
+          ratio: extRatio,
+          ratioStr: String(extRatio),
+          label: FIB_LABELS[String(extRatio)] || `${(extRatio * 100).toFixed(1)}٪`,
+          source: 'extension',
+          confluenceCount: 1,
+        });
+      }
+    }
+
+    // Fibonacci Extension levels (projected below L — inverse extensions)
+    for (const extRatio of FIB_EXTENSIONS) {
+      const price = L - (extRatio - 1) * range;
+      if (price > 0) {
+        allLevels.push({
+          price: roundToNice(price),
+          ratio: -(extRatio),
+          ratioStr: String(-extRatio),
+          label: `-${FIB_LABELS[String(extRatio)] || `${(extRatio * 100).toFixed(1)}٪`}`,
+          source: 'retracement-inv',
+          confluenceCount: 1,
+        });
+      }
+    }
+  }
+
+  // ── Step 4: Generate levels from secondary swings and check confluence ──
+  const confluenceThreshold = currentPrice * 0.005; // 0.5%
+
+  for (const sec of topSecondary) {
+    const H = sec.high;
+    const L = sec.low;
+    const range = H - L;
+
+    for (const ratio of FIB_RETRACEMENTS) {
+      const price = roundToNice(H - ratio * range);
+      if (price <= 0) continue;
+      // Check if this level is close to an existing one
+      for (const existing of allLevels) {
+        if (Math.abs(existing.price - price) < confluenceThreshold) {
+          existing.confluenceCount++;
+        }
+      }
+    }
+
+    for (const extRatio of FIB_EXTENSIONS) {
+      const price = roundToNice(H + (extRatio - 1) * range);
+      if (price <= 0) continue;
+      for (const existing of allLevels) {
+        if (Math.abs(existing.price - price) < confluenceThreshold) {
+          existing.confluenceCount++;
+        }
+      }
+    }
+  }
+
+  // ── Step 5: Score each level ──
+  const avgVolume = data.reduce((s, d) => s + d.volume, 0) / data.length;
+  const dataHasVolume = data.some(d => d.volume > 0);
+
+  const scoredLevels: LevelStrength[] = allLevels.map(lvl => {
+    // Factor 1: Confluence (multiple swings agree) — 0-3 pts
+    const confluenceScore = Math.min(3, lvl.confluenceCount * 1.0);
+
+    // Factor 2: Proximity to a KEY Fibonacci ratio — 0-2 pts
+    // Levels at key ratios (0.382, 0.5, 0.618, 1.618, 2.618) are stronger
+    let keyRatioScore = 0;
+    const absRatio = Math.abs(lvl.ratio);
+    for (const keyR of KEY_FIB_RATIOS) {
+      if (Math.abs(absRatio - keyR) < 0.01) {
+        keyRatioScore = 2.0;
         break;
       }
     }
-    if (!merged) {
-      clusters.push({ price: lvl.price, sources: new Set([lvl.source]), touchCount: 0, totalVolumeAtTouches: 0, mostRecentTouchBar: -1 });
-    }
-  }
+    // 0% and 100% are the swing extremes — also strong
+    if (absRatio < 0.01 || Math.abs(absRatio - 1.0) < 0.01) keyRatioScore = 1.5;
 
-  // 9. Count actual price TOUCHES (rejections) and volume at each cluster level
-  // A real touch = bar wick reached the level AND bar body closed away from it
-  const touchThreshold = currentPrice * 0.002; // 0.2% tight proximity
-  for (let i = 0; i < data.length; i++) {
-    const bar = data[i];
-    for (const c of clusters) {
-      const isResistance = c.price > currentPrice;
-      if (isResistance) {
-        // Resistance: bar high reached near the level AND closed below it (rejection)
-        if (bar.high >= c.price - touchThreshold && bar.close < c.price) {
-          c.touchCount++;
-          c.totalVolumeAtTouches += bar.volume;
-          c.mostRecentTouchBar = Math.max(c.mostRecentTouchBar, i);
+    // Factor 3: Proximity to current price — 0-2 pts
+    const distRatio = Math.abs(lvl.price - currentPrice) / currentPrice;
+    let proximityScore = 0;
+    if (distRatio < 0.01) proximityScore = 2.0;
+    else if (distRatio < 0.02) proximityScore = 1.7;
+    else if (distRatio < 0.04) proximityScore = 1.3;
+    else if (distRatio < 0.07) proximityScore = 1.0;
+    else if (distRatio < 0.10) proximityScore = 0.6;
+    else if (distRatio < 0.15) proximityScore = 0.3;
+    else proximityScore = 0.1;
+
+    // Factor 4: Touch/rejection count at this level — 0-2 pts
+    let touchScore = 0;
+    const touchThreshold = currentPrice * 0.002;
+    let touchCount = 0;
+    let totalVolAtTouches = 0;
+    for (let i = 0; i < data.length; i++) {
+      const bar = data[i];
+      const isAbove = lvl.price > currentPrice;
+      if (isAbove) {
+        if (bar.high >= lvl.price - touchThreshold && bar.close < lvl.price) {
+          touchCount++;
+          totalVolAtTouches += bar.volume;
         }
       } else {
-        // Support: bar low reached near the level AND closed above it (rejection)
-        if (bar.low <= c.price + touchThreshold && bar.close > c.price) {
-          c.touchCount++;
-          c.totalVolumeAtTouches += bar.volume;
-          c.mostRecentTouchBar = Math.max(c.mostRecentTouchBar, i);
+        if (bar.low <= lvl.price + touchThreshold && bar.close > lvl.price) {
+          touchCount++;
+          totalVolAtTouches += bar.volume;
         }
       }
     }
-  }
+    if (touchCount >= 5) touchScore = 2.0;
+    else if (touchCount >= 3) touchScore = 1.5;
+    else if (touchCount >= 2) touchScore = 1.0;
+    else if (touchCount === 1) touchScore = 0.5;
 
-  // 10. Calculate multi-factor strength (0-10)
-  const levelStrengths: LevelStrength[] = clusters.map(c => {
-    // Factor 1: Source Confluence (0-2.0 pts)
-    const sourceScore = Math.min(2.0, c.sources.size * 0.4);
-    const hasSwingAndPivot = c.sources.has('swing') && c.sources.has('pivot') ? 0.4 : 0;
-    const maConfluence = c.sources.has('ma') ? 0.4 : 0;
-    const confluenceScore = Math.min(2.0, sourceScore + hasSwingAndPivot + maConfluence);
-
-    // Factor 2: Touch Count — CAPPED by recency (0-1.5 pts)
-    // Only count touches in the most recent 50% of data to avoid ancient history inflating
-    const recentBarStart = Math.floor(data.length * 0.5);
-    const recentTouches = c.mostRecentTouchBar >= recentBarStart ? c.touchCount : Math.max(0, c.touchCount - 1);
-    let touchScore: number;
-    if (recentTouches === 0) touchScore = 0;
-    else if (recentTouches === 1) touchScore = 0.3;
-    else if (recentTouches <= 2) touchScore = 0.6;
-    else if (recentTouches <= 4) touchScore = 0.9;
-    else if (recentTouches <= 7) touchScore = 1.2;
-    else touchScore = 1.5;
-
-    // Factor 3: Volume Confirmation (0-1.0 pts) — skip when no volume available
-    let volumeScore = 0;
-    const dataHasVolume = data.some(d => d.volume > 0);
-    if (dataHasVolume && c.touchCount > 0) {
-      const avgVolAtTouch = c.totalVolumeAtTouches / c.touchCount;
+    // Factor 5: Volume at touches — 0-1 pt
+    let volumeTouchScore = 0;
+    if (dataHasVolume && touchCount > 0) {
+      const avgVolAtTouch = totalVolAtTouches / touchCount;
       const volRatio = avgVolume > 0 ? avgVolAtTouch / avgVolume : 1;
-      if (volRatio > 2.0) volumeScore = 1.0;
-      else if (volRatio > 1.5) volumeScore = 0.8;
-      else if (volRatio > 1.0) volumeScore = 0.5;
-      else if (volRatio > 0.7) volumeScore = 0.25;
-      else volumeScore = 0.1;
+      if (volRatio > 2.0) volumeTouchScore = 1.0;
+      else if (volRatio > 1.5) volumeTouchScore = 0.7;
+      else if (volRatio > 1.0) volumeTouchScore = 0.4;
     }
 
-    // Factor 4: Freshness / Recency (0-1.0 pts)
-    let freshnessScore = 0;
-    if (c.touchCount > 0 && data.length > 0) {
-      const barsAgo = data.length - 1 - c.mostRecentTouchBar;
-      if (barsAgo <= 3) freshnessScore = 1.0;
-      else if (barsAgo <= 10) freshnessScore = 0.8;
-      else if (barsAgo <= 25) freshnessScore = 0.5;
-      else if (barsAgo <= 50) freshnessScore = 0.25;
-      else freshnessScore = 0.05;
+    // Factor 6: Swing recency bonus — 0-1 pt
+    let recencyScore = 0;
+    if (bestSwing) {
+      const barsSinceSwing = data.length - 1 - Math.max(bestSwing.highIdx, bestSwing.lowIdx);
+      if (barsSinceSwing <= 5) recencyScore = 1.0;
+      else if (barsSinceSwing <= 15) recencyScore = 0.7;
+      else if (barsSinceSwing <= 30) recencyScore = 0.4;
+      else if (barsSinceSwing <= 60) recencyScore = 0.2;
     }
 
-    // Factor 5: Proximity to current price (0-0.5 pts)
-    const distRatio = Math.abs(c.price - currentPrice) / currentPrice;
-    let proximityScore = 0;
-    if (distRatio < 0.01) proximityScore = 0.5;
-    else if (distRatio < 0.02) proximityScore = 0.35;
-    else if (distRatio < 0.04) proximityScore = 0.2;
-    else if (distRatio < 0.07) proximityScore = 0.1;
+    const total = confluenceScore + keyRatioScore + proximityScore + touchScore + volumeTouchScore + recencyScore;
+    const strength = Math.min(10, Math.max(1, Math.round(total)));
 
-    const total = confluenceScore + touchScore + volumeScore + freshnessScore + proximityScore;
-    const strength = Math.min(10, Math.max(1, Math.round(total * 10 / 6.0)));
-
-    return { price: c.price, strength, isTarget: false };
+    return {
+      price: lvl.price,
+      strength,
+      isTarget: false,
+      fibRatio: lvl.ratioStr,
+      fibLabel: lvl.label,
+    };
   });
 
-  // 11. Separate above/below current price
-  const above = levelStrengths.filter(l => l.price > currentPrice).sort((a, b) => a.price - b.price);
-  const below = levelStrengths.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
+  // ── Step 6: Separate into above/below current price ──
+  const above = scoredLevels.filter(l => l.price > currentPrice).sort((a, b) => a.price - b.price);
+  const below = scoredLevels.filter(l => l.price < currentPrice).sort((a, b) => b.price - a.price);
 
-  // 12. Adaptive gap enforcement — keep highest strength in cluster
-  // v2: enforce 5-10% gap between consecutive S/R lines
-  function enforceGap(levels: LevelStrength[], targetCount: number): LevelStrength[] {
-    const gapSteps = [0.10, 0.09, 0.08, 0.07, 0.06, 0.05];
-    for (const gapPct of gapSteps) {
-      if (levels.length === 0) return [];
-      const result: LevelStrength[] = [levels[0]];
-      for (let i = 1; i < levels.length; i++) {
-        if (result.length >= targetCount) break;
-        const prevPrice = result[result.length - 1].price;
-        const currPrice = levels[i].price;
-        const gap = Math.abs(currPrice - prevPrice) / prevPrice;
-        if (gap >= gapPct) {
-          result.push(levels[i]);
-        } else {
-          // Merge: keep stronger level's strength (no inflation)
-          const keep = levels[i].strength >= result[result.length - 1].strength ? levels[i] : result[result.length - 1];
-          result[result.length - 1] = { ...keep, strength: keep.strength };
-        }
-      }
-      if (result.length >= targetCount) return result;
+  // ── Step 7: Pick top 6 resistances and 6 supports ──
+  // Prefer levels with higher strength, but ensure we pick nearest levels too
+  // Use a composite score: strength * 2 + proximity bonus
+  function pickTop6(levels: LevelStrength[]): LevelStrength[] {
+    if (levels.length <= 6) return levels;
+
+    // Score each level: combine strength with proximity to current price
+    const scored = levels.map((l) => {
+      const dist = Math.abs(l.price - currentPrice) / currentPrice;
+      // Proximity bonus: closer = higher bonus (up to 3 pts)
+      const proxBonus = Math.max(0, 3 - dist * 20);
+      const compositeScore = l.strength * 2 + proxBonus;
+      return { level: l, compositeScore };
+    }); 
+
+    // Sort by composite score descending, take top 6
+    scored.sort((a, b) => b.compositeScore - a.compositeScore);
+    const picked = scored.slice(0, 6).map(s => s.level);
+
+    // Re-sort by price (nearest first)
+    const isAbove = picked[0]?.price > currentPrice;
+    if (isAbove) {
+      picked.sort((a, b) => a.price - b.price);
+    } else {
+      picked.sort((a, b) => b.price - a.price);
     }
-    // Fallback: still enforce minimum 5% gap, returning as many as possible
-    if (levels.length === 0) return [];
-    const fallback: LevelStrength[] = [levels[0]];
-    for (let i = 1; i < levels.length; i++) {
-      const prevPrice = fallback[fallback.length - 1].price;
-      const currPrice = levels[i].price;
-      const gap = Math.abs(currPrice - prevPrice) / prevPrice;
-      if (gap >= 0.05) {
-        fallback.push(levels[i]);
-      } else {
-        const keep = levels[i].strength >= fallback[fallback.length - 1].strength ? levels[i] : fallback[fallback.length - 1];
-        fallback[fallback.length - 1] = { ...keep, strength: keep.strength };
-      }
-    }
-    return fallback;
+
+    return picked;
   }
 
-  const finalResistances = enforceGap(above, 6);
-  const finalSupports = enforceGap(below, 6);
+  const finalResistances = pickTop6(above);
+  const finalSupports = pickTop6(below);
 
-  // 13. Determine price targets: top 2 by strength, or any above 7
-  const allLevels = [...finalResistances, ...finalSupports];
-  const sortedByStrength = [...allLevels].sort((a, b) => b.strength - a.strength);
-  let targets: LevelStrength[];
-  if (sortedByStrength.some(l => l.strength >= 7)) {
-    targets = sortedByStrength.filter(l => l.strength >= 7).slice(0, 3);
-  } else {
-    targets = sortedByStrength.slice(0, 2);
-  }
+  // ── Step 8: Mark price targets (top 2 strongest across all levels) ──
+  const combinedLevels = [...finalResistances, ...finalSupports];
+  const sortedByStrength = [...combinedLevels].sort((a, b) => b.strength - a.strength);
+  const targets = sortedByStrength.slice(0, 2).map(t => ({ ...t, isTarget: true }));
 
-  // Mark targets
-  targets = targets.map(t => ({ ...t, isTarget: true }));
-
-  // Also mark in final arrays
+  // Mark targets in final arrays
   finalResistances.forEach(r => {
-    if (targets.some(t => t.price === r.price)) r.isTarget = true;
+    if (targets.some(t => Math.abs(t.price - r.price) < 1)) r.isTarget = true;
   });
   finalSupports.forEach(s => {
-    if (targets.some(t => t.price === s.price)) s.isTarget = true;
+    if (targets.some(t => Math.abs(t.price - s.price) < 1)) s.isTarget = true;
   });
 
   return {

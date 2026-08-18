@@ -185,3 +185,45 @@ Stage Summary:
 - Auto-refresh now correctly passes finpySector for industry indices
 - Vazirmatn font enforced via CSS on chart canvas elements
 - All L-requirements verified: L2 (white bg) ✅, L3 (no white text) ✅, L4 (auto-refresh) ✅, L5 (Vazir only) ✅, L6 (Shamsi dates) ✅
+
+---
+Task ID: 11
+Agent: Main Agent
+Task: Implement Fibonacci-based S/R levels (6 support + 6 resistance)
+
+Work Log:
+- Added `fibRatio` and `fibLabel` fields to `LevelStrength` interface in ta-engine.ts
+- Completely rewrote `calcSupportResistance()` function:
+  - Now uses Fibonacci Retracement (0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%) and Extension (127.2%, 161.8%, 200%, 261.8%, 361.8%, 423.6%)
+  - Finds the most significant swing (largest range) across multiple lookback periods (3,5,7,10,15,20)
+  - Generates Fibonacci levels from the swing high/low pair
+  - Checks confluence with up to 3 secondary swings
+  - Scores levels by: confluence, key Fibonacci ratio proximity, price proximity, touch/rejection count, volume confirmation, swing recency
+  - Always returns exactly 6 resistances and 6 supports
+  - Each level includes `fibRatio` (e.g. '0.382') and `fibLabel` (e.g. '۳۸.۲٪') in Persian
+- Updated `findSwingLevels()` to also return bar index (needed for recency scoring)
+- Updated indicators-panel.tsx:
+  - Section renamed to "خطوط حمایت و مقاومت فیبوناچی"
+  - Now shows 6 levels (was 5) with Fibonacci ratio label and strength bar
+  - Uses `resistanceStrengths`/`supportStrengths` arrays with new fibLabel field
+- Updated candlestick-chart.tsx:
+  - S/R price line titles now include Fibonacci labels (e.g. "R۱ [۶۱.۸٪]")
+  - All 6 levels get `axisLabelVisible: true`
+  - Added `fibRatio`/`fibLabel` to local LevelStrength interface
+- Updated vdes-analysis.tsx:
+  - S/R sections now labeled "فیبوناچی — قدرت ۱-۱۰"
+  - Shows 6 levels (was unlimited) with Fibonacci label per level
+  - Updated TypeScript interfaces for new fields
+- Fixed FIB_LABELS key normalization: `'1'` and `'2'` instead of `'1.0'` and `'2.0'` (JavaScript String() drops trailing zeros)
+- Verified via agent-browser:
+  - Indicators panel shows all 6 R + 6 S with correct Persian Fibonacci labels
+  - VDes analysis shows all 6 R + 6 S with Fibonacci labels and strength bars
+  - API returns correct data: `fibRatio`, `fibLabel`, `strength`, `isTarget` on all 12 levels
+  - ESLint passes cleanly
+
+Stage Summary:
+- S/R calculation completely replaced with Fibonacci Retracement + Extension algorithm
+- Always produces exactly 6 support + 6 resistance lines
+- Each level tagged with its Fibonacci ratio in Persian (e.g. ۰٪ (اوج), ۲۳.۶٪, ۳۸.۲٪, ۵۰٪, ۶۱.۸٪, ۷۸.۶٪, ۱۰۰٪ (کف), ۱۲۷.۲٪, ۱۶۱.۸٪, ۲۰۰٪, ۲۶۱.۸٪, ۳۶۱.۸٪)
+- Multi-swing confluence detection strengthens levels where multiple Fibonacci setups agree
+- All three UIs (chart price lines, indicators panel, VDes analysis) updated with Fibonacci labels

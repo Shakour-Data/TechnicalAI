@@ -48,6 +48,8 @@ interface LevelStrength {
   price: number;
   strength: number;
   isTarget: boolean;
+  fibRatio?: string;
+  fibLabel?: string;
 }
 
 interface CandlestickChartProps {
@@ -487,34 +489,36 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       if (ta.sar > 0)
         cs.createPriceLine({ price: ta.sar, color: 'rgba(217,119,6,0.7)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
 
-      // S/R with strength
+      // S/R Fibonacci levels with strength
       const resistanceStrengths = ta.resistanceStrengths || [];
       const supportStrengths = ta.supportStrengths || [];
 
-      resistanceStrengths.forEach((r, i) => {
+      resistanceStrengths.slice(0, 6).forEach((r, i) => {
         if (r.price <= 0) return;
         const style = srLineStyle(r.strength, r.isTarget);
-        const title = `R${toPersianDigits(String(i + 1))} (${toPersianDigits(String(r.strength))}/10)`;
+        const fibTag = r.fibLabel ? ` [${r.fibLabel}]` : '';
+        const title = `R${toPersianDigits(String(i + 1))}${fibTag}`;
         cs.createPriceLine({
           price: r.price,
           color: r.isTarget ? '#dc2626' : BEAR,
           lineWidth: style.lineWidth as 1|2|3|4,
           lineStyle: style.lineStyle,
-          axisLabelVisible: i < 6,
+          axisLabelVisible: true,
           title,
         });
       });
 
-      supportStrengths.forEach((s, i) => {
+      supportStrengths.slice(0, 6).forEach((s, i) => {
         if (s.price <= 0) return;
         const style = srLineStyle(s.strength, s.isTarget);
-        const title = `S${toPersianDigits(String(i + 1))} (${toPersianDigits(String(s.strength))}/10)`;
+        const fibTag = s.fibLabel ? ` [${s.fibLabel}]` : '';
+        const title = `S${toPersianDigits(String(i + 1))}${fibTag}`;
         cs.createPriceLine({
           price: s.price,
           color: s.isTarget ? '#16a34a' : BULL,
           lineWidth: style.lineWidth as 1|2|3|4,
           lineStyle: style.lineStyle,
-          axisLabelVisible: i < 6,
+          axisLabelVisible: true,
           title,
         });
       });

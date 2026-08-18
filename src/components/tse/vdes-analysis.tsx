@@ -74,9 +74,9 @@ export interface VdesAnalysisProps {
     R4: Scenario;
     R5: Scenario;
   };
-  supportStrengths: { price: number; strength: number; isTarget: boolean }[];
-  resistanceStrengths: { price: number; strength: number; isTarget: boolean }[];
-  priceTargets: { price: number; strength: number; isTarget: boolean }[];
+  supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
+  resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
+  priceTargets: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
   hasVolume?: boolean;
 }
 
@@ -866,16 +866,17 @@ ${SCENARIO_KEYS.map(k => {
           <div className="px-5 py-3 flex items-center gap-2 border-b border-red-700/10 bg-red-50">
             <div className="w-2.5 h-2.5 rounded-full bg-red-600" />
             <h3 className="text-sm font-bold text-red-700">سطوح مقاومت</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">با قدرت ۱-۱۰</span>
+            <span className="text-[10px] text-[#6b7280] mr-auto">فیبوناچی — قدرت ۱-۱۰</span>
           </div>
           <div className="p-4 space-y-2.5">
-            {resistanceStrengths.map((r, i) => (
+            {resistanceStrengths.slice(0, 6).map((r, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-red-600 w-6">R{toFa(i + 1)}</span>
                   <div>
                     <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(r.price)}</span>
                     <span className="text-[10px] text-[#6b7280] mr-1.5">ریال</span>
+                    {r.fibLabel && <span className="text-[10px] text-red-400 mr-1.5">فیبو {r.fibLabel}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -892,16 +893,17 @@ ${SCENARIO_KEYS.map(k => {
           <div className="px-5 py-3 flex items-center gap-2 border-b border-emerald-700/10 bg-emerald-50">
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
             <h3 className="text-sm font-bold text-emerald-700">سطوح حمایت</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">با قدرت ۱-۱۰</span>
+            <span className="text-[10px] text-[#6b7280] mr-auto">فیبوناچی — قدرت ۱-۱۰</span>
           </div>
           <div className="p-4 space-y-2.5">
-            {supportStrengths.map((s, i) => (
+            {supportStrengths.slice(0, 6).map((s, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-emerald-600 w-6">S{toFa(i + 1)}</span>
                   <div>
                     <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(s.price)}</span>
                     <span className="text-[10px] text-[#6b7280] mr-1.5">ریال</span>
+                    {s.fibLabel && <span className="text-[10px] text-emerald-400 mr-1.5">فیبو {s.fibLabel}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
