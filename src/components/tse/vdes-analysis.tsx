@@ -27,9 +27,33 @@ import {
 import { computeDailyIndicators } from '@/lib/indicator-arrays';
 
 function renderAIText(text: string): string {
-  return text
+  // Normalize zero-width and look-alike characters that may interfere with regex
+  const normalized = text.replace(/[\u200c\u200d\u200b\ufeff]/g, '');
+
+  // Color syntax: {color:hex}text{/color} or {color:named}text{/color} → <span>
+  const colorMap: Record<string, string> = {
+    'red': '#dc2626', 'red-600': '#dc2626', 'red-700': '#b91c1c',
+    'green': '#16a34a', 'emerald': '#059669', 'emerald-600': '#059669', 'emerald-700': '#047857',
+    'amber': '#d97706', 'amber-600': '#d97706', 'amber-700': '#b45309', 'amber-800': '#92400e',
+    'blue': '#2563eb', 'blue-600': '#2563eb', 'blue-700': '#1d4ed8',
+    'orange': '#ea580c',
+    'purple': '#9333ea', 'purple-600': '#9333ea', 'purple-700': '#7e22ce',
+  };
+
+  const withColors = normalized.replace(/\{color:([^}]+)\}([\s\S]*?)\{\/color\}/g, (_match, colorName: string, inner: string) => {
+    const hex = colorMap[colorName.trim()] || (colorName.startsWith('#') ? colorName : null);
+    if (!hex) return inner; // Unknown color: just return text without color
+    return `<span style="color:${hex}">${inner}</span>`;
+  });
+
+  return withColors
     .split('\n\n')
-    .map(p => `<p class="mb-4">${p.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>')}</p>`)
+    .map(p => {
+      // Convert **bold** to <strong>
+      const html = p.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>');
+      // Convert newlines within paragraph to <br>
+      return `<p class="mb-4">${html.replace(/\n/g, '<br>')}</p>`;
+    })
     .join('');
 }
 
@@ -610,14 +634,27 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           }),
           signal: controller.signal,
         });
+        if (cancelled) return;
+        if (!res.ok) {
+          let errMsg = `خطای سرور (${res.status})`;
+          try {
+            const errBody = await res.json();
+            if (errBody.error) errMsg = errBody.error;
+          } catch { /* non-JSON response (e.g. 502 HTML) */ }
+          setAiError(errMsg);
+          return;
+        }
         const data = await res.json();
         if (cancelled) return;
         if (data.text) {
           setAiText(data.text);
         }
         else if (data.error) setAiError(data.error);
-      } catch (err) {
-        if (!cancelled) setAiError(String(err));
+      } catch (err: unknown) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
       } finally {
         if (!cancelled) setAiLoading(false);
       }
@@ -746,14 +783,15 @@ ${SCENARIO_KEYS.map(k => {
   }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, strategy, lastCandleJalali, fileBase]);
 
   const exportPDF = useCallback(async () => {
-    if (!vdesRef.current) return;
+    const el = vdesRef.current;
+    if (!el || !el.isConnected || el.offsetWidth === 0) return;
     try {
-      const dataUrl = await toPng(vdesRef.current, { backgroundColor: '#f3f4f6', pixelRatio: 2 });
+      const dataUrl = await toPng(el, { backgroundColor: '#f3f4f6', pixelRatio: 2, cacheBust: true });
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pdfWidth;
-      const imgHeight = (vdesRef.current.offsetHeight * imgWidth) / vdesRef.current.offsetWidth;
+      const imgHeight = (el.offsetHeight * imgWidth) / el.offsetWidth;
       let heightLeft = imgHeight;
       let position = 0;
       pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
@@ -765,9 +803,8 @@ ${SCENARIO_KEYS.map(k => {
         heightLeft -= pdfHeight;
       }
       pdf.save(`${fileBase}.pdf`);
-    } catch {
-      // Fallback: try to capture what we can
-      console.warn('PDF export failed for full VDes capture');
+    } catch (err) {
+      console.warn('PDF export failed:', err instanceof Error ? err.message : String(err));
     }
   }, [fileBase]);
 
@@ -833,12 +870,12 @@ ${SCENARIO_KEYS.map(k => {
   // ── Chart Image Export ─────────────────────────────────────────
   const exportChartImage = useCallback(async () => {
     const chartEl = document.getElementById('chart-export-wrapper');
-    if (!chartEl) return;
+    if (!chartEl || !chartEl.isConnected || chartEl.offsetWidth === 0) return;
     try {
-      const dataUrl = await toPng(chartEl, { backgroundColor: '#ffffff', pixelRatio: 2 });
+      const dataUrl = await toPng(chartEl, { backgroundColor: '#ffffff', pixelRatio: 2, cacheBust: true });
       saveAs(dataUrl, `${fileBase}_نمودار.png`);
     } catch (err) {
-      console.warn('Chart image export failed:', err);
+      console.warn('Chart image export failed:', err instanceof Error ? err.message : String(err));
     }
   }, [fileBase]);
 

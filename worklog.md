@@ -264,3 +264,23 @@ Work Log:
 Stage Summary:
 - User sees only professional analysis text, no internal metadata
 - Files changed: vdes-analysis.tsx, ai-analysis/route.ts
+---
+Task ID: 1
+Agent: main
+Task: Fix 6 issues reported by user (errors, 502, HMR, formatting)
+
+Work Log:
+- Fixed "Uncaught (in promise) Object" ×3 by adding proper res.ok checks before res.json() in vdes-analysis.tsx and page.tsx
+- Fixed 502 Bad Gateway handling by wrapping res.json() in try/catch blocks for all fetch paths
+- Fixed "Node cannot be found" by adding isConnected and offsetWidth checks before html-to-image toPng calls
+- Added AbortError handling to prevent spurious error display on component unmount
+- Updated renderAIText to support {color:COLOR} syntax with zero-width character normalization
+- Updated SYSTEM_PROMPT with 16 rules including: colors (rule 16), emojis (rule 3), Persian % format (rule 12), no internal headings (rule 14), bold (rule 13)
+- Fixed all fetch paths in page.tsx (TGJU, index, regular TSE) to handle non-JSON error responses
+- Browser verified: 0 console errors, 6 colored spans rendering correctly, bold formatting working, no raw color tags
+
+Stage Summary:
+- All 6 issues resolved
+- Key fix: zero-width Unicode character normalization in renderAIText was critical for color syntax
+- Error handling now catches SyntaxError from res.json() on non-JSON responses (502, etc.)
+

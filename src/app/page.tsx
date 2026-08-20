@@ -242,8 +242,9 @@ export default function Home() {
       try {
         const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(tgjuKey)}`);
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'خطا در دریافت داده‌های تاریخی');
+          let errMsg = 'خطا در دریافت داده‌های تاریخی';
+          try { const err = await res.json(); if (err.error) errMsg = err.error; } catch { /* non-JSON error */ }
+          throw new Error(errMsg);
         }
         const json = await res.json();
         if (!json.candles || json.candles.length === 0 || !json.ta) {
@@ -269,64 +270,61 @@ export default function Home() {
       lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
       let gotError = false;
       try {
-        // 1. Try webId (TSETMC CDN — most reliable for all indices)
+        // 1. Try webId (TSETMC CDN)
         if (webId) {
           setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ...');
           const res = await fetch(`/api/finpy-sector?webId=${encodeURIComponent(String(webId))}`);
           if (res.ok) {
-            const json = await res.json();
-            if (json.candles && json.candles.length > 0 && json.ta) {
-              setData(json);
-              setActivePanel('visual');
-              setLoading(false);
-              setLoadingMessage(null);
-              return;
-            }
-            if (json.error) {
-              setError(json.error);
-              gotError = true;
-            }
-          }
+            try {
+              const json = await res.json();
+              if (json.candles && json.candles.length > 0 && json.ta) {
+                setData(json);
+                setActivePanel('visual');
+                setLoading(false);
+                setLoadingMessage(null);
+                return;
+              }
+              if (json.error) { setError(json.error); gotError = true; }
+            } catch { /* invalid JSON */ }
+          } else { gotError = true; }
         }
 
-        // 2. Main indices (CWI, EWI, etc.) via finpy-tse
+        // 2. Main indices via finpy-tse
         if (finpyIndex) {
           setLoadingMessage('در حال دریافت داده‌های شاخص اصلی ...');
           const res = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(finpyIndex)}`);
           if (res.ok) {
-            const json = await res.json();
-            if (json.candles && json.candles.length > 0 && json.ta) {
-              setData(json);
-              setActivePanel('visual');
-              setLoading(false);
-              setLoadingMessage(null);
-              return;
-            }
-            if (json.error) {
-              setError(json.error);
-              gotError = true;
-            }
-          }
+            try {
+              const json = await res.json();
+              if (json.candles && json.candles.length > 0 && json.ta) {
+                setData(json);
+                setActivePanel('visual');
+                setLoading(false);
+                setLoadingMessage(null);
+                return;
+              }
+              if (json.error) { setError(json.error); gotError = true; }
+            } catch { /* invalid JSON */ }
+          } else { gotError = true; }
         }
 
-        // 3. Sector indices via finpy-tse (uses sector name)
+        // 3. Sector indices via finpy-tse
         if (finpySector) {
           setLoadingMessage('در حال دریافت داده‌های شاخص گروه ...');
           const res = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
           if (res.ok) {
-            const json = await res.json();
-            if (json.candles && json.candles.length > 0 && json.ta) {
-              setData(json);
-              setActivePanel('visual');
-              setLoading(false);
-              setLoadingMessage(null);
-              return;
-            }
-            if (json.error) {
-              setError(json.error);
-              gotError = true;
-            }
-          }
+            try {
+              const json = await res.json();
+              if (json.candles && json.candles.length > 0 && json.ta) {
+                setData(json);
+                setActivePanel('visual');
+                setLoading(false);
+                setLoadingMessage(null);
+                return;
+              }
+              if (json.error) { setError(json.error); gotError = true; }
+            } catch { /* invalid JSON */ }
+          } else { gotError = true; }
         }
 
         if (!gotError) {
@@ -348,8 +346,9 @@ export default function Home() {
     try {
       const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}`);
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'خطا در دریافت داده‌ها');
+        let errMsg = 'خطا در دریافت داده‌ها';
+        try { const err = await res.json(); if (err.error) errMsg = err.error; } catch { /* non-JSON error */ }
+        throw new Error(errMsg);
       }
       const json = await res.json();
       setData(json);
