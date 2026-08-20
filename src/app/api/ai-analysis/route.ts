@@ -9,18 +9,42 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+// ─── 1-hour in-memory cache ────────────────────────────────────────
+interface CacheEntry {
+  text: string;
+  ml: { school: string; style: string; tone: string; reasoning: string; methods: string[] };
+  ts: number;
+}
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL = 3_600_000; // 1 hour
+
+function cacheKey(body: Record<string, unknown>): string {
+  // Use a stable subset of inputs for caching
+  const k = {
+    s: body.symbolName,
+    p: body.currentPrice,
+    t: body.trendDirection,
+    r: body.rsi,
+    a: body.adx,
+    sc: body.stochK,
+    mh: body.macdHist,
+    sd: body.scenarios,
+  };
+  return JSON.stringify(k);
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────
 function toPersianNum(n: number): string {
-  if (!isFinite(n) || isNaN(n)) return '۰';
+  if (!isFinite(n) || isNaN(n)) return '\u06f0';
   return Math.round(n).toLocaleString('fa-IR');
 }
 
 function srGrade(strength: number): string {
-  if (strength >= 8.5) return 'بسیار قوی';
-  if (strength >= 7) return 'قوی';
-  if (strength >= 5) return 'متوسط';
-  if (strength >= 3) return 'ضعیف';
-  return 'بسیار ضعیف';
+  if (strength >= 8.5) return '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc';
+  if (strength >= 7) return '\u0642\u0648\u06cc';
+  if (strength >= 5) return '\u0645\u062a\u0648\u0633\u0637';
+  if (strength >= 3) return '\u0636\u0639\u06cc\u0641';
+  return '\u0628\u0633\u06cc\u0627\u0631 \u0636\u0639\u06cc\u0641';
 }
 
 // ─── Build ML Selector Input ──────────────────────────────────────────
@@ -38,11 +62,9 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   const support = (body.supportStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
   const atr = (body.atr as number) || 0;
 
-  // BB position 0-100
   const bbRange = bollingerUpper - bollingerLower;
   const bbPosition = bbRange > 0 ? Math.min(100, Math.max(0, Math.round((price - bollingerLower) / bbRange * 100))) : 50;
 
-  // Dominant scenario
   const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
   let dominantKey = 'R3';
   let dominantProb = 0;
@@ -70,8 +92,8 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   };
 }
 
-// ─── Build the Super-Advanced Unified Prompt ─────────────────────────
-function buildUnifiedPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
+// ─── Build the V5 Fused Prompt (no duplication) ────────────────────
+function buildV5Prompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
   const {
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
     stochK, stochD, macdLine, macdSignal, macdHist,
@@ -93,217 +115,223 @@ function buildUnifiedPrompt(body: Record<string, unknown>, mlSelection: ReturnTy
     supportStrengths: Array<{ price: number; strength: number; grade?: string; methods?: unknown[]; overlapCount?: number }>;
   };
 
-  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+  const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
   const r2Pct = (trendR2 * 100).toFixed(1);
-  const adxStrength = adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف';
-  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
-  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+  const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
+  const rsiSignal = rsi > 70 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0634\u062f\u06cc\u062f' : rsi > 60 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : rsi > 40 ? '\u062e\u0646\u062b\u06cc' : rsi > 30 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634 \u0634\u062f\u06cc\u062f';
+  const stochSignal = stochK > 80 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : stochK < 20 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : stochK > stochD ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
 
   const bbRange = bollingerUpper - bollingerLower;
   const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
   const bbSignal = currentPrice > bollingerUpper
-    ? 'بالای باند بالایی'
+    ? '\u0628\u0627\u0644\u0627\u06cc \u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc'
     : currentPrice < bollingerLower
-    ? 'زیر باند پایینی'
-    : `داخل باندها (${toPersianNum(bbPos)}٪)`;
+    ? '\u0632\u06cc\u0631 \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc'
+    : `\u062f\u0627\u062e\u0644 \u0628\u0627\u0646\u062f\u0647\u0627 (${toPersianNum(bbPos)}\u066a)`;
 
   const R1 = resistanceStrengths?.[0];
-  const R2 = resistanceStrengths?.[1];
   const S1 = supportStrengths?.[0];
   const S2 = supportStrengths?.[1];
-  const S3 = supportStrengths?.[2];
 
   const R1Price = R1?.price ?? Math.round(currentPrice * 1.05);
-  const R2Price = R2?.price ?? Math.round(currentPrice * 1.10);
   const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
   const S2Price = S2?.price ?? Math.round(currentPrice * 0.90);
-  const S3Price = S3?.price ?? Math.round(currentPrice * 0.85);
 
-  const R1Grade = R1?.strength ? srGrade(R1.strength) : 'نامشخص';
-  const S1Grade = S1?.strength ? srGrade(S1.strength) : 'نامشخص';
-  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} روش تأیید)` : '';
-  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} روش تأیید)` : '';
+  const R1Grade = R1?.strength ? srGrade(R1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+  const S1Grade = S1?.strength ? srGrade(S1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
+  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
 
-  const sR1 = scenarios?.R1?.name || 'تداوم صعود هیجانی';
-  const sR2 = scenarios?.R2?.name || 'پولبک سالم';
-  const sR3 = scenarios?.R3?.name || 'اصلاح کنترل‌شده';
-  const sR4 = scenarios?.R4?.name || 'اصلاح عمیق';
-  const sR5 = scenarios?.R5?.name || 'تضعیف ساختار';
+  const sR1 = scenarios?.R1?.name || '\u062a\u062f\u0627\u0648\u0645 \u0635\u0639\u0648\u062f \u0647\u06cc\u062c\u0627\u0646\u06cc';
+  const sR2 = scenarios?.R2?.name || '\u067e\u0648\u0644\u0628\u06a9 \u0633\u0627\u0644\u0645';
+  const sR3 = scenarios?.R3?.name || '\u0627\u0635\u0644\u0627\u062d \u06a9\u0646\u062a\u0631\u0644\u200c\u0634\u062f\u0647';
+  const sR4 = scenarios?.R4?.name || '\u0627\u0635\u0644\u0627\u062d \u0639\u0645\u06cc\u0642';
+  const sR5 = scenarios?.R5?.name || '\u062a\u0636\u0639\u06cc\u0641 \u0633\u0627\u062e\u062a\u0627\u0631';
 
   const obvDesc = hasVolume
     ? (obv > 0
-      ? `مثبت (+${(obv / 1e6).toFixed(1)}M) — جریان ورود پول`
-      : `منفی (${(obv / 1e6).toFixed(1)}M) — جریان خروج پول`)
-    : 'بدون داده حجم (TGJU)';
+      ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u0648\u0631\u0648\u062f \u067e\u0648\u0644`
+      : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u062e\u0631\u0648\u062c \u067e\u0648\u0644`)
+    : '\u0628\u062f\u0648\u0646 \u062f\u0627\u062f\u0647 \u062d\u062c\u0645';
 
   const macdDesc = macdHist > 0 && macdLine > macdSignal
-    ? 'صعودی (خط بالاتر از سیگنال)'
+    ? '\u0635\u0639\u0648\u062f\u06cc (\u062e\u0637 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644)'
     : macdHist > 0
-    ? 'صعودی با هیستوگرام مثبت'
-    : 'نزولی (هیستوگرام منفی)';
+    ? '\u0635\u0639\u0648\u062f\u06cc \u0628\u0627 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u062b\u0628\u062a'
+    : '\u0646\u0632\u0648\u0644\u06cc (\u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u0646\u0641\u06cc)';
 
-  const diPressure = diPlus > diMinus ? 'فشار خرید غالب' : 'فشار فروش غالب';
-  const posVsMa21 = currentPrice > ma21 ? 'بالاتر' : 'پایین‌تر';
-  const posVsMa100 = currentPrice > ma100 ? 'بالاتر' : 'پایین‌تر';
+  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
 
   const { school, style, tone } = mlSelection;
   const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
 
+  // ── Build sorted scenario list (dynamic naming) ──
+  const scenarioList = (['R1', 'R2', 'R3', 'R4', 'R5'] as const)
+    .map((k, i) => ({
+      key: k,
+      label: `\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)}`,
+      name: scenarios?.[k]?.name || getScenarioName(k),
+      prob: scenarios?.[k]?.probability ?? 0,
+      min: scenarios?.[k]?.targetMin ?? 0,
+      max: scenarios?.[k]?.targetMax ?? 0,
+    }))
+    .sort((a, b) => b.prob - a.prob);
+
+  const dominantScenario = scenarioList[0];
+  const scenarioBlock = scenarioList
+    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob * 100)}\u066a (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
+    .join('\n');
+
   return `
-**دستورالعمل (نسخه فوق‌پیشرفته تلفیقی — تولید توسط Z.ai):**
-شما یک **تحلیلگر ارشد بازارهای مالی با ۲۰ سال تجربه** هستید.
-این تحلیل با استفاده از **سیستم هوشمند ترکیبی** تولید شده است:
-- **مکتب تحلیل تکنیکال:** ${school}
-- **سبک روایت:** ${style}
-- **لحن تحلیلی:** ${tone}
+**\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644 (\u0646\u0633\u062e\u0647 v5 \u2014 \u062a\u0644\u0641\u06cc\u0642\u06cc \u0641\u0648\u0642\u200c\u067e\u06cc\u0634\u0631\u0641\u062a\u0647):**
+\u0634\u0645\u0627 \u06cc\u06a9 **\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0628\u0627 20 \u0633\u0627\u0644 \u062a\u062c\u0631\u0628\u0647** \u0647\u0633\u062a\u06cc\u062f.
+\u0627\u06cc\u0646 \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 **\u0633\u06cc\u0633\u062a\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u062a\u0631\u06a9\u06cc\u0628\u06cc** \u062a\u0648\u0644\u06cc\u062f \u0634\u062f\u0647 \u0627\u0633\u062a:
+- **\u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644:** ${school}
+- **\u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a:** ${style}
+- **\u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc:** ${tone}
 
-وظیفه شما این است که برای **«${symbolName}»** در **تایمفریم روزانه**، یک تحلیل **فوق‌پیشرفته، چندلایه، و کاملاً استدلالی** ارائه دهید.
-تحلیل باید **کاملاً با مکتب ${school}، سبک ${style} و لحن ${tone} هماهنگ** باشد.
+\u0648\u0638\u06cc\u0641\u0647 \u0634\u0645\u0627 \u0627\u06cc\u0646 \u0627\u0633\u062a \u06a9\u0647 \u0628\u0631\u0627\u06cc **\u00ab${symbolName}\u00bb** \u062f\u0631 **\u062a\u0627\u06cc\u0645\u0641\u0631\u06cc\u0645 \u0631\u0648\u0632\u0627\u0646\u0647**\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 **\u0686\u0646\u062f\u0644\u0627\u06cc\u0647 \u0648 \u06a9\u0627\u0645\u0644\u0627\u064b \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u06cc** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f.
+\u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f **\u06a9\u0627\u0645\u0644\u0627\u064b \u0628\u0627 \u0645\u06a9\u062a\u0628 ${school} \u0648 \u0633\u0628\u06a9 ${style} \u0648 \u0644\u062d\u0646 ${tone} \u0647\u0645\u0627\u0647\u0646\u06af** \u0628\u0627\u0634\u062f.
 
 ---
-**داده‌های پایه (واقعی و غیرقابل تغییر):**
-- نام ابزار: **${symbolName}**
-- قیمت مرجع: **${toPersianNum(currentPrice)} ریال**
-- روند میان‌مدت: **${trendLabel}** (زاویه ${toPersianNum(Math.abs(trendAngle))}°، R²=${r2Pct}٪)
-- موقعیت نسبت به میانگین‌ها: ${posVsMa21} از **MA21 (${toPersianNum(ma21)})** و ${posVsMa100} از **MA100 (${toPersianNum(ma100)})**
-- **ADX=${toPersianNum(adx)}** (${adxStrength})، **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** ← ${diPressure}
-- **RSI=${toPersianNum(rsi)}** (${rsiSignal})، **استوکاستیک=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})
-- **CCI=${toPersianNum(cci)}**${mfi > 0 ? `، **MFI=${toPersianNum(mfi)}**` : ''}
-- **MACD** ${macdDesc} (خط=${toPersianNum(macdLine)}، سیگنال=${toPersianNum(macdSignal)}، هیستوگرام=${toPersianNum(macdHist)})
+**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647 (\u0648\u0627\u0642\u0639\u06cc \u0648 \u063a\u06cc\u0631\u0642\u0627\u0628\u0644 \u062a\u063a\u06cc\u06cc\u0631):**
+- \u0646\u0627\u0645 \u0627\u0628\u0632\u0627\u0631: **${symbolName}**
+- \u0642\u06cc\u0645\u062a \u0645\u0631\u062c\u0639: **${toPersianNum(currentPrice)} \u0631\u06cc\u0627\u0644**
+- \u0631\u0648\u0646\u062f \u0645\u06cc\u0627\u0646\u200c\u0645\u062f\u062a: **${trendLabel}** (\u0632\u0627\u0648\u06cc\u0647 ${toPersianNum(Math.abs(trendAngle))}\u00b0\u060c R\u00b2=${r2Pct}%)
+- \u0645\u0648\u0642\u0639\u06cc\u062a \u0646\u0633\u0628\u062a \u0628\u0647 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646\u200c\u0647\u0627: ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA21 (${toPersianNum(ma21)})** \u0648 ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA100 (${toPersianNum(ma100)})**
+- **ADX=${toPersianNum(adx)}** (${adxStrength})\u060c **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** \u2190 ${diPressure}
+- **RSI=${toPersianNum(rsi)}** (${rsiSignal})\u060c **\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})
+- **CCI=${toPersianNum(cci)}**${mfi > 0 ? `\u060c **MFI=${toPersianNum(mfi)}**` : ''}
+- **MACD** ${macdDesc} (\u062e\u0637=${toPersianNum(macdLine)}\u060c \u0633\u06cc\u06af\u0646\u0627\u0644=${toPersianNum(macdSignal)}\u060c \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645=${toPersianNum(macdHist)})
 - **OBV** ${obvDesc}
-- قیمت **${bbSignal}** (باند بالایی ${toPersianNum(bollingerUpper)}، باند پایینی ${toPersianNum(bollingerLower)})
-- **SAR (پارابولیک):** ${toPersianNum(sar)} ریال
-- مقاومت **R1** در ${toPersianNum(R1Price)} ریال (${R1Grade} ${R1Confirm})
-- حمایت **S1** در ${toPersianNum(S1Price)} ریال (${S1Grade} ${S1Confirm})
-${S2Price ? `- حمایت **S2** در ${toPersianNum(S2Price)} ریال\n` : ''}${S3Price ? `- حمایت **S3** در ${toPersianNum(S3Price)} ریال\n` : ''}${R2Price ? `- مقاومت **R2** در ${toPersianNum(R2Price)} ریال\n` : ''}- میانگین نوسان روزانه (ATR): ${toPersianNum(atr)} ریال
+- \u0642\u06cc\u0645\u062a **${bbSignal}** (\u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc ${toPersianNum(bollingerUpper)}\u060c \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc ${toPersianNum(bollingerLower)})
+- **SAR (\u067e\u0627\u0631\u0627\u0628\u0648\u0644\u06cc\u06a9):** ${toPersianNum(sar)} \u0631\u06cc\u0627\u0644
+- \u0645\u0642\u0627\u0648\u0645\u062a **R1** \u062f\u0631 ${toPersianNum(R1Price)} \u0631\u06cc\u0627\u0644 (${R1Grade} ${R1Confirm})
+- \u062d\u0645\u0627\u06cc\u062a **S1** \u062f\u0631 ${toPersianNum(S1Price)} \u0631\u06cc\u0627\u0644 (${S1Grade} ${S1Confirm})
+${S2Price ? `- \u062d\u0645\u0627\u06cc\u062a **S2** \u062f\u0631 ${toPersianNum(S2Price)} \u0631\u06cc\u0627\u0644\n` : ''}- \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0646\u0648\u0633\u0627\u0646 \u0631\u0648\u0632\u0627\u0646\u0647 (ATR): ${toPersianNum(atr)} \u0631\u06cc\u0627\u0644
 
-**سناریوهای محتمل (با احتمالات):**
-- **R1 – ${sR1}:** ${toPersianNum((scenarios?.R1?.probability ?? 0) * 100)}٪ (محدوده ${toPersianNum(scenarios?.R1?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R1?.targetMax ?? 0)} ریال)
-- **R2 – ${sR2}:** ${toPersianNum((scenarios?.R2?.probability ?? 0) * 100)}٪ (محدوده ${toPersianNum(scenarios?.R2?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R2?.targetMax ?? 0)} ریال)
-- **R3 – ${sR3}:** ${toPersianNum((scenarios?.R3?.probability ?? 0) * 100)}٪ (محدوده ${toPersianNum(scenarios?.R3?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R3?.targetMax ?? 0)} ریال)
-- **R4 – ${sR4}:** ${toPersianNum((scenarios?.R4?.probability ?? 0) * 100)}٪ (محدوده ${toPersianNum(scenarios?.R4?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R4?.targetMax ?? 0)} ریال)
-- **R5 – ${sR5}:** ${toPersianNum((scenarios?.R5?.probability ?? 0) * 100)}٪ (محدوده ${toPersianNum(scenarios?.R5?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R5?.targetMax ?? 0)} ریال)
+**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
+${scenarioBlock}
 
-**روش‌های تحلیلی انتخاب‌شده توسط ML:**
+**\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML:**
 ${methodsStr}
 
 ---
-**مرحله ۱: استدلال داخلی چندمرحلهای (Chain of Thought — بدون نمایش در خروجی)**
-پیش از نوشتن تحلیل نهایی، به این سوالات به‌صورت داخلی پاسخ دهید (این بخش را در خروجی ننویسید):
-۱. آیا بازار در فاز تجمع، صعود، توزیع یا نزول است؟
-۲. آیا بین سیگنال‌ها تضاد وجود دارد (مثلاً روند صعودی اما اشباع خرید)؟ کدام سیگنال قویتر است؟
-۳. آیا جریان پول هوشمند (OBV) تأییدکننده روند است یا مخالف آن؟
-۴. اگر قیمت به سطوح کلیدی (${toPersianNum(S1Price)} یا ${toPersianNum(R1Price)}) برسد، چه تغییری در سناریوها ایجاد می‌شود؟
-۵. روانشناسی غالب بازار چیست؟ (ترس، طمع، سرخوردگی، اعتماد کور؟)
+**\u0645\u0631\u062d\u0644\u0647 1: \u0627\u0633\u062a\u062f\u0644\u0627\u0644 \u062f\u0627\u062e\u0644\u06cc (Chain of Thought \u2014 \u0628\u062f\u0648\u0646 \u0646\u0645\u0627\u06cc\u0634 \u062f\u0631 \u062e\u0631\u0648\u062c\u06cc)**
+\u067e\u06cc\u0634 \u0627\u0632 \u0646\u0648\u0634\u062a\u0646 \u062a\u062d\u0644\u06cc\u0644 \u0646\u0647\u0627\u06cc\u06cc\u060c \u0628\u0647 \u0627\u06cc\u0646 \u0633\u0648\u0627\u0644\u0627\u062a \u0628\u0647\u200c\u0635\u0648\u0631\u062a \u062f\u0627\u062e\u0644\u06cc \u067e\u0627\u0633\u062e \u062f\u0647\u06cc\u062f (\u0627\u06cc\u0646 \u0628\u062e\u0634 \u0631\u0627 \u062f\u0631 \u062e\u0631\u0648\u062c\u06cc \u0646\u0646\u0648\u06cc\u0633\u06cc\u062f):
+1. \u0622\u06cc\u0627 \u0628\u0627\u0632\u0627\u0631 \u062f\u0631 \u0641\u0627\u0632 \u062a\u062c\u0645\u0639\u060c \u0635\u0639\u0648\u062f\u060c \u062a\u0648\u0632\u06cc\u0639 \u06cc\u0627 \u0646\u0632\u0648\u0644 \u0627\u0633\u062a\u061f
+2. \u0622\u06cc\u0627 \u0628\u06cc\u0646 \u0633\u06cc\u06af\u0646\u0627\u0644\u200c\u0647\u0627 \u062a\u0636\u0627\u062f \u0648\u062c\u0648\u062f \u062f\u0627\u0631\u062f \u061f \u06a9\u062f\u0627\u0645 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0642\u0648\u06cc\u200c\u062a\u0631 \u0627\u0633\u062a\u061f
+3. \u0622\u06cc\u0627 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f (OBV) \u062a\u0623\u06cc\u06cc\u062f\u06a9\u0646\u0646\u062f\u0647 \u0631\u0648\u0646\u062f \u0627\u0633\u062a \u06cc\u0627 \u0645\u062e\u0627\u0644\u0641 \u0622\u0646\u061f
+4. \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a \u0628\u0647 ${toPersianNum(S1Price)} \u06cc\u0627 ${toPersianNum(R1Price)} \u0628\u0631\u0633\u062f\u060c \u0686\u0647 \u062a\u063a\u06cc\u06cc\u0631\u06cc \u062f\u0631 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627 \u0627\u06cc\u062c\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f\u061f
+5. \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u063a\u0627\u0644\u0628 \u0628\u0627\u0632\u0627\u0631 \u0686\u06cc\u0633\u062a\u061f
 
 ---
-**مرحله ۲: تشخیص فاز بازار (Market Phase Analysis)**
-بازار را به ۴ فاز تقسیم کنید و فاز فعلی را مشخص کنید:
-- **فاز تجمع:** قیمت پایین، حجم در حال افزایش، خرید هوشمند
-- **فاز صعود:** روند صعودی شتابدار، حجم بالا، شکست مقاومت‌ها
-- **فاز توزیع:** قیمت بالا، حجم در حال کاهش، فروش هوشمند
-- **فاز نزول:** روند نزولی، حجم بالا در ریزش‌ها، شکست حمایت‌ها
+**\u0645\u0631\u062d\u0644\u0647 2: \u062a\u0634\u062e\u06cc\u0635 \u0641\u0627\u0632 \u0628\u0627\u0632\u0627\u0631 (Market Phase Analysis)**
+\u0628\u0627\u0632\u0627\u0631 \u0631\u0627 \u0628\u0647 4 \u0641\u0627\u0632 \u062a\u0642\u0633\u06cc\u0645 \u06a9\u0646\u06cc\u062f \u0648 \u0641\u0627\u0632 \u0641\u0639\u0644\u06cc \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u06cc\u062f:
+- **\u0641\u0627\u0632 \u062a\u062c\u0645\u0639:** \u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u060c \u062d\u062c\u0645 \u062f\u0631 \u062d\u0627\u0644 \u0627\u0641\u0632\u0627\u06cc\u0634\u060c \u062e\u0631\u06cc\u062f \u0647\u0648\u0634\u0645\u0646\u062f
+- **\u0641\u0627\u0632 \u0635\u0639\u0648\u062f:** \u0631\u0648\u0646\u062f \u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u06a9\u062f\u0627\u0631\u060c \u062d\u062c\u0645 \u0628\u0627\u0644\u0627\u060c \u0634\u06a9\u0633\u062a \u0645\u0642\u0627\u0648\u0645\u062a\u200c\u0647\u0627
+- **\u0641\u0627\u0632 \u062a\u0648\u0632\u06cc\u0639:** \u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u060c \u062d\u062c\u0645 \u062f\u0631 \u062d\u0627\u0644 \u06a9\u0627\u0647\u0634\u060c \u0641\u0631\u0648\u0634 \u0647\u0648\u0634\u0645\u0646\u062f
+- **\u0641\u0627\u0632 \u0646\u0632\u0648\u0644:** \u0631\u0648\u0646\u062f \u0646\u0632\u0648\u0644\u06cc\u060c \u062d\u062c\u0645 \u0628\u0627\u0644\u0627 \u062f\u0631 \u0631\u06cc\u0632\u0634\u200c\u0647\u0627\u060c \u0634\u06a9\u0633\u062a \u062d\u0645\u0627\u06cc\u062a\u200c\u0647\u0627
 
 ---
-**مرحله ۳: تشخیص تضادها و اولویتبندی سیگنالها**
-- تضادهای موجود را به‌صراحت نام ببرید (مثلاً «روند صعودی اما اشباع خرید»).
-- تصمیم بگیرید کدام سیگنال در شرایط فعلی وزن بیشتری دارد و چرا.
+**\u0645\u0631\u062d\u0644\u0647 3: \u062a\u0634\u062e\u06cc\u0635 \u062a\u0636\u0627\u062f\u0647\u0627 \u0648 \u0627\u0648\u0644\u0648\u06cc\u062a\u200c\u0628\u0646\u062f\u06cc \u0633\u06cc\u06af\u0646\u0627\u0644\u0647\u0627**
+- \u062a\u0636\u0627\u062f\u0647\u0627\u06cc \u0645\u0648\u062c\u0648\u062f \u0631\u0627 \u0628\u0647\u200c\u0635\u0631\u0627\u062d\u062a \u0646\u0627\u0645 \u0628\u0628\u0631\u06cc\u062f.
+- \u062a\u0635\u0645\u06cc\u0645 \u0628\u06af\u06cc\u0631\u06cc\u062f \u06a9\u062f\u0627\u0645 \u0633\u06cc\u06af\u0646\u0627\u0644 \u062f\u0631 \u0634\u0631\u0627\u06cc\u0637 \u0641\u0639\u0644\u06cc \u0648\u0632\u0646 \u0628\u06cc\u0634\u062a\u0631\u06cc \u062f\u0627\u0631\u062f \u0648 \u0686\u0631\u0627.
 
 ---
-**مرحله ۴: تحلیل جریان پول هوشمند و روانشناسی بازار**
-- بر اساس OBV و تغییرات حجم، بگویید آیا پول هوشمند در حال ورود است یا خروج.
-- بر اساس رفتار شاخص‌ها، روانشناسی معامله‌گران را توصیف کنید.
+**\u0645\u0631\u062d\u0644\u0647 4: \u062a\u062d\u0644\u06cc\u0644 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u0648 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u0628\u0627\u0632\u0627\u0631**
+- \u0628\u0631 \u0627\u0633\u0627\u0633 OBV \u0648 \u062a\u063a\u06cc\u06cc\u0631\u0627\u062a \u062d\u062c\u0645\u060c \u0628\u06af\u0648\u06cc\u06cc\u062f \u0622\u06cc\u0627 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u062f\u0631 \u062d\u0627\u0644 \u0648\u0631\u0648\u062f \u0627\u0633\u062a \u06cc\u0627 \u062e\u0631\u0648\u062c.
+- \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u063a\u0627\u0644\u0628 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 \u0631\u0627 \u062a\u0648\u0635\u06cc\u0641 \u06a9\u0646\u06cc\u062f.
 
 ---
-**مرحله ۵: ترکیب روش‌های تحلیلی**
-روش‌های انتخاب‌شده توسط ML را ترکیب کنید و تحلیل هر روش را به‌اختصار ارائه دهید:
+**\u0645\u0631\u062d\u0644\u0647 5: \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc**
+\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML \u0631\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u062d\u0644\u06cc\u0644 \u0647\u0631 \u0631\u0648\u0634 \u0631\u0627 \u0628\u0647\u200c\u0627\u062e\u062a\u0635\u0627\u0631 \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
 ${methodsStr}
 
 ---
-**مرحله ۶: سناریونویسی درختی (Scenario Tree)**
-یک درخت سناریویی انشعابی بسازید:
-- اگر قیمت **بالای ${toPersianNum(R1Price)}** برود ← مسیر A (${sR1}: محدوده ${toPersianNum(scenarios?.R1?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R1?.targetMax ?? 0)})
-- اگر قیمت **بین ${toPersianNum(S1Price)} و ${toPersianNum(R1Price)}** بماند ← مسیر B (${sR3}: محدوده ${toPersianNum(scenarios?.R3?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R3?.targetMax ?? 0)})
-- اگر قیمت **زیر ${toPersianNum(S1Price)}** برود ← مسیر C (${sR4}: محدوده ${toPersianNum(scenarios?.R4?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R4?.targetMax ?? 0)})
+**\u0645\u0631\u062d\u0644\u0647 6: \u0633\u0646\u0627\u0631\u06cc\u0648\u0646\u0648\u06cc\u0633\u06cc \u062f\u0631\u062e\u062a\u06cc (Scenario Tree)**
+\u06cc\u06a9 \u062f\u0631\u062e\u062a \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc\u06cc \u0627\u0646\u0634\u0639\u0627\u0628\u06cc \u0628\u0633\u0627\u0632\u06cc\u062f:
+- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0628\u0627\u0644\u0627\u06cc ${toPersianNum(R1Price)}** \u0628\u0631\u0648\u062f \u2190 \u0645\u0633\u06cc\u0631 \u0635\u0639\u0648\u062f\u06cc (${dominantScenario.label}: ${dominantScenario.name})
+- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0628\u06cc\u0646 ${toPersianNum(S1Price)} \u0648 ${toPersianNum(R1Price)}** \u0628\u0645\u0627\u0646\u062f \u2190 \u0645\u0633\u06cc\u0631 \u062e\u0646\u062b\u06cc
+- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0632\u06cc\u0631 ${toPersianNum(S1Price)}** \u0628\u0631\u0648\u062f \u2190 \u0645\u0633\u06cc\u0631 \u0646\u0632\u0648\u0644\u06cc
 
 ---
-**مرحله ۷: تحلیل حساسیت (Sensitivity Analysis)**
-برای هر سطح کلیدی بگویید:
-- اگر قیمت به ${toPersianNum(S1Price)} برسد، کدام سناریو تقویت و کدام تضعیف می‌شود؟
-- اگر قیمت به ${toPersianNum(R1Price)} برسد، چه تغییری در احتمالها ایجاد می‌شود؟
-- اگر قیمت به ${toPersianNum(S2Price)} یا ${toPersianNum(R2Price)} برسد، وضعیت کلی چگونه تغییر می‌کند؟
+**\u0645\u0631\u062d\u0644\u0647 7: \u062a\u062d\u0644\u06cc\u0644 \u062d\u0633\u0627\u0633\u06cc\u062a (Sensitivity Analysis)**
+\u0628\u0631\u0627\u06cc \u0647\u0631 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc \u0628\u06af\u0648\u06cc\u06cc\u062f \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a \u0628\u0647 \u0622\u0646 \u0628\u0631\u0633\u062f\u060c \u06a9\u062f\u0627\u0645 \u0633\u0646\u0627\u0631\u06cc\u0648 \u062a\u0642\u0648\u06cc\u062a \u0648 \u06a9\u062f\u0627\u0645 \u062a\u0636\u0639\u06cc\u0641 \u0645\u06cc\u200c\u0634\u0648\u062f\u061f
 
 ---
-**مرحله ۸: سناریوی معاملاتی کامل**
-با ترکیب روش‌های انتخابی:
-- **جهت:** خرید، فروش یا انتظار؟
-- **نقطه ورود دقیق:** بر اساس کدام سطح/سیگنال؟
-- **حد ضرر (SL):** بر اساس ATR (${toPersianNum(atr)}) و سطح کلیدی
-- **اهداف (TP):** حداقل ۲ هدف (محافظه‌کارانه + جاهطلبانه)
-- **نسبت ریسک به ریوارد (R/R):** محاسبه شود
+**\u0645\u0631\u062d\u0644\u0647 8: \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u06a9\u0627\u0645\u0644**
+\u0628\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u06cc:
+- **\u062c\u0647\u062a:** \u062e\u0631\u06cc\u062f\u060c \u0641\u0631\u0648\u0634 \u06cc\u0627 \u0627\u0646\u062a\u0638\u0627\u0631\u061f
+- **\u0646\u0642\u0637\u0647 \u0648\u0631\u0648\u062f \u062f\u0642\u06cc\u0642:** \u0628\u0631 \u0627\u0633\u0627\u0633 \u06a9\u062f\u0627\u0645 \u0633\u0637\u062d/\u0633\u06cc\u06af\u0646\u0627\u0644\u061f
+- **\u062d\u062f \u0636\u0631\u0631 (SL):** \u0628\u0631 \u0627\u0633\u0627\u0633 ATR (${toPersianNum(atr)}) \u0648 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc
+- **\u0627\u0647\u062f\u0627\u0641 (TP):** \u062d\u062f\u0627\u0642\u0644 2 \u0647\u062f\u0641 (\u0645\u062d\u0627\u0641\u0638\u0647\u200c\u06a9\u0627\u0631\u0627\u0646\u0647 + \u062c\u0627\u0647\u0637\u0644\u0628\u0627\u0646\u0647)
+- **\u0646\u0633\u0628\u062a \u0631\u06cc\u0633\u06a9 \u0628\u0647 \u0631\u06cc\u0648\u0627\u0631\u062f (R/R):** \u0645\u062d\u0627\u0633\u0628\u0647 \u0634\u0648\u062f
 
 ---
-**مرحله ۹: انتخاب روایت غالب**
-بر اساس تمام تحلیل‌های بالا و مکتب ${school}، روایت غالب را مشخص کنید و توجیه کنید.
+**\u0645\u0631\u062d\u0644\u0647 9: \u0627\u0646\u062a\u062e\u0627\u0628 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628**
+\u0628\u0631 \u0627\u0633\u0627\u0633 \u062a\u0645\u0627\u0645 \u062a\u062d\u0644\u06cc\u0644\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627 \u0648 \u0645\u06a9\u062a\u0628 ${school}\u060c \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628 \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u0648\u062c\u06cc\u0647 \u06a9\u0646\u06cc\u062f.
 
 ---
-**مرحله ۱۰: خروجی سه‌لایه (Triple-Layer Output)**
-تحلیل نهایی را در **سه لایه** ارائه دهید:
-- **لایه اول (عملیاتی):** سناریوی معاملاتی و اعداد (برای معامله‌گر)
-- **لایه دوم (تحلیلی):** دلایل تکنیکال و استدلالها (برای تحلیلگر)
-- **لایه سوم (روانشناختی):** وضعیت روانی بازار و رفتار معامله‌گران (برای مدیر ریسک)
+**\u0645\u0631\u062d\u0644\u0647 10: \u062e\u0631\u0648\u062c\u06cc \u0633\u0647\u200c\u0644\u0627\u06cc\u0647 (Triple-Layer Output)**
+\u062a\u062d\u0644\u06cc\u0644 \u0646\u0647\u0627\u06cc\u06cc \u0631\u0627 \u062f\u0631 **\u0633\u0647 \u0644\u0627\u06cc\u0647** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
+- **\u0644\u0627\u06cc\u0647 \u0627\u0648\u0644 (\u0639\u0645\u0644\u06cc\u0627\u062a\u06cc):** \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u0648 \u0627\u0639\u062f\u0627\u062f (\u0628\u0631\u0627\u06cc \u0645\u0639\u0627\u0645\u0644\u06af\u0631)
+- **\u0644\u0627\u06cc\u0647 \u062f\u0648\u0645 (\u062a\u062d\u0644\u06cc\u0644\u06cc):** \u062f\u0644\u0627\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644 \u0648 \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u0647\u0627 (\u0628\u0631\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06af\u0631)
+- **\u0644\u0627\u06cc\u0647 \u0633\u0648\u0645 (\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc):** \u0648\u0636\u0639\u06cc\u062a \u0631\u0648\u062d\u06cc \u0628\u0627\u0632\u0627\u0631 \u0648 \u0631\u0641\u062a\u0627\u0631 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 (\u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0631\u06cc\u0633\u06a9)
 
 ---
-**ساختار خروجی نهایی:**
-- **عنوان:** ${school} با سبک ${style} و لحن ${tone}
-- **متن اصلی:** ۳ تا ۵ پاراگراف (۸۰۰ تا ۱٬۵۰۰ کلمه)
-- **جمله روایت غالب:** (پررنگ)
-- **خلاصه عملی:** حداکثر ۳۰ کلمه
-- **ترکیب انتخابی:** مکتب: ${school} | سبک: ${style} | لحن: ${tone}
+**\u0633\u0627\u062e\u062a\u0627\u0631 \u062e\u0631\u0648\u062c\u06cc \u0646\u0647\u0627\u06cc\u06cc:**
+- **\u0639\u0646\u0648\u0627\u0646:** ${school} \u0628\u0627 \u0633\u0628\u06a9 ${style} \u0648 \u0644\u062d\u0646 ${tone}
+- **\u0645\u062a\u0646 \u0627\u0635\u0644\u06cc:** 3 \u062a\u0627 5 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 (800 \u062a\u0627 1,500 \u06a9\u0644\u0645\u0647)
+- **\u062c\u0645\u0644\u0647 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628:** (\u067e\u0631\u0631\u0646\u06af)
+- **\u062e\u0644\u0627\u0635\u0647 \u0639\u0645\u0644\u06cc:** \u062d\u062f\u0627\u06a9\u062b\u0631 30 \u06a9\u0644\u0645\u0647
+- **\u062a\u0631\u06a9\u06cc\u0628 \u0627\u0646\u062a\u062e\u0627\u0628\u06cc:** \u0645\u06a9\u062a\u0628: ${school} | \u0633\u0628\u06a9: ${style} | \u0644\u062d\u0646: ${tone}
 
-**قوانین خروجی:**
-- **بدون ایموجی** — فقط . ، ؟ ! — « »
-- **حداقل ۵ سوال یا تعجب** در سراسر متن
-- **هر پاراگراف باید بلند و عمیق باشد** (بین ۲۰۰ تا ۵۰۰ کلمه)
-- **از تکرار اطلاعات تکراری پرهیز شود** — یک بار کامل بگویید، سپس به تحلیل بپردازید
-- **حداقل ۳ ارجاع به شاخص‌های تکنیکال** (با نام و عدد)
-- **تحلیل شامل توضیح دلیل انتخاب مکتب ${school} و سبک ${style} باشد**
-- **در هر پاراگراف حداقل یک جمله پرسشی یا تعجبی**
-- **در پایان هر پاراگراف یک جمع‌بندی جزئی** داشته باشید
-- **تمام متن به زبان فارسی باشد.**
-- **اعداد در متن به فارسی و سه رقم سه رقم جدا شوند.**`;
+**\u0642\u0648\u0627\u0639\u062f \u062e\u0631\u0648\u062c\u06cc:**
+- **\u0628\u062f\u0648\u0646 \u0627\u06cc\u0645\u0648\u062c\u06cc** \u2014 \u0641\u0642\u0637 . \u060c ? ! \u2014 \u00ab \u00bb
+- **\u062d\u062f\u0627\u0642\u0644 5 \u0633\u0648\u0627\u0644 \u06cc\u0627 \u062a\u0639\u062c\u0628** \u062f\u0631 \u0633\u0631\u0627\u0633\u0631 \u0645\u062a\u0646
+- **\u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0627\u06cc\u062f \u0628\u0644\u0646\u062f \u0648 \u0639\u0645\u06cc\u0642 \u0628\u0627\u0634\u062f** (200 \u062a\u0627 500 \u06a9\u0644\u0645\u0647)
+- **\u062d\u062f\u0627\u0642\u0644 3 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0634\u0627\u062e\u0635\u200c\u0647\u0627\u06cc \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644** (\u0628\u0627 \u0646\u0627\u0645 \u0648 \u0639\u062f\u062f)
+- **\u062a\u062d\u0644\u06cc\u0644 \u0634\u0627\u0645\u0644 \u062a\u0648\u0636\u06cc\u062d \u062f\u0644\u06cc\u0644 \u0627\u0646\u062a\u062e\u0627\u0628 \u0645\u06a9\u062a\u0628 ${school} \u0648 \u0633\u0628\u06a9 ${style} \u0628\u0627\u0634\u062f**
+- **\u062f\u0631 \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u062d\u062f\u0627\u0642\u0644 \u06cc\u06a9 \u062c\u0645\u0644\u0647 \u067e\u0631\u0633\u0634\u06cc \u06cc\u0627 \u062a\u0639\u062c\u0628\u06cc**
+- **\u062f\u0631 \u067e\u0627\u06cc\u0627\u0646 \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u06cc\u06a9 \u062c\u0645\u0639\u200c\u0628\u0646\u062f\u06cc \u062c\u0632\u0626\u06cc** \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u06cc\u062f
+- **\u062a\u0645\u0627\u0645 \u0645\u062a\u0646 \u0628\u0647 \u0632\u0628\u0627\u0646 \u0641\u0627\u0631\u0633\u06cc \u0628\u0627\u0634\u062f.**
+- **\u0627\u0639\u062f\u0627\u062f \u062f\u0631 \u0645\u062a\u0646 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u0648 \u0633\u0647 \u0631\u0642\u0645 \u0633\u0647 \u0631\u0642\u0645 \u062c\u062f\u0627 \u0634\u0648\u0646\u062f.**`;
 }
 
-// ─── System Prompt ─────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید که از یک سیستم هوشمند ترکیبی استفاده می‌کند.
+// ─── System Prompt (FIXED: role=system) ─────────────────────────────
+const SYSTEM_PROMPT = `\u0634\u0645\u0627 \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0627\u06cc\u0631\u0627\u0646\u06cc \u0647\u0633\u062a\u06cc\u062f \u06a9\u0647 \u0627\u0632 \u06cc\u06a9 \u0633\u06cc\u0633\u062a\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u062a\u0631\u06a9\u06cc\u0628\u06cc \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u200c\u06a9\u0646\u06cc\u062f.
 
-این سیستم شامل:
-- ۱۰ مکتب تحلیل تکنیکال
-- ۱۰ سبک روایت
-- ۱۵ لحن تحلیلی
-- انتخاب خودکار توسط ML بر اساس داده‌های واقعی
+\u0627\u06cc\u0646 \u0633\u06cc\u0633\u062a\u0645 \u0634\u0627\u0645\u0644:
+- 10 \u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644
+- 10 \u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a
+- 15 \u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc
+- \u0627\u0646\u062a\u062e\u0627\u0628 \u062e\u0648\u062f\u06a9\u0627\u0631 \u062a\u0648\u0633\u0637 ML \u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0648\u0627\u0642\u0639\u06cc
 
-قوانین خروجی:
-۱. حداقل ۸۰۰ کلمه و حداکثر ۱٬۵۰۰ کلمه بنویسید. این مهم‌ترین قانون است.
-۲. تمام اعداد در متن به فارسی و سه رقم سه رقم جدا شوند (مثلاً ۱۲۳٬۴۵۶).
-۳. هیچ ایموجی، شکلک یا کاراکتر غیرحروفی استفاده نشود. فقط علائم نگارشی استاندارد ( . ، ؛ : ؟ ! « » — ).
-۴. متن شامل ۳ تا ۵ پاراگراف باشد. هر پاراگراف بلند و عمیق (۲۰۰ تا ۵۰۰ کلمه).
-۵. متن کاملاً به زبان فارسی باشد.
-۶. تحلیل ۳ لایه داشته باشد: لایه عملیاتی (برای معامله‌گر)، لایه تحلیلی (برای تحلیلگر)، لایه روانشناختی (برای مدیر ریسک).
-۷. شامل سناریوی معاملاتی کامل باشد: جهت، نقطه ورود، حد ضرر، اهداف، نسبت ریسک/ریوارد.
-۸. شامل درخت سناریویی انشعابی و تحلیل حساسیت باشد.
-۹. حداقل ۵ سوال یا تعجب در متن داشته باشد.
-۱۰. در ابتدا عنوان شامل مکتب + سبک + لحن و در انتها جمله روایت غالب (پررنگ) و خلاصه عملی (حداکثر ۳۰ کلمه) بیاید.
-۱۱. ترکیب انتخابی (مکتب، سبک، لحن) را در انتهای تحلیل به‌صراحت ذکر کنید.
-۱۲. این تحلیل صد درصد مبتنی بر داده‌های تکنیکال است و با استفاده از مکتب، سبک و لحن انتخاب‌شده توسط ML و ساختار ۱۰ مرحل‌ای تولید شده است.`;
+\u0642\u0648\u0627\u0639\u062f \u062e\u0631\u0648\u062c\u06cc:
+1. \u062d\u062f\u0627\u0642\u0644 800 \u06a9\u0644\u0645\u0647 \u0648 \u062d\u062f\u0627\u06a9\u062b\u0631 1,500 \u06a9\u0644\u0645\u0647 \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u0627\u06cc\u0646 \u0645\u0647\u0645\u200c\u062a\u0631\u06cc\u0646 \u0642\u0627\u0646\u0648\u0646 \u0627\u0633\u062a.
+2. \u062a\u0645\u0627\u0645 \u0627\u0639\u062f\u0627\u062f \u062f\u0631 \u0645\u062a\u0646 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u0648 \u0633\u0647 \u0631\u0642\u0645 \u0633\u0647 \u0631\u0642\u0645 \u062c\u062f\u0627 \u0634\u0648\u0646\u062f (\u0645\u062b\u0644\u0627\u064b 123,456).
+3. \u0647\u06cc\u0686 \u0627\u06cc\u0645\u0648\u062c\u06cc\u060c \u0634\u06a9\u0644\u06a9 \u06cc\u0627 \u06a9\u0627\u0631\u0627\u06a9\u062a\u0631 \u063a\u06cc\u0631\u062d\u0631\u0648\u0641\u06cc \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0646\u0634\u0648\u062f. \u0641\u0642\u0637 \u0639\u0644\u0627\u0626\u0645 \u0646\u06af\u0627\u0631\u0634\u06cc \u0627\u0633\u062a\u0627\u0646\u062f\u0627\u0631\u062f ( . , ; : ? ! " ").
+4. \u0645\u062a\u0646 \u0634\u0627\u0645\u0644 3 \u062a\u0627 5 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0627\u0634\u062f. \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0644\u0646\u062f \u0648 \u0639\u0645\u06cc\u0642 (200 \u062a\u0627 500 \u06a9\u0644\u0645\u0647).
+5. \u0645\u062a\u0646 \u06a9\u0627\u0645\u0644\u0627\u064b \u0628\u0647 \u0632\u0628\u0627\u0646 \u0641\u0627\u0631\u0633\u06cc \u0628\u0627\u0634\u062f.
+6. \u062a\u062d\u0644\u06cc\u0644 3 \u0644\u0627\u06cc\u0647 \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u062f: \u0644\u0627\u06cc\u0647 \u0639\u0645\u0644\u06cc\u0627\u062a\u06cc (\u0628\u0631\u0627\u06cc \u0645\u0639\u0627\u0645\u0644\u06af\u0631)\u060c \u0644\u0627\u06cc\u0647 \u062a\u062d\u0644\u06cc\u0644\u06cc (\u0628\u0631\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06af\u0631)\u060c \u0644\u0627\u06cc\u0647 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc (\u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0631\u06cc\u0633\u06a9).
+7. \u0634\u0627\u0645\u0644 \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u06a9\u0627\u0645\u0644 \u0628\u0627\u0634\u062f: \u062c\u0647\u062a\u060c \u0646\u0642\u0637\u0647 \u0648\u0631\u0648\u062f\u060c \u062d\u062f \u0636\u0631\u0631\u060c \u0627\u0647\u062f\u0627\u0641\u060c \u0646\u0633\u0628\u062a \u0631\u06cc\u0633\u06a9/\u0631\u06cc\u0648\u0627\u0631\u062f.
+8. \u0634\u0627\u0645\u0644 \u062f\u0631\u062e\u062a \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc\u06cc \u0627\u0646\u0634\u0639\u0627\u0628\u06cc \u0648 \u062a\u062d\u0644\u06cc\u0644 \u062d\u0633\u0627\u0633\u06cc\u062a \u0628\u0627\u0634\u062f.
+9. \u062d\u062f\u0627\u0642\u0644 5 \u0633\u0648\u0627\u0644 \u06cc\u0627 \u062a\u0639\u062c\u0628 \u062f\u0631 \u0645\u062a\u0646 \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u062f.
+10. \u062f\u0631 \u0627\u0628\u062a\u062f\u0627 \u0639\u0646\u0648\u0627\u0646 \u0634\u0627\u0645\u0644 \u0645\u06a9\u062a\u0628 + \u0633\u0628\u06a9 + \u0644\u062d\u0646 \u0648 \u062f\u0631 \u0627\u0646\u062a\u0647\u0627 \u062c\u0645\u0644\u0647 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628 (\u067e\u0631\u0631\u0646\u06af) \u0648 \u062e\u0644\u0627\u0635\u0647 \u0639\u0645\u0644\u06cc (\u062d\u062f\u0627\u06a9\u062b\u0631 30 \u06a9\u0644\u0645\u0647) \u0628\u06cc\u0627\u06cc\u062f.
+11. \u062a\u0631\u06a9\u06cc\u0628 \u0627\u0646\u062a\u062e\u0627\u0628\u06cc (\u0645\u06a9\u062a\u0628\u060c \u0633\u0628\u06a9\u060c \u0644\u062d\u0646) \u0631\u0627 \u062f\u0631 \u0627\u0646\u062a\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644 \u0628\u0647\u200c\u0635\u0631\u0627\u062d\u062a \u0630\u06a9\u0631 \u06a9\u0646\u06cc\u062f.`;
 
-// ─── Retry helper for 429 errors ────────────────────────────────
+// ─── Retry helper (FIXED: exponential backoff with jitter) ───────
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+function jitter(base: number): number {
+  return base + Math.random() * base * 0.3;
+}
 
 async function aiCompletionWithRetry(
   zai: Awaited<ReturnType<typeof getZai>>,
   messages: { role: string; content: string }[],
-  maxRetries = 5,
+  maxRetries = 3,
 ): Promise<string> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -319,8 +347,8 @@ async function aiCompletionWithRetry(
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('429') && attempt < maxRetries) {
-        const waitMs = 8000 * attempt; // 8s, 16s, 24s, 32s
-        console.warn(`[AI Analysis] 429 retry ${attempt}/${maxRetries}, waiting ${waitMs}ms...`);
+        const waitMs = Math.round(jitter(15000 * Math.pow(2, attempt - 1))); // 15s, 30s, 60s + jitter
+        console.warn(`[AI Analysis v5] 429 retry ${attempt}/${maxRetries}, waiting ${waitMs}ms...`);
         await sleep(waitMs);
         continue;
       }
@@ -339,6 +367,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
     }
 
+    // 0. Check cache first
+    const key = cacheKey(body);
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      console.log(`[AI Analysis v5] Cache hit for ${body.symbolName}`);
+      return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
+    }
+
     // 1. Build ML selector input
     const mlInput = buildMLInput(body);
 
@@ -348,21 +384,20 @@ export async function POST(req: NextRequest) {
     // 3. Select analytical methods
     const methods = selectMethods(mlInput);
 
-    console.log(`[AI Analysis] ML Selection for ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
-    console.log(`[AI Analysis] Methods: ${methods.join(', ')}`);
-    console.log(`[AI Analysis] Reasoning: ${mlSelection.reasoning}`);
+    console.log(`[AI Analysis v5] ML Selection for ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
+    console.log(`[AI Analysis v5] Methods: ${methods.join(', ')}`);
 
-    // 4. Build the unified prompt
-    const userMessage = buildUnifiedPrompt(body, mlSelection, methods);
+    // 4. Build the fused prompt (NO duplication)
+    const userMessage = buildV5Prompt(body, mlSelection, methods);
 
-    // 5. Generate analysis using Z.ai (with retry on 429)
+    // 5. Generate analysis using Z.ai (FIXED: role=system + better retry)
     const zai = await getZai();
     const content = await aiCompletionWithRetry(zai, [
-      { role: 'assistant', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userMessage },
     ]);
 
-    return NextResponse.json({
+    const result = {
       text: content,
       ml: {
         school: mlSelection.school,
@@ -371,9 +406,19 @@ export async function POST(req: NextRequest) {
         reasoning: mlSelection.reasoning,
         methods,
       },
-    });
+    };
+
+    // 6. Store in cache
+    cache.set(key, { text: content, ml: result.ml, ts: Date.now() });
+
+    // 7. Prune old cache entries
+    for (const [k, v] of cache.entries()) {
+      if (Date.now() - v.ts > CACHE_TTL) cache.delete(k);
+    }
+
+    return NextResponse.json(result);
   } catch (err) {
-    console.error('AI Analysis error:', err);
+    console.error('AI Analysis v5 error:', err);
     return NextResponse.json({ error: String(err), text: '' }, { status: 500 });
   }
 }

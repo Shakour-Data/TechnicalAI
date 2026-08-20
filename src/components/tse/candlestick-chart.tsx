@@ -91,8 +91,10 @@ interface CandlestickChartProps {
 
 /* ----------------------------- CONSTANTS -- */
 
-const BULL = '#22a366';
-const BEAR = '#e04060';
+const BULL = '#22a366';   // Candle up — green
+const BEAR = '#e04060';   // Candle down — red
+const SUPPORT_COLOR = '#2563eb';  // Support lines — blue
+const RESIST_COLOR = '#ea580c'; // Resistance lines — orange
 const BG = '#ffffff';
 const TXT = '#374151';
 const GRID = 'rgba(0,0,0,0.06)';
@@ -102,18 +104,18 @@ const TOOLBAR_BORDER = '#e5e7eb';
 const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#374151'];
 
 const SMA_CFG = [
-  { key: 'sma9', color: '#6366f1', title: 'SMA 9' },
-  { key: 'sma21', color: '#0891b2', title: 'SMA 21' },
-  { key: 'sma50', color: '#d97706', title: 'SMA 50' },
-  { key: 'sma100', color: '#e04060', title: 'SMA 100' },
-  { key: 'sma200', color: '#7c3aed', title: 'SMA 200' },
+  { key: 'sma9', color: '#8b5cf6', title: 'SMA 9' },
+  { key: 'sma21', color: '#06b6d4', title: 'SMA 21' },
+  { key: 'sma50', color: '#d946ef', title: 'SMA 50' },
+  { key: 'sma100', color: '#a855f7', title: 'SMA 100' },
+  { key: 'sma200', color: '#ec4899', title: 'SMA 200' },
 ];
 
 const EMA_CFG = [
-  { key: 'ema9', color: '#6366f1', title: 'EMA 9', dash: [2, 2] as [number, number] },
-  { key: 'ema21', color: '#0d9488', title: 'EMA 21', dash: [2, 2] as [number, number] },
-  { key: 'ema50', color: '#ea580c', title: 'EMA 50', dash: [2, 2] as [number, number] },
-  { key: 'ema200', color: '#9333ea', title: 'EMA 200', dash: [2, 2] as [number, number] },
+  { key: 'ema9', color: '#8b5cf6', title: 'EMA 9', dash: [2, 2] as [number, number] },
+  { key: 'ema21', color: '#06b6d4', title: 'EMA 21', dash: [2, 2] as [number, number] },
+  { key: 'ema50', color: '#d946ef', title: 'EMA 50', dash: [2, 2] as [number, number] },
+  { key: 'ema200', color: '#ec4899', title: 'EMA 200', dash: [2, 2] as [number, number] },
 ];
 
 const FIB_LEVELS = [
@@ -790,7 +792,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           : `R${toFa(i + 1)} [${r.grade}] (${methodCount} method)${fibTag}`;
         cs.createPriceLine({
           price: r.price,
-          color: r.isTarget ? '#dc2626' : BEAR,
+          color: r.isTarget ? '#c2410c' : RESIST_COLOR,
           lineWidth: style.lineWidth as 1|2|3|4,
           lineStyle: style.lineStyle,
           axisLabelVisible: true,
@@ -809,7 +811,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           : `S${toFa(i + 1)} [${s.grade}] (${methodCount} method)${fibTag}`;
         cs.createPriceLine({
           price: s.price,
-          color: s.isTarget ? '#16a34a' : BULL,
+          color: s.isTarget ? '#1d4ed8' : SUPPORT_COLOR,
           lineWidth: style.lineWidth as 1|2|3|4,
           lineStyle: style.lineStyle,
           axisLabelVisible: true,

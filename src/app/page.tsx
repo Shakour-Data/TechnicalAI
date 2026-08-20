@@ -55,6 +55,166 @@ const SIDEBAR_ITEMS = [
 
 type SidebarItem = typeof SIDEBAR_ITEMS[number]['id'];
 
+// ─── Landing Page Component ─────────────────────────────────────
+const FEATURES = [
+  { icon: TrendingUp, title: 'تحلیل تکنیکال ۷ لایه', desc: 'موتور VDss با مدل ML تطبیقی: میانگین متحرک، RSI، MACD، باند بولینگر، استوکاستیک، ADX و SAR' },
+  { icon: Activity, title: 'اندیکاتورهای حرفه‌ای', desc: 'RSI، MFI، CCI، استوکاستیک، MACD، ADX، Parabolic SAR، باند بولینگر، Ichimoku و VWAP' },
+  { icon: GitBranch, title: 'گراف تصمیم هوشمند', desc: 'درخت تصمیم ۱۲ گره‌ای با مسیرهای صعودی، نزولی، پولبک و ریسک' },
+  { icon: FileText, title: 'توضیح‌دهنده تصویری (AI)', desc: 'تحلیل هوشمند چندلایه با ۱۰ مکتب تحلیلی، ۱۰ سبک روایت و ۱۵ لحن تحلیلی' },
+  { icon: BarChart3, title: 'حمایت و مقاومت هوشمند', desc: 'تشخیص خودکار سطوح کلیدی با ترکیب ۵ روش: فیبوناچی، پیوت، سقف/کف تاریخی، خط روند و ML' },
+  { icon: Coins, title: 'پوشش جامع بازارها', desc: 'بورس تهران، ارز، طلا، سکه، کریپتو، فارکس، شاخص‌های جهانی، نفت و فلزات' },
+];
+
+const MARKETS = [
+  { label: 'سهام بورس', cls: 'bg-gray-100 text-gray-700' },
+  { label: 'ارزها (ریال)', cls: 'bg-teal-50 text-teal-700 border border-teal-100' },
+  { label: 'جفت ارز', cls: 'bg-violet-50 text-violet-700 border border-violet-100' },
+  { label: 'کریپتو', cls: 'bg-orange-50 text-orange-700 border border-orange-100' },
+  { label: 'طلا و سکه', cls: 'bg-yellow-50 text-yellow-700 border border-yellow-100' },
+  { label: 'بورس جهانی', cls: 'bg-sky-50 text-sky-700 border border-sky-100' },
+  { label: 'نفت و انرژی', cls: 'bg-red-50 text-red-700 border border-red-100' },
+  { label: 'فلزات جهانی', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-100' },
+  { label: 'شاخص‌ها', cls: 'bg-rose-50 text-rose-700 border border-rose-100' },
+  { label: 'صندوق‌ها', cls: 'bg-purple-50 text-purple-700 border border-purple-100' },
+];
+
+function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => void }) {
+  return (
+    <div className="space-y-16 pb-16">
+      {/* ── HERO ── */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-amber-900/80 px-6 py-16 sm:px-12 sm:py-24 text-center">
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-400/40 via-transparent to-transparent" />
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-cyan-400/40 via-transparent to-transparent" />
+        <div className="relative z-10 max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-amber-300 text-xs font-medium mb-6">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            نسخه 5.0 — تحلیل هوشمند با AI
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight">
+            تحلیل تکنیکال{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">هوشمند</span>{' '}
+            بازار ایران
+          </h2>
+          <p className="text-gray-300 text-base sm:text-lg leading-relaxed mb-8 max-w-2xl mx-auto">
+            سیستم جامع تحلیل تکنیکال با موتور ۷ لایه VDss، انتخاب خودکار مکتب تحلیلی با ML،
+            گراف تصمیم هوشمند و تحلیل متنی تولیدشده توسط هوش مصنوعی.
+          </p>
+          <div className="max-w-lg mx-auto">
+            <SymbolSearch onSelect={onSearch} placeholder='جستجوی نماد، ارز، طلا، کریپتو، شاخص ...' />
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 mt-8">
+            {MARKETS.map((m) => (
+              <span key={m.label} className={`px-3 py-1 rounded-full text-[10px] font-medium ${m.cls}`}>{m.label}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FEATURES GRID ── */}
+      <section>
+        <div className="text-center mb-10">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">قابلیت‌های کلیدی</h3>
+          <p className="text-gray-500 text-sm max-w-xl mx-auto">
+            ترکیب مهندسی مالی و هوش مصنوعی برای تحلیل حرفه‌ای بازارهای مالی ایران
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {FEATURES.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div key={f.title} className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md hover:border-amber-200 transition-all">
+                <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200/60 flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors">
+                  <Icon className="w-5 h-5 text-amber-700" />
+                </div>
+                <h4 className="font-bold text-gray-900 mb-1.5">{f.title}</h4>
+                <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ── */}
+      <section>
+        <div className="text-center mb-10">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">چگونه کار می‌کند؟</h3>
+          <p className="text-gray-500 text-sm">سه مرحله ساده تا تحلیل کامل</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          {[
+            { step: '۱', title: 'جستجوی نماد', desc: 'نام نماد، ارز، طلا، کریپتو یا شاخص مورد نظر خود را در نوار جستجو تایپ کنید' },
+            { step: '۲', title: 'تحلیل خودکار', desc: 'موتور VDss داده‌های تاریخی را تحلیل کرده و ۳ پنل نمایشی می‌سازد' },
+            { step: '۳', title: 'تحلیل هوشمند AI', desc: 'سیستم ML مکتب و سبک تحلیلی مناسب را انتخاب و تحلیل متنی تولید می‌کند' },
+          ].map((s) => (
+            <div key={s.step} className="relative text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center mx-auto mb-4 text-amber-800 font-black text-lg">
+                {s.step}
+              </div>
+              <h4 className="font-bold text-gray-900 mb-1">{s.title}</h4>
+              <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── AI SYSTEM EXPLANATION ── */}
+      <section className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-amber-50/30 p-8 sm:p-12">
+        <div className="max-w-4xl mx-auto">
+          <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">سیستم هوشمند ترکیبی AI</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <div className="text-center p-4">
+              <div className="text-3xl font-black text-amber-700 mb-1">۱۰</div>
+              <div className="text-sm font-bold text-gray-900">مکتب تحلیل تکنیکال</div>
+              <div className="text-xs text-gray-500 mt-1">روند، الگوهای کلاسیک، کندلی، فیبوناچی، نوسان، اسیلاتور، حمایت/مقاومت، فاز و چرخه، چندزمانی، روانشناختی</div>
+            </div>
+            <div className="text-center p-4">
+              <div className="text-3xl font-black text-teal-700 mb-1">۱۰</div>
+              <div className="text-sm font-bold text-gray-900">سبک روایت</div>
+              <div className="text-xs text-gray-500 mt-1">محافظه‌کار، اسکالپر، روندگرا، بدبین، روایی، تصمیم‌محور، تحلیلگر حجم، تحلیلگر الگو، روانشناختی، تحلیلگر نوسان</div>
+            </div>
+            <div className="text-center p-4">
+              <div className="text-3xl font-black text-violet-700 mb-1">۱۵</div>
+              <div className="text-sm font-bold text-gray-900">لحن تحلیلی</div>
+              <div className="text-xs text-gray-500 mt-1">رسمی، سریع، فلسفی، هشداردهنده، داستانی، گام‌به‌گام، شکاک، خوشبین، ساده، عددمحور، چندلایه، آموزشی و ...</div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm text-gray-600 leading-relaxed">
+            <p className="font-bold text-gray-900 mb-2">چگونه کار می‌کند؟</p>
+            <p>
+              سیستم ابتدا داده‌های تکنیکال (RSI، MACD، ADX، استوکاستیک، باند بولینگر و ...) را پردازش می‌کند.
+              سپس بر اساس ۶ شاخه تصمیم‌گیری (بازار رنج، روند قوی صعودی، تضاد شدید، فشرده نوسان، الگوی واضح، عدم قطعیت بالا)
+              بهترین ترکیب مکتب + سبک + لحن را انتخاب می‌کند.
+              در نهایت با ساختار ۱۰ مرحله‌ای (از Chain of Thought تا خروجی سه‌لایه) تحلیلی جامع تولید می‌شود.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── DATA SOURCES ── */}
+      <section>
+        <div className="text-center mb-10">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">منابع داده</h3>
+          <p className="text-gray-500 text-sm">داده‌های واقعی از منابع معتبر</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-3xl mx-auto">
+          <div className="rounded-xl border border-gray-300 p-5 bg-white text-center">
+            <div className="font-bold text-gray-900 mb-1">TSETMC</div>
+            <p className="text-xs text-gray-500 leading-relaxed">داده‌های تعدیل‌شده سهام بورس تهران و اوراق بدهی</p>
+          </div>
+          <div className="rounded-xl border border-teal-300 p-5 bg-white text-center">
+            <div className="font-bold text-gray-900 mb-1">TGJU (تارا)</div>
+            <p className="text-xs text-gray-500 leading-relaxed">ارزها، طلا، سکه، کریپتو، فارکس، بورس جهانی، نفت و فلزات</p>
+          </div>
+          <div className="rounded-xl border border-purple-300 p-5 bg-white text-center">
+            <div className="font-bold text-gray-900 mb-1">Finpy-TSE</div>
+            <p className="text-xs text-gray-500 leading-relaxed">شاخص‌های اصلی و گروهی بورس تهران با تاریخچه CDN</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -311,29 +471,7 @@ export default function Home() {
       {/* ── MAIN CONTENT ──────────────────────────────────────── */}
       <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
         {!data && !loading && !error && (
-          <div className="flex flex-col items-center justify-center py-32 text-center">
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-700/5 border border-amber-300/30 flex items-center justify-center mb-6">
-              <BarChart3 className="w-12 h-12 text-amber-600/50" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">تحلیل تکنیکال بازار ایران</h2>
-            <p className="text-gray-500 max-w-md mb-6">
-              نماد بورسی، ارز، طلا، کریپتو، شاخص جهانی یا جفت ارز مورد نظر خود را جستجو کنید
-              تا تحلیل کامل تکنیکال نمایش داده شود.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2 text-xs">
-              <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700">سهام</span>
-              <span className="px-3 py-1.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100">ارزها</span>
-              <span className="px-3 py-1.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">جفت ارز</span>
-              <span className="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100">کریپتو</span>
-              <span className="px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-100">طلا و نقره</span>
-              <span className="px-3 py-1.5 rounded-full bg-sky-50 text-sky-700 border border-sky-100">بورس جهانی</span>
-              <span className="px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-100">نفت و انرژی</span>
-              <span className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">فلزات</span>
-              <span className="px-3 py-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-100">شاخص‌ها</span>
-              <span className="px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100">صندوق‌ها</span>
-              <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700">اندیکاتورها، گراف تصمیم، توضیح‌دهنده تصویری</span>
-            </div>
-          </div>
+          <LandingPage onSearch={handleSelect} />
         )}
 
         {loading && (
@@ -525,7 +663,7 @@ export default function Home() {
       </main>
 
       <footer className={`mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500 ${data ? 'lg:mb-14' : ''}`}>
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v4.0 — سایدبار + خروجی تصویر نمودار
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v5.0 — صفحه اول + رفع باگ‌های AI
       </footer>
     </div>
   );

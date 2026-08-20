@@ -115,11 +115,11 @@ const NODE_DEFS: Record<string, { title: string; type: string; desc: string; col
   J:  { title: 'حمایت S4', type: 'گره حمایت', desc: 'آخرین سطح قبل از ناحیه بحرانی MA100.', color: COLORS.orange },
   K:  { title: 'MA100 — گره بحرانی', type: 'گره ریسک', desc: 'شکست معتبر این ناحیه به منزله ابطال روند صعودی است.', color: COLORS.red },
   L:  { title: 'خطوط روند', type: 'گره کنترل', desc: 'حفظ قیمت بالای این خطوط برای تداوم روند صعودی حیاتی است.', color: COLORS.purple },
-  R1: { title: 'تداوم صعود', type: 'گره نتیجه', desc: 'رسیدن یا تثبیت در کریدور صعودی.', color: COLORS.green, isTerminal: true },
-  R2: { title: 'پولبک سالم', type: 'گره نتیجه', desc: 'حفظ S1 و بازپس‌گیری مقاومت R1.', color: COLORS.cyan, isTerminal: true },
-  R3: { title: 'اصلاح کنترل‌شده', type: 'گره نتیجه', desc: 'حرکت به حمایت‌های میانی.', color: COLORS.orange, isTerminal: true },
-  R4: { title: 'اصلاح عمیق', type: 'گره نتیجه', desc: 'آزمون ناحیه نزدیک به MA100.', color: COLORS.gold, isTerminal: true },
-  R5: { title: 'تضعیف ساختار', type: 'گره نتیجه', desc: 'شکست معتبر MA100.', color: COLORS.red, isTerminal: true },
+  R1: { title: 'سناریوی ۱ — تداوم صعود', type: 'گره نتیجه', desc: 'رسیدن یا تثبیت در کریدور صعودی.', color: COLORS.green, isTerminal: true },
+  R2: { title: 'سناریوی ۲ — پولبک سالم', type: 'گره نتیجه', desc: 'حفظ S1 و بازپس‌گیری مقاومت R1.', color: COLORS.cyan, isTerminal: true },
+  R3: { title: 'سناریوی ۳ — اصلاح کنترل‌شده', type: 'گره نتیجه', desc: 'حرکت به حمایت‌های میانی.', color: COLORS.orange, isTerminal: true },
+  R4: { title: 'سناریوی ۴ — اصلاح عمیق', type: 'گره نتیجه', desc: 'آزمون ناحیه نزدیک به MA100.', color: COLORS.gold, isTerminal: true },
+  R5: { title: 'سناریوی ۵ — تضعیف ساختار', type: 'گره نتیجه', desc: 'شکست معتبر MA100.', color: COLORS.red, isTerminal: true },
 };
 
 const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;

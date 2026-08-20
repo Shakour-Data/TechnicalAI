@@ -89,12 +89,14 @@ const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
 
 const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;
 
+const SCENARIO_NUMBER: Record<string, string> = { R1: '\u06f1', R2: '\u06f2', R3: '\u06f3', R4: '\u06f4', R5: '\u06f5' };
+
 const SCENARIO_META: Record<string, { label: string; type: string; border: string; badgeBg: string; badgeColor: string }> = {
-  R1: { label: 'تداوم صعود هیجانی', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
-  R2: { label: 'پولبک سالم', type: 'pullback', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
-  R3: { label: 'اصلاح کنترل‌شده', type: 'down', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
-  R4: { label: 'اصلاح عمیق', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
-  R5: { label: 'تضعیف ساختار', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
+  R1: { label: '\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u06f1 \u2014 \u062a\u062f\u0627\u0648\u0645 \u0635\u0639\u0648\u062f \u0647\u06cc\u062c\u0627\u0646\u06cc', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
+  R2: { label: '\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u06f2 \u2014 \u067e\u0648\u0644\u0628\u06a9 \u0633\u0627\u0644\u0645', type: 'pullback', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
+  R3: { label: '\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u06f3 \u2014 \u0627\u0635\u0644\u0627\u062d \u06a9\u0646\u062a\u0631\u0644\u200c\u0634\u062f\u0647', type: 'down', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
+  R4: { label: '\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u06f4 \u2014 \u0627\u0635\u0644\u0627\u062d \u0639\u0645\u06cc\u0642', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
+  R5: { label: '\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u06f5 \u2014 \u062a\u0636\u0639\u06cc\u0641 \u0633\u0627\u062e\u062a\u0627\u0631', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
 };
 
 const GRADE_MAP: Record<string, { label: string; color: string }> = {
@@ -114,7 +116,7 @@ function GradeBadge({ grade }: { grade: string }) {
 }
 
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
-  R1: { text: 'صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+  R1: { text: 'سناریوی ۱: صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
   R2: { text: 'صعود تدریجی — ورود در اصلاح توصیه می‌شود', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
   R3: { text: 'بازار رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
   R4: { text: 'اصلاحی — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
@@ -664,23 +666,23 @@ body { font-family: 'Vazirmatn', sans-serif; background: #f3f4f6; color: #111827
 <body>
 <div class="container">
 <div class="header">
-<h1>📈 تحلیل تکنیکال ${symbolName}</h1>
+<h1> تحلیل تکنیکال ${symbolName}</h1>
 <div style="margin-top:8px">
-<span class="badge">📍 قیمت مرجع: <strong>${toFa(currentPrice)} ریال</strong></span>
-<span class="badge">🎯 هدف کوتاه‌مدت: <strong>${toFa(targetMin)} — ${toFa(targetMax)} ریال</strong></span>
-<span class="badge">📊 روند: <strong>${trendText}</strong></span>
+<span class="badge"> قیمت مرجع: <strong>${toFa(currentPrice)} ریال</strong></span>
+<span class="badge"> هدف کوتاه‌مدت: <strong>${toFa(targetMin)} — ${toFa(targetMax)} ریال</strong></span>
+<span class="badge"> روند: <strong>${trendText}</strong></span>
 <span class="badge">RSI: ${toFa(rsi)} (${rsiSignal})</span>
 </div>
-${lastCandleJalali ? `<div style="font-size:11px;color:#6b7280;margin-top:8px">📅 ${lastCandleJalali}</div>` : ''}
+${lastCandleJalali ? `<div style="font-size:11px;color:#6b7280;margin-top:8px"> ${lastCandleJalali}</div>` : ''}
 </div>
 
 <div class="section">
-<h2>🧠 تحلیل جامع روند و اندیکاتورها</h2>
+<h2> تحلیل جامع روند و اندیکاتورها</h2>
 <div>${vdesRef.current.querySelector('.vdes-analysis-text')?.innerHTML || '<p>تحلیل در دسترس نیست</p>'}</div>
 </div>
 
 <div class="section">
-<h2>🏛️ احتمالات سناریوها</h2>
+<h2> احتمالات سناریوها</h2>
 <div class="scenario-grid">
 ${SCENARIO_KEYS.map(k => {
   const s = scenarios[k];
@@ -841,21 +843,21 @@ ${SCENARIO_KEYS.map(k => {
       <div className="rounded-2xl px-6 py-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold text-amber-800">
-            📈 تحلیل تکنیکال {symbolName}
+             تحلیل تکنیکال {symbolName}
           </h1>
           {lastCandleJalali && (
-            <span className="text-xs text-[#6b7280]">📅 {lastCandleJalali}</span>
+            <span className="text-xs text-[#6b7280]"> {lastCandleJalali}</span>
           )}
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
           <span className="px-3.5 py-1 rounded-full border border-[#e5e7eb] bg-[#f3f4f6] text-xs text-[#374151]">
-            📍 قیمت مرجع: <b className="text-[#111827]">{toFa(currentPrice)} ریال</b>
+             قیمت مرجع: <b className="text-[#111827]">{toFa(currentPrice)} ریال</b>
           </span>
           <span className="px-3.5 py-1 rounded-full border border-[#e5e7eb] bg-[#f3f4f6] text-xs text-[#374151]">
-            🎯 هدف کوتاه‌مدت: <b className="text-[#111827]">{toFa(targetMin)} — {toFa(targetMax)} ریال</b>
+             هدف کوتاه‌مدت: <b className="text-[#111827]">{toFa(targetMin)} — {toFa(targetMax)} ریال</b>
           </span>
           <span className="px-3.5 py-1 rounded-full border border-[#e5e7eb] bg-[#f3f4f6] text-xs text-[#374151]">
-            📊 روند: <b className="text-[#111827]">{trendText}</b>
+             روند: <b className="text-[#111827]">{trendText}</b>
           </span>
           <span className={`px-3.5 py-1 rounded-full border text-xs font-medium ${
             rsi > 70 ? 'bg-red-700/10 text-red-700 border-red-700/20'
@@ -913,10 +915,10 @@ ${SCENARIO_KEYS.map(k => {
       {/* ═══ KEY LEVELS ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* ── Resistances ── */}
-        <div className="rounded-2xl border border-red-700/15 overflow-hidden bg-[#ffffff] shadow-sm">
-          <div className="px-5 py-3 flex items-center gap-2 border-b border-red-700/10 bg-red-50">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-600" />
-            <h3 className="text-sm font-bold text-red-700">سطوح مقاومت</h3>
+        <div className="rounded-2xl border border-orange-200 overflow-hidden bg-[#ffffff] shadow-sm">
+          <div className="px-5 py-3 flex items-center gap-2 border-b border-orange-200 bg-orange-50">
+            <div className="w-2.5 h-2.5 rounded-full bg-orange-600" />
+            <h3 className="text-sm font-bold text-orange-700">سطوح مقاومت</h3>
             <span className="text-[10px] text-[#6b7280] mr-auto">حمایت و مقاومت هوشمند</span>
           </div>
           <div className="p-4 space-y-2.5">
@@ -939,7 +941,7 @@ ${SCENARIO_KEYS.map(k => {
                 </div>
                 <div className="flex items-center gap-2">
                   <StrengthBar strength={r.strength} />
-                  {r.isTarget && <span className="text-[10px]">🎯</span>}
+                  {r.isTarget && <span className="text-[10px]"></span>}
                 </div>
               </div>
             ))}
@@ -947,10 +949,10 @@ ${SCENARIO_KEYS.map(k => {
         </div>
 
         {/* ── Supports ── */}
-        <div className="rounded-2xl border border-emerald-700/15 overflow-hidden bg-[#ffffff] shadow-sm">
-          <div className="px-5 py-3 flex items-center gap-2 border-b border-emerald-700/10 bg-emerald-50">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-            <h3 className="text-sm font-bold text-emerald-700">سطوح حمایت</h3>
+        <div className="rounded-2xl border border-blue-200 overflow-hidden bg-[#ffffff] shadow-sm">
+          <div className="px-5 py-3 flex items-center gap-2 border-b border-blue-200 bg-blue-50">
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+            <h3 className="text-sm font-bold text-blue-700">سطوح حمایت</h3>
             <span className="text-[10px] text-[#6b7280] mr-auto">حمایت و مقاومت هوشمند</span>
           </div>
           <div className="p-4 space-y-2.5">
@@ -973,7 +975,7 @@ ${SCENARIO_KEYS.map(k => {
                 </div>
                 <div className="flex items-center gap-2">
                   <StrengthBar strength={s.strength} />
-                  {s.isTarget && <span className="text-[10px]">🎯</span>}
+                  {s.isTarget && <span className="text-[10px]"></span>}
                 </div>
               </div>
             ))}
@@ -994,7 +996,7 @@ ${SCENARIO_KEYS.map(k => {
               <div key={i} className="flex-1 min-w-[160px] rounded-xl p-4 border border-amber-800/10 bg-amber-50/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] text-[#6b7280]">هدف {toFa(i + 1)}</span>
-                  <span className="text-[10px]">🎯</span>
+                  <span className="text-[10px]"></span>
                 </div>
                 <p className="text-base font-black text-amber-800 tabular-nums" dir="ltr">{toFa(t.price)}</p>
                 <span className="text-[10px] text-[#6b7280]">ریال</span>
@@ -1010,7 +1012,7 @@ ${SCENARIO_KEYS.map(k => {
       {/* ═══ AI ANALYSIS TEXT ═══ */}
       <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
         <h2 className="text-sm font-semibold mb-3 text-amber-800 flex items-center gap-2">
-          <span>🧠</span>
+          <span></span>
           تحلیل هوشمند بازار
         </h2>
         {/* ML Selection Badges */}
@@ -1069,7 +1071,7 @@ ${SCENARIO_KEYS.map(k => {
       {/* ═══ SCENARIO PROBABILITIES ═══ */}
       <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
         <h2 className="text-sm font-semibold mb-4 text-amber-800 flex items-center gap-2">
-          <span>🏛️</span>
+          <span></span>
           احتمالات سناریوها
         </h2>
 
