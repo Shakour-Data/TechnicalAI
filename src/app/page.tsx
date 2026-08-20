@@ -368,6 +368,8 @@ export default function Home() {
     setRefreshing(true);
     try {
       await handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector, params.finpyIndex, params.webId);
+    } catch {
+      // Silently handle refresh errors to avoid unhandled rejections
     } finally {
       setRefreshing(false);
     }
@@ -384,7 +386,7 @@ export default function Home() {
   // Refresh on tab/window focus
   useEffect(() => {
     const onFocus = () => {
-      if (data) doRefresh();
+      if (data) doRefresh().catch(() => {});
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);

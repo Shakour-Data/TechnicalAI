@@ -19,7 +19,7 @@ const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 3_600_000;
 
 function cacheKey(body: Record<string, unknown>): string {
-  const k = { v: 2, s: body.symbolName, p: body.currentPrice, t: body.trendDirection, r: body.rsi, a: body.adx };
+  const k = { v: 5, s: body.symbolName, p: body.currentPrice, t: body.trendDirection, r: body.rsi, a: body.adx };
   return JSON.stringify(k);
 }
 
@@ -63,7 +63,7 @@ function processAIQueue() {
       if (msg.includes('429')) {
         const cd = Math.max(cooldownUntil - Date.now(), 0) + 90_000;
         cooldownUntil = Date.now() + Math.min(cd, 300_000);
-        console.warn(`[AI v5.1] 429, cooldown ${Math.min(cd, 300_000) / 1000}s`);
+        console.warn(`[AI v5] 429, cooldown ${Math.min(cd, 300_000) / 1000}s`);
       }
       item.reject(err);
     })
@@ -116,7 +116,7 @@ async function callZaiSDK(messages: { role: string; content: string }[], maxRetr
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('429') && attempt < maxRetries) {
         const waitMs = Math.round(jitter(20_000 * Math.pow(2, attempt - 1))); // 20s, 40s, 80s, 160s + jitter
-        console.warn(`[AI v5.1] 429 retry ${attempt}/${maxRetries}, waiting ${Math.round(waitMs / 1000)}s...`);
+        console.warn(`[AI v5] 429 retry ${attempt}/${maxRetries}, waiting ${Math.round(waitMs / 1000)}s...`);
         await sleep(waitMs);
         continue;
       }
@@ -241,7 +241,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
 
   const dominantScenario = scenarioList[0];
   const scenarioBlock = scenarioList
-    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob * 100)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
+    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
     .join('\n');
 
   return `
@@ -287,20 +287,21 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 قواعد خروجی:
 1. حداقل 800 کلمه و حداکثر 1,500 کلمه.
 2. تمام اعداد به فارسی و سه رقم سه رقم جدا شوند.
-3. از ایموجی‌های تحلیلی مناسب استفاده کنید: 📊 📈 📉 ⚡ 🔑 ⚠️ 🎯 ✅ ❌ ❓ 💡 🔴 🟢. حداکثر 6 تا در کل متن.
+3. از ایموجی‌های تحلیلی مناسب استفاده کنید: 📊 📈 📉 ⚡ 🔑 ⚠️ 🎯 ✅ ❌ ❓ 💡 🔴 🟢. حداکثر 6 تا در کل متن. **ممنوعیت مطلق:** به هیچ عنوان از ایموجی‌های آدمک، چهره، شخص یا بدن انسان استفاده نکنید (مثل 🧑‍💼 👤 🙋 💂 🧑‍💻 🧑‍🔧 و مشابه آن‌ها).
 4. متن شامل 3 تا 5 پاراگراف باشد. هر پاراگراف بلند و عمیق (200 تا 500 کلمه).
-5. متن کاملاً به زبان فارسی باشد.
-6. تحلیل 3 لایه داشته باشد: عملیاتی (برای معاملگر), تحلیلی (برای تحلیلگر), روانشناختی (برای مدیر ریسک).
+5. متن کاملاً به زبان فارسی باشد. **ممنوعیت مطلق:** به هیچ عنوان از کلمات، عبارات یا جمله‌سازی‌های زبان چینی در متن استفاده نشود.
+6. تحلیل یک‌پارچه و پیوسته بنویسید. **ممنوعیت مطلق:** به هیچ عنوان از عباراتی مثل «از منظر عملیاتی»، «از دیدگاه عملیاتی»، «از زاویه عملیاتی» یا هر عبارت مشابه که متن را به بخش‌های جداگانه تقسیم می‌کند استفاده نکنید. تحلیل باید یک جریان یکپارچه و روان باشد بدون هیچ‌گونه برچسب‌گذاری داخلی یا دسته‌بندی لایه‌ای.
 7. شامل سناریوی معاملاتی کامل باشد: جهت, نقطه ورود, حد ضرر, اهداف, نسبت ریسک/ریوارد.
 8. شامل درخت سناریویی انشعابی و تحلیل حساسیت باشد.
-9. حداقل 5 سوال یا تعجب در متن داشته باشد.
+9. اگر در متن سؤالی یا ابهامی مطرح می‌شود، **حتماً** باید در همان پاراگراف یا پاراگراف بعدی با استناد به سناریوها و احتمالات ارائه‌شده به آن پاسخ داده شود. هیچ سؤالی بدون پاسخ باقی نماند.
 10. هیچ اشاره‌ای به مکتب, سبک, لحن, سیستم هوشمند, روش ML یا هر اصطلاح داخلی سیستم نشود.
 11. در ابتدا یک عنوان مختصر و در انتها جمله روایت غالب (پررنگ) و خلاصه عملی (حداکثر 30 کلمه) بیاورید.
-12. درصدها را به صورت کامل بنویسید: مثلاً «5 درصد» نه «5٪».
+12. درصدها را به صورت کامل بنویسید: مثلاً «5 درصد» نه «5٪». درصدها باید منطقی و معقول باشند (مثلاً بین 1 تا 99 درصد).
 13. برای کلمات و عبارات مهم از **بولد** استفاده کنید (حداقل 8 مورد بولد در کل متن).
-14. هیچ سرفصل یا عنوان داخلی سیستم (مثل مرحله, فاز, خروجی سه‌لایه و غیره) در متن نباشد. متن باید یکپارچه و روان باشد.
+14. هیچ سرفصل یا عنوان داخلی سیستم (مثل مرحله, فاز, خروجی سه‌لایه, تحلیل عملیاتی, تحلیل تحلیلی, تحلیل روانشناختی و غیره) در متن نباشد. متن باید یکپارچه و روان باشد.
 15. متن خروجی فقط و فقط تحلیل باشد. هیچ دستورالعمل, ساختار یا راهنمای داخلی در خروجی نیاید.
-16. برای رنگی کلمات مهم از دستور {color:COLOR}متن{/color} استفاده کنید. رنگهای مجاز: red, green, amber, blue, orange, purple, emerald. مثال: {color:red}**خطر شکست سطح مقاومت**{/color}. حداکثر 8 مورد رنگی در کل متن.`;
+16. برای رنگی کلمات مهم از دستور {color:COLOR}متن{/color} استفاده کنید. رنگهای مجاز: red, green, amber, blue, orange, purple, emerald. مثال: {color:red}**خطر شکست سطح مقاومت**{/color}. حداکثر 8 مورد رنگی در کل متن.
+17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.`;
 
 // --- POST Handler ---
 export async function POST(req: NextRequest) {
@@ -314,7 +315,7 @@ export async function POST(req: NextRequest) {
     const key = cacheKey(body);
     const cached = cache.get(key);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      console.log(`[AI v5.1] Cache hit for ${body.symbolName}`);
+      console.log(`[AI v5] Cache hit for ${body.symbolName}`);
       return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
     }
 
@@ -322,8 +323,8 @@ export async function POST(req: NextRequest) {
     const mlInput = buildMLInput(body);
     const mlSelection = selectMLCombination(mlInput);
     const methods = selectMethods(mlInput);
-    console.log(`[AI v5.1] ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
-    console.log(`[AI v5.1] Methods: ${methods.join(', ')}`);
+    console.log(`[AI v5] ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
+    console.log(`[AI v5] Methods: ${methods.join(', ')}`);
 
     // Build prompt
     const userMessage = buildPrompt(body, mlSelection, methods);
@@ -347,7 +348,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error('[AI v5.1] error:', err);
+    console.error('[AI v5] error:', err);
     return NextResponse.json({ error: userFriendlyError(err), text: '' }, { status: 500 });
   }
 }

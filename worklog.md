@@ -284,3 +284,28 @@ Stage Summary:
 - Key fix: zero-width Unicode character normalization in renderAIText was critical for color syntax
 - Error handling now catches SyntaxError from res.json() on non-JSON responses (502, etc.)
 
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix 5 AI analysis issues + lock version 5 + fix frontend errors
+
+Work Log:
+- Fixed percentage bug: `s.prob * 100` → `s.prob` in route.ts line 244 (ta-engine already returns 0-100)
+- Updated SYSTEM_PROMPT (v5 locked) with 5 new rules:
+  1. Absolute ban on human/figure emojis (🧑‍💼 👤 etc)
+  2. Absolute ban on "از منظر عملیاتی" and similar phrase-based segmentation
+  3. Questions must be answered with scenarios/probabilities
+  4. Absolute ban on Chinese language phrases
+  5. AI must not multiply provided percentages by 100
+- Updated all version references from v5.1 to v5
+- Fixed "Uncaught (in promise) Object" ×3: Added catch block to doRefresh() + .catch() to onFocus handler
+- Fixed "Node cannot be found" DOM error: Added visibility/height guards to exportPDF
+- Fixed 502 Bad Gateway: Added 120s read/write timeout to Caddy proxy config
+- Updated cache key version to v:5 to invalidate old cached analysis
+
+Stage Summary:
+- route.ts: Percentage fix (line 244), SYSTEM_PROMPT rewrite (17 rules), version v5 locked
+- page.tsx: Unhandled promise rejection fixes (doRefresh + onFocus)
+- vdes-analysis.tsx: Better exportPDF node guard
+- Caddyfile: 120s proxy timeout
+- All lint checks pass, zero console errors in browser verification

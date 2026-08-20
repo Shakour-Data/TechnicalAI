@@ -786,7 +786,17 @@ ${SCENARIO_KEYS.map(k => {
     const el = vdesRef.current;
     if (!el || !el.isConnected || el.offsetWidth === 0) return;
     try {
-      const dataUrl = await toPng(el, { backgroundColor: '#f3f4f6', pixelRatio: 2, cacheBust: true });
+      // Ensure the element is visible and rendered before capture
+      const originalDisplay = el.style.display;
+      const originalVisibility = el.style.visibility;
+      if (el.offsetHeight === 0) {
+        el.style.display = 'block';
+        el.style.visibility = 'visible';
+        await new Promise(r => setTimeout(r, 100));
+      }
+      const dataUrl = await toPng(el, { backgroundColor: '#f3f4f6', pixelRatio: 2, cacheBust: true, skipAutoScale: true });
+      el.style.display = originalDisplay;
+      el.style.visibility = originalVisibility;
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
