@@ -1,24 +1,27 @@
 // ═══════════════════════════════════════════════════════════════════
 // TSETMC Index History API
-// Uses z-ai-web-dev-sdk page_reader to fetch from cdn.tsetmc.com
-// (direct HTTP access to TSETMC is blocked outside Iran)
+// Uses z-ai-web-dev-sdk page_reader (rate-limited via zai-shared)
+// to fetch from cdn.tsetmc.com (direct HTTP access blocked outside Iran)
+//
+// IMPORTANT: All TSETMC webIds exceed Number.MAX_SAFE_INTEGER (17 digits)
+// so they MUST be stored and passed as STRINGS to avoid precision loss.
 // ═══════════════════════════════════════════════════════════════════
 
-import ZAI from 'z-ai-web-dev-sdk';
+import { rateLimitedPageReader } from '@/lib/zai-shared';
 import { gregorianToJalali } from '@/lib/jalali';
 
-// ── Web IDs for main market indices (from finpy-tse source) ───────
-export const INDEX_WEB_IDS: Record<string, number> = {
-  CWI:   32097828799138957,   // شاخص کل
-  EWI:   67130298613737946,   // شاخص کل هم‌وزن
-  CWPI:  5798407779416661,    // شاخص قیمت وزنی-ارزشی
-  EWPI:  8384385859414435,    // شاخص قیمت هم‌وزن
-  FFI:   49579049405614711,   // شاخص سهام آزاد شناور
-  MKT1I: 62752761908615603,   // شاخص بازار اول
-  MKT2I: 71704845530629737,   // شاخص بازار دوم
-  INDI:  43754960038275285,   // شاخص صنعت
-  ACT50: 46342955726788357,   // شاخص ۵۰ شرکت فعال‌تر
-  LCI30: 10523825119011581,   // شاخص ۳۰ شرکت بزرگ
+// ── Web IDs for main market indices (STRINGS to avoid precision loss) ─
+export const INDEX_WEB_IDS: Record<string, string> = {
+  CWI:   '32097828799138957',  // شاخص کل
+  EWI:   '67130298613737946',  // شاخص کل هم‌وزن
+  CWPI:  '5798407779416661',   // شاخص قیمت وزنی-ارزشی
+  EWPI:  '8384385859414435',   // شاخص قیمت هم‌وزن
+  FFI:   '49579049405614711',  // شاخص سهام آزاد شناور
+  MKT1I: '62752761908615603',  // شاخص بازار اول
+  MKT2I: '71704845530629737',  // شاخص بازار دوم
+  INDI:  '43754960038275285',  // شاخص صنعت
+  ACT50: '46342955726788357',  // شاخص ۵۰ شرکت فعال‌تر
+  LCI30: '10523825119011581',  // شاخص ۳۰ شرکت بزرگ
 };
 
 // ── In-memory cache ──────────────────────────────────────────────
@@ -40,20 +43,11 @@ export interface IndexCandle {
 }
 
 interface TsetmcB2Item {
-  insCode: number;
+  insCode: string;
   dEven: number;           // Gregorian date: 20260818
   xNivInuClMresIbs: number; // Adjusted Close
   xNivInuPbMresIbs: number; // Previous Day Close
   xNivInuPhMresIbs: number; // First price of day
-}
-
-// ── Singleton ZAI instance ───────────────────────────────────────
-let zaiInstance: ZAI | null = null;
-async function getZai(): Promise<ZAI> {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create();
-  }
-  return zaiInstance;
 }
 
 // ── Date conversion ──────────────────────────────────────────────
@@ -67,45 +61,58 @@ function devenToShamsi(deven: number): string {
   return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
 }
 
-// ── Core fetch function ──────────────────────────────────────────
-async function fetchB2FromTsetmc(webId: number): Promise<TsetmcB2Item[]> {
-  const url = `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`;
-  const zai = await getZai();
+// ── Core fetch function using rate-limited page_reader ─────────────
+async function fetchB2FromTsetmc(webIdStr: string): Promise<TsetmcB2Item[]> {
+  const url = `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webIdStr}`;
 
-  const result = await zai.functions.invoke('page_reader', { url });
-
-  console.log(`[tsetmc-index-api] page_reader result: code=${result.code}, hasData=${!!result.data}, dataType=${typeof result.data}, htmlLen=${result.data?.html?.length ?? 'N/A'}`);
-  console.log(`[tsetmc-index-api] HTML preview: ${String(result.data?.html ?? '').substring(0, 500)}`);
-
-  if (result.code !== 200 || !result.data?.html) {
-    throw new Error(`TSETMC API returned status ${result.code}`);
-  }
+  const html = await rateLimitedPageReader(url, 60_000);
 
   // Parse JSON from HTML <pre> tag (page_reader wraps content in HTML)
-  const html = result.data.html as string;
   const preMatch = /<pre[^>]*>([\s\S]*?)<\/pre>/i.exec(html);
-  console.log(`[tsetmc-index-api] preMatch found: ${!!preMatch}, html length: ${html.length}`);
-  
-  if (!preMatch) {
-    // Try parsing directly (some responses might not be wrapped)
-    try {
-      const parsed = JSON.parse(html);
-      return parsed.indexB2 || [];
-    } catch {
-      throw new Error('Failed to parse TSETMC response');
-    }
+
+  let jsonStr: string;
+  if (preMatch) {
+    jsonStr = preMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  } else {
+    // Try parsing directly
+    jsonStr = html.replace(/<[^>]+>/g, '').trim();
   }
 
-  const jsonStr = preMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
-  const parsed = JSON.parse(jsonStr);
-  const items = parsed.indexB2 || [];
-  console.log(`[tsetmc-index-api] Parsed ${items.length} items from TSETMC`);
-  return items;
+  // Handle truncated JSON — find last complete `]`
+  const lastBracket = jsonStr.lastIndexOf(']');
+  if (lastBracket > 0) {
+    jsonStr = jsonStr.substring(0, lastBracket + 1);
+  }
+
+  // Try to find the indexB2 array
+  const b2Match = jsonStr.match(/"indexB2"\s*:\s*/);
+  if (b2Match) {
+    const start = b2Match.index! + b2Match[0].length;
+    // Find the matching closing bracket
+    let depth = 0;
+    let end = start;
+    for (let i = start; i < jsonStr.length; i++) {
+      if (jsonStr[i] === '[') depth++;
+      else if (jsonStr[i] === ']') {
+        depth--;
+        if (depth === 0) { end = i + 1; break; }
+      }
+    }
+    const arrStr = jsonStr.substring(start, end);
+    const items: TsetmcB2Item[] = JSON.parse(arrStr);
+    return items;
+  }
+
+  // Fallback: try parsing the whole thing as JSON
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return parsed.indexB2 || [];
+  } catch {
+    throw new Error('Failed to parse TSETMC response');
+  }
 }
 
 // ── Build OHLC candles from B2 data ─────────────────────────────
-// B2 provides: Close, PreviousClose, First
-// We derive: Open=First, High=max(First,Close), Low=min(First,Close), Close
 function buildCandles(b2Items: TsetmcB2Item[]): IndexCandle[] {
   const candles: IndexCandle[] = [];
 
@@ -138,8 +145,8 @@ function buildCandles(b2Items: TsetmcB2Item[]): IndexCandle[] {
  */
 export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCandle[]> {
   const key = indexKey.toUpperCase();
-  const webId = INDEX_WEB_IDS[key];
-  if (!webId) {
+  const webIdStr = INDEX_WEB_IDS[key];
+  if (!webIdStr) {
     throw new Error(`Unknown index key: ${key}`);
   }
 
@@ -151,8 +158,8 @@ export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCand
     return cached.data;
   }
 
-  // Fetch from TSETMC via z-ai-web-dev-sdk
-  const b2Items = await fetchB2FromTsetmc(webId);
+  // Fetch from TSETMC via rate-limited page_reader
+  const b2Items = await fetchB2FromTsetmc(webIdStr);
   if (!b2Items || b2Items.length === 0) {
     throw new Error(`No data returned for index: ${key}`);
   }
@@ -167,22 +174,22 @@ export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCand
 
 /**
  * Fetch historical candle data for a sector/industry index
- * @param webId - The TSETMC web ID for the sector
+ * @param webIdStr - The TSETMC web ID (as string to avoid precision loss)
  * @returns Array of candles sorted oldest first
  */
-export async function fetchSectorIndexHistory(webId: number): Promise<IndexCandle[]> {
+export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCandle[]> {
   // Check cache
-  const cacheKey = `sec_${webId}`;
+  const cacheKey = `sec_${webIdStr}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && now - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
 
-  // Fetch from TSETMC via z-ai-web-dev-sdk
-  const b2Items = await fetchB2FromTsetmc(webId);
+  // Fetch from TSETMC via rate-limited page_reader
+  const b2Items = await fetchB2FromTsetmc(webIdStr);
   if (!b2Items || b2Items.length === 0) {
-    throw new Error(`No data returned for sector web ID: ${webId}`);
+    throw new Error(`No data returned for sector web ID: ${webIdStr}`);
   }
 
   const candles = buildCandles(b2Items);

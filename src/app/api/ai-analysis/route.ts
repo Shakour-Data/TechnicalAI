@@ -12,164 +12,271 @@ async function getZAI() {
   return zaiInstance;
 }
 
-const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایران هستید که یک گزارش تحلیلی جامع و حرفه‌ای تولید می‌کنید.
-
-قوانین الزامی خروجی:
-۱. حداقل ۷۰۰ کلمه و حداکثر ۱٬۵۰۰ کلمه بنویسید. این مهم‌ترین قانون است. اگر متن کمتر از ۷۰۰ کلمه شود، تحلیل ناقص محسوب می‌شود.
-۲. تمام اعداد در متن به فارسی نوشته شوند (مثلاً ۱۲۳٬۴۵۶ نه 123,456).
-۳. اعداد بزرگ سه رقم سه رقم جدا شوند (مثلاً ۱٬۲۳۴٬۵۶۷).
-۴. هیچ ایموجی، شکلک یا کاراکتر غیرحروفی استفاده نشود. فقط علائم نگارشی استاندارد ( . ، ؛ : ؟ ! « » — ).
-۵. متن شامل حداقل ۷ پاراگراف باشد.
-۶. متن کاملاً به زبان فارسی باشد.
-۷. هر پاراگراف حداقل ۳ الی ۵ جمله داشته باشد تا حجم متن به حداقل ۷۰۰ کلمه برسد.
-
----
-وظیفه شما:
-۱. ابتدا داده‌های تکنیکال زیر را به‌صورت جامع ارزیابی کنید.
-۲. سپس یکی از ۶ سبک روایت موجود را انتخاب کنید که بهترین تطابق را با شرایط فعلی بازار دارد.
-۳. تحلیلی با لحن، ساختار و نتیجه‌گیری مطابق آن سبک بنویسید.
-
----
-۶ سبک روایت موجود (انتخاب یکی از آنها):
-
-۱. روایت محافظه‌کار (بانکدار سابق):
-   - تمرکز بر ریسک و عدم قطعیت
-   - تأکید بر سناریوی اصلاح و هشدار
-   - شاخص کلیدی: ADX و RSI
-   - نتیجه‌گیری: صبر کنید تا بازار جهت خود را مشخص کند
-   - ویژگی زبانی: جملات بلند، رسمی، کلمات احتمال، ریسک، محافظت
-
-۲. روایت اسکالپر (تهاجمی و بی‌صبر):
-   - تمرکز بر فرصت‌های کوتاه‌مدت
-   - تأکید بر فرصت‌های ورود و خروج سریع
-   - شاخص کلیدی: MACD و OBV
-   - نتیجه‌گیری: در پولبک بخرید، در هیجان بفروشید
-   - ویژگی زبانی: جملات کوتاه، سریع، کلمات کشش، شارپ، فرصت
-
-۳. روایت روند (بلندمدت‌نگر و فلسفی):
-   - تمرکز بر چرخه و تثبیت
-   - تأکید بر تصویر بزرگتر بازار
-   - شاخص کلیدی: باند بولینگر و MA100
-   - نتیجه‌گیری: روند دست‌نخورده است، این فقط یک نفس‌گیری است
-   - ویژگی زبانی: آرام، توصیفی، کلمات چرخه، فاز، تثبیت
-
-۴. روایت بدبین (مدیر ریسک):
-   - تمرکز بر خطر اصلاح عمیق
-   - تأکید بر سناریوهای نزولی
-   - شاخص کلیدی: استوکاستیک و CCI
-   - نتیجه‌گیری: اشباع خرید نشانه‌ای از ریزش قریب‌الوقوع است
-   - ویژگی زبانی: هشداردهنده، کلمات خطر، شکست، فریبنده
-
-۵. روایت روایی (داستان‌گو):
-   - تمرکز بر رفتار قیمت و سطوح
-   - بدون استفاده از شاخص‌های عددی
-   - تأکید بر تمام سناریوها به‌صورت استعاری
-   - نتیجه‌گیری: بازار در چهارراه است، حمایت و مقاومت تصمیم‌گیرنده هستند
-   - ویژگی زبانی: توصیفی، استعاری، کلمات جاده، مسیر، فنر
-
-۶. روایت تصمیم‌محور (مشاور عملی):
-   - تمرکز بر گام‌های عملی
-   - تأکید بر شکست سطوح کلیدی
-   - شاخص کلیدی: حمایت و مقاومت و MA21
-   - نتیجه‌گیری: تا شکست سطوح کلیدی، هیچ اقدامی نکنید
-   - ویژگی زبانی: شرطی، گام‌به‌گام، کلمات اگر، آنگاه، اقدام
-
----
-فرآیند انتخاب روایت:
-۱. داده‌ها را بررسی کنید.
-۲. به این سوالات پاسخ دهید (به‌صورت داخلی و بدون نوشتن):
-   - آیا بازار در فاز انتظار است یا اقدام؟
-   - آیا حجم و مومنتوم MACD از صعود حمایت می‌کنند یا خیر؟
-   - آیا قیمت به مقاومت نزدیک است یا به حمایت؟
-   - کدام سناریو با مجموع شرایط فعلی سازگارتر است؟
-۳. یکی از ۶ روایت را انتخاب کنید.
-۴. تحلیلی بنویسید که:
-   - با لحن و سبک آن روایت نوشته شده باشد.
-   - شامل یک جمله روایت غالب (به‌صورت پررنگ با علامت ** در ابتدا و انتهای جمله) باشد.
-   - حداقل ۷ و حداکثر ۱۰ پاراگراف داشته باشد.
-   - هر پاراگراف حداقل ۳ جمله داشته باشد.
-   - حداقل یک سوال یا تعجب داشته باشد.
-   - در ابتدا عنوان روایت انتخاب‌شده را بنویسید (مثلاً: تحلیل تصمیم‌محور).
-   - در انتها یک خلاصه عملی (با کلمه خلاصه: در ابتدا) در حداکثر ۱۵ کلمه داشته باشد.
-
----
-خروجی نهایی:
-یک متن واحد با ساختار زیر:
-- عنوان: نام روایت انتخاب‌شده
-- متن اصلی: تحلیلی جامع و حرفه‌ای بین ۷۰۰ تا ۱٬۵۰۰ کلمه
-- جمله روایت غالب: (پررنگ)
-- خلاصه عملی: (حداکثر ۱۵ کلمه)
-
-توجه مهم: انتخاب روایت بر اساس داده‌های واقعی است، نه ترجیح شخصی. اگر شاخص‌ها نشان‌دهنده اشباع خرید شدید هستند، روایت بدبین را انتخاب کنید. اگر حجم مثبت و مومنتوم صعودی غالب است، روایت اسکالپر یا روند را انتخاب کنید. تمام اعداد حتماً فارسی باشند.`;
-
-// ─── Helper: Convert numbers to Persian with 3-digit grouping ────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────
 function toPersianNum(n: number): string {
+  if (!isFinite(n) || isNaN(n)) return '0';
   return Math.round(n).toLocaleString('fa-IR');
 }
 
+function srGrade(strength: number): string {
+  if (strength >= 8.5) return 'بسیار قوی';
+  if (strength >= 7) return 'قوی';
+  if (strength >= 5) return 'متوسط';
+  if (strength >= 3) return 'ضعیف';
+  return 'بسیار ضعیف';
+}
+
+// ─── Build the advanced 10-layer narrative prompt ─────────────────────
+function buildAdvancedPrompt(body: Record<string, unknown>): string {
+  const {
+    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+    stochK, stochD, macdLine, macdSignal, macdHist,
+    diPlus, diMinus, sar, atr, obv,
+    bollingerUpper, bollingerMiddle, bollingerLower,
+    trendDirection, trendAngle, trendR2,
+    scenarios, hasVolume,
+    resistanceStrengths, supportStrengths,
+  } = body as {
+    symbolName: string; currentPrice: number; ma21: number; ma100: number;
+    rsi: number; mfi: number; cci: number; adx: number;
+    stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number;
+    diPlus: number; diMinus: number; sar: number; atr: number; obv: number;
+    bollingerUpper: number; bollingerMiddle: number; bollingerLower: number;
+    trendDirection: string; trendAngle: number; trendR2: number;
+    scenarios: Record<string, { name?: string; probability: number; targetMin: number; targetMax: number; description?: string }>;
+    hasVolume: boolean;
+    resistanceStrengths: Array<{ price: number; strength: number; grade?: string; methods?: unknown[]; overlapCount?: number }>;
+    supportStrengths: Array<{ price: number; strength: number; grade?: string; methods?: unknown[]; overlapCount?: number }>;
+  };
+
+  // Trend
+  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+  const r2Pct = (trendR2 * 100).toFixed(1);
+
+  // ADX strength
+  const adxStrength = adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف';
+
+  // RSI signal
+  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+
+  // Stochastic signal
+  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+
+  // BB position
+  const bbRange = bollingerUpper - bollingerLower;
+  const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
+  const bbSignal = currentPrice > bollingerUpper
+    ? 'بالای باند بالایی'
+    : currentPrice < bollingerLower
+    ? 'زیر باند پایینی'
+    : `داخل باندها (${toPersianNum(bbPos)}٪)`;
+
+  // S/R levels
+  const R1 = resistanceStrengths?.[0];
+  const R2 = resistanceStrengths?.[1];
+  const S1 = supportStrengths?.[0];
+  const S2 = supportStrengths?.[1];
+  const S3 = supportStrengths?.[2];
+
+  const R1Price = R1?.price ?? Math.round(currentPrice * 1.05);
+  const R2Price = R2?.price ?? Math.round(currentPrice * 1.10);
+  const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
+  const S2Price = S2?.price ?? Math.round(currentPrice * 0.90);
+  const S3Price = S3?.price ?? Math.round(currentPrice * 0.85);
+
+  const R1Grade = R1?.strength ? srGrade(R1.strength) : 'نامشخص';
+  const S1Grade = S1?.strength ? srGrade(S1.strength) : 'نامشخص';
+  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} روش تأیید)` : '';
+  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} روش تأیید)` : '';
+
+  // Dominant scenario
+  let dominantKey = 'R3';
+  let dominantProb = 0;
+  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5'] as const) {
+    const p = scenarios?.[k]?.probability ?? 0;
+    if (p > dominantProb) { dominantProb = p; dominantKey = k; }
+  }
+
+  // OBV description
+  const obvDesc = hasVolume
+    ? (obv > 0
+      ? `مثبت (+${(obv / 1e6).toFixed(1)}M) اما در فاز رنج سیگنال قطعی نیست`
+      : `منفی (${(obv / 1e6).toFixed(1)}M) و در فاز رنج`)
+    : 'بدون داده حجم';
+
+  // MACD description
+  const macdDesc = macdHist > 0 && macdLine > macdSignal
+    ? 'صعودی اما هیستوگرام ضعیف'
+    : macdHist > 0
+    ? 'صعودی با هیستوگرام مثبت'
+    : 'نزولی';
+
+  // Overall signal
+  const diPressure = diPlus > diMinus ? 'فشار خرید غالب' : 'فشار فروش غالب';
+
+  // Price vs MAs
+  const posVsMa21 = currentPrice > ma21 ? 'بالاتر' : 'پایین‌تر';
+  const posVsMa100 = currentPrice > ma100 ? 'بالاتر' : 'پایین‌تر';
+
+  // Scenario names (use provided names or defaults)
+  const sR1 = scenarios?.R1?.name || 'تداوم صعود هیجانی';
+  const sR2 = scenarios?.R2?.name || 'پولبک سالم';
+  const sR3 = scenarios?.R3?.name || 'اصلاح کنترل‌شده';
+  const sR4 = scenarios?.R4?.name || 'اصلاح عمیق';
+  const sR5 = scenarios?.R5?.name || 'تضعیف ساختار';
+
+  return `
+**دستورالعمل (نسخه فوق‌پیشرفته):**  
+شما یک **تحلیلگر ارشد بازارهای مالی با ۲۰ سال تجربه** هستید که به‌جای استفاده از یک رویکرد ثابت، یک **«سیستم تشخیص شرایط چندلایه»** را پیاده‌سازی می‌کنید.  
+
+وظیفه شما این است که برای **«${symbolName}»** در **تایمفریم روزانه**، یک تحلیل **فوق‌پیشرفته، چندلایه، و کاملاً استدلالی** ارائه دهید.
+
+---  
+**داده‌های پایه (واقعی و غیرقابل تغییر):**  
+- نام ابزار: **${symbolName}**  
+- قیمت مرجع: **${toPersianNum(currentPrice)} ریال**  
+- روند میان‌مدت: **${trendLabel}** (زاویه ${toPersianNum(Math.abs(trendAngle))}°، R²=${r2Pct}٪)  
+- موقعیت نسبت به میانگین‌ها: ${posVsMa21} از **MA21 (${toPersianNum(ma21)})** و ${posVsMa100} از **MA100 (${toPersianNum(ma100)})**  
+- **ADX=${toPersianNum(adx)}** (${adxStrength})، **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** ← ${diPressure}  
+- **RSI=${toPersianNum(rsi)}** (${rsiSignal})، **استوکاستیک=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})  
+- **MACD** ${macdDesc} (خط=${toPersianNum(macdLine)}، سیگنال=${toPersianNum(macdSignal)}، هیستوگرام=${toPersianNum(macdHist)})  
+- **OBV** ${obvDesc}  
+- قیمت **${bbSignal}** (باند بالایی ${toPersianNum(bollingerUpper)})  
+- مقاومت **R1** در ${toPersianNum(R1Price)} ریال (${R1Grade} ${R1Confirm})  
+- حمایت **S1** در ${toPersianNum(S1Price)} ریال (${S1Grade} ${S1Confirm})  
+${S2Price ? `- حمایت **S2** در ${toPersianNum(S2Price)} ریال  \n` : ''}${S3Price ? `- حمایت **S3** در ${toPersianNum(S3Price)} ریال  \n` : ''}${R2Price ? `- مقاومت **R2** در ${toPersianNum(R2Price)} ریال  \n` : ''}- میانگین نوسان روزانه (ATR): ${toPersianNum(atr)} ریال  
+
+**سناریوهای محتمل (با احتمالات):**  
+- **سناریوی ۱ – ${sR1}:** ${toPersianNum(scenarios?.R1?.probability ?? 0)}٪ (محدوده ${toPersianNum(scenarios?.R1?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R1?.targetMax ?? 0)} ریال)  
+- **سناریوی ۲ – ${sR2}:** ${toPersianNum(scenarios?.R2?.probability ?? 0)}٪ (محدوده ${toPersianNum(scenarios?.R2?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R2?.targetMax ?? 0)} ریال)  
+- **سناریوی ۳ – ${sR3}:** ${toPersianNum(scenarios?.R3?.probability ?? 0)}٪ (محدوده ${toPersianNum(scenarios?.R3?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R3?.targetMax ?? 0)} ریال) ← **سناریوی عددی غالب**  
+- **سناریوی ۴ – ${sR4}:** ${toPersianNum(scenarios?.R4?.probability ?? 0)}٪ (محدوده ${toPersianNum(scenarios?.R4?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R4?.targetMax ?? 0)} ریال)  
+- **سناریوی ۵ – ${sR5}:** ${toPersianNum(scenarios?.R5?.probability ?? 0)}٪ (محدوده ${toPersianNum(scenarios?.R5?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R5?.targetMax ?? 0)} ریال)  
+
+---  
+**مرحله ۱: استدلال داخلی چندمرحلهای (Chain of Thought — بدون نمایش)**  
+پیش از نوشتن تحلیل نهایی، به این سوالات به‌صورت داخلی پاسخ دهید (این بخش را در خروجی ننویسید):  
+۱. آیا بازار در فاز تجمع، صعود، توزیع یا نزول است؟  
+۲. آیا بین سیگنال‌ها تضاد وجود دارد (مثلاً روند صعودی اما اشباع خرید)؟ کدام سیگنال قویتر است؟  
+۳. آیا جریان پول هوشمند (OBV) تأییدکننده روند است یا مخالف آن؟  
+۴. اگر قیمت به سطوح کلیدی (${toPersianNum(S1Price)} یا ${toPersianNum(R1Price)}) برسد، چه تغییری در سناریوها ایجاد می‌شود؟  
+۵. روانشناسی غالب بازار چیست؟ (ترس، طمع، سرخوردگی، اعتماد کور؟)  
+
+---  
+**مرحله ۲: تشخیص فاز بازار (Market Phase Analysis)**  
+بازار را به ۴ فاز تقسیم کنید و فاز فعلی را مشخص کنید:  
+- **فاز تجمع:** قیمت پایین، حجم در حال افزایش، خرید هوشمند  
+- **فاز صعود:** روند صعودی شتابدار، حجم بالا، شکست مقاومت‌ها  
+- **فاز توزیع:** قیمت بالا، حجم در حال کاهش، فروش هوشمند  
+- **فاز نزول:** روند نزولی، حجم بالا در ریزش‌ها، شکست حمایت‌ها  
+
+---  
+**مرحله ۳: تشخیص تضادها و اولویتبندی سیگنالها**  
+- تضادهای موجود را به‌صراحت نام ببرید (مثلاً «روند صعودی اما اشباع خرید»).  
+- تصمیم بگیرید کدام سیگنال در شرایط فعلی وزن بیشتری دارد و چرا.  
+
+---  
+**مرحله ۴: تحلیل جریان پول هوشمند و روانشناسی بازار**  
+- بر اساس OBV و تغییرات حجم، بگویید آیا پول هوشمند در حال ورود است یا خروج.  
+- بر اساس رفتار شاخص‌ها، روانشناسی معامله‌گران را توصیف کنید.  
+
+---  
+**مرحله ۵: انتخاب ترکیب روشهای تحلیلی**  
+از جدول زیر، **حداقل ۳ و حداکثر ۵ روش** را انتخاب کنید و ترکیب کنید:  
+
+| شرط | روشهای مناسب |  
+|------|--------------|  
+| روند صعودی قوی | EMA 20/50، MACD، فیبوناچی اصلاحی (۳۸.۲ یا ۵۰) |  
+| روند نزولی قوی | SMA 50/200، RSI (اشباع فروش)، الگوهای ادامهدهنده |  
+| بازار رنج | باند بولینگر، استوکاستیک، سطوح افقی |  
+| نزدیک به مقاومت قوی | الگوهای برگشتی، واگرایی منفی، فیبوناچی گسترشی |  
+| نزدیک به حمایت قوی | الگوهای برگشتی صعودی، واگرایی مثبت |  
+| نوسان کم (خفه‌شده) | منتظر شکست باند، مثلث/پرچم، ATR باریک |  
+| شکست سطح کلیدی | OBV تأیید، فیبوناچی گسترشی، کندل قوی |  
+
+---  
+**مرحله ۶: سناریونویسی درختی (Scenario Tree)**  
+یک درخت سناریویی انشعابی بسازید:  
+- اگر قیمت **بالای ${toPersianNum(R1Price)}** برود ← مسیر A (${sR1}: محدوده ${toPersianNum(scenarios?.R1?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R1?.targetMax ?? 0)})  
+- اگر قیمت **بین ${toPersianNum(S1Price)} و ${toPersianNum(R1Price)}** بماند ← مسیر B (${sR3}: محدوده ${toPersianNum(scenarios?.R3?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R3?.targetMax ?? 0)})  
+- اگر قیمت **زیر ${toPersianNum(S1Price)}** برود ← مسیر C (${sR4}: محدوده ${toPersianNum(scenarios?.R4?.targetMin ?? 0)} — ${toPersianNum(scenarios?.R4?.targetMax ?? 0)})  
+
+---  
+**مرحله ۷: تحلیل حساسیت (Sensitivity Analysis)**  
+برای هر سطح کلیدی بگویید:  
+- اگر قیمت به ${toPersianNum(S1Price)} برسد، کدام سناریو تقویت و کدام تضعیف می‌شود؟  
+- اگر قیمت به ${toPersianNum(R1Price)} برسد، چه تغییری در احتمالها ایجاد می‌شود؟  
+
+---  
+**مرحله ۸: سناریوی معاملاتی کامل**  
+با ترکیب روشهای انتخابی:  
+- **جهت:** خرید، فروش یا انتظار؟  
+- **نقطه ورود دقیق:** بر اساس کدام سطح/سیگنال؟  
+- **حد ضرر (SL):** بر اساس ATR (${toPersianNum(atr)}) و سطح کلیدی  
+- **اهداف (TP):** حداقل ۲ هدف (محافظه‌کارانه + جاهطلبانه)  
+- **نسبت ریسک به ریوارد (R/R):** محاسبه شود  
+
+---  
+**مرحله ۹: انتخاب روایت غالب (از ۶ سبک)**  
+یکی از ۶ روایت زیر را انتخاب و توجیه کنید:  
+۱. **محافظه‌کار** — تمرکز بر ریسک و عدم قطعیت  
+۲. **اسکالپر** — تمرکز بر فرصت‌های کوتاه‌مدت  
+۳. **روند** — تمرکز بر چرخه و تثبیت بلندمدت  
+۴. **بدبین** — تمرکز بر خطر اصلاح عمیق  
+۵. **روایی** — تمرکز بر رفتار قیمت و سطوح به‌صورت استعاری  
+۶. **تصمیم‌محور** — تمرکز بر گام‌های عملی و شرطی  
+
+---  
+**مرحله ۱۰: خروجی سه‌لایه (Triple-Layer Output)**  
+تحلیل نهایی را در **سه لایه** ارائه دهید:  
+- **لایه اول (عملیاتی):** سناریوی معاملاتی و اعداد (برای معامله‌گر)  
+- **لایه دوم (تحلیلی):** دلایل تکنیکال و استدلالها (برای تحلیلگر)  
+- **لایه سوم (روانشناختی):** وضعیت روانی بازار و رفتار معامله‌گران (برای مدیر ریسک)  
+
+---  
+**ساختار خروجی نهایی:**  
+- **عنوان:** نام روایت انتخاب‌شده (مثلاً «تحلیل محافظه‌کار»)  
+- **متن اصلی:** ۳ تا ۵ پاراگراف (۷۰۰ تا ۱۵۰۰ کلمه)  
+- **جمله روایت غالب:** (پررنگ)  
+- **خلاصه عملی:** حداکثر ۳۰ کلمه  
+
+**قوانین خروجی:**  
+- **بدون ایموجی** — فقط . ، ؟ ! —  
+- **حداقل ۵ سوال یا تعجب** در سراسر متن  
+- **هر پاراگراف باید بلند و عمیق باشد** (بین ۲۰۰ تا ۵۰۰ کلمه)  
+- **از تکرار اطلاعات تکراری پرهیز شود** — یک بار کامل بگویید، سپس به تحلیل بپردازید  
+- **حداقل ۳ ارجاع به شاخص‌های تکنیکال** (با نام و عدد)  
+- **تحلیل شامل توضیح دلیل انتخاب روایت** باشد  
+- **در هر پاراگراف حداقل یک جمله پرسشی یا تعجبی**  
+- **در پایان هر پاراگراف یک جمع‌بندی جزئی** داشته باشید  
+- **تمام متن به زبان فارسی باشد.**`;
+}
+
+// ─── System Prompt ─────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.
+
+قوانین خروجی:
+۱. حداقل ۷۰۰ کلمه و حداکثر ۱٬۵۰۰ کلمه بنویسید. این مهم‌ترین قانون است.
+۲. تمام اعداد در متن به فارسی و سه رقم سه رقم جدا شوند (مثلاً ۱۲۳٬۴۵۶).
+۳. هیچ ایموجی، شکلک یا کاراکتر غیرحروفی استفاده نشود. فقط علائم نگارشی استاندارد ( . ، ؛ : ؟ ! « » — ).
+۴. متن شامل ۳ تا ۵ پاراگراف باشد. هر پاراگراف بلند و عمیق (۲۰۰ تا ۵۰۰ کلمه).
+۵. متن کاملاً به زبان فارسی باشد.
+۶. تحلیل ۳ لایه داشته باشد: لایه عملیاتی (برای معامله‌گر)، لایه تحلیلی (برای تحلیلگر)، لایه روانشناختی (برای مدیر ریسک).
+۷. شامل سناریوی معاملاتی کامل باشد: جهت، نقطه ورود، حد ضرر، اهداف، نسبت ریسک/ریوارد.
+۸. شامل درخت سناریویی انشعابی و تحلیل حساسیت باشد.
+۹. حداقل ۵ سوال یا تعجب در متن داشته باشد.
+۱۰. در ابتدا عنوان روایت انتخاب‌شده و در انتها جمله روایت غالب (پررنگ) و خلاصه عملی (حداکثر ۳۰ کلمه) بیاید.`;
+
+// ─── POST Handler ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const {
-      symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
-      stochK, stochD, macdLine, macdSignal, macdHist,
-      diPlus, diMinus, sar, atr, obv,
-      bollingerUpper, bollingerMiddle, bollingerLower,
-      trendDirection, trendAngle, trendR2,
-      scenarios, hasVolume,
-      resistanceStrengths, supportStrengths,
-    } = body;
 
-    if (!currentPrice) {
+    if (!body.currentPrice) {
       return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
     }
 
-    // Build data context for AI — with Persian numbers
-    const S1 = supportStrengths?.[0];
-    const R1 = resistanceStrengths?.[0];
-    const S1_methods = S1?.methods?.length ? `(${S1.methods.length} روش تأیید)` : '';
-    const R1_methods = R1?.methods?.length ? `(${R1.methods.length} روش تأیید)` : '';
-
-    const bbRange = bollingerUpper - bollingerLower;
-    const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
-
-    const trendDirText = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
-    const adxText = adx > 40 ? 'روند قدرتمند' : adx > 25 ? 'روند متوسط' : 'روند ضعیف یا رنج';
-    const rsiText = rsi > 70 ? 'اشباع خرید' : rsi > 60 ? 'نزدیک اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
-    const stochText = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : 'عادی';
-    const bbText = currentPrice > bollingerUpper ? 'بالای باند بالایی' : currentPrice < bollingerLower ? 'زیر باند پایینی' : 'داخل باندها';
-    const sarText = sar < currentPrice ? 'زیر قیمت — تأیید صعودی' : 'بالای قیمت — تأیید نزولی';
-    const mfiText = mfi > 80 ? 'اشباع خرید' : mfi < 20 ? 'اشباع فروش' : 'عادی';
-    const obvText = obv > 0 ? 'مثبت' : 'منفی';
-
-    const userMessage = `داده‌های پایه (واقعی و غیرقابل تغییر):
-- نام ابزار: ${symbolName}
-- قیمت مرجع: ${toPersianNum(currentPrice)} ریال
-- روند میان‌مدت: ${trendDirText} (زاویه ${toPersianNum(Math.abs(trendAngle))} درجه، آر‌اسکوئر=${(trendR2 * 100).toFixed(1)} درصد)
-- موقعیت نسبت به میانگین‌ها: ${currentPrice > ma21 ? 'بالاتر' : 'پایین‌تر'} از ام‌ای ۲۱ (${toPersianNum(ma21)}) و ${currentPrice > ma100 ? 'بالاتر' : 'پایین‌تر'} از ام‌ای ۱۰۰ (${toPersianNum(ma100)})
-- ای‌دی‌ایکس=${toPersianNum(adx)} (${adxText})، دی‌پلاس (${toPersianNum(diPlus)}) ${diPlus > diMinus ? 'بیشتر' : 'کمتر'} از دی‌میناس (${toPersianNum(diMinus)}) — فشار ${diPlus > diMinus ? 'خرید' : 'فروش'} غالب
-- آر‌اس‌آی=${toPersianNum(rsi)} (${rsiText})، استوکاستیک=${toPersianNum(stochK)}/${toPersianNum(stochD)} (${stochText})
-- مک‌دی صعودی=${macdLine > macdSignal ? 'بله' : 'خیر'} (خط=${toPersianNum(macdLine)}، سیگنال=${toPersianNum(macdSignal)})، هیستوگرام=${toPersianNum(macdHist)}
-${hasVolume ? `- او‌بی‌وی=${obv > 0 ? 'مثبت' : 'منفی'} (${(Math.abs(obv) / 1e6).toFixed(1)} میلیون)، ام‌اف‌آی=${toPersianNum(mfi)} (${mfiText})` : '- حجم معاملات: در دسترس نیست'}
-- قیمت در باند بولینگر: ${bbPos} درصد از بازه (${bbText})
-- باند بالایی: ${toPersianNum(bollingerUpper)}، باند میانی: ${toPersianNum(bollingerMiddle)}، باند پایینی: ${toPersianNum(bollingerLower)}
-- اس‌ای‌آر=${toPersianNum(sar)} (${sarText})
-- ای‌تی‌آر=${toPersianNum(atr)} (نوسان روزانه)
-${R1 ? `- مقاومت آر ۱: ${toPersianNum(R1.price)} ریال ${R1.grade ? '(' + R1.grade + ')' : ''} ${R1_methods}` : ''}
-${S1 ? `- حمایت اس ۱: ${toPersianNum(S1.price)} ریال ${S1.grade ? '(' + S1.grade + ')' : ''} ${S1_methods}` : ''}
-
-سناریوهای محتمل (با احتمالات):
-${scenarios ? `- آر ۱ — تداوم صعود هیجانی: ${toPersianNum(scenarios.R1?.probability || 0)} درصد (محدوده ${toPersianNum(scenarios.R1?.targetMin || 0)} تا ${toPersianNum(scenarios.R1?.targetMax || 0)} ریال)
-- آر ۲ — پولبک سالم: ${toPersianNum(scenarios.R2?.probability || 0)} درصد (محدوده ${toPersianNum(scenarios.R2?.targetMin || 0)} تا ${toPersianNum(scenarios.R2?.targetMax || 0)} ریال)
-- آر ۳ — اصلاح کنترل‌شده: ${toPersianNum(scenarios.R3?.probability || 0)} درصد (محدوده ${toPersianNum(scenarios.R3?.targetMin || 0)} تا ${toPersianNum(scenarios.R3?.targetMax || 0)} ریال)
-- آر ۴ — اصلاح عمیق: ${toPersianNum(scenarios.R4?.probability || 0)} درصد (محدوده ${toPersianNum(scenarios.R4?.targetMin || 0)} تا ${toPersianNum(scenarios.R4?.targetMax || 0)} ریال)
-- آر ۵ — تضعیف ساختار: ${toPersianNum(scenarios.R5?.probability || 0)} درصد (محدوده ${toPersianNum(scenarios.R5?.targetMin || 0)} تا ${toPersianNum(scenarios.R5?.targetMax || 0)} ریال)` : '- سناریوها: در دسترس نیست'}
-
-تحلیل هوشمند و منحصربه‌فرد بر اساس این داده‌ها ارائه دهید. یادتان باشد:
-- متن حتماً حداقل ۷۰۰ کلمه باشد (این یک الزام قطعی است).
-- تمام اعداد فارسی باشند و سه رقم سه رقم جدا شوند.
-- حداقل ۷ پاراگراف داشته باشد و هر پاراگراف حداقل ۳ جمله.
-- انتخاب روایت را بر اساس داده‌های واقعی انجام دهید.`;
+    const userMessage = buildAdvancedPrompt(body);
 
     const zai = await getZAI();
 
