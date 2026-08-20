@@ -54,7 +54,8 @@ async function processQueue() {
       await sleep(waitMs);
     }
 
-    const item = queue.shift()!;
+    const item = queue.shift();
+    if (!item) continue; // Queue was drained by timeouts during sleep
     try {
       const elapsed = Date.now() - lastCallTime;
       if (elapsed < MIN_INTERVAL_MS) {

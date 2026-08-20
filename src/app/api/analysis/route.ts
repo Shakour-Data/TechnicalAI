@@ -118,6 +118,8 @@ export async function GET(req: NextRequest) {
       ta,
     });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
+    console.error(`[analysis] Error for symbol=${symbol}:`, msg);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

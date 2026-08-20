@@ -497,8 +497,24 @@ export default function Home() {
             <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
               <TrendingDown className="w-8 h-8 text-red-600" />
             </div>
-            <h3 className="text-lg font-bold text-red-700 mb-2">خطا</h3>
-            <p className="text-gray-500 text-sm max-w-md">{error}</p>
+            <h3 className="text-lg font-bold text-red-700 mb-2">خطا در دریافت داده‌ها</h3>
+            <p className="text-gray-500 text-sm max-w-md mb-6">{error}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setError(null); setData(null); }}
+                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                بازگشت
+              </button>
+              {lastFetchRef.current && (
+                <button
+                  onClick={() => { setError(null); doRefresh(); }}
+                  className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors cursor-pointer"
+                >
+                  تلاش مجدد
+                </button>
+              )}
+            </div>
           </div>
         )}
 

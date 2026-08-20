@@ -131,6 +131,39 @@ function loadFileCache(type: number): TseSymbol[] | null {
   }
 }
 
+// ── Candlestick file-based cache ──
+const CANDLE_FILE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours for candlestick cache (less time-sensitive)
+
+function candleFileCachePath(symbol: string, type: number): string {
+  const safe = symbol.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+  return join(FILE_CACHE_DIR, `candle-${safe}-type${type}.json`);
+}
+
+function loadCandleFileCache(symbol: string, type: number): CandleData[] | null {
+  try {
+    const path = candleFileCachePath(symbol, type);
+    if (!existsSync(path)) return null;
+    const content = readFileSync(path, 'utf-8');
+    const entry = JSON.parse(content);
+    if (Date.now() - entry.time > CANDLE_FILE_CACHE_TTL) return null;
+    return entry.data as CandleData[];
+  } catch {
+    return null;
+  }
+}
+
+function saveCandleFileCache(symbol: string, type: number, data: CandleData[]): void {
+  try {
+    const dir = FILE_CACHE_DIR;
+    if (!existsSync(dir)) {
+      try { mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+    }
+    writeFileSync(candleFileCachePath(symbol, type), JSON.stringify({ data, time: Date.now() }), 'utf-8');
+  } catch {
+    // File cache is best-effort
+  }
+}
+
 function saveFileCache(type: number, data: TseSymbol[]): void {
   try {
     const dir = FILE_CACHE_DIR;
@@ -225,22 +258,44 @@ export async function fetchAllInstruments(): Promise<{
 }
 
 export async function fetchSymbolData(symbol: string): Promise<Record<string, unknown>> {
-  const url = `${BASE_URL}/Symbol.php?key=${API_KEY}&l18=${encodeURIComponent(symbol)}`;
-  const res = await fetch(url, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Failed to fetch symbol ${symbol}: ${res.status}`);
-  return res.json();
+  try {
+    const url = `${BASE_URL}/Symbol.php?key=${API_KEY}&l18=${encodeURIComponent(symbol)}`;
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (err) {
+    console.warn(`[tse-api] BrsApi symbol data failed for ${symbol}:`, err instanceof Error ? err.message : String(err));
+    return {} as Record<string, unknown>;
+  }
 }
 
 export async function fetchCandlestick(
   symbol: string,
   type: number = 3, // ⚠️ ALWAYS use type=3 (تعدیل‌شده / adjusted). Never use 1 (realtime) or 2 (unadjusted).
 ): Promise<CandleData[]> {
-  const url = `${BASE_URL}/Candlestick.php?key=${API_KEY}&type=${type}&l18=${encodeURIComponent(symbol)}`;
-  const res = await fetch(url, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Failed to fetch candlestick for ${symbol}: ${res.status}`);
-  const data = await res.json();
-  if (Array.isArray(data)) return data;
-  return data.candle_daily_adjusted || data.candle_daily || data.data || data.candlesticks || [];
+  // Try file cache first
+  const cached = loadCandleFileCache(symbol, type);
+  if (cached && cached.length > 0) {
+    console.log(`[tse-api] Using candlestick file cache for ${symbol} (${cached.length} candles)`);
+    return cached;
+  }
+
+  try {
+    const url = `${BASE_URL}/Candlestick.php?key=${API_KEY}&type=${type}&l18=${encodeURIComponent(symbol)}`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const candles: CandleData[] = Array.isArray(data)
+      ? data
+      : data.candle_daily_adjusted || data.candle_daily || data.data || data.candlesticks || [];
+    // Save to file cache on success
+    if (candles.length > 0) saveCandleFileCache(symbol, type, candles);
+    return candles;
+  } catch (err) {
+    console.warn(`[tse-api] BrsApi candlestick failed for ${symbol}:`, err instanceof Error ? err.message : String(err));
+    // No file cache available — throw a clear error
+    throw new Error(`دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.`);
+  }
 }
 
 export async function fetchHistory(symbol: string): Promise<HistoryData[]> {

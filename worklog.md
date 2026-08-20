@@ -128,6 +128,31 @@ Stage Summary:
 - All v5 audit items verified correct
 
 ---
+Task ID: 7
+Agent: main
+Task: Fix 502 Bad Gateway + symbol search not working
+
+Work Log:
+- Diagnosed 502: dev server process was killed (container process management)
+- Restarted dev server with setsid for persistence
+- Investigated search: dropdown works (API /api/instruments returns 200, file cache valid)
+- Investigated analysis: /api/analysis?symbol=خودرو returned 500 (BrsApi fetch failed)
+- Root cause of 'search not working': BrsApi intermittently unreachable → analysis fails after selecting symbol
+- Added candlestick file-based caching to tse-api.ts (24hr TTL, db/candle-{symbol}-type{N}.json)
+- Updated fetchCandlestick: checks file cache first, saves on success, Persian error on failure
+- Updated fetchSymbolData: wrapped in try/catch, returns {} on failure (non-blocking)
+- Updated /api/analysis error response: status 502, structured Persian error message
+- Updated page.tsx error display: added 'بازگشت' and 'تلاش مجدد' buttons
+- Fixed zai-shared.ts race condition: queue.shift() could return undefined when timeouts drain queue during sleep
+- Browser verified: search works (خودرو → filtered results), analysis loads (chart + TA signals), candlestick cache created
+
+Stage Summary:
+- Search dropdown: working (cached instruments data)
+- Analysis: working with candlestick file cache as resilience layer
+- Error UX: Persian messages, retry/back buttons
+- Files changed: tse-api.ts, analysis/route.ts, page.tsx, zai-shared.ts
+- New cache: db/candle-خودرو-type3.json, db/candle-خساپا-type3.json
+---
 Task ID: 0
 Agent: main
 Task: Fix 502 Bad Gateway on AI analysis endpoint
