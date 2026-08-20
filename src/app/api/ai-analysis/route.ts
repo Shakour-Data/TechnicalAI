@@ -25,7 +25,7 @@ function cacheKey(body: Record<string, unknown>): string {
 
 // --- Global rate limiter (serial queue) ---
 let lastAITime = 0;
-const AI_MIN_INTERVAL = 15_000;
+const AI_MIN_INTERVAL = 20_000;
 let cooldownUntil = 0;
 let activeCall = false;
 const pendingQueue: Array<{
@@ -61,8 +61,9 @@ function processAIQueue() {
     .catch(err => {
       const msg = err.message || '';
       if (msg.includes('429')) {
-        cooldownUntil = Date.now() + 60_000;
-        console.warn('[AI] 429, cooldown 60s');
+        const cd = Math.max(cooldownUntil - Date.now(), 0) + 90_000;
+        cooldownUntil = Date.now() + Math.min(cd, 300_000);
+        console.warn(`[AI v5.1] 429, cooldown ${Math.min(cd, 300_000) / 1000}s`);
       }
       item.reject(err);
     })
@@ -90,11 +91,25 @@ function queueAI(messages: { role: string; content: string }[], timeoutMs = 90_0
   });
 }
 
-// --- Z.ai SDK call with retry (v3 approach) ---
+// --- Z.ai SDK call with retry ---
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
-function jitter(base: number): number { return base + Math.random() * base * 0.3; }
+function jitter(base: number): number { return base + Math.random() * base * 0.5; }
 
-async function callZaiSDK(messages: { role: string; content: string }[], maxRetries = 3): Promise<string> {
+// Common emoji ranges to strip from AI output
+const EMOJI_PATTERNS = [
+  /\p{Emoji_Presentation}/gu,
+  /\p{Extended_Pictographic}/gu,
+];
+
+function stripEmojis(text: string): string {
+  let result = text;
+  for (const pattern of EMOJI_PATTERNS) {
+    result = result.replace(pattern, '').trim();
+  }
+  return result;
+}
+
+async function callZaiSDK(messages: { role: string; content: string }[], maxRetries = 4): Promise<string> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const zai = await getZai();
@@ -102,13 +117,11 @@ async function callZaiSDK(messages: { role: string; content: string }[], maxRetr
         messages,
         thinking: { type: 'disabled' },
       });
-      const content = completion.choices[0]?.message?.content;
-      if (!content || content.trim().length === 0) {
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw || raw.trim().length === 0) {
         throw new Error('Empty AI response');
       }
-      // Strip emoji prefix lines
-      const lines = content.split('\n').filter(l => !l.startsWith('\ud83d\ude80'));
-      const text = lines.join('\n').trim();
+      const text = stripEmojis(raw).trim();
       if (text.length < 10) {
         throw new Error('AI response too short: ' + text.slice(0, 100));
       }
@@ -116,8 +129,8 @@ async function callZaiSDK(messages: { role: string; content: string }[], maxRetr
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('429') && attempt < maxRetries) {
-        const waitMs = Math.round(jitter(15_000 * Math.pow(2, attempt - 1))); // 15s, 30s, 60s + jitter
-        console.warn(`[AI v5.1] 429 retry ${attempt}/${maxRetries}, waiting ${waitMs}ms...`);
+        const waitMs = Math.round(jitter(20_000 * Math.pow(2, attempt - 1))); // 20s, 40s, 80s, 160s + jitter
+        console.warn(`[AI v5.1] 429 retry ${attempt}/${maxRetries}, waiting ${Math.round(waitMs / 1000)}s...`);
         await sleep(waitMs);
         continue;
       }
@@ -308,8 +321,7 @@ ${methodsStr}
 
 ---
 **\u0645\u0631\u062d\u0644\u0647 5: \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc**
-\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML \u0631\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u062d\u0644\u06cc\u0644 \u0647\u0631 \u0631\u0648\u0634 \u0631\u0627 \u0628\u0647\u200c\u0627\u062e\u062a\u0635\u0627\u0631 \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
-${methodsStr}
+u0631u0648u0634u200cu0647u0627u06cc u0630u06a9u0631u0634u062fu0647 u062fu0631 u0628u062eu0634 u00abu0631u0648u0634u200cu0647u0627u06cc u062au062du0644u06ccu0644u06cc u0627u0646u062au062eu0627u0628u200cu0634u062fu0647 u062au0648u0633u0637 MLu00bb u0628u0627u0644u0627 u0631u0627 u062au0631u06a9u06ccu0628 u06a9u0646u06ccu062f.
 
 ---
 **\u0645\u0631\u062d\u0644\u0647 6: \u0633\u0646\u0627\u0631\u06cc\u0648\u0646\u0648\u06cc\u0633\u06cc \u062f\u0631\u062e\u062a\u06cc (Scenario Tree)**

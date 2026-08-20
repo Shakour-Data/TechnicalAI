@@ -79,6 +79,34 @@ Stage Summary:
 - ESLint clean, all routes compile and respond
 - 429 from Z.ai API still active (from previous aggressive retries) but will clear automatically
 ---
+Task ID: 4
+Agent: main
+Task: Fix 502 + improve AI analysis reliability (v5.1 continued)
+
+Work Log:
+- Diagnosed 502: dev server was simply not running (process killed by container init)
+- Created persistent start script (start-server.sh) to auto-restart on crash
+- Improved 429 handling in ai-analysis/route.ts:
+  - Increased base retry wait from 15s to 20s (20s, 40s, 80s, 160s + jitter 0.5)
+  - Increased max retries from 3 to 4
+  - Increased 429 cooldown from 60s to 90s (stacking, max 300s)
+  - Increased AI_MIN_INTERVAL from 15s to 20s
+- Replaced single-emoji strip with comprehensive Unicode emoji stripping (Emoji_Presentation + Extended_Pictographic)
+- Removed duplicate methodsStr listing from prompt step 5 (was shown twice)
+- Verified SDK role='assistant' is correct per LLM skill docs (NOT 'system')
+- Updated footer to clean 'v5.0' (removed changelog text)
+- Verified chart colors already correct: support=blue(#2563eb), resistance=orange(#ea580c), MAs=violet/cyan/fuchsia
+- Verified dynamic scenarios already using Persian labels (سناریوی ۱-۵)
+- Lint passes clean
+- Browser verified: landing page loads, search returns results, category tabs work
+
+Stage Summary:
+- 502 root cause: server process management (not code bug)
+- AI reliability: significantly improved 429 handling with better backoff
+- Code quality: removed prompt duplication, comprehensive emoji stripping
+- All v5 audit items verified correct
+
+---
 Task ID: 0
 Agent: main
 Task: Fix 502 Bad Gateway on AI analysis endpoint
