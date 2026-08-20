@@ -223,3 +223,27 @@ Stage Summary:
 - Symbol search → analysis → AI text flow verified for 3 symbols
 - BrsApi reliability fixed: 24h file cache + stale fallback + 8s timeouts
 - All API endpoints return proper responses or graceful fallbacks
+
+---
+Task ID: 9
+Agent: main
+Task: Fix AI prompt - remove multi-combination framing, ensure single combination per request
+
+Work Log:
+- User reported: AI system was listing "10 schools × 10 styles × 15 tones" in system prompt, causing confusion
+- Verified: Backend code already correctly selects ONE combination via selectMLCombination() and makes ONE AI request
+- Problem was in SYSTEM_PROMPT: told AI about all 10/10/15 combinations unnecessarily
+- Fixed SYSTEM_PROMPT: removed "این سیستم شامل: 10 مکتب, 10 سبک, 15 لحن, انتخاب خودکار توسط ML"
+- Replaced with: "مکتب، سبک و لحن تحلیل دقیقاً در هر درخواست مشخص شده است. فقط و فقط بر اساس همان یک ترکیب بنویسید."
+- Removed "سیستم هوشمند ترکیبی" framing and 3 bullet points from user prompt header
+- Removed v5.1 version label from prompt
+- Updated buildPrompt function comment to remove version reference
+- Verified: lint passes clean
+- Browser tested: searched خودرو → selected symbol → chart loaded → AI analysis generated in 32.2s → text displayed correctly with 3 layers
+- Confirmed: only ONE AI request made, ONE combination selected (Oscillators & Momentum + تحلیلگر حجم + عدد‌محور و سخت‌گیر)
+
+Stage Summary:
+- SYSTEM_PROMPT simplified: no longer mentions multiple combinations
+- User prompt header cleaned: removed version label, smart system framing
+- Code was already making single request - fix was in prompt clarity only
+- Files changed: /home/z/my-project/src/app/api/ai-analysis/route.ts
