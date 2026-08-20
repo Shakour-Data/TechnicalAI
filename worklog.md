@@ -247,3 +247,20 @@ Stage Summary:
 - User prompt header cleaned: removed version label, smart system framing
 - Code was already making single request - fix was in prompt clarity only
 - Files changed: /home/z/my-project/src/app/api/ai-analysis/route.ts
+
+---
+Task ID: 10
+Agent: main
+Task: Remove internal system info from user-facing analysis text
+
+Work Log:
+- Removed ML Selection Badges from vdes-analysis.tsx UI
+- Removed aiML state variable and setAiML() call
+- Updated SYSTEM_PROMPT: explicit prohibition on internal system references
+- Removed school/style/tone from prompt output structure
+- Changed ML references to neutral labels in prompt methods section
+- Browser verified: AI text has zero internal system references
+
+Stage Summary:
+- User sees only professional analysis text, no internal metadata
+- Files changed: vdes-analysis.tsx, ai-analysis/route.ts
