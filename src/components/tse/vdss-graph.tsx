@@ -467,7 +467,7 @@ export default function VdssGraph(props: VdssGraphProps) {
   const allFilters = [
     ...TYPE_FILTERS,
     { key: 'sep1', label: '│', isSep: true as const },
-    ...SCENARIO_KEYS.map(k => ({ key: k, label: `${k} | ${SCENARIO_META[k].label}`, scenarioKey: k })),
+    ...SCENARIO_KEYS.map(k => ({ key: k, label: SCENARIO_META[k].label, scenarioKey: k })),
   ];
 
   return (

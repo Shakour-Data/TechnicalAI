@@ -10,7 +10,7 @@ import ZAI from 'z-ai-web-dev-sdk';
 const PORT = 3032;
 
 // ── Web IDs for main market indices ─────────────────────────────────
-const INDEX_WEB_IDS: Record<string, number> = {
+const INDEX_WEB_IDS = {
   CWI:   32097828799138957,
   EWI:   67130298613737946,
   CWPI:  5798407779416661,
@@ -24,13 +24,13 @@ const INDEX_WEB_IDS: Record<string, number> = {
 };
 
 // ── Cache ──────────────────────────────────────────────────────────
-const cache = new Map<string, { data: unknown; ts: number }>();
+const cache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // ── Gregorian → Jalali conversion ──────────────────────────────────
-function gregorianToJalali(gy: number, gm: number, gd: number): { jy: number; jm: number; jd: number } {
+function gregorianToJalali(gy, gm, gd) {
   const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-  let jy: number;
+  let jy;
   if (gy > 1600) { jy = 979; gy -= 1600; } else { jy = 0; gy -= 621; }
   const gy2 = gm > 2 ? gy + 1 : gy;
   let days = 365 * gy + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
@@ -44,7 +44,7 @@ function gregorianToJalali(gy: number, gm: number, gd: number): { jy: number; jm
   return { jy, jm, jd };
 }
 
-function devenToShamsi(deven: number): string {
+function devenToShamsi(deven) {
   const s = String(deven);
   if (s.length < 8) return s;
   const gy = parseInt(s.slice(0, 4));
@@ -55,14 +55,14 @@ function devenToShamsi(deven: number): string {
 }
 
 // ── ZAI SDK ────────────────────────────────────────────────────────
-let zai: ZAI | null = null;
-async function getZai(): Promise<ZAI> {
+let zai = null;
+async function getZai() {
   if (!zai) zai = await ZAI.create();
   return zai;
 }
 
 // ── Fetch and parse B2 data from cdn.tsetmc.com ───────────────────
-async function fetchB2History(webId: number): Promise<Array<Record<string, unknown>>> {
+async function fetchB2History(webId) {
   const sdk = await getZai();
   const result = await sdk.functions.invoke('page_reader', {
     url: `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`,
@@ -73,7 +73,7 @@ async function fetchB2History(webId: number): Promise<Array<Record<string, unkno
     throw new Error(`TSETMC API returned status ${result.code}`);
   }
 
-  const html = result.data.html as string;
+  const html = result.data.html;
   console.log(`[fetchB2] HTML length: ${html.length}`);
   const preMatch = /<pre[^>]*>([\s\S]*?)<\/pre>/i.exec(html);
   if (!preMatch) {
@@ -93,8 +93,8 @@ async function fetchB2History(webId: number): Promise<Array<Record<string, unkno
 }
 
 // ── Build OHLC candles ─────────────────────────────────────────────
-function buildCandles(items: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const candles: Array<Record<string, unknown>> = [];
+function buildCandles(items) {
+  const candles = [];
   for (const item of items) {
     const close = Number(item.xNivInuClMresIbs) || 0;
     const first = Number(item.xNivInuPhMresIbs) || 0;
@@ -115,16 +115,16 @@ function buildCandles(items: Array<Record<string, unknown>>): Array<Record<strin
 }
 
 // ── JSON response helper ───────────────────────────────────────────
-function jsonRes(data: unknown, status = 200): NodeJS.Response {
+function jsonRes(data, status = 200) {
   return {
     statusCode: status,
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     body: JSON.stringify(data),
-  } as unknown as NodeJS.Response;
+  };
 }
 
 // ── HTTP Server (Node.js native) ───────────────────────────────────
-async function handleHistoryRequest(cacheKey: string, webId: number) {
+async function handleHistoryRequest(cacheKey, webId) {
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && now - cached.ts < CACHE_TTL) {
@@ -148,7 +148,7 @@ async function handleHistoryRequest(cacheKey: string, webId: number) {
 }
 
 const server = createServer(async (req, res) => {
- const url = new URL(req.url || '/', `http://localhost:${PORT}`);
+  const url = new URL(req.url || '/', `http://localhost:${PORT}`);
   const path = url.pathname;
 
   res.setHeader('Content-Type', 'application/json');

@@ -1,0 +1,425 @@
+     1→     1→import { NextRequest, NextResponse } from 'next/server';
+     2→     2→import { getZai } from '@/lib/zai-shared';
+     3→     3→import {
+     4→     4→  selectMLCombination,
+     5→     5→  selectMethods,
+     6→     6→  getScenarioName,
+     7→     7→  type MLSelectorInput,
+     8→     8→} from '@/lib/analysis-ml-selector';
+     9→     9→
+    10→    10→export const dynamic = 'force-dynamic';
+    11→    11→
+    12→    12→// ─── 1-hour in-memory cache ────────────────────────────────────────
+    13→    13→interface CacheEntry {
+    14→    14→  text: string;
+    15→    15→  ml: { school: string; style: string; tone: string; reasoning: string; methods: string[] };
+    16→    16→  ts: number;
+    17→    17→}
+    18→    18→const cache = new Map<string, CacheEntry>();
+    19→    19→const CACHE_TTL = 3_600_000; // 1 hour
+    20→    20→
+    21→    21→function cacheKey(body: Record<string, unknown>): string {
+    22→    22→  // Use a stable subset of inputs for caching
+    23→    23→  const k = {
+    24→    24→    s: body.symbolName,
+    25→    25→    p: body.currentPrice,
+    26→    26→    t: body.trendDirection,
+    27→    27→    r: body.rsi,
+    28→    28→    a: body.adx,
+    29→    29→    sc: body.stochK,
+    30→    30→    mh: body.macdHist,
+    31→    31→    sd: body.scenarios,
+    32→    32→  };
+    33→    33→  return JSON.stringify(k);
+    34→    34→}
+    35→    35→
+    36→    36→// ─── Helpers ──────────────────────────────────────────────────────────
+    37→    37→function toPersianNum(n: number): string {
+    38→    38→  if (!isFinite(n) || isNaN(n)) return '\u06f0';
+    39→    39→  return Math.round(n).toLocaleString('fa-IR');
+    40→    40→}
+    41→    41→
+    42→    42→function srGrade(strength: number): string {
+    43→    43→  if (strength >= 8.5) return '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc';
+    44→    44→  if (strength >= 7) return '\u0642\u0648\u06cc';
+    45→    45→  if (strength >= 5) return '\u0645\u062a\u0648\u0633\u0637';
+    46→    46→  if (strength >= 3) return '\u0636\u0639\u06cc\u0641';
+    47→    47→  return '\u0628\u0633\u06cc\u0627\u0631 \u0636\u0639\u06cc\u0641';
+    48→    48→}
+    49→    49→
+    50→    50→// ─── Build ML Selector Input ──────────────────────────────────────────
+    51→    51→function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
+    52→    52→  const price = (body.currentPrice as number) || 0;
+    53→    53→  const trendDir = (body.trendDirection as string) || 'range';
+    54→    54→  const adx = (body.adx as number) || 0;
+    55→    55→  const rsi = (body.rsi as number) || 50;
+    56→    56→  const stochK = (body.stochK as number) || 50;
+    57→    57→  const macdHist = (body.macdHist as number) || 0;
+    58→    58→  const obv = (body.obv as number) || 0;
+    59→    59→  const bollingerUpper = (body.bollingerUpper as number) || 0;
+    60→    60→  const bollingerLower = (body.bollingerLower as number) || 0;
+    61→    61→  const resistance = (body.resistanceStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
+    62→    62→  const support = (body.supportStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
+    63→    63→  const atr = (body.atr as number) || 0;
+    64→    64→
+    65→    65→  const bbRange = bollingerUpper - bollingerLower;
+    66→    66→  const bbPosition = bbRange > 0 ? Math.min(100, Math.max(0, Math.round((price - bollingerLower) / bbRange * 100))) : 50;
+    67→    67→
+    68→    68→  const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
+    69→    69→  let dominantKey = 'R3';
+    70→    70→  let dominantProb = 0;
+    71→    71→  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5'] as const) {
+    72→    72→    const p = scenarios?.[k]?.probability ?? 0;
+    73→    73→    if (p > dominantProb) { dominantProb = p; dominantKey = k; }
+    74→    74→  }
+    75→    75→
+    76→    76→  return {
+    77→    77→    price,
+    78→    78→    trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range',
+    79→    79→    adx,
+    80→    80→    diPlus: (body.diPlus as number) || 0,
+    81→    81→    diMinus: (body.diMinus as number) || 0,
+    82→    82→    rsi,
+    83→    83→    stochK,
+    84→    84→    macdHist,
+    85→    85→    obv,
+    86→    86→    bbPosition,
+    87→    87→    resistance,
+    88→    88→    support,
+    89→    89→    atr,
+    90→    90→    scenarioDominant: dominantKey,
+    91→    91→    hasVolume: (body.hasVolume as boolean) ?? false,
+    92→    92→  };
+    93→    93→}
+    94→    94→
+    95→    95→// ─── Build the V5 Fused Prompt (no duplication) ────────────────────
+    96→    96→function buildV5Prompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
+    97→    97→  const {
+    98→    98→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+    99→    99→    stochK, stochD, macdLine, macdSignal, macdHist,
+   100→   100→    diPlus, diMinus, sar, atr, obv,
+   101→   101→    bollingerUpper, bollingerMiddle, bollingerLower,
+   102→   102→    trendDirection, trendAngle, trendR2,
+   103→   103→    scenarios, hasVolume,
+   104→   104→    resistanceStrengths, supportStrengths,
+   105→   105→  } = body as {
+   106→   106→    symbolName: string; currentPrice: number; ma21: number; ma100: number;
+   107→   107→    rsi: number; mfi: number; cci: number; adx: number;
+   108→   108→    stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number;
+   109→   109→    diPlus: number; diMinus: number; sar: number; atr: number; obv: number;
+   110→   110→    bollingerUpper: number; bollingerMiddle: number; bollingerLower: number;
+   111→   111→    trendDirection: string; trendAngle: number; trendR2: number;
+   112→   112→    scenarios: Record<string, { name?: string; probability: number; targetMin: number; targetMax: number; description?: string }>;
+   113→   113→    hasVolume: boolean;
+   114→   114→    resistanceStrengths: Array<{ price: number; strength: number; grade?: string; methods?: unknown[]; overlapCount?: number }>;
+   115→   115→    supportStrengths: Array<{ price: number; strength: number; grade?: string; methods?: unknown[]; overlapCount?: number }>;
+   116→   116→  };
+   117→   117→
+   118→   118→  const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
+   119→   119→  const r2Pct = (trendR2 * 100).toFixed(1);
+   120→   120→  const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
+   121→   121→  const rsiSignal = rsi > 70 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0634\u062f\u06cc\u062f' : rsi > 60 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : rsi > 40 ? '\u062e\u0646\u062b\u06cc' : rsi > 30 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634 \u0634\u062f\u06cc\u062f';
+   122→   122→  const stochSignal = stochK > 80 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : stochK < 20 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : stochK > stochD ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
+   123→   123→
+   124→   124→  const bbRange = bollingerUpper - bollingerLower;
+   125→   125→  const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
+   126→   126→  const bbSignal = currentPrice > bollingerUpper
+   127→   127→    ? '\u0628\u0627\u0644\u0627\u06cc \u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc'
+   128→   128→    : currentPrice < bollingerLower
+   129→   129→    ? '\u0632\u06cc\u0631 \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc'
+   130→   130→    : `\u062f\u0627\u062e\u0644 \u0628\u0627\u0646\u062f\u0647\u0627 (${toPersianNum(bbPos)}\u066a)`;
+   131→   131→
+   132→   132→  const R1 = resistanceStrengths?.[0];
+   133→   133→  const S1 = supportStrengths?.[0];
+   134→   134→  const S2 = supportStrengths?.[1];
+   135→   135→
+   136→   136→  const R1Price = R1?.price ?? Math.round(currentPrice * 1.05);
+   137→   137→  const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
+   138→   138→  const S2Price = S2?.price ?? Math.round(currentPrice * 0.90);
+   139→   139→
+   140→   140→  const R1Grade = R1?.strength ? srGrade(R1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+   141→   141→  const S1Grade = S1?.strength ? srGrade(S1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+   142→   142→  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
+   143→   143→  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
+   144→   144→
+   145→   145→  const sR1 = scenarios?.R1?.name || '\u062a\u062f\u0627\u0648\u0645 \u0635\u0639\u0648\u062f \u0647\u06cc\u062c\u0627\u0646\u06cc';
+   146→   146→  const sR2 = scenarios?.R2?.name || '\u067e\u0648\u0644\u0628\u06a9 \u0633\u0627\u0644\u0645';
+   147→   147→  const sR3 = scenarios?.R3?.name || '\u0627\u0635\u0644\u0627\u062d \u06a9\u0646\u062a\u0631\u0644\u200c\u0634\u062f\u0647';
+   148→   148→  const sR4 = scenarios?.R4?.name || '\u0627\u0635\u0644\u0627\u062d \u0639\u0645\u06cc\u0642';
+   149→   149→  const sR5 = scenarios?.R5?.name || '\u062a\u0636\u0639\u06cc\u0641 \u0633\u0627\u062e\u062a\u0627\u0631';
+   150→   150→
+   151→   151→  const obvDesc = hasVolume
+   152→   152→    ? (obv > 0
+   153→   153→      ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u0648\u0631\u0648\u062f \u067e\u0648\u0644`
+   154→   154→      : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u062e\u0631\u0648\u062c \u067e\u0648\u0644`)
+   155→   155→    : '\u0628\u062f\u0648\u0646 \u062f\u0627\u062f\u0647 \u062d\u062c\u0645';
+   156→   156→
+   157→   157→  const macdDesc = macdHist > 0 && macdLine > macdSignal
+   158→   158→    ? '\u0635\u0639\u0648\u062f\u06cc (\u062e\u0637 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644)'
+   159→   159→    : macdHist > 0
+   160→   160→    ? '\u0635\u0639\u0648\u062f\u06cc \u0628\u0627 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u062b\u0628\u062a'
+   161→   161→    : '\u0646\u0632\u0648\u0644\u06cc (\u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u0646\u0641\u06cc)';
+   162→   162→
+   163→   163→  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
+   164→   164→
+   165→   165→  const { school, style, tone } = mlSelection;
+   166→   166→  const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
+   167→   167→
+   168→   168→  // ── Build sorted scenario list (dynamic naming) ──
+   169→   169→  const scenarioList = (['R1', 'R2', 'R3', 'R4', 'R5'] as const)
+   170→   170→    .map((k, i) => ({
+   171→   171→      key: k,
+   172→   172→      label: `\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)}`,
+   173→   173→      name: scenarios?.[k]?.name || getScenarioName(k),
+   174→   174→      prob: scenarios?.[k]?.probability ?? 0,
+   175→   175→      min: scenarios?.[k]?.targetMin ?? 0,
+   176→   176→      max: scenarios?.[k]?.targetMax ?? 0,
+   177→   177→    }))
+   178→   178→    .sort((a, b) => b.prob - a.prob);
+   179→   179→
+   180→   180→  const dominantScenario = scenarioList[0];
+   181→   181→  const scenarioBlock = scenarioList
+   182→   182→    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob * 100)}\u066a (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
+   183→   183→    .join('\n');
+   184→   184→
+   185→   185→  return `
+   186→   186→**\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644 (\u0646\u0633\u062e\u0647 v5 \u2014 \u062a\u0644\u0641\u06cc\u0642\u06cc \u0641\u0648\u0642\u200c\u067e\u06cc\u0634\u0631\u0641\u062a\u0647):**
+   187→   187→\u0634\u0645\u0627 \u06cc\u06a9 **\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0628\u0627 20 \u0633\u0627\u0644 \u062a\u062c\u0631\u0628\u0647** \u0647\u0633\u062a\u06cc\u062f.
+   188→   188→\u0627\u06cc\u0646 \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 **\u0633\u06cc\u0633\u062a\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u062a\u0631\u06a9\u06cc\u0628\u06cc** \u062a\u0648\u0644\u06cc\u062f \u0634\u062f\u0647 \u0627\u0633\u062a:
+   189→   189→- **\u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644:** ${school}
+   190→   190→- **\u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a:** ${style}
+   191→   191→- **\u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc:** ${tone}
+   192→   192→
+   193→   193→\u0648\u0638\u06cc\u0641\u0647 \u0634\u0645\u0627 \u0627\u06cc\u0646 \u0627\u0633\u062a \u06a9\u0647 \u0628\u0631\u0627\u06cc **\u00ab${symbolName}\u00bb** \u062f\u0631 **\u062a\u0627\u06cc\u0645\u0641\u0631\u06cc\u0645 \u0631\u0648\u0632\u0627\u0646\u0647**\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 **\u0686\u0646\u062f\u0644\u0627\u06cc\u0647 \u0648 \u06a9\u0627\u0645\u0644\u0627\u064b \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u06cc** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f.
+   194→   194→\u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f **\u06a9\u0627\u0645\u0644\u0627\u064b \u0628\u0627 \u0645\u06a9\u062a\u0628 ${school} \u0648 \u0633\u0628\u06a9 ${style} \u0648 \u0644\u062d\u0646 ${tone} \u0647\u0645\u0627\u0647\u0646\u06af** \u0628\u0627\u0634\u062f.
+   195→   195→
+   196→   196→---
+   197→   197→**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647 (\u0648\u0627\u0642\u0639\u06cc \u0648 \u063a\u06cc\u0631\u0642\u0627\u0628\u0644 \u062a\u063a\u06cc\u06cc\u0631):**
+   198→   198→- \u0646\u0627\u0645 \u0627\u0628\u0632\u0627\u0631: **${symbolName}**
+   199→   199→- \u0642\u06cc\u0645\u062a \u0645\u0631\u062c\u0639: **${toPersianNum(currentPrice)} \u0631\u06cc\u0627\u0644**
+   200→   200→- \u0631\u0648\u0646\u062f \u0645\u06cc\u0627\u0646\u200c\u0645\u062f\u062a: **${trendLabel}** (\u0632\u0627\u0648\u06cc\u0647 ${toPersianNum(Math.abs(trendAngle))}\u00b0\u060c R\u00b2=${r2Pct}%)
+   201→   201→- \u0645\u0648\u0642\u0639\u06cc\u062a \u0646\u0633\u0628\u062a \u0628\u0647 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646\u200c\u0647\u0627: ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA21 (${toPersianNum(ma21)})** \u0648 ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA100 (${toPersianNum(ma100)})**
+   202→   202→- **ADX=${toPersianNum(adx)}** (${adxStrength})\u060c **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** \u2190 ${diPressure}
+   203→   203→- **RSI=${toPersianNum(rsi)}** (${rsiSignal})\u060c **\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})
+   204→   204→- **CCI=${toPersianNum(cci)}**${mfi > 0 ? `\u060c **MFI=${toPersianNum(mfi)}**` : ''}
+   205→   205→- **MACD** ${macdDesc} (\u062e\u0637=${toPersianNum(macdLine)}\u060c \u0633\u06cc\u06af\u0646\u0627\u0644=${toPersianNum(macdSignal)}\u060c \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645=${toPersianNum(macdHist)})
+   206→   206→- **OBV** ${obvDesc}
+   207→   207→- \u0642\u06cc\u0645\u062a **${bbSignal}** (\u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc ${toPersianNum(bollingerUpper)}\u060c \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc ${toPersianNum(bollingerLower)})
+   208→   208→- **SAR (\u067e\u0627\u0631\u0627\u0628\u0648\u0644\u06cc\u06a9):** ${toPersianNum(sar)} \u0631\u06cc\u0627\u0644
+   209→   209→- \u0645\u0642\u0627\u0648\u0645\u062a **R1** \u062f\u0631 ${toPersianNum(R1Price)} \u0631\u06cc\u0627\u0644 (${R1Grade} ${R1Confirm})
+   210→   210→- \u062d\u0645\u0627\u06cc\u062a **S1** \u062f\u0631 ${toPersianNum(S1Price)} \u0631\u06cc\u0627\u0644 (${S1Grade} ${S1Confirm})
+   211→   211→${S2Price ? `- \u062d\u0645\u0627\u06cc\u062a **S2** \u062f\u0631 ${toPersianNum(S2Price)} \u0631\u06cc\u0627\u0644\n` : ''}- \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0646\u0648\u0633\u0627\u0646 \u0631\u0648\u0632\u0627\u0646\u0647 (ATR): ${toPersianNum(atr)} \u0631\u06cc\u0627\u0644
+   212→   212→
+   213→   213→**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
+   214→   214→${scenarioBlock}
+   215→   215→
+   216→   216→**\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML:**
+   217→   217→${methodsStr}
+   218→   218→
+   219→   219→---
+   220→   220→**\u0645\u0631\u062d\u0644\u0647 1: \u0627\u0633\u062a\u062f\u0644\u0627\u0644 \u062f\u0627\u062e\u0644\u06cc (Chain of Thought \u2014 \u0628\u062f\u0648\u0646 \u0646\u0645\u0627\u06cc\u0634 \u062f\u0631 \u062e\u0631\u0648\u062c\u06cc)**
+   221→   221→\u067e\u06cc\u0634 \u0627\u0632 \u0646\u0648\u0634\u062a\u0646 \u062a\u062d\u0644\u06cc\u0644 \u0646\u0647\u0627\u06cc\u06cc\u060c \u0628\u0647 \u0627\u06cc\u0646 \u0633\u0648\u0627\u0644\u0627\u062a \u0628\u0647\u200c\u0635\u0648\u0631\u062a \u062f\u0627\u062e\u0644\u06cc \u067e\u0627\u0633\u062e \u062f\u0647\u06cc\u062f (\u0627\u06cc\u0646 \u0628\u062e\u0634 \u0631\u0627 \u062f\u0631 \u062e\u0631\u0648\u062c\u06cc \u0646\u0646\u0648\u06cc\u0633\u06cc\u062f):
+   222→   222→1. \u0622\u06cc\u0627 \u0628\u0627\u0632\u0627\u0631 \u062f\u0631 \u0641\u0627\u0632 \u062a\u062c\u0645\u0639\u060c \u0635\u0639\u0648\u062f\u060c \u062a\u0648\u0632\u06cc\u0639 \u06cc\u0627 \u0646\u0632\u0648\u0644 \u0627\u0633\u062a\u061f
+   223→   223→2. \u0622\u06cc\u0627 \u0628\u06cc\u0646 \u0633\u06cc\u06af\u0646\u0627\u0644\u200c\u0647\u0627 \u062a\u0636\u0627\u062f \u0648\u062c\u0648\u062f \u062f\u0627\u0631\u062f \u061f \u06a9\u062f\u0627\u0645 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0642\u0648\u06cc\u200c\u062a\u0631 \u0627\u0633\u062a\u061f
+   224→   224→3. \u0622\u06cc\u0627 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f (OBV) \u062a\u0623\u06cc\u06cc\u062f\u06a9\u0646\u0646\u062f\u0647 \u0631\u0648\u0646\u062f \u0627\u0633\u062a \u06cc\u0627 \u0645\u062e\u0627\u0644\u0641 \u0622\u0646\u061f
+   225→   225→4. \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a \u0628\u0647 ${toPersianNum(S1Price)} \u06cc\u0627 ${toPersianNum(R1Price)} \u0628\u0631\u0633\u062f\u060c \u0686\u0647 \u062a\u063a\u06cc\u06cc\u0631\u06cc \u062f\u0631 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627 \u0627\u06cc\u062c\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f\u061f
+   226→   226→5. \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u063a\u0627\u0644\u0628 \u0628\u0627\u0632\u0627\u0631 \u0686\u06cc\u0633\u062a\u061f
+   227→   227→
+   228→   228→---
+   229→   229→**\u0645\u0631\u062d\u0644\u0647 2: \u062a\u0634\u062e\u06cc\u0635 \u0641\u0627\u0632 \u0628\u0627\u0632\u0627\u0631 (Market Phase Analysis)**
+   230→   230→\u0628\u0627\u0632\u0627\u0631 \u0631\u0627 \u0628\u0647 4 \u0641\u0627\u0632 \u062a\u0642\u0633\u06cc\u0645 \u06a9\u0646\u06cc\u062f \u0648 \u0641\u0627\u0632 \u0641\u0639\u0644\u06cc \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u06cc\u062f:
+   231→   231→- **\u0641\u0627\u0632 \u062a\u062c\u0645\u0639:** \u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u060c \u062d\u062c\u0645 \u062f\u0631 \u062d\u0627\u0644 \u0627\u0641\u0632\u0627\u06cc\u0634\u060c \u062e\u0631\u06cc\u062f \u0647\u0648\u0634\u0645\u0646\u062f
+   232→   232→- **\u0641\u0627\u0632 \u0635\u0639\u0648\u062f:** \u0631\u0648\u0646\u062f \u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u06a9\u062f\u0627\u0631\u060c \u062d\u062c\u0645 \u0628\u0627\u0644\u0627\u060c \u0634\u06a9\u0633\u062a \u0645\u0642\u0627\u0648\u0645\u062a\u200c\u0647\u0627
+   233→   233→- **\u0641\u0627\u0632 \u062a\u0648\u0632\u06cc\u0639:** \u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u060c \u062d\u062c\u0645 \u062f\u0631 \u062d\u0627\u0644 \u06a9\u0627\u0647\u0634\u060c \u0641\u0631\u0648\u0634 \u0647\u0648\u0634\u0645\u0646\u062f
+   234→   234→- **\u0641\u0627\u0632 \u0646\u0632\u0648\u0644:** \u0631\u0648\u0646\u062f \u0646\u0632\u0648\u0644\u06cc\u060c \u062d\u062c\u0645 \u0628\u0627\u0644\u0627 \u062f\u0631 \u0631\u06cc\u0632\u0634\u200c\u0647\u0627\u060c \u0634\u06a9\u0633\u062a \u062d\u0645\u0627\u06cc\u062a\u200c\u0647\u0627
+   235→   235→
+   236→   236→---
+   237→   237→**\u0645\u0631\u062d\u0644\u0647 3: \u062a\u0634\u062e\u06cc\u0635 \u062a\u0636\u0627\u062f\u0647\u0627 \u0648 \u0627\u0648\u0644\u0648\u06cc\u062a\u200c\u0628\u0646\u062f\u06cc \u0633\u06cc\u06af\u0646\u0627\u0644\u0647\u0627**
+   238→   238→- \u062a\u0636\u0627\u062f\u0647\u0627\u06cc \u0645\u0648\u062c\u0648\u062f \u0631\u0627 \u0628\u0647\u200c\u0635\u0631\u0627\u062d\u062a \u0646\u0627\u0645 \u0628\u0628\u0631\u06cc\u062f.
+   239→   239→- \u062a\u0635\u0645\u06cc\u0645 \u0628\u06af\u06cc\u0631\u06cc\u062f \u06a9\u062f\u0627\u0645 \u0633\u06cc\u06af\u0646\u0627\u0644 \u062f\u0631 \u0634\u0631\u0627\u06cc\u0637 \u0641\u0639\u0644\u06cc \u0648\u0632\u0646 \u0628\u06cc\u0634\u062a\u0631\u06cc \u062f\u0627\u0631\u062f \u0648 \u0686\u0631\u0627.
+   240→   240→
+   241→   241→---
+   242→   242→**\u0645\u0631\u062d\u0644\u0647 4: \u062a\u062d\u0644\u06cc\u0644 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u0648 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u0628\u0627\u0632\u0627\u0631**
+   243→   243→- \u0628\u0631 \u0627\u0633\u0627\u0633 OBV \u0648 \u062a\u063a\u06cc\u06cc\u0631\u0627\u062a \u062d\u062c\u0645\u060c \u0628\u06af\u0648\u06cc\u06cc\u062f \u0622\u06cc\u0627 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u062f\u0631 \u062d\u0627\u0644 \u0648\u0631\u0648\u062f \u0627\u0633\u062a \u06cc\u0627 \u062e\u0631\u0648\u062c.
+   244→   244→- \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u063a\u0627\u0644\u0628 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 \u0631\u0627 \u062a\u0648\u0635\u06cc\u0641 \u06a9\u0646\u06cc\u062f.
+   245→   245→
+   246→   246→---
+   247→   247→**\u0645\u0631\u062d\u0644\u0647 5: \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc**
+   248→   248→\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML \u0631\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u062d\u0644\u06cc\u0644 \u0647\u0631 \u0631\u0648\u0634 \u0631\u0627 \u0628\u0647\u200c\u0627\u062e\u062a\u0635\u0627\u0631 \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
+   249→   249→${methodsStr}
+   250→   250→
+   251→   251→---
+   252→   252→**\u0645\u0631\u062d\u0644\u0647 6: \u0633\u0646\u0627\u0631\u06cc\u0648\u0646\u0648\u06cc\u0633\u06cc \u062f\u0631\u062e\u062a\u06cc (Scenario Tree)**
+   253→   253→\u06cc\u06a9 \u062f\u0631\u062e\u062a \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc\u06cc \u0627\u0646\u0634\u0639\u0627\u0628\u06cc \u0628\u0633\u0627\u0632\u06cc\u062f:
+   254→   254→- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0628\u0627\u0644\u0627\u06cc ${toPersianNum(R1Price)}** \u0628\u0631\u0648\u062f \u2190 \u0645\u0633\u06cc\u0631 \u0635\u0639\u0648\u062f\u06cc (${dominantScenario.label}: ${dominantScenario.name})
+   255→   255→- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0628\u06cc\u0646 ${toPersianNum(S1Price)} \u0648 ${toPersianNum(R1Price)}** \u0628\u0645\u0627\u0646\u062f \u2190 \u0645\u0633\u06cc\u0631 \u062e\u0646\u062b\u06cc
+   256→   256→- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0632\u06cc\u0631 ${toPersianNum(S1Price)}** \u0628\u0631\u0648\u062f \u2190 \u0645\u0633\u06cc\u0631 \u0646\u0632\u0648\u0644\u06cc
+   257→   257→
+   258→   258→---
+   259→   259→**\u0645\u0631\u062d\u0644\u0647 7: \u062a\u062d\u0644\u06cc\u0644 \u062d\u0633\u0627\u0633\u06cc\u062a (Sensitivity Analysis)**
+   260→   260→\u0628\u0631\u0627\u06cc \u0647\u0631 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc \u0628\u06af\u0648\u06cc\u06cc\u062f \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a \u0628\u0647 \u0622\u0646 \u0628\u0631\u0633\u062f\u060c \u06a9\u062f\u0627\u0645 \u0633\u0646\u0627\u0631\u06cc\u0648 \u062a\u0642\u0648\u06cc\u062a \u0648 \u06a9\u062f\u0627\u0645 \u062a\u0636\u0639\u06cc\u0641 \u0645\u06cc\u200c\u0634\u0648\u062f\u061f
+   261→   261→
+   262→   262→---
+   263→   263→**\u0645\u0631\u062d\u0644\u0647 8: \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u06a9\u0627\u0645\u0644**
+   264→   264→\u0628\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u06cc:
+   265→   265→- **\u062c\u0647\u062a:** \u062e\u0631\u06cc\u062f\u060c \u0641\u0631\u0648\u0634 \u06cc\u0627 \u0627\u0646\u062a\u0638\u0627\u0631\u061f
+   266→   266→- **\u0646\u0642\u0637\u0647 \u0648\u0631\u0648\u062f \u062f\u0642\u06cc\u0642:** \u0628\u0631 \u0627\u0633\u0627\u0633 \u06a9\u062f\u0627\u0645 \u0633\u0637\u062d/\u0633\u06cc\u06af\u0646\u0627\u0644\u061f
+   267→   267→- **\u062d\u062f \u0636\u0631\u0631 (SL):** \u0628\u0631 \u0627\u0633\u0627\u0633 ATR (${toPersianNum(atr)}) \u0648 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc
+   268→   268→- **\u0627\u0647\u062f\u0627\u0641 (TP):** \u062d\u062f\u0627\u0642\u0644 2 \u0647\u062f\u0641 (\u0645\u062d\u0627\u0641\u0638\u0647\u200c\u06a9\u0627\u0631\u0627\u0646\u0647 + \u062c\u0627\u0647\u0637\u0644\u0628\u0627\u0646\u0647)
+   269→   269→- **\u0646\u0633\u0628\u062a \u0631\u06cc\u0633\u06a9 \u0628\u0647 \u0631\u06cc\u0648\u0627\u0631\u062f (R/R):** \u0645\u062d\u0627\u0633\u0628\u0647 \u0634\u0648\u062f
+   270→   270→
+   271→   271→---
+   272→   272→**\u0645\u0631\u062d\u0644\u0647 9: \u0627\u0646\u062a\u062e\u0627\u0628 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628**
+   273→   273→\u0628\u0631 \u0627\u0633\u0627\u0633 \u062a\u0645\u0627\u0645 \u062a\u062d\u0644\u06cc\u0644\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627 \u0648 \u0645\u06a9\u062a\u0628 ${school}\u060c \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628 \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u0648\u062c\u06cc\u0647 \u06a9\u0646\u06cc\u062f.
+   274→   274→
+   275→   275→---
+   276→   276→**\u0645\u0631\u062d\u0644\u0647 10: \u062e\u0631\u0648\u062c\u06cc \u0633\u0647\u200c\u0644\u0627\u06cc\u0647 (Triple-Layer Output)**
+   277→   277→\u062a\u062d\u0644\u06cc\u0644 \u0646\u0647\u0627\u06cc\u06cc \u0631\u0627 \u062f\u0631 **\u0633\u0647 \u0644\u0627\u06cc\u0647** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
+   278→   278→- **\u0644\u0627\u06cc\u0647 \u0627\u0648\u0644 (\u0639\u0645\u0644\u06cc\u0627\u062a\u06cc):** \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u0648 \u0627\u0639\u062f\u0627\u062f (\u0628\u0631\u0627\u06cc \u0645\u0639\u0627\u0645\u0644\u06af\u0631)
+   279→   279→- **\u0644\u0627\u06cc\u0647 \u062f\u0648\u0645 (\u062a\u062d\u0644\u06cc\u0644\u06cc):** \u062f\u0644\u0627\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644 \u0648 \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u0647\u0627 (\u0628\u0631\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06af\u0631)
+   280→   280→- **\u0644\u0627\u06cc\u0647 \u0633\u0648\u0645 (\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc):** \u0648\u0636\u0639\u06cc\u062a \u0631\u0648\u062d\u06cc \u0628\u0627\u0632\u0627\u0631 \u0648 \u0631\u0641\u062a\u0627\u0631 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 (\u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0631\u06cc\u0633\u06a9)
+   281→   281→
+   282→   282→---
+   283→   283→**\u0633\u0627\u062e\u062a\u0627\u0631 \u062e\u0631\u0648\u062c\u06cc \u0646\u0647\u0627\u06cc\u06cc:**
+   284→   284→- **\u0639\u0646\u0648\u0627\u0646:** ${school} \u0628\u0627 \u0633\u0628\u06a9 ${style} \u0648 \u0644\u062d\u0646 ${tone}
+   285→   285→- **\u0645\u062a\u0646 \u0627\u0635\u0644\u06cc:** 3 \u062a\u0627 5 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 (800 \u062a\u0627 1,500 \u06a9\u0644\u0645\u0647)
+   286→   286→- **\u062c\u0645\u0644\u0647 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628:** (\u067e\u0631\u0631\u0646\u06af)
+   287→   287→- **\u062e\u0644\u0627\u0635\u0647 \u0639\u0645\u0644\u06cc:** \u062d\u062f\u0627\u06a9\u062b\u0631 30 \u06a9\u0644\u0645\u0647
+   288→   288→- **\u062a\u0631\u06a9\u06cc\u0628 \u0627\u0646\u062a\u062e\u0627\u0628\u06cc:** \u0645\u06a9\u062a\u0628: ${school} | \u0633\u0628\u06a9: ${style} | \u0644\u062d\u0646: ${tone}
+   289→   289→
+   290→   290→**\u0642\u0648\u0627\u0639\u062f \u062e\u0631\u0648\u062c\u06cc:**
+   291→   291→- **\u0628\u062f\u0648\u0646 \u0627\u06cc\u0645\u0648\u062c\u06cc** \u2014 \u0641\u0642\u0637 . \u060c ? ! \u2014 \u00ab \u00bb
+   292→   292→- **\u062d\u062f\u0627\u0642\u0644 5 \u0633\u0648\u0627\u0644 \u06cc\u0627 \u062a\u0639\u062c\u0628** \u062f\u0631 \u0633\u0631\u0627\u0633\u0631 \u0645\u062a\u0646
+   293→   293→- **\u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0627\u06cc\u062f \u0628\u0644\u0646\u062f \u0648 \u0639\u0645\u06cc\u0642 \u0628\u0627\u0634\u062f** (200 \u062a\u0627 500 \u06a9\u0644\u0645\u0647)
+   294→   294→- **\u062d\u062f\u0627\u0642\u0644 3 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0634\u0627\u062e\u0635\u200c\u0647\u0627\u06cc \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644** (\u0628\u0627 \u0646\u0627\u0645 \u0648 \u0639\u062f\u062f)
+   295→   295→- **\u062a\u062d\u0644\u06cc\u0644 \u0634\u0627\u0645\u0644 \u062a\u0648\u0636\u06cc\u062d \u062f\u0644\u06cc\u0644 \u0627\u0646\u062a\u062e\u0627\u0628 \u0645\u06a9\u062a\u0628 ${school} \u0648 \u0633\u0628\u06a9 ${style} \u0628\u0627\u0634\u062f**
+   296→   296→- **\u062f\u0631 \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u062d\u062f\u0627\u0642\u0644 \u06cc\u06a9 \u062c\u0645\u0644\u0647 \u067e\u0631\u0633\u0634\u06cc \u06cc\u0627 \u062a\u0639\u062c\u0628\u06cc**
+   297→   297→- **\u062f\u0631 \u067e\u0627\u06cc\u0627\u0646 \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u06cc\u06a9 \u062c\u0645\u0639\u200c\u0628\u0646\u062f\u06cc \u062c\u0632\u0626\u06cc** \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u06cc\u062f
+   298→   298→- **\u062a\u0645\u0627\u0645 \u0645\u062a\u0646 \u0628\u0647 \u0632\u0628\u0627\u0646 \u0641\u0627\u0631\u0633\u06cc \u0628\u0627\u0634\u062f.**
+   299→   299→- **\u0627\u0639\u062f\u0627\u062f \u062f\u0631 \u0645\u062a\u0646 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u0648 \u0633\u0647 \u0631\u0642\u0645 \u0633\u0647 \u0631\u0642\u0645 \u062c\u062f\u0627 \u0634\u0648\u0646\u062f.**`;
+   300→   300→}
+   301→   301→
+   302→   302→// ─── System Prompt (FIXED: role=system) ─────────────────────────────
+   303→   303→const SYSTEM_PROMPT = `\u0634\u0645\u0627 \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0627\u06cc\u0631\u0627\u0646\u06cc \u0647\u0633\u062a\u06cc\u062f \u06a9\u0647 \u0627\u0632 \u06cc\u06a9 \u0633\u06cc\u0633\u062a\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u062a\u0631\u06a9\u06cc\u0628\u06cc \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u200c\u06a9\u0646\u06cc\u062f.
+   304→   304→
+   305→   305→\u0627\u06cc\u0646 \u0633\u06cc\u0633\u062a\u0645 \u0634\u0627\u0645\u0644:
+   306→   306→- 10 \u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644
+   307→   307→- 10 \u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a
+   308→   308→- 15 \u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc
+   309→   309→- \u0627\u0646\u062a\u062e\u0627\u0628 \u062e\u0648\u062f\u06a9\u0627\u0631 \u062a\u0648\u0633\u0637 ML \u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0648\u0627\u0642\u0639\u06cc
+   310→   310→
+   311→   311→\u0642\u0648\u0627\u0639\u062f \u062e\u0631\u0648\u062c\u06cc:
+   312→   312→1. \u062d\u062f\u0627\u0642\u0644 800 \u06a9\u0644\u0645\u0647 \u0648 \u062d\u062f\u0627\u06a9\u062b\u0631 1,500 \u06a9\u0644\u0645\u0647 \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u0627\u06cc\u0646 \u0645\u0647\u0645\u200c\u062a\u0631\u06cc\u0646 \u0642\u0627\u0646\u0648\u0646 \u0627\u0633\u062a.
+   313→   313→2. \u062a\u0645\u0627\u0645 \u0627\u0639\u062f\u0627\u062f \u062f\u0631 \u0645\u062a\u0646 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u0648 \u0633\u0647 \u0631\u0642\u0645 \u0633\u0647 \u0631\u0642\u0645 \u062c\u062f\u0627 \u0634\u0648\u0646\u062f (\u0645\u062b\u0644\u0627\u064b 123,456).
+   314→   314→3. \u0647\u06cc\u0686 \u0627\u06cc\u0645\u0648\u062c\u06cc\u060c \u0634\u06a9\u0644\u06a9 \u06cc\u0627 \u06a9\u0627\u0631\u0627\u06a9\u062a\u0631 \u063a\u06cc\u0631\u062d\u0631\u0648\u0641\u06cc \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0646\u0634\u0648\u062f. \u0641\u0642\u0637 \u0639\u0644\u0627\u0626\u0645 \u0646\u06af\u0627\u0631\u0634\u06cc \u0627\u0633\u062a\u0627\u0646\u062f\u0627\u0631\u062f ( . , ; : ? ! " ").
+   315→   315→4. \u0645\u062a\u0646 \u0634\u0627\u0645\u0644 3 \u062a\u0627 5 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0627\u0634\u062f. \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0644\u0646\u062f \u0648 \u0639\u0645\u06cc\u0642 (200 \u062a\u0627 500 \u06a9\u0644\u0645\u0647).
+   316→   316→5. \u0645\u062a\u0646 \u06a9\u0627\u0645\u0644\u0627\u064b \u0628\u0647 \u0632\u0628\u0627\u0646 \u0641\u0627\u0631\u0633\u06cc \u0628\u0627\u0634\u062f.
+   317→   317→6. \u062a\u062d\u0644\u06cc\u0644 3 \u0644\u0627\u06cc\u0647 \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u062f: \u0644\u0627\u06cc\u0647 \u0639\u0645\u0644\u06cc\u0627\u062a\u06cc (\u0628\u0631\u0627\u06cc \u0645\u0639\u0627\u0645\u0644\u06af\u0631)\u060c \u0644\u0627\u06cc\u0647 \u062a\u062d\u0644\u06cc\u0644\u06cc (\u0628\u0631\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06af\u0631)\u060c \u0644\u0627\u06cc\u0647 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc (\u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0631\u06cc\u0633\u06a9).
+   318→   318→7. \u0634\u0627\u0645\u0644 \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u06a9\u0627\u0645\u0644 \u0628\u0627\u0634\u062f: \u062c\u0647\u062a\u060c \u0646\u0642\u0637\u0647 \u0648\u0631\u0648\u062f\u060c \u062d\u062f \u0636\u0631\u0631\u060c \u0627\u0647\u062f\u0627\u0641\u060c \u0646\u0633\u0628\u062a \u0631\u06cc\u0633\u06a9/\u0631\u06cc\u0648\u0627\u0631\u062f.
+   319→   319→8. \u0634\u0627\u0645\u0644 \u062f\u0631\u062e\u062a \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc\u06cc \u0627\u0646\u0634\u0639\u0627\u0628\u06cc \u0648 \u062a\u062d\u0644\u06cc\u0644 \u062d\u0633\u0627\u0633\u06cc\u062a \u0628\u0627\u0634\u062f.
+   320→   320→9. \u062d\u062f\u0627\u0642\u0644 5 \u0633\u0648\u0627\u0644 \u06cc\u0627 \u062a\u0639\u062c\u0628 \u062f\u0631 \u0645\u062a\u0646 \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u062f.
+   321→   321→10. \u062f\u0631 \u0627\u0628\u062a\u062f\u0627 \u0639\u0646\u0648\u0627\u0646 \u0634\u0627\u0645\u0644 \u0645\u06a9\u062a\u0628 + \u0633\u0628\u06a9 + \u0644\u062d\u0646 \u0648 \u062f\u0631 \u0627\u0646\u062a\u0647\u0627 \u062c\u0645\u0644\u0647 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628 (\u067e\u0631\u0631\u0646\u06af) \u0648 \u062e\u0644\u0627\u0635\u0647 \u0639\u0645\u0644\u06cc (\u062d\u062f\u0627\u06a9\u062b\u0631 30 \u06a9\u0644\u0645\u0647) \u0628\u06cc\u0627\u06cc\u062f.
+   322→   322→11. \u062a\u0631\u06a9\u06cc\u0628 \u0627\u0646\u062a\u062e\u0627\u0628\u06cc (\u0645\u06a9\u062a\u0628\u060c \u0633\u0628\u06a9\u060c \u0644\u062d\u0646) \u0631\u0627 \u062f\u0631 \u0627\u0646\u062a\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644 \u0628\u0647\u200c\u0635\u0631\u0627\u062d\u062a \u0630\u06a9\u0631 \u06a9\u0646\u06cc\u062f.`;
+   323→   323→
+   324→   324→// ─── Retry helper (FIXED: exponential backoff with jitter) ───────
+   325→   325→function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+   326→   326→
+   327→   327→function jitter(base: number): number {
+   328→   328→  return base + Math.random() * base * 0.3;
+   329→   329→}
+   330→   330→
+   331→   331→async function aiCompletionWithRetry(
+   332→   332→  zai: Awaited<ReturnType<typeof getZai>>,
+   333→   333→  messages: { role: string; content: string }[],
+   334→   334→  maxRetries = 3,
+   335→   335→): Promise<string> {
+   336→   336→  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+   337→   337→    try {
+   338→   338→      const completion = await zai.chat.completions.create({
+   339→   339→        messages,
+   340→   340→        thinking: { type: 'disabled' },
+   341→   341→      });
+   342→   342→      const content = completion.choices[0]?.message?.content;
+   343→   343→      if (!content || content.trim().length === 0) {
+   344→   344→        throw new Error('Empty AI response');
+   345→   345→      }
+   346→   346→      return content;
+   347→   347→    } catch (err: unknown) {
+   348→   348→      const msg = err instanceof Error ? err.message : String(err);
+   349→   349→      if (msg.includes('429') && attempt < maxRetries) {
+   350→   350→        const waitMs = Math.round(jitter(15000 * Math.pow(2, attempt - 1))); // 15s, 30s, 60s + jitter
+   351→   351→        console.warn(`[AI Analysis v5] 429 retry ${attempt}/${maxRetries}, waiting ${waitMs}ms...`);
+   352→   352→        await sleep(waitMs);
+   353→   353→        continue;
+   354→   354→      }
+   355→   355→      throw err;
+   356→   356→    }
+   357→   357→  }
+   358→   358→  throw new Error('Max retries exceeded');
+   359→   359→}
+   360→   360→
+   361→   361→// ─── POST Handler ─────────────────────────────────────────────────────
+   362→   362→export async function POST(req: NextRequest) {
+   363→   363→  try {
+   364→   364→    const body = await req.json();
+   365→   365→
+   366→   366→    if (!body.currentPrice) {
+   367→   367→      return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
+   368→   368→    }
+   369→   369→
+   370→   370→    // 0. Check cache first
+   371→   371→    const key = cacheKey(body);
+   372→   372→    const cached = cache.get(key);
+   373→   373→    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+   374→   374→      console.log(`[AI Analysis v5] Cache hit for ${body.symbolName}`);
+   375→   375→      return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
+   376→   376→    }
+   377→   377→
+   378→   378→    // 1. Build ML selector input
+   379→   379→    const mlInput = buildMLInput(body);
+   380→   380→
+   381→   381→    // 2. Run ML selection
+   382→   382→    const mlSelection = selectMLCombination(mlInput);
+   383→   383→
+   384→   384→    // 3. Select analytical methods
+   385→   385→    const methods = selectMethods(mlInput);
+   386→   386→
+   387→   387→    console.log(`[AI Analysis v5] ML Selection for ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
+   388→   388→    console.log(`[AI Analysis v5] Methods: ${methods.join(', ')}`);
+   389→   389→
+   390→   390→    // 4. Build the fused prompt (NO duplication)
+   391→   391→    const userMessage = buildV5Prompt(body, mlSelection, methods);
+   392→   392→
+   393→   393→    // 5. Generate analysis using Z.ai (FIXED: role=system + better retry)
+   394→   394→    const zai = await getZai();
+   395→   395→    const content = await aiCompletionWithRetry(zai, [
+   396→   396→      { role: 'system', content: SYSTEM_PROMPT },
+   397→   397→      { role: 'user', content: userMessage },
+   398→   398→    ]);
+   399→   399→
+   400→   400→    const result = {
+   401→   401→      text: content,
+   402→   402→      ml: {
+   403→   403→        school: mlSelection.school,
+   404→   404→        style: mlSelection.style,
+   405→   405→        tone: mlSelection.tone,
+   406→   406→        reasoning: mlSelection.reasoning,
+   407→   407→        methods,
+   408→   408→      },
+   409→   409→    };
+   410→   410→
+   411→   411→    // 6. Store in cache
+   412→   412→    cache.set(key, { text: content, ml: result.ml, ts: Date.now() });
+   413→   413→
+   414→   414→    // 7. Prune old cache entries
+   415→   415→    for (const [k, v] of cache.entries()) {
+   416→   416→      if (Date.now() - v.ts > CACHE_TTL) cache.delete(k);
+   417→   417→    }
+   418→   418→
+   419→   419→    return NextResponse.json(result);
+   420→   420→  } catch (err) {
+   421→   421→    console.error('AI Analysis v5 error:', err);
+   422→   422→    return NextResponse.json({ error: String(err), text: '' }, { status: 500 });
+   423→   423→  }
+   424→   424→}
+   425→   425→

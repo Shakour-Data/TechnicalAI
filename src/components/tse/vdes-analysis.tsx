@@ -117,10 +117,10 @@ function GradeBadge({ grade }: { grade: string }) {
 
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
   R1: { text: 'سناریوی ۱: صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
-  R2: { text: 'صعود تدریجی — ورود در اصلاح توصیه می‌شود', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
-  R3: { text: 'بازار رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
-  R4: { text: 'اصلاحی — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
-  R5: { text: 'نزولی قوی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+  R2: { text: 'سناریوی ۲: صعود تدریجی — ورود در اصلاح توصیه می‌شود', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
+  R3: { text: 'سناریوی ۳: بازار رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
+  R4: { text: 'سناریوی ۴: اصلاحی — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+  R5: { text: 'سناریوی ۵: نزولی قوی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -688,7 +688,7 @@ ${SCENARIO_KEYS.map(k => {
   const s = scenarios[k];
   const m = SCENARIO_META[k];
   return `<div class="scenario-card" style="border-top-color:${m.border}">
-    <div style="display:flex;justify-content:space-between"><strong style="color:${m.badgeColor}">${k}</strong><span style="font-size:10px;color:#6b7280">${m.label}</span></div>
+    <div style="display:flex;justify-content:space-between"><strong style="color:${m.badgeColor}">${SCENARIO_NUMBER[k]}</strong><span style="font-size:10px;color:#6b7280">${m.label}</span></div>
     <div class="prob" style="color:${m.badgeColor}">${toFa(s.probability)}٪</div>
     <div class="bar-bg"><div class="bar-fill" style="width:${s.probability}%;background:${m.border}"></div></div>
     <div class="range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال</div>
@@ -731,7 +731,7 @@ ${SCENARIO_KEYS.map(k => {
     for (const k of SCENARIO_KEYS) {
       const s = scenarios[k];
       const m = SCENARIO_META[k];
-      lines.push(`${k} — ${m.label}: ${toFa(s.probability)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`);
+      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: ${toFa(s.probability)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`);
     }
     lines.push('');
     lines.push(`سیگنال غالب: ${strategy.text}`);
@@ -798,7 +798,7 @@ ${SCENARIO_KEYS.map(k => {
     // Add scenarios sheet
     const scenarioRows = SCENARIO_KEYS.map(k => ({
       'سناریو': SCENARIO_META[k].label,
-      'کد': k,
+      'کد': `سناریوی ${SCENARIO_NUMBER[k]}`,
       'احتمال٪': scenarios[k].probability,
       'هدف_حداقل': Math.round(scenarios[k].targetMin),
       'هدف_حداکثر': Math.round(scenarios[k].targetMax),
@@ -1086,7 +1086,7 @@ ${SCENARIO_KEYS.map(k => {
                 style={{ borderTop: `3px solid ${meta.border}` }}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{key}</span>
+                  <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{SCENARIO_NUMBER[key]}</span>
                   <span className="text-[10px] text-[#6b7280]">{meta.label}</span>
                 </div>
                 <div className="text-center my-2">
