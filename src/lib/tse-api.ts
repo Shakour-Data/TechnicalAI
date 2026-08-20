@@ -112,19 +112,19 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // File-based cache for resilience when BrsApi is blocked
 const FILE_CACHE_DIR = join(process.cwd(), 'db');
-const FILE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes for file cache
+const FILE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours for file cache (BrsApi unreliable)
 
 function fileCachePath(type: number): string {
   return join(FILE_CACHE_DIR, `symbols-type-${type}.json`);
 }
 
-function loadFileCache(type: number): TseSymbol[] | null {
+function loadFileCache(type: number, force = false): TseSymbol[] | null {
   try {
     const path = fileCachePath(type);
     if (!existsSync(path)) return null;
     const content = readFileSync(path, 'utf-8');
     const entry = JSON.parse(content);
-    if (Date.now() - entry.time > FILE_CACHE_TTL) return null;
+    if (!force && Date.now() - entry.time > FILE_CACHE_TTL) return null;
     return entry.data as TseSymbol[];
   } catch {
     return null;
@@ -139,13 +139,13 @@ function candleFileCachePath(symbol: string, type: number): string {
   return join(FILE_CACHE_DIR, `candle-${safe}-type${type}.json`);
 }
 
-function loadCandleFileCache(symbol: string, type: number): CandleData[] | null {
+function loadCandleFileCache(symbol: string, type: number, force = false): CandleData[] | null {
   try {
     const path = candleFileCachePath(symbol, type);
     if (!existsSync(path)) return null;
     const content = readFileSync(path, 'utf-8');
     const entry = JSON.parse(content);
-    if (Date.now() - entry.time > CANDLE_FILE_CACHE_TTL) return null;
+    if (!force && Date.now() - entry.time > CANDLE_FILE_CACHE_TTL) return null;
     return entry.data as CandleData[];
   } catch {
     return null;
@@ -177,6 +177,8 @@ function saveFileCache(type: number, data: TseSymbol[]): void {
   }
 }
 
+const BRSAPI_TIMEOUT = 8000; // 8s connect timeout for BrsApi
+
 export async function fetchAllSymbols(type: number = 1): Promise<TseSymbol[]> {
   const now = Date.now();
   const cached = symbolsCaches.get(type);
@@ -185,7 +187,7 @@ export async function fetchAllSymbols(type: number = 1): Promise<TseSymbol[]> {
   }
   try {
     const url = `${BASE_URL}/AllSymbols.php?key=${API_KEY}&type=${type}`;
-    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
+    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 }, signal: AbortSignal.timeout(BRSAPI_TIMEOUT) });
     if (!res.ok) throw new Error(`Failed to fetch symbols (type=${type}): ${res.status}`);
     const raw = await res.json();
     // Check for API error response
@@ -198,8 +200,8 @@ export async function fetchAllSymbols(type: number = 1): Promise<TseSymbol[]> {
     return data;
   } catch (err) {
     console.warn(`[tse-api] BrsApi failed for type=${type}:`, (err instanceof Error ? err.message : String(err)));
-    // Fallback to file cache
-    const fileData = loadFileCache(type);
+    // Fallback to file cache (even if expired, stale data is better than nothing)
+    const fileData = loadFileCache(type) || loadFileCache(type, true);
     if (fileData && fileData.length > 0) {
       console.log(`[tse-api] Using file cache for type=${type} (${fileData.length} items)`);
       return fileData;
@@ -213,16 +215,21 @@ export async function fetchIndices(): Promise<TseIndex[]> {
   if (indicesCache && now - indicesCache.time < CACHE_TTL) {
     return indicesCache.data;
   }
-  const url = `${BASE_URL}/Index.php?key=${API_KEY}&type=3`;
-  const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
-  if (!res.ok) throw new Error(`Failed to fetch indices: ${res.status}`);
-  const raw = await res.json();
-  if (raw && !Array.isArray(raw) && raw.code_http) {
-    throw new Error(raw.message_error || `API error: ${raw.code_http}`);
+  try {
+    const url = `${BASE_URL}/Index.php?key=${API_KEY}&type=3`;
+    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 }, signal: AbortSignal.timeout(BRSAPI_TIMEOUT) });
+    if (!res.ok) throw new Error(`Failed to fetch indices: ${res.status}`);
+    const raw = await res.json();
+    if (raw && !Array.isArray(raw) && raw.code_http) {
+      throw new Error(raw.message_error || `API error: ${raw.code_http}`);
+    }
+    const data: TseIndex[] = Array.isArray(raw) ? raw : [];
+    indicesCache = { data, time: now };
+    return data;
+  } catch (err) {
+    console.warn(`[tse-api] BrsApi indices failed:`, err instanceof Error ? err.message : String(err));
+    return [];
   }
-  const data: TseIndex[] = Array.isArray(raw) ? raw : [];
-  indicesCache = { data, time: now };
-  return data;
 }
 
 export async function fetchAllInstruments(): Promise<{
@@ -282,7 +289,7 @@ export async function fetchCandlestick(
 
   try {
     const url = `${BASE_URL}/Candlestick.php?key=${API_KEY}&type=${type}&l18=${encodeURIComponent(symbol)}`;
-    const res = await fetch(url, { headers: HEADERS });
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(BRSAPI_TIMEOUT) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const candles: CandleData[] = Array.isArray(data)
@@ -293,18 +300,27 @@ export async function fetchCandlestick(
     return candles;
   } catch (err) {
     console.warn(`[tse-api] BrsApi candlestick failed for ${symbol}:`, err instanceof Error ? err.message : String(err));
-    // No file cache available — throw a clear error
+    // Try expired cache as last resort
+    const stale = loadCandleFileCache(symbol, type, true);
+    if (stale && stale.length > 0) {
+      console.log(`[tse-api] Using expired candlestick cache for ${symbol} (${stale.length} candles)`);
+      return stale;
+    }
     throw new Error(`دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.`);
   }
 }
 
 export async function fetchHistory(symbol: string): Promise<HistoryData[]> {
-  const url = `${BASE_URL}/History.php?key=${API_KEY}&type=0&l18=${encodeURIComponent(symbol)}`;
-  const res = await fetch(url, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Failed to fetch history for ${symbol}: ${res.status}`);
-  const data = await res.json();
-  if (Array.isArray(data)) return data;
-  return data.data || data.history || [];
+  try {
+    const url = `${BASE_URL}/History.php?key=${API_KEY}&type=0&l18=${encodeURIComponent(symbol)}`;
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(BRSAPI_TIMEOUT) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    return data.data || data.history || [];
+  } catch {
+    return [];
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
