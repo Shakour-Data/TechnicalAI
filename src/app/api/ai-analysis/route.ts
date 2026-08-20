@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { execFile } from 'child_process';
+import { getZai } from '@/lib/zai-shared';
 import {
   selectMLCombination,
   selectMethods,
@@ -9,7 +9,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// ─── 1-hour in-memory cache ────────────────────────────────────────
+// --- 1-hour in-memory cache ---
 interface CacheEntry {
   text: string;
   ml: { school: string; style: string; tone: string; reasoning: string; methods: string[] };
@@ -23,16 +23,15 @@ function cacheKey(body: Record<string, unknown>): string {
   return JSON.stringify(k);
 }
 
-// ─── Global rate limiter ───────────────────────────────────────────
+// --- Global rate limiter (serial queue) ---
 let lastAITime = 0;
-const AI_MIN_INTERVAL = 30_000;
+const AI_MIN_INTERVAL = 15_000;
 let cooldownUntil = 0;
 let activeCall = false;
 const pendingQueue: Array<{
   resolve: (text: string) => void;
   reject: (err: Error) => void;
-  prompt: string;
-  system: string;
+  messages: { role: string; content: string }[];
 }> = [];
 
 function processAIQueue() {
@@ -53,7 +52,7 @@ function processAIQueue() {
   const item = pendingQueue.shift()!;
   activeCall = true;
 
-  callZaiCLI(item.prompt, item.system)
+  callZaiSDK(item.messages)
     .then(text => {
       lastAITime = Date.now();
       cooldownUntil = 0;
@@ -62,29 +61,27 @@ function processAIQueue() {
     .catch(err => {
       const msg = err.message || '';
       if (msg.includes('429')) {
-        const cd = Math.max(cooldownUntil - Date.now(), 0) + 60_000;
-        cooldownUntil = Date.now() + Math.min(cd, 300_000);
-        console.warn(`[AI] 429, cooldown ${Math.min(cd, 300_000) / 1000}s`);
+        cooldownUntil = Date.now() + 60_000;
+        console.warn('[AI] 429, cooldown 60s');
       }
       item.reject(err);
     })
     .finally(() => {
       activeCall = false;
-      setTimeout(processAIQueue, 1000);
+      setTimeout(processAIQueue, 2000);
     });
 }
 
-function queueAI(prompt: string, system: string, timeoutMs = 45_000): Promise<string> {
+function queueAI(messages: { role: string; content: string }[], timeoutMs = 90_000): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      const idx = pendingQueue.findIndex(q => q.prompt === prompt);
+      const idx = pendingQueue.findIndex(q => q.messages === messages);
       if (idx >= 0) pendingQueue.splice(idx, 1);
       reject(new Error('AI request timeout'));
     }, timeoutMs);
 
     pendingQueue.push({
-      prompt,
-      system,
+      messages,
       resolve: (text) => { clearTimeout(timer); resolve(text); },
       reject: (err) => { clearTimeout(timer); reject(err); },
     });
@@ -93,32 +90,44 @@ function queueAI(prompt: string, system: string, timeoutMs = 45_000): Promise<st
   });
 }
 
-// ─── z-ai CLI wrapper (no SDK import in server process) ──────────
-function callZaiCLI(prompt: string, system: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    console.log('[AI] Calling z-ai CLI...');
-    const child = execFile('z-ai', ['chat', '-p', prompt, '-s', system],
-      { timeout: 40_000, maxBuffer: 2 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(stderr?.trim() || error.message));
-          return;
-        }
-        const output = stdout.trim();
-        // Strip emoji prefix lines
-        const lines = output.split('\n').filter(l => !l.startsWith('🚀'));
-        const text = lines.join('\n').trim();
-        if (text.length < 10) {
-          reject(new Error('AI response too short: ' + text.slice(0, 100)));
-        } else {
-          resolve(text);
-        }
+// --- Z.ai SDK call with retry (v3 approach) ---
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+function jitter(base: number): number { return base + Math.random() * base * 0.3; }
+
+async function callZaiSDK(messages: { role: string; content: string }[], maxRetries = 3): Promise<string> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const zai = await getZai();
+      const completion = await zai.chat.completions.create({
+        messages,
+        thinking: { type: 'disabled' },
+      });
+      const content = completion.choices[0]?.message?.content;
+      if (!content || content.trim().length === 0) {
+        throw new Error('Empty AI response');
       }
-    );
-  });
+      // Strip emoji prefix lines
+      const lines = content.split('\n').filter(l => !l.startsWith('\ud83d\ude80'));
+      const text = lines.join('\n').trim();
+      if (text.length < 10) {
+        throw new Error('AI response too short: ' + text.slice(0, 100));
+      }
+      return text;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('429') && attempt < maxRetries) {
+        const waitMs = Math.round(jitter(15_000 * Math.pow(2, attempt - 1))); // 15s, 30s, 60s + jitter
+        console.warn(`[AI v5.1] 429 retry ${attempt}/${maxRetries}, waiting ${waitMs}ms...`);
+        await sleep(waitMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────
+// --- Helpers ---
 function toPersianNum(n: number): string {
   if (!isFinite(n) || isNaN(n)) return '\u06f0';
   return Math.round(n).toLocaleString('fa-IR');
@@ -132,7 +141,7 @@ function srGrade(strength: number): string {
   return '\u0628\u0633\u06cc\u0627\u0631 \u0636\u0639\u06cc\u0641';
 }
 
-// ─── Build ML Selector Input ──────────────────────────────────────
+// --- Build ML Selector Input ---
 function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   const price = (body.currentPrice as number) || 0;
   const trendDir = (body.trendDirection as string) || 'range';
@@ -158,24 +167,72 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   return { price, trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range', adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0, rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr, scenarioDominant: dominantKey, hasVolume: (body.hasVolume as boolean) ?? false };
 }
 
-// ─── Build Prompt (v5.1 — concise) ────────────────────────────────
-function buildPrompt(body: Record<string, unknown>, ml: ReturnType<typeof selectMLCombination>, methods: string[]): string {
-  const { symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist, diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerLower, trendDirection, trendAngle, trendR2, scenarios, resistanceStrengths, supportStrengths, } = body as { symbolName: string; currentPrice: number; ma21: number; ma100: number; rsi: number; mfi: number; cci: number; adx: number; stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number; diPlus: number; diMinus: number; sar: number; atr: number; obv: number; bollingerUpper: number; bollingerLower: number; trendDirection: string; trendAngle: number; trendR2: number; scenarios: Record<string, { name?: string; probability: number; targetMin: number; targetMax: number }>; resistanceStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>; supportStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>; };
+// --- Build Prompt (v5.1 - detailed, v3-style) ---
+function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
+  const {
+    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+    stochK, stochD, macdLine, macdSignal, macdHist,
+    diPlus, diMinus, sar, atr, obv, hasVolume,
+    bollingerUpper, bollingerLower,
+    trendDirection, trendAngle, trendR2,
+    scenarios, resistanceStrengths, supportStrengths,
+  } = body as {
+    symbolName: string; currentPrice: number; ma21: number; ma100: number;
+    rsi: number; mfi: number; cci: number; adx: number;
+    stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number;
+    diPlus: number; diMinus: number; sar: number; atr: number; obv: number;
+    bollingerUpper: number; bollingerLower: number;
+    trendDirection: string; trendAngle: number; trendR2: number;
+    scenarios: Record<string, { name?: string; probability: number; targetMin: number; targetMax: number }>;
+    hasVolume: boolean;
+    resistanceStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+    supportStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+  };
 
-  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+  const { school, style, tone } = mlSelection;
+  const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
   const r2Pct = (trendR2 * 100).toFixed(1);
-  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
-  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+  const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
+  const rsiSignal = rsi > 70 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0634\u062f\u06cc\u062f' : rsi > 60 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : rsi > 40 ? '\u062e\u0646\u062b\u06cc' : rsi > 30 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634 \u0634\u062f\u06cc\u062f';
+  const stochSignal = stochK > 80 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : stochK < 20 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : stochK > stochD ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
+
+  const bbRange = bollingerUpper - bollingerLower;
+  const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
+  const bbSignal = currentPrice > bollingerUpper
+    ? '\u0628\u0627\u0644\u0627\u06cc \u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc'
+    : currentPrice < bollingerLower
+    ? '\u0632\u06cc\u0631 \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc'
+    : `\u062f\u0627\u062e\u0644 \u0628\u0627\u0646\u062f\u0647\u0627 (${toPersianNum(bbPos)}\u066a)`;
+
   const R1 = resistanceStrengths?.[0];
   const S1 = supportStrengths?.[0];
   const R1Price = R1?.price ?? Math.round(currentPrice * 1.05);
   const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
-  const R1Grade = R1?.strength ? srGrade(R1.strength) : 'نامشخص';
-  const S1Grade = S1?.strength ? srGrade(S1.strength) : 'نامشخص';
+  const R1Grade = R1?.strength ? srGrade(R1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+  const S1Grade = S1?.strength ? srGrade(S1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
+  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
 
+  const obvDesc = hasVolume
+    ? (obv > 0
+      ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u0648\u0631\u0648\u062f \u067e\u0648\u0644`
+      : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u062e\u0631\u0648\u062c \u067e\u0648\u0644`)
+    : '\u0628\u062f\u0648\u0646 \u062f\u0627\u062f\u0647 \u062d\u062c\u0645';
+
+  const macdDesc = macdHist > 0 && macdLine > macdSignal
+    ? '\u0635\u0639\u0648\u062f\u06cc (\u062e\u0637 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644)'
+    : macdHist > 0
+    ? '\u0635\u0639\u0648\u062f\u06cc \u0628\u0627 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u062b\u0628\u062a'
+    : '\u0646\u0632\u0648\u0644\u06cc (\u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u0646\u0641\u06cc)';
+
+  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
+
+  const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
+
+  // Dynamic scenario list sorted by probability
   const scenarioList = (['R1', 'R2', 'R3', 'R4', 'R5'] as const)
     .map((k, i) => ({
-      label: `سناریوی ${toPersianNum(i + 1)}`,
+      label: `\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)}`,
       name: scenarios?.[k]?.name || getScenarioName(k),
       prob: scenarios?.[k]?.probability ?? 0,
       min: scenarios?.[k]?.targetMin ?? 0,
@@ -183,40 +240,151 @@ function buildPrompt(body: Record<string, unknown>, ml: ReturnType<typeof select
     }))
     .sort((a, b) => b.prob - a.prob);
 
+  const dominantScenario = scenarioList[0];
   const scenarioBlock = scenarioList
-    .map(s => `${s.label} (${s.name}): ${toPersianNum(s.prob * 100)}% [${toPersianNum(s.min)}-${toPersianNum(s.max)}]`)
+    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob * 100)}\u066a (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
     .join('\n');
-  const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
 
-  return `تحلیل برای: ${symbolName}
-مکتب: ${ml.school} | سبک: ${ml.style} | لحن: ${ml.tone}
+  return `
+**\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644 (\u0646\u0633\u062e\u0647 v5.1 \u2014 \u062a\u062d\u0644\u06cc\u0644 \u0647\u0648\u0634\u0645\u0646\u062f):**
+\u0634\u0645\u0627 \u06cc\u06a9 **\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0628\u0627 20 \u0633\u0627\u0644 \u062a\u062c\u0631\u0628\u0647** \u0647\u0633\u062a\u06cc\u062f.
+\u0627\u06cc\u0646 \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 **\u0633\u06cc\u0633\u062a\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u062a\u0631\u06a9\u06cc\u0628\u06cc** \u062a\u0648\u0644\u06cc\u062f \u0634\u062f\u0647 \u0627\u0633\u062a:
+- **\u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644:** ${school}
+- **\u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a:** ${style}
+- **\u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc:** ${tone}
 
---- داده‌های پایه ---
-قیمت: ${toPersianNum(currentPrice)} ریال | روند: ${trendLabel} (${toPersianNum(Math.abs(trendAngle))}°, R²=${r2Pct}%)
-MA21=${toPersianNum(ma21)} | MA100=${toPersianNum(ma100)} | ATR=${toPersianNum(atr)}
-RSI=${toPersianNum(rsi)} (${rsiSignal}) | استوک=${toPersianNum(stochK)}/${toPersianNum(stochD)} (${stochSignal})
-CCI=${toPersianNum(cci)} | ADX=${toPersianNum(adx)} | DI+=${toPersianNum(diPlus)} | DI-=${toPersianNum(diMinus)}
-MACD: خط=${toPersianNum(macdLine)} سیگنال=${toPersianNum(macdSignal)} هیستو=${toPersianNum(macdHist)} | SAR=${toPersianNum(sar)}
-باند: ${toPersianNum(bollingerUpper)} / ${toPersianNum(bollingerLower)} | OBV=${obv > 0 ? '+' : ''}${toPersianNum(obv)}
-مقاومت R1: ${toPersianNum(R1Price)} (${R1Grade}) | حمایت S1: ${toPersianNum(S1Price)} (${S1Grade})
+\u0648\u0638\u06cc\u0641\u0647 \u0634\u0645\u0627 \u0627\u06cc\u0646 \u0627\u0633\u062a \u06a9\u0647 \u0628\u0631\u0627\u06cc **\u00ab${symbolName}\u00bb** \u062f\u0631 **\u062a\u0627\u06cc\u0645\u0641\u0631\u06cc\u0645 \u0631\u0648\u0632\u0627\u0646\u0647**\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 **\u0686\u0646\u062f\u0644\u0627\u06cc\u0647 \u0648 \u06a9\u0627\u0645\u0644\u0627\u064b \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u06cc** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f.
+\u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f **\u06a9\u0627\u0645\u0644\u0627\u064b \u0628\u0627 \u0645\u06a9\u062a\u0628 ${school} \u0648 \u0633\u0628\u06a9 ${style} \u0648 \u0644\u062d\u0646 ${tone} \u0647\u0645\u0627\u0647\u0646\u06af** \u0628\u0627\u0634\u062f.
 
---- سناریوها (مرتب احتمال) ---
+---
+**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647 (\u0648\u0627\u0642\u0639\u06cc \u0648 \u063a\u06cc\u0631\u0642\u0627\u0628\u0644 \u062a\u063a\u06cc\u06cc\u0631):**
+- \u0646\u0627\u0645 \u0627\u0628\u0632\u0627\u0631: **${symbolName}**
+- \u0642\u06cc\u0645\u062a \u0645\u0631\u062c\u0639: **${toPersianNum(currentPrice)} \u0631\u06cc\u0627\u0644**
+- \u0631\u0648\u0646\u062f \u0645\u06cc\u0627\u0646\u200c\u0645\u062f\u062a: **${trendLabel}** (\u0632\u0627\u0648\u06cc\u0647 ${toPersianNum(Math.abs(trendAngle))}\u00b0\u060c R\u00b2=${r2Pct}%)
+- \u0645\u0648\u0642\u0639\u06cc\u062a \u0646\u0633\u0628\u062a \u0628\u0647 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646\u200c\u0647\u0627: ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA21 (${toPersianNum(ma21)})** \u0648 ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA100 (${toPersianNum(ma100)})**
+- **ADX=${toPersianNum(adx)}** (${adxStrength})\u060c **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** \u2190 ${diPressure}
+- **RSI=${toPersianNum(rsi)}** (${rsiSignal})\u060c **\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})
+- **CCI=${toPersianNum(cci)}**${mfi > 0 ? `\u060c **MFI=${toPersianNum(mfi)}**` : ''}
+- **MACD** ${macdDesc} (\u062e\u0637=${toPersianNum(macdLine)}\u060c \u0633\u06cc\u06af\u0646\u0627\u0644=${toPersianNum(macdSignal)}\u060c \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645=${toPersianNum(macdHist)})
+- **OBV** ${obvDesc}
+- \u0642\u06cc\u0645\u062a **${bbSignal}** (\u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc ${toPersianNum(bollingerUpper)}\u060c \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc ${toPersianNum(bollingerLower)})
+- **SAR (\u067e\u0627\u0631\u0627\u0628\u0648\u0644\u06cc\u06a9):** ${toPersianNum(sar)} \u0631\u06cc\u0627\u0644
+- \u0645\u0642\u0627\u0648\u0645\u062a **R1** \u062f\u0631 ${toPersianNum(R1Price)} \u0631\u06cc\u0627\u0644 (${R1Grade} ${R1Confirm})
+- \u062d\u0645\u0627\u06cc\u062a **S1** \u062f\u0631 ${toPersianNum(S1Price)} \u0631\u06cc\u0627\u0644 (${S1Grade} ${S1Confirm})
+- \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0646\u0648\u0633\u0627\u0646 \u0631\u0648\u0632\u0627\u0646\u0647 (ATR): ${toPersianNum(atr)} \u0631\u06cc\u0627\u0644
+
+**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
 ${scenarioBlock}
 
---- روش‌های ML ---
+**\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML:**
 ${methodsStr}
 
---- دستور ---
-تحلیل چندلایه بنویس با 3 لایه: عملیاتی (جهت/ورود/SL/TP/R:R)، تحلیلی (دلایل تکنیکال)، روانشناسی.
-در ابتدا عنوان: مکتب ${ml.school} با سبک ${ml.style}.
-شامل درخت سناریو و تحلیل حساسیت باشد.
-در انتها: روایت غالب (پررنگ) + خلاصه عملی (حداکثر 30 کلمه) + ترکیب انتخای.
-قواعد: بدون ایموجی، فارسی با اعداد سه رقمی جدا، 800-1500 کلمه، حداقل 5 سوال/تعجب، حداقل 3 ارجاع به شاخص‌ها با عدد.`;
+---
+**\u0645\u0631\u062d\u0644\u0647 1: \u0627\u0633\u062a\u062f\u0644\u0627\u0644 \u062f\u0627\u062e\u0644\u06cc (Chain of Thought)**
+\u067e\u06cc\u0634 \u0627\u0632 \u0646\u0648\u0634\u062a\u0646 \u062a\u062d\u0644\u06cc\u0644 \u0646\u0647\u0627\u06cc\u06cc\u060c \u0628\u0647 \u0627\u06cc\u0646 \u0633\u0648\u0627\u0644\u0627\u062a \u0628\u0647\u200c\u0635\u0648\u0631\u062a \u062f\u0627\u062e\u0644\u06cc \u067e\u0627\u0633\u062e \u062f\u0647\u06cc\u062f (\u0627\u06cc\u0646 \u0628\u062e\u0634 \u0631\u0627 \u062f\u0631 \u062e\u0631\u0648\u062c\u06cc \u0646\u0646\u0648\u06cc\u0633\u06cc\u062f):
+1. \u0622\u06cc\u0627 \u0628\u0627\u0632\u0627\u0631 \u062f\u0631 \u0641\u0627\u0632 \u062a\u062c\u0645\u0639\u060c \u0635\u0639\u0648\u062f\u060c \u062a\u0648\u0632\u06cc\u0639 \u06cc\u0627 \u0646\u0632\u0648\u0644 \u0627\u0633\u062a\u061f
+2. \u0622\u06cc\u0627 \u0628\u06cc\u0646 \u0633\u06cc\u06af\u0646\u0627\u0644\u200c\u0647\u0627 \u062a\u0636\u0627\u062f \u0648\u062c\u0648\u062f \u062f\u0627\u0631\u062f \u061f \u06a9\u062f\u0627\u0645 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0642\u0648\u06cc\u200c\u062a\u0631 \u0627\u0633\u062a\u061f
+3. \u0622\u06cc\u0627 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f (OBV) \u062a\u0623\u06cc\u06cc\u062f\u06a9\u0646\u0646\u062f\u0647 \u0631\u0648\u0646\u062f \u0627\u0633\u062a \u06cc\u0627 \u0645\u062e\u0627\u0644\u0641 \u0622\u0646\u061f
+4. \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a \u0628\u0647 ${toPersianNum(S1Price)} \u06cc\u0627 ${toPersianNum(R1Price)} \u0628\u0631\u0633\u062f\u060c \u0686\u0647 \u062a\u063a\u06cc\u06cc\u0631\u06cc \u062f\u0631 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627 \u0627\u06cc\u062c\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f\u061f
+5. \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u063a\u0627\u0644\u0628 \u0628\u0627\u0632\u0627\u0631 \u0686\u06cc\u0633\u062a\u061f
+
+---
+**\u0645\u0631\u062d\u0644\u0647 2: \u062a\u0634\u062e\u06cc\u0635 \u0641\u0627\u0632 \u0628\u0627\u0632\u0627\u0631 (Market Phase Analysis)**
+\u0628\u0627\u0632\u0627\u0631 \u0631\u0627 \u0628\u0647 4 \u0641\u0627\u0632 \u062a\u0642\u0633\u06cc\u0645 \u06a9\u0646\u06cc\u062f \u0648 \u0641\u0627\u0632 \u0641\u0639\u0644\u06cc \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u06cc\u062f:
+- **\u0641\u0627\u0632 \u062a\u062c\u0645\u0639:** \u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u060c \u062d\u062c\u0645 \u062f\u0631 \u062d\u0627\u0644 \u0627\u0641\u0632\u0627\u06cc\u0634\u060c \u062e\u0631\u06cc\u062f \u0647\u0648\u0634\u0645\u0646\u062f
+- **\u0641\u0627\u0632 \u0635\u0639\u0648\u062f:** \u0631\u0648\u0646\u062f \u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u06a9\u062f\u0627\u0631\u060c \u062d\u062c\u0645 \u0628\u0627\u0644\u0627\u060c \u0634\u06a9\u0633\u062a \u0645\u0642\u0627\u0648\u0645\u062a\u200c\u0647\u0627
+- **\u0641\u0627\u0632 \u062a\u0648\u0632\u06cc\u0639:** \u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u060c \u062d\u062c\u0645 \u062f\u0631 \u062d\u0627\u0644 \u06a9\u0627\u0647\u0634\u060c \u0641\u0631\u0648\u0634 \u0647\u0648\u0634\u0645\u0646\u062f
+- **\u0641\u0627\u0632 \u0646\u0632\u0648\u0644:** \u0631\u0648\u0646\u062f \u0646\u0632\u0648\u0644\u06cc\u060c \u062d\u062c\u0645 \u0628\u0627\u0644\u0627 \u062f\u0631 \u0631\u06cc\u0632\u0634\u200c\u0647\u0627\u060c \u0634\u06a9\u0633\u062a \u062d\u0645\u0627\u06cc\u062a\u200c\u0647\u0627
+
+---
+**\u0645\u0631\u062d\u0644\u0647 3: \u062a\u0634\u062e\u06cc\u0635 \u062a\u0636\u0627\u062f\u0647\u0627 \u0648 \u0627\u0648\u0644\u0648\u06cc\u062a\u200c\u0628\u0646\u062f\u06cc \u0633\u06cc\u06af\u0646\u0627\u0644\u0647\u0627**
+- \u062a\u0636\u0627\u062f\u0647\u0627\u06cc \u0645\u0648\u062c\u0648\u062f \u0631\u0627 \u0628\u0647\u200c\u0635\u0631\u0627\u062d\u062a \u0646\u0627\u0645 \u0628\u0628\u0631\u06cc\u062f.
+- \u062a\u0635\u0645\u06cc\u0645 \u0628\u06af\u06cc\u0631\u06cc\u062f \u06a9\u062f\u0627\u0645 \u0633\u06cc\u06af\u0646\u0627\u0644 \u062f\u0631 \u0634\u0631\u0627\u06cc\u0637 \u0641\u0639\u0644\u06cc \u0648\u0632\u0646 \u0628\u06cc\u0634\u062a\u0631\u06cc \u062f\u0627\u0631\u062f \u0648 \u0686\u0631\u0627.
+
+---
+**\u0645\u0631\u062d\u0644\u0647 4: \u062a\u062d\u0644\u06cc\u0644 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u0648 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u0628\u0627\u0632\u0627\u0631**
+- \u0628\u0631 \u0627\u0633\u0627\u0633 OBV \u0648 \u062a\u063a\u06cc\u06cc\u0631\u0627\u062a \u062d\u062c\u0645\u060c \u0628\u06af\u0648\u06cc\u06cc\u062f \u0622\u06cc\u0627 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f \u062f\u0631 \u062d\u0627\u0644 \u0648\u0631\u0648\u062f \u0627\u0633\u062a \u06cc\u0627 \u062e\u0631\u0648\u062c.
+- \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u0633\u06cc \u063a\u0627\u0644\u0628 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 \u0631\u0627 \u062a\u0648\u0635\u06cc\u0641 \u06a9\u0646\u06cc\u062f.
+
+---
+**\u0645\u0631\u062d\u0644\u0647 5: \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc**
+\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u200c\u0634\u062f\u0647 \u062a\u0648\u0633\u0637 ML \u0631\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u062d\u0644\u06cc\u0644 \u0647\u0631 \u0631\u0648\u0634 \u0631\u0627 \u0628\u0647\u200c\u0627\u062e\u062a\u0635\u0627\u0631 \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
+${methodsStr}
+
+---
+**\u0645\u0631\u062d\u0644\u0647 6: \u0633\u0646\u0627\u0631\u06cc\u0648\u0646\u0648\u06cc\u0633\u06cc \u062f\u0631\u062e\u062a\u06cc (Scenario Tree)**
+\u06cc\u06a9 \u062f\u0631\u062e\u062a \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc\u06cc \u0627\u0646\u0634\u0639\u0627\u0628\u06cc \u0628\u0633\u0627\u0632\u06cc\u062f:
+- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0628\u0627\u0644\u0627\u06cc ${toPersianNum(R1Price)}** \u0628\u0631\u0648\u062f \u2190 \u0645\u0633\u06cc\u0631 \u0635\u0639\u0648\u062f\u06cc (${dominantScenario.label}: ${dominantScenario.name})
+- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0628\u06cc\u0646 ${toPersianNum(S1Price)} \u0648 ${toPersianNum(R1Price)}** \u0628\u0645\u0627\u0646\u062f \u2190 \u0645\u0633\u06cc\u0631 \u062e\u0646\u062b\u06cc
+- \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a **\u0632\u06cc\u0631 ${toPersianNum(S1Price)}** \u0628\u0631\u0648\u062f \u2190 \u0645\u0633\u06cc\u0631 \u0646\u0632\u0648\u0644\u06cc
+
+---
+**\u0645\u0631\u062d\u0644\u0647 7: \u062a\u062d\u0644\u06cc\u0644 \u062d\u0633\u0627\u0633\u06cc\u062a (Sensitivity Analysis)**
+\u0628\u0631\u0627\u06cc \u0647\u0631 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc \u0628\u06af\u0648\u06cc\u06cc\u062f \u0627\u06af\u0631 \u0642\u06cc\u0645\u062a \u0628\u0647 \u0622\u0646 \u0628\u0631\u0633\u062f\u060c \u06a9\u062f\u0627\u0645 \u0633\u0646\u0627\u0631\u06cc\u0648 \u062a\u0642\u0648\u06cc\u062a \u0648 \u06a9\u062f\u0627\u0645 \u062a\u0636\u0639\u06cc\u0641 \u0645\u06cc\u200c\u0634\u0648\u062f\u061f
+
+---
+**\u0645\u0631\u062d\u0644\u0647 8: \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u06a9\u0627\u0645\u0644**
+\u0628\u0627 \u062a\u0631\u06a9\u06cc\u0628 \u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u0627\u0646\u062a\u062e\u0627\u0628\u06cc:
+- **\u062c\u0647\u062a:** \u062e\u0631\u06cc\u062f\u060c \u0641\u0631\u0648\u0634 \u06cc\u0627 \u0627\u0646\u062a\u0638\u0627\u0631\u061f
+- **\u0646\u0642\u0637\u0647 \u0648\u0631\u0648\u062f \u062f\u0642\u06cc\u0642:** \u0628\u0631 \u0627\u0633\u0627\u0633 \u06a9\u062f\u0627\u0645 \u0633\u0637\u062d/\u0633\u06cc\u06af\u0646\u0627\u0644\u061f
+- **\u062d\u062f \u0636\u0631\u0631 (SL):** \u0628\u0631 \u0627\u0633\u0627\u0633 ATR (${toPersianNum(atr)}) \u0648 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc
+- **\u0627\u0647\u062f\u0627\u0641 (TP):** \u062d\u062f\u0627\u0642\u0644 2 \u0647\u062f\u0641 (\u0645\u062d\u0627\u0641\u0638\u0647\u200c\u06a9\u0627\u0631\u0627\u0646\u0647 + \u062c\u0627\u0647\u0637\u0644\u0628\u0627\u0646\u0647)
+- **\u0646\u0633\u0628\u062a \u0631\u06cc\u0633\u06a9 \u0628\u0647 \u0631\u06cc\u0648\u0627\u0631\u062f (R/R):** \u0645\u062d\u0627\u0633\u0628\u0647 \u0634\u0648\u062f
+
+---
+**\u0645\u0631\u062d\u0644\u0647 9: \u0627\u0646\u062a\u062e\u0627\u0628 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628**
+\u0628\u0631 \u0627\u0633\u0627\u0633 \u062a\u0645\u0627\u0645 \u062a\u062d\u0644\u06cc\u0644\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627 \u0648 \u0645\u06a9\u062a\u0628 ${school}\u060c \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628 \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u06cc\u062f \u0648 \u062a\u0648\u062c\u06cc\u0647 \u06a9\u0646\u06cc\u062f.
+
+---
+**\u0645\u0631\u062d\u0644\u0647 10: \u062e\u0631\u0648\u062c\u06cc \u0633\u0647\u200c\u0644\u0627\u06cc\u0647 (Triple-Layer Output)**
+\u062a\u062d\u0644\u06cc\u0644 \u0646\u0647\u0627\u06cc\u06cc \u0631\u0627 \u062f\u0631 **\u0633\u0647 \u0644\u0627\u06cc\u0647** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f:
+- **\u0644\u0627\u06cc\u0647 \u0627\u0648\u0644 (\u0639\u0645\u0644\u06cc\u0627\u062a\u06cc):** \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u0648 \u0627\u0639\u062f\u0627\u062f (\u0628\u0631\u0627\u06cc \u0645\u0639\u0627\u0645\u0644\u06af\u0631)
+- **\u0644\u0627\u06cc\u0647 \u062f\u0648\u0645 (\u062a\u062d\u0644\u06cc\u0644\u06cc):** \u062f\u0644\u0627\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644 \u0648 \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u0647\u0627 (\u0628\u0631\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06af\u0631)
+- **\u0644\u0627\u06cc\u0647 \u0633\u0648\u0645 (\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc):** \u0648\u0636\u0639\u06cc\u062a \u0631\u0648\u062d\u06cc \u0628\u0627\u0632\u0627\u0631 \u0648 \u0631\u0641\u062a\u0627\u0631 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 (\u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0631\u06cc\u0633\u06a9)
+
+---
+**\u0633\u0627\u062e\u062a\u0627\u0631 \u062e\u0631\u0648\u062c\u06cc \u0646\u0647\u0627\u06cc\u06cc:**
+- **\u0639\u0646\u0648\u0627\u0646:** ${school} \u0628\u0627 \u0633\u0628\u06a9 ${style} \u0648 \u0644\u062d\u0646 ${tone}
+- **\u0645\u062a\u0646 \u0627\u0635\u0644\u06cc:** 3 \u062a\u0627 5 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 (800 \u062a\u0627 1,500 \u06a9\u0644\u0645\u0647)
+- **\u062c\u0645\u0644\u0647 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628:** (\u067e\u0631\u0631\u0646\u06af)
+- **\u062e\u0644\u0627\u0635\u0647 \u0639\u0645\u0644\u06cc:** \u062d\u062f\u0627\u06a9\u062b\u0631 30 \u06a9\u0644\u0645\u0647
+- **\u062a\u0631\u06a9\u06cc\u0628 \u0627\u0646\u062a\u062e\u0627\u0628\u06cc:** \u0645\u06a9\u062a\u0628: ${school} | \u0633\u0628\u06a9: ${style} | \u0644\u062d\u0646: ${tone}
+
+**\u0642\u0648\u0627\u0639\u062f \u062e\u0631\u0648\u062c\u06cc:**
+- **\u0628\u062f\u0648\u0646 \u0627\u06cc\u0645\u0648\u062c\u06cc** \u2014 \u0641\u0642\u0637 . \u060c ? ! \u2014 \u00ab \u00bb
+- **\u062d\u062f\u0627\u0642\u0644 5 \u0633\u0648\u0627\u0644 \u06cc\u0627 \u062a\u0639\u062c\u0628** \u062f\u0631 \u0633\u0631\u0627\u0633\u0631 \u0645\u062a\u0646
+- **\u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0627\u06cc\u062f \u0628\u0644\u0646\u062f \u0648 \u0639\u0645\u06cc\u0642 \u0628\u0627\u0634\u062f** (200 \u062a\u0627 500 \u06a9\u0644\u0645\u0647)
+- **\u062d\u062f\u0627\u0642\u0644 3 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0634\u0627\u062e\u0635\u200c\u0647\u0627\u06cc \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644** (\u0628\u0627 \u0646\u0627\u0645 \u0648 \u0639\u062f\u062f)
+- **\u062a\u062d\u0644\u06cc\u0644 \u0634\u0627\u0645\u0644 \u062a\u0648\u0636\u06cc\u062d \u062f\u0644\u06cc\u0644 \u0627\u0646\u062a\u062e\u0627\u0628 \u0645\u06a9\u062a\u0628 ${school} \u0648 \u0633\u0628\u06a9 ${style} \u0628\u0627\u0634\u062f**
+- **\u062f\u0631 \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u062d\u062f\u0627\u0642\u0644 \u06cc\u06a9 \u062c\u0645\u0644\u0647 \u067e\u0631\u0633\u0634\u06cc \u06cc\u0627 \u062a\u0639\u062c\u0628\u06cc**
+- **\u062f\u0631 \u067e\u0627\u06cc\u0627\u0646 \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u06cc\u06a9 \u062c\u0645\u0639\u200c\u0628\u0646\u062f\u06cc \u062c\u0632\u0626\u06cc** \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u06cc\u062f
+- **\u062a\u0645\u0627\u0645 \u0645\u062a\u0646 \u0628\u0647 \u0632\u0628\u0627\u0646 \u0641\u0627\u0631\u0633\u06cc \u0628\u0627\u0634\u062f.**
+- **\u0627\u0639\u062f\u0627\u062f \u062f\u0631 \u0645\u062a\u0646 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u0648 \u0633\u0647 \u0631\u0642\u0645 \u0633\u0647 \u0631\u0642\u0645 \u062c\u062f\u0627 \u0634\u0648\u0646\u062f.**`;
 }
 
-const SYSTEM_PROMPT = 'شما تحلیلگر ارشد بازارهای مالی ایرانی هستید. تحلیل شامل 3 لایه: عملیاتی، تحلیلی، روانشناسی. 800 تا 1500 کلمه. بدون ایموجی. فارسی. اعداد سه رقمی جدا.';
+// System prompt (SDK uses role 'assistant' for system instructions)
+const SYSTEM_PROMPT = `\u0634\u0645\u0627 \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0627\u06cc\u0631\u0627\u0646\u06cc \u0647\u0633\u062a\u06cc\u062f \u06a9\u0647 \u0627\u0632 \u06cc\u06a9 \u0633\u06cc\u0633\u062a\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u062a\u0631\u06a9\u06cc\u0628\u06cc \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u200c\u06a9\u0646\u06cc\u062f.
 
-// ─── POST Handler ────────────────────────────────────────────────
+\u0627\u06cc\u0646 \u0633\u06cc\u0633\u062a\u0645 \u0634\u0627\u0645\u0644:
+- 10 \u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644 \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644
+- 10 \u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a
+- 15 \u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc
+- \u0627\u0646\u062a\u062e\u0627\u0628 \u062e\u0648\u062f\u06a9\u0627\u0631 \u062a\u0648\u0633\u0637 ML \u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0648\u0627\u0642\u0639\u06cc
+
+\u0642\u0648\u0627\u0639\u062f \u062e\u0631\u0648\u062c\u06cc:
+1. \u062d\u062f\u0627\u0642\u0644 800 \u06a9\u0644\u0645\u0647 \u0648 \u062d\u062f\u0627\u06a9\u062b\u0631 1,500 \u06a9\u0644\u0645\u0647 \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u0627\u06cc\u0646 \u0645\u0647\u0645\u200c\u062a\u0631\u06cc\u0646 \u0642\u0627\u0646\u0648\u0646 \u0627\u0633\u062a.
+2. \u062a\u0645\u0627\u0645 \u0627\u0639\u062f\u0627\u062f \u062f\u0631 \u0645\u062a\u0646 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u0648 \u0633\u0647 \u0631\u0642\u0645 \u0633\u0647 \u0631\u0642\u0645 \u062c\u062f\u0627 \u0634\u0648\u0646\u062f (\u0645\u062b\u0644\u0627\u064b 123,456).
+3. \u0647\u06cc\u0686 \u0627\u06cc\u0645\u0648\u062c\u06cc\u060c \u0634\u06a9\u0644\u06a9 \u06cc\u0627 \u06a9\u0627\u0631\u0627\u06a9\u062a\u0631 \u063a\u06cc\u0631\u062d\u0631\u0648\u0641\u06cc \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0646\u0634\u0648\u062f. \u0641\u0642\u0637 \u0639\u0644\u0627\u0626\u0645 \u0646\u06af\u0627\u0631\u0634\u06cc \u0627\u0633\u062a\u0627\u0646\u062f\u0627\u0631\u062f ( . , ; : ? ! \u00ab \u00bb).
+4. \u0645\u062a\u0646 \u0634\u0627\u0645\u0644 3 \u062a\u0627 5 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0627\u0634\u062f. \u0647\u0631 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641 \u0628\u0644\u0646\u062f \u0648 \u0639\u0645\u06cc\u0642 (200 \u062a\u0627 500 \u06a9\u0644\u0645\u0647).
+5. \u0645\u062a\u0646 \u06a9\u0627\u0645\u0644\u0627\u064b \u0628\u0647 \u0632\u0628\u0627\u0646 \u0641\u0627\u0631\u0633\u06cc \u0628\u0627\u0634\u062f.
+6. \u062a\u062d\u0644\u06cc\u0644 3 \u0644\u0627\u06cc\u0647 \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u062f: \u0644\u0627\u06cc\u0647 \u0639\u0645\u0644\u06cc\u0627\u062a\u06cc (\u0628\u0631\u0627\u06cc \u0645\u0639\u0627\u0645\u0644\u06af\u0631)\u060c \u0644\u0627\u06cc\u0647 \u062a\u062d\u0644\u06cc\u0644\u06cc (\u0628\u0631\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06af\u0631)\u060c \u0644\u0627\u06cc\u0647 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc (\u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631 \u0631\u06cc\u0633\u06a9).
+7. \u0634\u0627\u0645\u0644 \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc \u06a9\u0627\u0645\u0644 \u0628\u0627\u0634\u062f: \u062c\u0647\u062a\u060c \u0646\u0642\u0637\u0647 \u0648\u0631\u0648\u062f\u060c \u062d\u062f \u0636\u0631\u0631\u060c \u0627\u0647\u062f\u0627\u0641\u060c \u0646\u0633\u0628\u062a \u0631\u06cc\u0633\u06a9/\u0631\u06cc\u0648\u0627\u0631\u062f.
+8. \u0634\u0627\u0645\u0644 \u062f\u0631\u062e\u062a \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc\u06cc \u0627\u0646\u0634\u0639\u0627\u0628\u06cc \u0648 \u062a\u062d\u0644\u06cc\u0644 \u062d\u0633\u0627\u0633\u06cc\u062a \u0628\u0627\u0634\u062f.
+9. \u062d\u062f\u0627\u0642\u0644 5 \u0633\u0648\u0627\u0644 \u06cc\u0627 \u062a\u0639\u062c\u0628 \u062f\u0631 \u0645\u062a\u0646 \u062f\u0627\u0634\u062a\u0647 \u0628\u0627\u0634\u062f.
+10. \u062f\u0631 \u0627\u0628\u062a\u062f\u0627 \u0639\u0646\u0648\u0627\u0646 \u0634\u0627\u0645\u0644 \u0645\u06a9\u062a\u0628 + \u0633\u0628\u06a9 + \u0644\u062d\u0646 \u0648 \u062f\u0631 \u0627\u0646\u062a\u0647\u0627 \u062c\u0645\u0644\u0647 \u0631\u0648\u0627\u06cc\u062a \u063a\u0627\u0644\u0628 (\u067e\u0631\u0631\u0646\u06af) \u0648 \u062e\u0644\u0627\u0635\u0647 \u0639\u0645\u0644\u06cc (\u062d\u062f\u0627\u06a9\u062b\u0631 30 \u06a9\u0644\u0645\u0647) \u0628\u06cc\u0627\u06cc\u062f.
+11. \u062a\u0631\u06a9\u06cc\u0628 \u0627\u0646\u062a\u062e\u0627\u0628\u06cc (\u0645\u06a9\u062a\u0628\u060c \u0633\u0628\u06a9\u060c \u0644\u062d\u0646) \u0631\u0627 \u062f\u0631 \u0627\u0646\u062a\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644 \u0628\u0647\u200c\u0635\u0631\u0627\u062d\u062a \u0630\u06a9\u0631 \u06a9\u0646\u06cc\u062f.`;
+
+// --- POST Handler ---
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -224,6 +392,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
     }
 
+    // Check cache
     const key = cacheKey(body);
     const cached = cache.get(key);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
@@ -231,19 +400,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
     }
 
+    // ML selection
     const mlInput = buildMLInput(body);
     const mlSelection = selectMLCombination(mlInput);
     const methods = selectMethods(mlInput);
-    console.log(`[AI v5.1] ${body.symbolName}: school=${mlSelection.school}`);
+    console.log(`[AI v5.1] ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
+    console.log(`[AI v5.1] Methods: ${methods.join(', ')}`);
 
+    // Build prompt
     const userMessage = buildPrompt(body, mlSelection, methods);
-    const content = await queueAI(userMessage, SYSTEM_PROMPT, 45_000);
+
+    // Call AI via SDK (v3 approach with queue + retry)
+    const content = await queueAI([
+      { role: 'assistant', content: SYSTEM_PROMPT },
+      { role: 'user', content: userMessage },
+    ], 90_000);
 
     const result = {
       text: content,
       ml: { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods },
     };
 
+    // Cache result
     cache.set(key, { text: content, ml: result.ml, ts: Date.now() });
     for (const [k, v] of cache.entries()) {
       if (Date.now() - v.ts > CACHE_TTL) cache.delete(k);
@@ -258,7 +436,7 @@ export async function POST(req: NextRequest) {
 
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes('429')) return 'سرور هوشمند در حال حاضر شارژ دارد. لطفاً چند دقیقه دیگر تلاش کنید.';
-  if (msg.includes('timeout') || msg.includes('زمان')) return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً باز تلاش کنید.';
-  return 'خطایی در تولید تحلیل رخ داد. لطفاً دوباره تلاش کنید.';
+  if (msg.includes('429')) return '\u0633\u0631\u0648\u0631 \u0647\u0648\u0634\u0645\u0646\u062f \u062f\u0631 \u062d\u0627\u0644 \u062d\u0627\u0636\u0631 \u0634\u0627\u0631\u0698 \u062f\u0627\u0631\u062f. \u0644\u0637\u0641\u0627\u064b \u0686\u0646\u062f \u062f\u0642\u06cc\u0642\u0647 \u062f\u06cc\u06af\u0631 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+  if (msg.includes('timeout') || msg.includes('\u0632\u0645\u0627\u0646')) return '\u0632\u0645\u0627\u0646 \u067e\u0627\u0633\u062e\u062f\u0647\u06cc \u0647\u0648\u0634\u0645\u0646\u062f \u0628\u0647 \u067e\u0627\u06cc\u0627\u0646 \u0631\u0633\u06cc\u062f. \u0644\u0637\u0641\u0627\u064b \u0628\u0627\u0632 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+  return '\u062e\u0637\u0627\u06cc\u06cc \u062f\u0631 \u062a\u0648\u0644\u06cc\u062f \u062a\u062d\u0644\u06cc\u0644 \u0631\u062e \u062f\u0627\u062f. \u0644\u0637\u0641\u0627\u064b \u062f\u0648\u0628\u0627\u0631\u0647 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
 }

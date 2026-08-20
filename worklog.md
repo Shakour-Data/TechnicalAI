@@ -78,3 +78,44 @@ Stage Summary:
 - Fallback to static analysis when AI fails
 - ESLint clean, all routes compile and respond
 - 429 from Z.ai API still active (from previous aggressive retries) but will clear automatically
+---
+Task ID: 0
+Agent: main
+Task: Fix 502 Bad Gateway on AI analysis endpoint
+
+Work Log:
+- Investigated dev server crash - server had died, restarted it
+- Read current ai-analysis/route.ts - found it uses CLI wrapper (execFile 'z-ai') that fails with 429
+- Checked git history - found v3/v5 parent commit used SDK directly via getZai()
+- Read LLM skill docs - confirmed SDK uses role 'assistant' for system prompts
+- Rewrote route.ts: replaced CLI wrapper with SDK (getZai() + chat.completions.create)
+- Restored detailed v3 prompt (10-step structure with CoT, market phase, scenario tree, etc.)
+- Restored proper system prompt with 11 rules
+- Added queue-based rate limiting (15s min interval, 60s cooldown on 429)
+- Added exponential backoff retry with jitter (15s, 30s, 60s)
+- Kept in-memory cache (1hr TTL)
+- Lint passes clean
+
+Stage Summary:
+- Root cause: Latest commit switched from SDK to CLI wrapper which hit 429 with no retry
+- Fix: Reverted to SDK approach (v3-style) with proper retry + queue + detailed prompt
+- File changed: /home/z/my-project/src/app/api/ai-analysis/route.ts
+
+---
+Task ID: 2
+Agent: main
+Task: Verify server stability and fix OOM issues
+
+Work Log:
+- Discovered server kept dying - investigated via dmesg
+- Found OOM killer terminating next-server (1.8GB RSS in 4GB cgroup)
+- agent-browser Chrome was consuming ~500MB+ in same cgroup, pushing total over limit
+- Root cause: Kubernetes cgroup memory limit (4GB) shared between all processes
+- Fix: Killed agent-browser, set NODE_OPTIONS='--max-old-space-size=768'
+- Created auto-restart daemon script (start-dev.sh)
+- Verified 19/20 requests returned HTTP 200 with ~39KB content over 60 seconds
+
+Stage Summary:
+- Server now stable with ~768MB heap limit and daemon auto-restart
+- AI analysis route fixed (SDK approach restored from v3)
+- User should see app in preview panel once infrastructure proxy detects backend

@@ -663,7 +663,7 @@ export default function Home() {
       </main>
 
       <footer className={`mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500 ${data ? 'lg:mb-14' : ''}`}>
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v5.0 — صفحه اول + رفع باگ‌های AI
+        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v5.1 — رفع 502 + بازگشت به SDK + پرامپت ۱۰ مرحله‌ای
       </footer>
     </div>
   );
