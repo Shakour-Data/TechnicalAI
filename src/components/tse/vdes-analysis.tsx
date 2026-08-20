@@ -26,6 +26,13 @@ import {
 } from 'lucide-react';
 import { computeDailyIndicators } from '@/lib/indicator-arrays';
 
+function renderAIText(text: string): string {
+  return text
+    .split('\n\n')
+    .map(p => `<p class="mb-4">${p.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>')}</p>`)
+    .join('');
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════
@@ -1027,12 +1034,12 @@ ${SCENARIO_KEYS.map(k => {
             </div>
           )}
           {!aiLoading && aiText && (
-            <div className="text-sm text-[#374151] leading-[1.85] whitespace-pre-line space-y-3">
-              {aiText.split('\n\n').map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
-            </div>
-          )}
+          <div
+            className="text-sm text-[#374151] leading-[1.85] vdes-analysis-text"
+            dir="rtl"
+            dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }}
+          />
+        )}
           {!aiLoading && !aiText && !aiError && analysisParagraphs.length > 0 && (
             <div className="space-y-4">
               {analysisParagraphs.map((p, i) => (

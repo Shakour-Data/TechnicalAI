@@ -1,0 +1,756 @@
+     1→▲ Next.js 16.1.3 (Turbopack)
+     2→- Local:         http://localhost:3000
+     3→- Network:       http://21.0.15.114:3000
+     4→- Environments: .env
+     5→
+     6→✓ Starting...
+     7→✓ Ready in 772ms
+     8→○ Compiling / ...
+     9→ GET / 200 in 5.8s (compile: 5.4s, render: 356ms)
+    10→ GET / 200 in 259ms (compile: 44ms, render: 214ms)
+    11→ GET /api/instruments 200 in 2.7s (compile: 173ms, render: 2.6s)
+    12→ GET /api/tgju-instruments 200 in 6.4s (compile: 108ms, render: 6.3s)
+    13→ GET /api/tgju-instruments 200 in 11ms (compile: 3ms, render: 8ms)
+    14→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+    15→    at async processQueue (src/lib/zai-shared.ts:65:22)
+    16→  63 |
+    17→  64 |       const zai = await getZai();
+    18→> 65 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+    19→     |                      ^
+    20→  66 |       lastCallTime = Date.now();
+    21→  67 |
+    22→  68 |       const html: string = result.data?.html || '';
+    23→[zai-shared] 429, cooldown: 120s
+    24→[zai-shared] Cooldown, waiting 120s...
+    25→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+    26→    at async processQueue (src/lib/zai-shared.ts:65:22)
+    27→  63 |
+    28→  64 |       const zai = await getZai();
+    29→> 65 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+    30→     |                      ^
+    31→  66 |       lastCallTime = Date.now();
+    32→  67 |
+    33→  68 |       const html: string = result.data?.html || '';
+    34→[zai-shared] 429, cooldown: 120s
+    35→[zai-shared] Cooldown, waiting 120s...
+    36→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 500 in 10.7s (compile: 197ms, render: 10.5s)
+    37→TypeError: Cannot read properties of undefined (reading 'reject')
+    38→    at processQueue (src/lib/zai-shared.ts:76:12)
+    39→  74 |     } catch (err: unknown) {
+    40→  75 |       const msg = err instanceof Error ? err.message : String(err);
+    41→> 76 |       item.reject(new Error(msg));
+    42→     |            ^
+    43→  77 |
+    44→  78 |       if (msg.includes('429')) {
+    45→  79 |         const currentCooldown = Math.max(cooldownUntil - Date.now(), 0);
+    46→⨯ unhandledRejection: TypeError: Cannot read properties of undefined (reading 'reject')
+    47→    at processQueue (src/lib/zai-shared.ts:76:12)
+    48→  74 |     } catch (err: unknown) {
+    49→  75 |       const msg = err instanceof Error ? err.message : String(err);
+    50→> 76 |       item.reject(new Error(msg));
+    51→     |            ^
+    52→  77 |
+    53→  78 |       if (msg.includes('429')) {
+    54→  79 |         const currentCooldown = Math.max(cooldownUntil - Date.now(), 0);
+    55→⨯ unhandledRejection:  TypeError: Cannot read properties of undefined (reading 'reject')
+    56→    at processQueue (src/lib/zai-shared.ts:76:12)
+    57→  74 |     } catch (err: unknown) {
+    58→  75 |       const msg = err instanceof Error ? err.message : String(err);
+    59→> 76 |       item.reject(new Error(msg));
+    60→     |            ^
+    61→  77 |
+    62→  78 |       if (msg.includes('429')) {
+    63→  79 |         const currentCooldown = Math.max(cooldownUntil - Date.now(), 0);
+    64→✓ Compiled in 227ms
+    65→ GET / 200 in 390ms (compile: 55ms, render: 335ms)
+    66→[TypeError: fetch failed] {
+    67→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+    68→      at ignore-listed frames {
+    69→    code: 'UND_ERR_CONNECT_TIMEOUT'
+    70→  }
+    71→}
+    72→[TypeError: fetch failed] {
+    73→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+    74→      at ignore-listed frames {
+    75→    code: 'UND_ERR_CONNECT_TIMEOUT'
+    76→  }
+    77→}
+    78→⨯ Error: failed to pipe response
+    79→    at ignore-listed frames {
+    80→  [cause]: [TypeError: fetch failed] {
+    81→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+    82→        at ignore-listed frames {
+    83→      code: 'UND_ERR_CONNECT_TIMEOUT'
+    84→    }
+    85→  }
+    86→}
+    87→ GET /api/instruments 500 in 10.8s (compile: 46ms, render: 10.8s)
+    88→[TypeError: fetch failed] {
+    89→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+    90→      at ignore-listed frames {
+    91→    code: 'UND_ERR_CONNECT_TIMEOUT'
+    92→  }
+    93→}
+    94→[TypeError: fetch failed] {
+    95→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+    96→      at ignore-listed frames {
+    97→    code: 'UND_ERR_CONNECT_TIMEOUT'
+    98→  }
+    99→}
+   100→ GET /api/tgju-instruments 200 in 3.7s (compile: 56ms, render: 3.7s)
+   101→ GET /api/tgju-instruments 200 in 25ms (compile: 7ms, render: 18ms)
+   102→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+   103→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   104→  64 |
+   105→  65 |       const zai = await getZai();
+   106→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   107→     |                      ^
+   108→  67 |       lastCallTime = Date.now();
+   109→  68 |
+   110→  69 |       const html: string = result.data?.html || '';
+   111→[zai-shared] 429, cooldown: 120s
+   112→[zai-shared] Cooldown, waiting 120s...
+   113→[tse-api] BrsApi symbol data failed for خودرو: The operation was aborted due to timeout
+   114→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 14.8s (compile: 43ms, render: 14.7s)
+   115→[AI v5.1] خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   116→[AI v5.1] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   117→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   118→    at async callZaiSDK (src/app/api/ai-analysis/route.ts:116:26)
+   119→  114 |     try {
+   120→  115 |       const zai = await getZai();
+   121→> 116 |       const completion = await zai.chat.completions.create({
+   122→      |                          ^
+   123→  117 |         messages,
+   124→  118 |         thinking: { type: 'disabled' },
+   125→  119 |       });
+   126→[AI v5.1] 429 retry 1/4, waiting 22s...
+   127→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   128→    at async callZaiSDK (src/app/api/ai-analysis/route.ts:116:26)
+   129→  114 |     try {
+   130→  115 |       const zai = await getZai();
+   131→> 116 |       const completion = await zai.chat.completions.create({
+   132→      |                          ^
+   133→  117 |         messages,
+   134→  118 |         thinking: { type: 'disabled' },
+   135→  119 |       });
+   136→[AI v5.1] 429 retry 2/4, waiting 43s...
+   137→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   138→ POST /api/ai-analysis 200 in 60s (compile: 183ms, render: 60s)
+   139→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.4s (compile: 3ms, render: 6.4s)
+   140→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   141→    at async callZaiSDK (src/app/api/ai-analysis/route.ts:116:26)
+   142→  114 |     try {
+   143→  115 |       const zai = await getZai();
+   144→> 116 |       const completion = await zai.chat.completions.create({
+   145→      |                          ^
+   146→  117 |         messages,
+   147→  118 |         thinking: { type: 'disabled' },
+   148→  119 |       });
+   149→[AI v5.1] 429 retry 3/4, waiting 105s...
+   150→[AI v5.1] ایران‌ خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   151→[AI v5.1] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   152→ POST /api/ai-analysis 200 in 16.9s (compile: 3ms, render: 16.9s)
+   153→[AI v5.1] error: Error: AI request timeout
+   154→    at Timeout._onTimeout (src/app/api/ai-analysis/route.ts:81:14)
+   155→  79 |       const idx = pendingQueue.findIndex(q => q.messages === messages);
+   156→  80 |       if (idx >= 0) pendingQueue.splice(idx, 1);
+   157→> 81 |       reject(new Error('AI request timeout'));
+   158→     |              ^
+   159→  82 |     }, timeoutMs);
+   160→  83 |
+   161→  84 |     pendingQueue.push({
+   162→[tse-api] BrsApi symbol data failed for خساپا: The operation was aborted due to timeout
+   163→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 14.8s (compile: 3ms, render: 14.8s)
+   164→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+   165→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   166→  64 |
+   167→  65 |       const zai = await getZai();
+   168→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   169→     |                      ^
+   170→  67 |       lastCallTime = Date.now();
+   171→  68 |
+   172→  69 |       const html: string = result.data?.html || '';
+   173→[zai-shared] 429, cooldown: 120s
+   174→[zai-shared] Cooldown, waiting 120s...
+   175→[AI v5.1] خساپا: school=تحلیل سطوح حمایت/مقاومت (Support & Resistance), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   176→[AI v5.1] Methods: باند بولینگر, استوکاستیک, سطوح افقی حمایت/مقاومت, الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   177→ POST /api/ai-analysis 200 in 20.5s (compile: 6ms, render: 20.5s)
+   178→[AI v5.1] error: Error: AI request timeout
+   179→    at Timeout._onTimeout (src/app/api/ai-analysis/route.ts:81:14)
+   180→  79 |       const idx = pendingQueue.findIndex(q => q.messages === messages);
+   181→  80 |       if (idx >= 0) pendingQueue.splice(idx, 1);
+   182→> 81 |       reject(new Error('AI request timeout'));
+   183→     |              ^
+   184→  82 |     }, timeoutMs);
+   185→  83 |
+   186→  84 |     pendingQueue.push({
+   187→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   188→    at async callZaiSDK (src/app/api/ai-analysis/route.ts:116:26)
+   189→  114 |     try {
+   190→  115 |       const zai = await getZai();
+   191→> 116 |       const completion = await zai.chat.completions.create({
+   192→      |                          ^
+   193→  117 |         messages,
+   194→  118 |         thinking: { type: 'disabled' },
+   195→  119 |       });
+   196→[AI v5.1] 429, cooldown 90s
+   197→ GET / 200 in 71ms (compile: 5ms, render: 66ms)
+   198→ GET / 200 in 39ms (compile: 3ms, render: 37ms)
+   199→[AI v5.1] error: Error: AI request timeout
+   200→    at Timeout._onTimeout (src/app/api/ai-analysis/route.ts:81:14)
+   201→  79 |       const idx = pendingQueue.findIndex(q => q.messages === messages);
+   202→  80 |       if (idx >= 0) pendingQueue.splice(idx, 1);
+   203→> 81 |       reject(new Error('AI request timeout'));
+   204→     |              ^
+   205→  82 |     }, timeoutMs);
+   206→  83 |
+   207→  84 |     pendingQueue.push({
+   208→ GET / 200 in 42ms (compile: 4ms, render: 38ms)
+   209→ GET /api/tgju-instruments 200 in 4.0s (compile: 3ms, render: 4.0s)
+   210→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+   211→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   212→  64 |
+   213→  65 |       const zai = await getZai();
+   214→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   215→     |                      ^
+   216→  67 |       lastCallTime = Date.now();
+   217→  68 |
+   218→  69 |       const html: string = result.data?.html || '';
+   219→[zai-shared] 429, cooldown: 120s
+   220→[zai-shared] Cooldown, waiting 120s...
+   221→ GET /api/tgju-instruments 200 in 11ms (compile: 6ms, render: 5ms)
+   222→[TypeError: fetch failed] {
+   223→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   224→      at ignore-listed frames {
+   225→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   226→  }
+   227→}
+   228→[TypeError: fetch failed] {
+   229→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   230→      at ignore-listed frames {
+   231→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   232→  }
+   233→}
+   234→⨯ Error: failed to pipe response
+   235→    at ignore-listed frames {
+   236→  [cause]: [TypeError: fetch failed] {
+   237→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   238→        at ignore-listed frames {
+   239→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   240→    }
+   241→  }
+   242→}
+   243→ GET /api/instruments 500 in 10.6s (compile: 4ms, render: 10.6s)
+   244→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+   245→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   246→  64 |
+   247→  65 |       const zai = await getZai();
+   248→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   249→     |                      ^
+   250→  67 |       lastCallTime = Date.now();
+   251→  68 |
+   252→  69 |       const html: string = result.data?.html || '';
+   253→[zai-shared] 429, cooldown: 120s
+   254→[zai-shared] Cooldown, waiting 120s...
+   255→ GET / 200 in 31ms (compile: 2ms, render: 29ms)
+   256→ GET /api/tgju-instruments 200 in 7ms (compile: 2ms, render: 4ms)
+   257→ GET /api/tgju-instruments 200 in 6ms (compile: 1848µs, render: 4ms)
+   258→ GET /api/instruments 200 in 2.0s (compile: 4ms, render: 2.0s)
+   259→[tse-api] BrsApi candlestick failed for اهرم: fetch failed
+   260→[analysis] Error for symbol=اهرم: دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.
+   261→ GET /api/analysis?symbol=%D8%A7%D9%87%D8%B1%D9%85 502 in 10.5s (compile: 3ms, render: 10.5s)
+   262→[tse-api] BrsApi symbol data failed for اهرم: The operation was aborted due to timeout
+   263→[tse-api] BrsApi candlestick failed for اهرم: fetch failed
+   264→[analysis] Error for symbol=اهرم: دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.
+   265→ GET /api/analysis?symbol=%D8%A7%D9%87%D8%B1%D9%85 502 in 10.5s (compile: 2ms, render: 10.5s)
+   266→ GET / 200 in 39ms (compile: 3ms, render: 36ms)
+   267→ GET /api/tgju-instruments 200 in 3.7s (compile: 3ms, render: 3.7s)
+   268→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+   269→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   270→  64 |
+   271→  65 |       const zai = await getZai();
+   272→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   273→     |                      ^
+   274→  67 |       lastCallTime = Date.now();
+   275→  68 |
+   276→  69 |       const html: string = result.data?.html || '';
+   277→[zai-shared] 429, cooldown: 120s
+   278→[zai-shared] Cooldown, waiting 120s...
+   279→ GET /api/tgju-instruments 200 in 8ms (compile: 4ms, render: 4ms)
+   280→[TypeError: fetch failed] {
+   281→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   282→      at ignore-listed frames {
+   283→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   284→  }
+   285→}
+   286→[TypeError: fetch failed] {
+   287→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   288→      at ignore-listed frames {
+   289→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   290→  }
+   291→}
+   292→⨯ Error: failed to pipe response
+   293→    at ignore-listed frames {
+   294→  [cause]: [TypeError: fetch failed] {
+   295→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   296→        at ignore-listed frames {
+   297→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   298→    }
+   299→  }
+   300→}
+   301→ GET /api/instruments 500 in 10.6s (compile: 4ms, render: 10.6s)
+   302→[TypeError: fetch failed] {
+   303→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   304→      at ignore-listed frames {
+   305→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   306→  }
+   307→}
+   308→[TypeError: fetch failed] {
+   309→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   310→      at ignore-listed frames {
+   311→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   312→  }
+   313→}
+   314→[tse-api] BrsApi candlestick failed for عیار: fetch failed
+   315→[analysis] Error for symbol=عیار: دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.
+   316→ GET /api/analysis?symbol=%D8%B9%DB%8C%D8%A7%D8%B1 502 in 10.5s (compile: 2ms, render: 10.5s)
+   317→Failed to invoke remote function: Error: Function invoke failed with status 429: {"error":"Too many requests, please try again later"}
+   318→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   319→  64 |
+   320→  65 |       const zai = await getZai();
+   321→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   322→     |                      ^
+   323→  67 |       lastCallTime = Date.now();
+   324→  68 |
+   325→  69 |       const html: string = result.data?.html || '';
+   326→[zai-shared] 429, cooldown: 120s
+   327→[zai-shared] Cooldown, waiting 120s...
+   328→ GET / 200 in 48ms (compile: 3ms, render: 44ms)
+   329→ GET / 200 in 42ms (compile: 4ms, render: 38ms)
+   330→ GET / 200 in 44ms (compile: 4ms, render: 40ms)
+   331→ GET / 200 in 40ms (compile: 3ms, render: 38ms)
+   332→ GET / 200 in 224ms (compile: 9ms, render: 215ms)
+   333→ GET /api/tgju-instruments 200 in 6.9s (compile: 3ms, render: 6.9s)
+   334→ GET /api/tgju-instruments 200 in 11ms (compile: 6ms, render: 5ms)
+   335→ GET /api/instruments 200 in 7.8s (compile: 78ms, render: 7.7s)
+   336→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   337→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.1s (compile: 52ms, render: 6.1s)
+   338→[AI v5.1] ایران‌ خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   339→[AI v5.1] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   340→ POST /api/ai-analysis 200 in 19.2s (compile: 8ms, render: 19.2s)
+   341→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   342→[tse-api] BrsApi symbol data failed for خودرو: The operation was aborted due to timeout
+   343→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 14.3s (compile: 4ms, render: 14.3s)
+   344→[AI v5.1] خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   345→[AI v5.1] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   346→ POST /api/ai-analysis 200 in 28.6s (compile: 5ms, render: 28.6s)
+   347→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   348→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 5.5s (compile: 4ms, render: 5.5s)
+   349→[AI v5.1] Cache hit for ایران‌ خودرو
+   350→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 6ms)
+   351→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   352→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 5.5s (compile: 4ms, render: 5.5s)
+   353→[AI v5.1] Cache hit for ایران‌ خودرو
+   354→ POST /api/ai-analysis 200 in 33ms (compile: 24ms, render: 9ms)
+   355→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   356→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 5.6s (compile: 4ms, render: 5.6s)
+   357→[AI v5.1] Cache hit for ایران‌ خودرو
+   358→ POST /api/ai-analysis 200 in 9ms (compile: 3ms, render: 6ms)
+   359→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   360→[tse-api] BrsApi symbol data failed for خساپا: The operation was aborted due to timeout
+   361→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 15.1s (compile: 3ms, render: 15.1s)
+   362→[AI v5.1] خساپا: school=تحلیل سطوح حمایت/مقاومت (Support & Resistance), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   363→[AI v5.1] Methods: باند بولینگر, استوکاستیک, سطوح افقی حمایت/مقاومت, الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   364→ POST /api/ai-analysis 200 in 28.1s (compile: 4ms, render: 28.1s)
+   365→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   366→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 6.7s (compile: 4ms, render: 6.7s)
+   367→[AI v5.1] سایپا: school=تحلیل سطوح حمایت/مقاومت (Support & Resistance), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   368→[AI v5.1] Methods: باند بولینگر, استوکاستیک, سطوح افقی حمایت/مقاومت, الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   369→ POST /api/ai-analysis 200 in 26.5s (compile: 4ms, render: 26.5s)
+   370→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   371→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 6.3s (compile: 5ms, render: 6.3s)
+   372→[AI v5.1] Cache hit for سایپا
+   373→ POST /api/ai-analysis 200 in 14ms (compile: 6ms, render: 8ms)
+   374→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   375→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 7.2s (compile: 4ms, render: 7.2s)
+   376→[AI v5.1] Cache hit for سایپا
+   377→ POST /api/ai-analysis 200 in 13ms (compile: 3ms, render: 10ms)
+   378→[tse-api] BrsApi symbol data failed for وبملت: The operation was aborted due to timeout
+   379→ GET /api/analysis?symbol=%D9%88%D8%A8%D9%85%D9%84%D8%AA 200 in 12.4s (compile: 3ms, render: 12.4s)
+   380→[AI v5.1] وبملت: school=تحلیل نوسان و حجم (Volatility & Volume), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   381→[AI v5.1] Methods: الگوهای برگشتی صعودی, واگرایی مثبت RSI/MACD, پین‌بار/همر, OBV تأییدکننده, فیبوناچی گسترشی
+   382→ POST /api/ai-analysis 200 in 24.6s (compile: 3ms, render: 24.6s)
+   383→[tse-api] Using candlestick file cache for وبملت (3664 candles)
+   384→ GET /api/analysis?symbol=%D9%88%D8%A8%D9%85%D9%84%D8%AA 200 in 3.6s (compile: 3ms, render: 3.6s)
+   385→[AI v5.1] بانک ملت: school=تحلیل نوسان و حجم (Volatility & Volume), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   386→[AI v5.1] Methods: الگوهای برگشتی صعودی, واگرایی مثبت RSI/MACD, پین‌بار/همر, OBV تأییدکننده, فیبوناچی گسترشی
+   387→ POST /api/ai-analysis 200 in 25.9s (compile: 5ms, render: 25.9s)
+   388→[tse-api] Using candlestick file cache for وبملت (3664 candles)
+   389→ GET /api/analysis?symbol=%D9%88%D8%A8%D9%85%D9%84%D8%AA 200 in 3.6s (compile: 3ms, render: 3.6s)
+   390→[AI v5.1] Cache hit for بانک ملت
+   391→ POST /api/ai-analysis 200 in 17ms (compile: 3ms, render: 14ms)
+   392→ GET / 200 in 41ms (compile: 3ms, render: 39ms)
+   393→ GET / 200 in 33ms (compile: 3ms, render: 31ms)
+   394→ GET / 200 in 41ms (compile: 3ms, render: 38ms)
+   395→ GET / 200 in 38ms (compile: 3ms, render: 35ms)
+   396→ GET / 200 in 145ms (compile: 47ms, render: 97ms)
+   397→[TypeError: fetch failed] {
+   398→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   399→      at ignore-listed frames {
+   400→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   401→  }
+   402→}
+   403→[TypeError: fetch failed] {
+   404→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   405→      at ignore-listed frames {
+   406→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   407→  }
+   408→}
+   409→⨯ Error: failed to pipe response
+   410→    at ignore-listed frames {
+   411→  [cause]: [TypeError: fetch failed] {
+   412→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   413→        at ignore-listed frames {
+   414→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   415→    }
+   416→  }
+   417→}
+   418→ GET /api/instruments 500 in 10.7s (compile: 4ms, render: 10.7s)
+   419→[TypeError: fetch failed] {
+   420→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   421→      at ignore-listed frames {
+   422→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   423→  }
+   424→}
+   425→ GET /api/tgju-instruments 200 in 6.8s (compile: 5ms, render: 6.8s)
+   426→ GET /api/tgju-instruments 200 in 13ms (compile: 4ms, render: 9ms)
+   427→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   428→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 5.7s (compile: 4ms, render: 5.7s)
+   429→[AI v5.1] ایران‌ خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   430→[AI v5.1] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   431→ POST /api/ai-analysis 200 in 32.2s (compile: 87ms, render: 32.1s)
+   432→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   433→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 5.6s (compile: 3ms, render: 5.6s)
+   434→[AI v5.1] Cache hit for ایران‌ خودرو
+   435→ POST /api/ai-analysis 200 in 38ms (compile: 3ms, render: 35ms)
+   436→[tse-api] Using candlestick file cache for خودرو (5262 candles)
+   437→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 1341ms (compile: 3ms, render: 1338ms)
+   438→[tse-api] BrsApi symbol data failed for خودرو: The operation was aborted due to timeout
+   439→ GET / 200 in 37ms (compile: 3ms, render: 34ms)
+   440→ GET / 200 in 31ms (compile: 3ms, render: 28ms)
+   441→ GET / 200 in 35ms (compile: 3ms, render: 32ms)
+   442→ GET /api/instruments 200 in 3.6s (compile: 3ms, render: 3.6s)
+   443→ GET /api/instruments 200 in 2.0s (compile: 2ms, render: 2.0s)
+   444→ GET /api/tgju-instruments 200 in 6.4s (compile: 2ms, render: 6.4s)
+   445→ GET /api/tgju-instruments 200 in 6ms (compile: 2ms, render: 4ms)
+   446→ GET /api/tgju-instruments 200 in 10ms (compile: 4ms, render: 6ms)
+   447→ GET /api/tgju-instruments 200 in 7ms (compile: 2ms, render: 5ms)
+   448→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   449→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 13.8s (compile: 1928µs, render: 13.8s)
+   450→[AI v5.1] فملی: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   451→[AI v5.1] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   452→ POST /api/ai-analysis 200 in 29.9s (compile: 4ms, render: 29.9s)
+   453→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   454→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 5.1s (compile: 3ms, render: 5.1s)
+   455→[AI v5.1] ملی‌ صنایع‌ مس‌ ایران: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   456→[AI v5.1] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   457→ POST /api/ai-analysis 200 in 38.0s (compile: 3ms, render: 38.0s)
+   458→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   459→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 5.5s (compile: 3ms, render: 5.5s)
+   460→[AI v5.1] Cache hit for ملی‌ صنایع‌ مس‌ ایران
+   461→ POST /api/ai-analysis 200 in 7ms (compile: 2ms, render: 5ms)
+   462→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   463→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 5.1s (compile: 3ms, render: 5.1s)
+   464→[AI v5.1] Cache hit for ملی‌ صنایع‌ مس‌ ایران
+   465→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   466→✓ Compiled in 246ms
+   467→[AI v5.1] Cache hit for ملی‌ صنایع‌ مس‌ ایران
+   468→ POST /api/ai-analysis 200 in 9ms (compile: 3ms, render: 6ms)
+   469→✓ Compiled in 214ms
+   470→⚠ Cross origin request detected from preview-chat-a97a2b0b-c3df-4080-9337-35f40f4aaee7.space-z.ai to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+   471→Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+   472→✓ Compiled in 191ms
+   473→⚠ Fast Refresh had to perform a full reload due to a runtime error.
+   474→ GET / 200 in 390ms (compile: 53ms, render: 337ms)
+   475→✓ Compiled in 162ms
+   476→ GET / 200 in 665ms (compile: 155ms, render: 510ms)
+   477→ GET /api/tgju-instruments 200 in 6.7s (compile: 181ms, render: 6.5s)
+   478→ GET /api/tgju-instruments 200 in 8ms (compile: 5ms, render: 3ms)
+   479→[TypeError: fetch failed] {
+   480→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   481→      at ignore-listed frames {
+   482→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   483→  }
+   484→}
+   485→[TypeError: fetch failed] {
+   486→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   487→      at ignore-listed frames {
+   488→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   489→  }
+   490→}
+   491→⨯ Error: failed to pipe response
+   492→    at ignore-listed frames {
+   493→  [cause]: [TypeError: fetch failed] {
+   494→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   495→        at ignore-listed frames {
+   496→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   497→    }
+   498→  }
+   499→}
+   500→ GET /api/instruments 500 in 10.7s (compile: 6ms, render: 10.7s)
+   501→[TypeError: fetch failed] {
+   502→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   503→      at ignore-listed frames {
+   504→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   505→  }
+   506→}
+   507→ GET / 200 in 303ms (compile: 4ms, render: 299ms)
+   508→ GET /api/tgju-instruments 200 in 22ms (compile: 14ms, render: 7ms)
+   509→ GET /api/tgju-instruments 200 in 18ms (compile: 3ms, render: 15ms)
+   510→ GET /api/instruments 200 in 2.0s (compile: 5ms, render: 2.0s)
+   511→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   512→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 6.0s (compile: 3ms, render: 6.0s)
+   513→[AI v5.1] سایپا: school=تحلیل سطوح حمایت/مقاومت (Support & Resistance), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   514→[AI v5.1] Methods: باند بولینگر, استوکاستیک, سطوح افقی حمایت/مقاومت, الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   515→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   516→ POST /api/ai-analysis 200 in 60s (compile: 86ms, render: 60s)
+   517→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 6.1s (compile: 4ms, render: 6.0s)
+   518→[AI v5.1] سایپا: school=تحلیل سطوح حمایت/مقاومت (Support & Resistance), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   519→[AI v5.1] Methods: باند بولینگر, استوکاستیک, سطوح افقی حمایت/مقاومت, الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   520→ GET / 200 in 69ms (compile: 9ms, render: 60ms)
+   521→ POST /api/ai-analysis 200 in 28.2s (compile: 5ms, render: 28.2s)
+   522→ GET /api/tgju-instruments 200 in 53ms (compile: 34ms, render: 19ms)
+   523→ GET /api/tgju-instruments 200 in 8ms (compile: 3ms, render: 5ms)
+   524→ GET /api/instruments 200 in 2.0s (compile: 9ms, render: 2.0s)
+   525→[tse-api] Using candlestick file cache for خساپا (5278 candles)
+   526→ GET /api/analysis?symbol=%D8%AE%D8%B3%D8%A7%D9%BE%D8%A7 200 in 6.2s (compile: 4ms, render: 6.2s)
+   527→[AI v5.1] Cache hit for سایپا
+   528→ POST /api/ai-analysis 200 in 47ms (compile: 5ms, render: 42ms)
+   529→[AI v5.1] error: Error: AI request timeout
+   530→    at Timeout._onTimeout (src/app/api/ai-analysis/route.ts:81:14)
+   531→  79 |       const idx = pendingQueue.findIndex(q => q.messages === messages);
+   532→  80 |       if (idx >= 0) pendingQueue.splice(idx, 1);
+   533→> 81 |       reject(new Error('AI request timeout'));
+   534→     |              ^
+   535→  82 |     }, timeoutMs);
+   536→  83 |
+   537→  84 |     pendingQueue.push({
+   538→ GET / 200 in 35ms (compile: 2ms, render: 33ms)
+   539→ GET / 200 in 39ms (compile: 2ms, render: 37ms)
+   540→ GET / 200 in 41ms (compile: 3ms, render: 38ms)
+   541→[TypeError: fetch failed] {
+   542→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   543→      at ignore-listed frames {
+   544→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   545→  }
+   546→}
+   547→[TypeError: fetch failed] {
+   548→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   549→      at ignore-listed frames {
+   550→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   551→  }
+   552→}
+   553→⨯ Error: failed to pipe response
+   554→    at ignore-listed frames {
+   555→  [cause]: [TypeError: fetch failed] {
+   556→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   557→        at ignore-listed frames {
+   558→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   559→    }
+   560→  }
+   561→}
+   562→ GET /api/instruments 500 in 10.6s (compile: 2ms, render: 10.6s)
+   563→[TypeError: fetch failed] {
+   564→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   565→      at ignore-listed frames {
+   566→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   567→  }
+   568→}
+   569→ GET /api/tgju-instruments 200 in 3.9s (compile: 3ms, render: 3.9s)
+   570→ GET /api/tgju-instruments 200 in 7ms (compile: 2ms, render: 4ms)
+   571→[TGJU] Column map for geram18: O=3 H=2 L=1 C=0 Date=7
+   572→[TGJU] geram18: 2/3482 invalid candles skipped
+   573→[TGJU] geram18: Parsed 3480 candles (1392-04-31 to 1405-05-28)
+   574→ GET /api/tgju-analysis?key=geram18 200 in 12.1s (compile: 63ms, render: 12.1s)
+   575→[AI v5.1] طلای 18 عیار / 750: school=تحلیل روند (Trend Following), style=روندگرا, tone=خوشبین و روندپذیر
+   576→[AI v5.1] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   577→ POST /api/ai-analysis 200 in 61s (compile: 3ms, render: 61s)
+   578→ GET /api/tgju-analysis?key=geram18 200 in 4.9s (compile: 3ms, render: 4.9s)
+   579→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   580→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   581→ GET /api/tgju-analysis?key=geram18 200 in 4.9s (compile: 5ms, render: 4.9s)
+   582→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   583→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   584→ GET /api/tgju-analysis?key=geram18 200 in 5.0s (compile: 3ms, render: 5.0s)
+   585→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   586→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   587→ GET /api/tgju-analysis?key=geram18 200 in 5.0s (compile: 3ms, render: 5.0s)
+   588→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   589→ POST /api/ai-analysis 200 in 9ms (compile: 3ms, render: 6ms)
+   590→ GET /api/tgju-analysis?key=geram18 200 in 11.3s (compile: 3ms, render: 11.3s)
+   591→ GET /api/tgju-analysis?key=geram18 200 in 4.6s (compile: 3ms, render: 4.6s)
+   592→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   593→ POST /api/ai-analysis 200 in 7ms (compile: 2ms, render: 5ms)
+   594→ GET /api/tgju-analysis?key=geram18 200 in 4.9s (compile: 3ms, render: 4.9s)
+   595→ GET / 200 in 49ms (compile: 2ms, render: 47ms)
+   596→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   597→ POST /api/ai-analysis 200 in 9ms (compile: 3ms, render: 6ms)
+   598→ GET /api/tgju-analysis?key=geram18 200 in 6.9s (compile: 3ms, render: 6.9s)
+   599→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   600→ POST /api/ai-analysis 200 in 10ms (compile: 5ms, render: 5ms)
+   601→ GET /api/tgju-analysis?key=geram18 200 in 4.8s (compile: 3ms, render: 4.8s)
+   602→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   603→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   604→ GET /api/tgju-analysis?key=geram18 200 in 5.0s (compile: 3ms, render: 5.0s)
+   605→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   606→ POST /api/ai-analysis 200 in 9ms (compile: 4ms, render: 5ms)
+   607→ GET /api/tgju-analysis?key=geram18 200 in 9.0s (compile: 3ms, render: 9.0s)
+   608→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   609→ POST /api/ai-analysis 200 in 24ms (compile: 7ms, render: 17ms)
+   610→ GET /api/tgju-analysis?key=geram18 200 in 4.9s (compile: 3ms, render: 4.9s)
+   611→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   612→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   613→ GET /api/tgju-analysis?key=geram18 200 in 5.1s (compile: 3ms, render: 5.1s)
+   614→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   615→ POST /api/ai-analysis 200 in 9ms (compile: 4ms, render: 5ms)
+   616→ GET /api/tgju-analysis?key=geram18 200 in 5.1s (compile: 3ms, render: 5.1s)
+   617→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   618→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   619→ GET /api/tgju-analysis?key=geram18 200 in 5.0s (compile: 3ms, render: 5.0s)
+   620→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   621→ POST /api/ai-analysis 200 in 9ms (compile: 3ms, render: 6ms)
+   622→ GET / 200 in 57ms (compile: 3ms, render: 53ms)
+   623→ GET /api/tgju-analysis?key=geram18 200 in 11.1s (compile: 3ms, render: 11.1s)
+   624→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   625→ POST /api/ai-analysis 200 in 7ms (compile: 3ms, render: 5ms)
+   626→ GET /api/tgju-analysis?key=geram18 200 in 4.8s (compile: 3ms, render: 4.8s)
+   627→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   628→ POST /api/ai-analysis 200 in 9ms (compile: 4ms, render: 5ms)
+   629→ GET /api/tgju-analysis?key=geram18 200 in 5.0s (compile: 5ms, render: 5.0s)
+   630→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   631→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   632→Failed to invoke remote function: Error: Function invoke failed with status 500: {"result":null,"error":"Page reader failed: request failed with status 422: {\"code\":422,\"data\":null,\"message\":\"JINA request returned 422 for http:/old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx: {\\\"data\\\":null,\\\"code\\\":422,\\\"name\\\":\\\"AssertionFailureError\\\",\\\"status\\\":42206,\\\"message\\\":\\\"Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\",\\\"readableMessage\\\":\\\"AssertionFailureError: Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\"}\",\"name\":\"UpstreamError\"}\n"}
+   633→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   634→  64 |
+   635→  65 |       const zai = await getZai();
+   636→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   637→     |                      ^
+   638→  67 |       lastCallTime = Date.now();
+   639→  68 |
+   640→  69 |       const html: string = result.data?.html || '';
+   641→[tsetmc-index] Financial fetch failed for CWI: Function invoke failed with status 500: {"result":null,"error":"Page reader failed: request failed with status 422: {\"code\":422,\"data\":null,\"message\":\"JINA request returned 422 for http:/old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx: {\\\"data\\\":null,\\\"code\\\":422,\\\"name\\\":\\\"AssertionFailureError\\\",\\\"status\\\":42206,\\\"message\\\":\\\"Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\",\\\"readableMessage\\\":\\\"AssertionFailureError: Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\"}\",\"name\":\"UpstreamError\"}\n"}
+   642→ GET /api/finpy-sector?indexKey=CWI 200 in 29.0s (compile: 93ms, render: 28.9s)
+   643→ GET /api/finpy-sector?indexKey=CWI 200 in 5.9s (compile: 4ms, render: 5.9s)
+   644→ GET /api/tgju-analysis?key=geram18 200 in 5.2s (compile: 2ms, render: 5.2s)
+   645→[tsetmc-index] B2 fetch failed for sector 20213770409093165: Unexpected end of JSON input
+   646→[AI v5.1] Cache hit for طلای 18 عیار / 750
+   647→ POST /api/ai-analysis 200 in 8ms (compile: 2ms, render: 5ms)
+   648→Failed to invoke remote function: Error: Function invoke failed with status 500: {"result":null,"error":"Page reader failed: request failed with status 422: {\"code\":422,\"data\":null,\"message\":\"JINA request returned 422 for http:/old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx: {\\\"data\\\":null,\\\"code\\\":422,\\\"name\\\":\\\"AssertionFailureError\\\",\\\"status\\\":42206,\\\"message\\\":\\\"Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\",\\\"readableMessage\\\":\\\"AssertionFailureError: Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\"}\",\"name\":\"UpstreamError\"}\n"}
+   649→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   650→  64 |
+   651→  65 |       const zai = await getZai();
+   652→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   653→     |                      ^
+   654→  67 |       lastCallTime = Date.now();
+   655→  68 |
+   656→  69 |       const html: string = result.data?.html || '';
+   657→[tsetmc-index] Financial fetch failed for sector 20213770409093165: Function invoke failed with status 500: {"result":null,"error":"Page reader failed: request failed with status 422: {\"code\":422,\"data\":null,\"message\":\"JINA request returned 422 for http:/old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx: {\\\"data\\\":null,\\\"code\\\":422,\\\"name\\\":\\\"AssertionFailureError\\\",\\\"status\\\":42206,\\\"message\\\":\\\"Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\",\\\"readableMessage\\\":\\\"AssertionFailureError: Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\"}\",\"name\":\"UpstreamError\"}\n"}
+   658→[finpy-sector] Error: Error: No data returned for sector web ID: 20213770409093165
+   659→    at fetchSectorIndexHistory (src/lib/tsetmc-index-api.ts:367:13)
+   660→    at async GET (src/app/api/finpy-sector/route.ts:94:23)
+   661→  365 |
+   662→  366 |     if (candles.length === 0) {
+   663→> 367 |       throw new Error(`No data returned for sector web ID: ${webIdStr}`);
+   664→      |             ^
+   665→  368 |     }
+   666→  369 |
+   667→  370 |     // Cache
+   668→ GET /api/finpy-sector?sector=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 500 in 25.9s (compile: 5ms, render: 25.9s)
+   669→Failed to invoke remote function: Error: Function invoke failed with status 500: {"result":null,"error":"Page reader failed: request failed with status 422: {\"code\":422,\"data\":null,\"message\":\"JINA request returned 422 for http:/old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx: {\\\"data\\\":null,\\\"code\\\":422,\\\"name\\\":\\\"AssertionFailureError\\\",\\\"status\\\":42206,\\\"message\\\":\\\"Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\",\\\"readableMessage\\\":\\\"AssertionFailureError: Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\"}\",\"name\":\"UpstreamError\"}\n"}
+   670→    at async processQueue (src/lib/zai-shared.ts:66:22)
+   671→  64 |
+   672→  65 |       const zai = await getZai();
+   673→> 66 |       const result = await zai.functions.invoke('page_reader', { url: item.url });
+   674→     |                      ^
+   675→  67 |       lastCallTime = Date.now();
+   676→  68 |
+   677→  69 |       const html: string = result.data?.html || '';
+   678→[tsetmc-index] Financial fetch failed for sector 20213770409093165: Function invoke failed with status 500: {"result":null,"error":"Page reader failed: request failed with status 422: {\"code\":422,\"data\":null,\"message\":\"JINA request returned 422 for http:/old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx: {\\\"data\\\":null,\\\"code\\\":422,\\\"name\\\":\\\"AssertionFailureError\\\",\\\"status\\\":42206,\\\"message\\\":\\\"Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\",\\\"readableMessage\\\":\\\"AssertionFailureError: Unexpected empty file: http://old.tsetmc.com/tsev2/chart/data/IndexFinancial.aspx\\\"}\",\"name\":\"UpstreamError\"}\n"}
+   679→ GET /api/finpy-sector?webId=20213770409093165 200 in 28.7s (compile: 3ms, render: 28.7s)
+   680→ GET /api/tgju-analysis?key=geram18 200 in 5.1s (compile: 3ms, render: 5.1s)
+   681→ GET /api/finpy-sector?sector=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 7.0s (compile: 3ms, render: 7.0s)
+   682→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   683→[tse-api] BrsApi symbol data failed for فملی: HTTP 403
+   684→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 5.9s (compile: 3ms, render: 5.9s)
+   685→[AI v5.1] فملی: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   686→[AI v5.1] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   687→ GET / 200 in 274ms (compile: 3ms, render: 271ms)
+   688→ POST /api/ai-analysis 200 in 18.0s (compile: 6ms, render: 18.0s)
+   689→ GET /api/tgju-instruments 200 in 7.1s (compile: 83ms, render: 7.0s)
+   690→ GET /api/tgju-instruments 200 in 10ms (compile: 3ms, render: 7ms)
+   691→[TypeError: fetch failed] {
+   692→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   693→      at ignore-listed frames {
+   694→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   695→  }
+   696→}
+   697→[TypeError: fetch failed] {
+   698→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   699→      at ignore-listed frames {
+   700→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   701→  }
+   702→}
+   703→⨯ Error: failed to pipe response
+   704→    at ignore-listed frames {
+   705→  [cause]: [TypeError: fetch failed] {
+   706→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   707→        at ignore-listed frames {
+   708→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   709→    }
+   710→  }
+   711→}
+   712→ GET /api/instruments 500 in 10.7s (compile: 7ms, render: 10.7s)
+   713→[TypeError: fetch failed] {
+   714→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   715→      at ignore-listed frames {
+   716→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   717→  }
+   718→}
+   719→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   720→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   721→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 14.1s (compile: 15ms, render: 14.1s)
+   722→[AI v5.1] Cache hit for فملی
+   723→ POST /api/ai-analysis 200 in 10ms (compile: 4ms, render: 6ms)
+   724→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   725→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 5.2s (compile: 2ms, render: 5.2s)
+   726→[AI v5.1] ملی‌ صنایع‌ مس‌ ایران: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+   727→[AI v5.1] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   728→ POST /api/ai-analysis 200 in 11.5s (compile: 3ms, render: 11.5s)
+   729→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   730→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   731→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 14.2s (compile: 3ms, render: 14.2s)
+   732→[AI v5.1] Cache hit for فملی
+   733→ POST /api/ai-analysis 200 in 9ms (compile: 4ms, render: 5ms)
+   734→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   735→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   736→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 14.3s (compile: 4ms, render: 14.3s)
+   737→[AI v5.1] Cache hit for فملی
+   738→ POST /api/ai-analysis 200 in 10ms (compile: 4ms, render: 5ms)
+   739→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   740→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   741→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 14.4s (compile: 3ms, render: 14.4s)
+   742→[AI v5.1] Cache hit for فملی
+   743→ POST /api/ai-analysis 200 in 8ms (compile: 3ms, render: 5ms)
+   744→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   745→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   746→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 14.3s (compile: 3ms, render: 14.3s)
+   747→[AI v5.1] Cache hit for فملی
+   748→ POST /api/ai-analysis 200 in 8ms (compile: 4ms, render: 4ms)
+   749→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   750→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 5.6s (compile: 2ms, render: 5.6s)
+   751→[AI v5.1] Cache hit for ملی‌ صنایع‌ مس‌ ایران
+   752→ POST /api/ai-analysis 200 in 6ms (compile: 1733µs, render: 4ms)
+   753→ GET / 200 in 105ms (compile: 3ms, render: 102ms)
+   754→ GET / 200 in 41ms (compile: 4ms, render: 38ms)
+   755→ GET / 200 in 39ms (compile: 2ms, render: 37ms)
+   756→

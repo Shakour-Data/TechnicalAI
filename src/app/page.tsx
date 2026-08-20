@@ -44,7 +44,7 @@ const TGJU_CATEGORIES = new Set([
 ]);
 
 // Auto-refresh interval (60 seconds)
-const REFRESH_INTERVAL = 60_000;
+const REFRESH_INTERVAL = 300_000;
 
 // Sidebar items
 const SIDEBAR_ITEMS = [
