@@ -16,7 +16,7 @@ const TGJU_CHART_API = 'https://api.tgju.org/v1/market/indicator/summary-table-d
 
 export type TgjuCategoryType =
   | 'currency' | 'gold' | 'silver' | 'gold_etf'
-  | 'crypto' | 'world_index' | 'forex' | 'energy' | 'metal' | 'commodity';
+  | 'crypto' | 'world_index' | 'foreign_stock' | 'forex' | 'energy' | 'metal' | 'commodity';
 
 export interface TgjuPriceItem {
   title: string;
@@ -208,13 +208,148 @@ export const STATIC_INSTRUMENTS: StaticInstrument[] = [
 
 /* ─── Helpers ──────────────────────────────────────────── */
 
-function parsePersianNum(str: string | null | undefined): number {
-  if (!str) return 0;
-  return Number(str.replace(/[,۰-۹]/g, (c) => {
+/**
+ * Parse a number that might contain Persian digits, commas, or other formatting.
+ * Handles null/undefined/empty strings gracefully.
+ */
+function parsePersianNum(str: string | null | undefined | number): number {
+  if (str === null || str === undefined) return 0;
+  const s = String(str);
+  if (!s || s.trim() === '-' || s.trim() === '') return 0;
+  return Number(s.replace(/[,۰-۹]/g, (c: string) => {
     const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
     const idx = persianDigits.indexOf(c);
-    return idx >= 0 ? idx : c === ',' ? '' : c;
+    return idx >= 0 ? String(idx) : c === ',' ? '' : c;
   }));
+}
+
+/**
+ * Check if a value looks like a date string (contains / or - and is not a number).
+ */
+function looksLikeDate(val: string | null | undefined | number): boolean {
+  if (!val) return false;
+  const s = String(val).trim();
+  return /[\/\-]/.test(s) && isNaN(Number(s.replace(/[,۰-۹\/\-]/g, '')));
+}
+
+/**
+ * Check if a value looks like a percentage (ends with % or is small like 0.5 to 50).
+ */
+function looksLikePercentage(val: string | null | undefined | number): boolean {
+  if (!val) return false;
+  const s = String(val).trim();
+  if (s.endsWith('%')) return true;
+  const n = parsePersianNum(val);
+  return !isNaN(n) && Math.abs(n) < 100 && n !== 0;
+}
+
+/**
+ * Auto-detect column mapping for TGJU API response.
+ * Expected format: [open, low, high, close, change, changePct, gregorianDate, jalaliDate]
+ * But the API may change column order.
+ */
+function detectColumnMap(row: (string | number)[]): {
+  openIdx: number; highIdx: number; lowIdx: number; closeIdx: number;
+  jalaliDateIdx: number; gregorianDateIdx: number;
+} | null {
+  if (!row || row.length < 6) return null;
+
+  let jalaliDateIdx = -1;
+  let gregorianDateIdx = -1;
+  const numericIndices: number[] = [];
+  const percentageIndices: number[] = [];
+
+  for (let i = 0; i < row.length; i++) {
+    const val = row[i];
+    if (looksLikeDate(val)) {
+      // Jalali dates have Persian digits or format like 1404/05/25
+      const s = String(val);
+      if (/[۰-۹]/.test(s) || /^14\d{2}/.test(s.replace(/[۰-۹]/g, (d: string) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))) {
+        if (jalaliDateIdx === -1) jalaliDateIdx = i;
+      } else {
+        if (gregorianDateIdx === -1) gregorianDateIdx = i;
+      }
+    } else if (looksLikePercentage(val)) {
+      percentageIndices.push(i);
+    } else {
+      const n = parsePersianNum(val);
+      if (isFinite(n) && n !== 0) {
+        numericIndices.push(i);
+      }
+    }
+  }
+
+  // If we couldn't auto-detect dates, fall back to assumed positions
+  if (jalaliDateIdx === -1 && row.length >= 8) {
+    // Default assumption: row[6] = gregorian, row[7] = jalali
+    if (looksLikeDate(row[7])) jalaliDateIdx = 7;
+    else if (looksLikeDate(row[6])) jalaliDateIdx = 6;
+    if (gregorianDateIdx === -1 && looksLikeDate(row[6]) && jalaliDateIdx !== 6) gregorianDateIdx = 6;
+    else if (gregorianDateIdx === -1 && looksLikeDate(row[7]) && jalaliDateIdx !== 7) gregorianDateIdx = 7;
+  }
+
+  // Numeric columns (excluding percentages) should be OHLC + change
+  // OHLC: typically 4 largest absolute values among non-percentage numerics
+  // change: the remaining one
+  const ohlcCandidates = numericIndices.filter(i => !percentageIndices.includes(i));
+
+  if (ohlcCandidates.length < 4) {
+    // Fallback: assume first 4 numeric columns are OHLC
+    if (numericIndices.length >= 4) {
+      return {
+        openIdx: numericIndices[0],
+        highIdx: numericIndices[2],
+        lowIdx: numericIndices[1],
+        closeIdx: numericIndices[3],
+        jalaliDateIdx: jalaliDateIdx >= 0 ? jalaliDateIdx : 7,
+        gregorianDateIdx: gregorianDateIdx >= 0 ? gregorianDateIdx : 6,
+      };
+    }
+    return null;
+  }
+
+  // Sort by absolute value descending to identify OHLC (largest) vs change (smallest)
+  const sorted = ohlcCandidates
+    .map(i => ({ idx: i, val: Math.abs(parsePersianNum(row[i])) }))
+    .sort((a, b) => b.val - a.val);
+
+  // The 4 largest should be OHLC. Among them, identify high (max) and low (min).
+  // open and close are the other two.
+  const top4 = sorted.slice(0, 4);
+  const maxIdx = top4.reduce((a, b) => a.val > b.val ? a : b).idx;
+  const minIdx = top4.reduce((a, b) => a.val < b.val ? a : b).idx;
+  const others = top4.filter(x => x.idx !== maxIdx && x.idx !== minIdx);
+
+  // Among the two remaining, the one closer to high is open, the other is close
+  // (heuristic: in an uptrend open < close, but we can't assume direction)
+  // Default: first = open, second = close
+  const openIdx = others[0]?.idx ?? ohlcCandidates[0];
+  const closeIdx = others[1]?.idx ?? ohlcCandidates[3];
+
+  return {
+    openIdx,
+    highIdx: maxIdx,
+    lowIdx: minIdx,
+    closeIdx,
+    jalaliDateIdx: jalaliDateIdx >= 0 ? jalaliDateIdx : row.length - 1,
+    gregorianDateIdx: gregorianDateIdx >= 0 ? gregorianDateIdx : row.length - 2,
+  };
+}
+
+/**
+ * Validate a candle's OHLC values for sanity.
+ * Returns true if the candle is valid.
+ */
+function isValidCandle(o: number, h: number, l: number, c: number): boolean {
+  if (!isFinite(o) || !isFinite(h) || !isFinite(l) || !isFinite(c)) return false;
+  if (o <= 0 || h <= 0 || l <= 0 || c <= 0) return false;
+  // High must be >= Low, Open, Close
+  if (h < l || h < o || h < c) return false;
+  // Low must be <= High, Open, Close
+  if (l > o || l > c) return false;
+  // No infinite or extreme values
+  if (o > 1e15 || h > 1e15 || l > 1e15 || c > 1e15) return false;
+  return true;
 }
 
 /* ─── Cache ────────────────────────────────────────────── */
@@ -398,33 +533,79 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
       return cached?.data || [];
     }
 
-    const data = JSON.parse(jsonStr);
-    const rows: string[][] = data.data;
+    const parsed = JSON.parse(jsonStr);
+    const rows: (string | number)[][] = parsed.data;
 
     if (!rows || rows.length === 0) {
       console.warn(`[TGJU] Empty data array for ${tgjuKey}`);
       return cached?.data || [];
     }
 
-    // Parse: [open, low, high, close, change, changePct, gregorianDate, jalaliDate]
-    // Prefer Jalali date (row[7]), fall back to Gregorian (row[6])
-    const candles: TgjuOHLC[] = rows
-      .map((row) => {
-        const rawDate = row[7] || row[6] || '';
-        // Normalize date: replace slashes with dashes
-        const date = rawDate.replace(/\//g, '-');
-        return {
-          date,
-          open: parsePersianNum(row[0]),
-          high: parsePersianNum(row[2]),
-          low: parsePersianNum(row[1]),
-          close: parsePersianNum(row[3]),
-        };
-      })
-      .filter((c) => c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0 && c.date.length > 0);
+    // ── Auto-detect column mapping from first valid row ──
+    let colMap = detectColumnMap(rows[0]);
+
+    // If auto-detect failed, try a few more rows
+    if (!colMap) {
+      for (let r = 1; r < Math.min(5, rows.length); r++) {
+        colMap = detectColumnMap(rows[r]);
+        if (colMap) break;
+      }
+    }
+
+    // If still no auto-detect, fall back to assumed column order
+    if (!colMap) {
+      console.warn(`[TGJU] Could not auto-detect columns for ${tgjuKey}, using default order`);
+      colMap = { openIdx: 0, highIdx: 2, lowIdx: 1, closeIdx: 3, jalaliDateIdx: 7, gregorianDateIdx: 6 };
+    } else {
+      console.log(`[TGJU] Column map for ${tgjuKey}: O=${colMap.openIdx} H=${colMap.highIdx} L=${colMap.lowIdx} C=${colMap.closeIdx} Date=${colMap.jalaliDateIdx}`);
+    }
+
+    const { openIdx, highIdx, lowIdx, closeIdx, jalaliDateIdx, gregorianDateIdx } = colMap;
+
+    // ── Parse rows ──
+    const candles: TgjuOHLC[] = [];
+    let invalidCount = 0;
+
+    for (const row of rows) {
+      const rawDate = String(row[jalaliDateIdx] || row[gregorianDateIdx] || '');
+      const date = rawDate.replace(/[\/]/g, '-');
+      const o = parsePersianNum(row[openIdx]);
+      const h = parsePersianNum(row[highIdx]);
+      const l = parsePersianNum(row[lowIdx]);
+      const c = parsePersianNum(row[closeIdx]);
+
+      if (!isValidCandle(o, h, l, c) || date.length === 0) {
+        invalidCount++;
+        continue;
+      }
+
+      candles.push({ date, open: o, high: h, low: l, close: c });
+    }
+
+    if (invalidCount > 0) {
+      console.warn(`[TGJU] ${tgjuKey}: ${invalidCount}/${rows.length} invalid candles skipped`);
+    }
 
     if (candles.length === 0) {
       return cached?.data || [];
+    }
+
+    // ── Detect and fix data drift ──
+    // Check if prices suddenly jump > 50% between consecutive candles
+    // (could indicate unit change, decimal shift, or API error)
+    let driftCount = 0;
+    for (let i = 1; i < candles.length; i++) {
+      const prevClose = candles[i - 1].close;
+      const currClose = candles[i].close;
+      if (prevClose > 0) {
+        const pctChange = Math.abs(currClose - prevClose) / prevClose;
+        if (pctChange > 0.5) { // > 50% single-day change is suspicious for most instruments
+          driftCount++;
+        }
+      }
+    }
+    if (driftCount > candles.length * 0.1) { // > 10% of candles have suspicious jumps
+      console.warn(`[TGJU] ${tgjuKey}: Possible data drift detected (${driftCount} suspicious jumps out of ${candles.length} candles)`);
     }
 
     // Reverse: API returns oldest-first (asc), we want newest-last for charting
@@ -434,6 +615,8 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
     if (firstDate > lastDate) {
       candles.reverse();
     }
+
+    console.log(`[TGJU] ${tgjuKey}: Parsed ${candles.length} candles (${candles[0]?.date} to ${candles[candles.length - 1]?.date})`);
 
     // Cache the result
     historyCache.set(tgjuKey, { data: candles, ts: now });
@@ -478,8 +661,8 @@ export const TGJU_CATEGORY_INFO: Record<string, { label: string; color: string; 
   silver:        { label: 'نقره', color: 'bg-gray-400/15 text-gray-300', badge: 'نقره' },
   gold_etf:      { label: 'صندوق طلای بورس', color: 'bg-amber-500/15 text-amber-400', badge: 'صندوق طلا' },
   crypto:        { label: 'ارزهای دیجیتال', color: 'bg-orange-500/15 text-orange-400', badge: 'کریپتو' },
-  world_index:   { label: 'شاخص بورس جهانی', color: 'bg-blue-500/15 text-blue-400', badge: 'شاخص جهانی' },
   foreign_stock: { label: 'سهام خارجی', color: 'bg-sky-500/15 text-sky-400', badge: 'سهام خارجی' },
+  world_index:   { label: 'شاخص بورس جهانی', color: 'bg-blue-500/15 text-blue-400', badge: 'شاخص جهانی' },
   forex:         { label: 'جفت ارزها', color: 'bg-violet-500/15 text-violet-400', badge: 'فارکس' },
   energy:        { label: 'نفت و انرژی', color: 'bg-red-500/15 text-red-400', badge: 'انرژی' },
   metal:         { label: 'فلزات جهانی', color: 'bg-emerald-500/15 text-emerald-400', badge: 'فلز' },

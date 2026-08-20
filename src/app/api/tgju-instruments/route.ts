@@ -28,6 +28,7 @@ export async function GET() {
     const goldEtfs = instruments.filter((i) => i.category === 'gold_etf').map(toItem);
     const crypto = instruments.filter((i) => i.category === 'crypto').map(toItem);
     const worldIndices = instruments.filter((i) => i.category === 'world_index').map(toItem);
+    const foreignStocks = instruments.filter((i) => i.category === 'foreign_stock').map(toItem);
     const forex = instruments.filter((i) => i.category === 'forex').map(toItem);
     const energy = instruments.filter((i) => i.category === 'energy').map(toItem);
     const metals = instruments.filter((i) => i.category === 'metal').map(toItem);
@@ -41,6 +42,7 @@ export async function GET() {
       goldEtfs,
       crypto,
       worldIndices,
+      foreignStocks,
       forex,
       energy,
       metals,

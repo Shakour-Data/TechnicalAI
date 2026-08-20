@@ -24,12 +24,12 @@ interface InstrumentItem {
   cs: string;
   category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index'
     | 'currency' | 'gold' | 'silver' | 'gold_etf'
-    | 'crypto' | 'world_index' | 'forex' | 'energy' | 'metal' | 'commodity';
+    | 'crypto' | 'world_index' | 'foreign_stock' | 'forex' | 'energy' | 'metal' | 'commodity';
   insCode?: string;
   tgjuKey?: string;
   finpySector?: string;  // finpy-tse sector name for industry indices
   finpyIndex?: string;   // finpy-tse index function key (CWI, EWI, etc.)
-  webId?: number;        // TSETMC web ID for cdn.tsetmc.com API
+  webId?: string | number;  // TSETMC web ID (string to preserve precision)
   isMainIndex?: boolean; // True for main market indices
   index?: number;
   indexChange?: number;
@@ -56,6 +56,7 @@ interface TgjuData {
   goldEtfs: InstrumentItem[];
   crypto: InstrumentItem[];
   worldIndices: InstrumentItem[];
+  foreignStocks: InstrumentItem[];
   forex: InstrumentItem[];
   energy: InstrumentItem[];
   metals: InstrumentItem[];
@@ -64,7 +65,7 @@ interface TgjuData {
 }
 
 interface SymbolSearchProps {
-  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => void;
+  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: string | number) => void;
   placeholder?: string;
   className?: string;
 }
@@ -238,7 +239,8 @@ export default function SymbolSearch({
         case 'gold_etf': return tgju.goldEtfs;
         case 'silver': return tgju.silver;
         case 'crypto': return tgju.crypto;
-        case 'world_index': return tgju.worldIndices;
+        case 'world_index': return [...tgju.worldIndices, ...tgju.foreignStocks];
+        case 'foreign_stock': return tgju.foreignStocks;
         case 'forex': return tgju.forex;
         case 'energy': return tgju.energy;
         case 'metal': return tgju.metals;

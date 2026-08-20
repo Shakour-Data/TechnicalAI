@@ -579,6 +579,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(true);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiML, setAiML] = useState<{ school: string; style: string; tone: string; methods: string[] } | null>(null);
 
   useEffect(() => {
     if (!currentPrice) return;
@@ -603,7 +604,10 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         });
         const data = await res.json();
         if (cancelled) return;
-        if (data.text) setAiText(data.text);
+        if (data.text) {
+          setAiText(data.text);
+          if (data.ml) setAiML(data.ml);
+        }
         else if (data.error) setAiError(data.error);
       } catch (err) {
         if (!cancelled) setAiError(String(err));
@@ -1005,10 +1009,29 @@ ${SCENARIO_KEYS.map(k => {
 
       {/* ═══ AI ANALYSIS TEXT ═══ */}
       <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
-        <h2 className="text-sm font-semibold mb-4 text-amber-800 flex items-center gap-2">
+        <h2 className="text-sm font-semibold mb-3 text-amber-800 flex items-center gap-2">
           <span>🧠</span>
           تحلیل هوشمند بازار
         </h2>
+        {/* ML Selection Badges */}
+        {aiML && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+              مکتب: {aiML.school.split('(')[0].trim()}
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+              سبک: {aiML.style}
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200">
+              لحن: {aiML.tone}
+            </span>
+            {aiML.methods && aiML.methods.length > 0 && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-200">
+                روش‌ها: {aiML.methods.slice(0, 3).join(' | ')}
+              </span>
+            )}
+          </div>
+        )}
         <div className="vdes-analysis-text">
           {aiLoading && (
             <div className="flex items-center gap-3 py-8 justify-center">

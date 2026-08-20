@@ -40,7 +40,7 @@ const toFaDecimal = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDi
 // All TGJU-based categories that use the tgju.org chart API
 const TGJU_CATEGORIES = new Set([
   'currency', 'gold', 'silver', 'gold_etf',
-  'crypto', 'world_index', 'forex', 'energy', 'metal', 'commodity',
+  'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity',
 ]);
 
 // Auto-refresh interval (60 seconds)
@@ -100,17 +100,38 @@ export default function Home() {
       return;
     }
 
-    // Index: fetch historical data via finpy-tse
+    // Index: fetch historical data via TSETMC CDN (webId), then finpy-tse (finpyIndex/finpySector)
     if (category === 'index') {
       setLoading(true);
-      setLoadingMessage('در حال دریافت داده‌های تاریخی شاخص از finpy-tse ...');
+      setLoadingMessage('در حال دریافت داده‌های تاریخی شاخص ...');
       setError(null);
       setData(null);
       lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
       let gotError = false;
       try {
-        // Main indices (CWI, EWI, etc.) via finpy-tse
+        // 1. Try webId (TSETMC CDN — most reliable for all indices)
+        if (webId) {
+          setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ...');
+          const res = await fetch(`/api/finpy-sector?webId=${encodeURIComponent(String(webId))}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.candles && json.candles.length > 0 && json.ta) {
+              setData(json);
+              setActivePanel('visual');
+              setLoading(false);
+              setLoadingMessage(null);
+              return;
+            }
+            if (json.error) {
+              setError(json.error);
+              gotError = true;
+            }
+          }
+        }
+
+        // 2. Main indices (CWI, EWI, etc.) via finpy-tse
         if (finpyIndex) {
+          setLoadingMessage('در حال دریافت داده‌های شاخص اصلی ...');
           const res = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(finpyIndex)}`);
           if (res.ok) {
             const json = await res.json();
@@ -128,9 +149,9 @@ export default function Home() {
           }
         }
 
-        // Sector indices via finpy-tse (uses sector name)
+        // 3. Sector indices via finpy-tse (uses sector name)
         if (finpySector) {
-          setLoadingMessage('در حال دریافت داده‌های شاخص گروه از finpy-tse ...');
+          setLoadingMessage('در حال دریافت داده‌های شاخص گروه ...');
           const res = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
           if (res.ok) {
             const json = await res.json();
