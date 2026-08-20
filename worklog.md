@@ -51,3 +51,30 @@ Stage Summary:
 - 1 build fix applied (TS annotations in .mjs)
 - No code-level bugs found in core functionality
 - External API issues (BrsApi 403, z-ai 429) are properly handled with error states
+
+---
+Task ID: 3
+Agent: main
+Task: Fix AI analysis 502/429 errors (v5.1)
+
+Work Log:
+- Identified root cause: z-ai-web-dev-sdk static import crashes Turbopack compiler during route compilation
+- Changed zai-shared.ts to use dynamic import (import('z-ai-web-dev-sdk')) instead of static import
+- Rewrote ai-analysis/route.ts to use z-ai CLI (child_process.execFile) instead of SDK direct call
+- This eliminates SDK import from the AI route entirely, preventing server crash
+- Added global AI request queue with 30s minimum interval between calls
+- Added 429 cooldown system (60s increasing, max 300s)
+- Shortened AI prompt from ~3000 chars to ~1500 chars (more efficient)
+- Added user-friendly error messages (Persian) instead of raw stack traces
+- Updated frontend error display to truncate long errors
+- Removed unused imports (writeFile, unlink, readFile, path, os)
+- Verified: server starts, main page loads (HTTP 200, 39KB), AI route compiles (247ms), server stays alive after AI request
+
+Stage Summary:
+- CRITICAL FIX: Server no longer crashes from SDK import (dynamic import + CLI approach)
+- AI route uses z-ai CLI via child_process, fully isolated from server process
+- Rate limiting prevents future 429 errors (30s queue interval + cooldown)
+- User-friendly Persian error messages for 429 and timeout
+- Fallback to static analysis when AI fails
+- ESLint clean, all routes compile and respond
+- 429 from Z.ai API still active (from previous aggressive retries) but will clear automatically

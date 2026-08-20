@@ -1043,8 +1043,8 @@ ${SCENARIO_KEYS.map(k => {
           )}
           {aiError && (
             <div className="rounded-xl p-4 bg-red-50 border border-red-200">
-              <p className="text-xs text-red-700 mb-2">خطا در تولید تحلیل هوشمند. تحلیل آماری جایگزین نمایش داده می‌شود:</p>
-              <p className="text-xs text-red-600">{aiError}</p>
+              <p className="text-xs text-red-700 mb-1">خطا در تولید تحلیل هوشمند:</p>
+              <p className="text-xs text-red-600">{aiError.length > 100 ? aiError.slice(0, 100) + '...' : aiError}</p>
             </div>
           )}
           {!aiLoading && aiText && (
