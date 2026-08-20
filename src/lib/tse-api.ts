@@ -1,11 +1,16 @@
-import { deflateRawSync, inflateSync } from 'node:zlib';
+import { deflateRawSync, inflateSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const API_KEY = "BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3";
 const BASE_URL = "https://Api.BrsApi.ir/Tsetmc";
 
 const HEADERS = {
   "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Referer": "https://brsapi.ir/",
+  "Origin": "https://brsapi.ir",
 };
 
 export interface TseSymbol {
@@ -105,23 +110,69 @@ const symbolsCaches = new Map<number, { data: TseSymbol[]; time: number }>();
 let indicesCache: { data: TseIndex[]; time: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// File-based cache for resilience when BrsApi is blocked
+const FILE_CACHE_DIR = join(process.cwd(), 'db');
+const FILE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes for file cache
+
+function fileCachePath(type: number): string {
+  return join(FILE_CACHE_DIR, `symbols-type-${type}.json`);
+}
+
+function loadFileCache(type: number): TseSymbol[] | null {
+  try {
+    const path = fileCachePath(type);
+    if (!existsSync(path)) return null;
+    const content = readFileSync(path, 'utf-8');
+    const entry = JSON.parse(content);
+    if (Date.now() - entry.time > FILE_CACHE_TTL) return null;
+    return entry.data as TseSymbol[];
+  } catch {
+    return null;
+  }
+}
+
+function saveFileCache(type: number, data: TseSymbol[]): void {
+  try {
+    const dir = FILE_CACHE_DIR;
+    if (!existsSync(dir)) {
+      // Try to create directory (may fail in sandbox)
+      try { mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+    }
+    writeFileSync(fileCachePath(type), JSON.stringify({ data, time: Date.now() }), 'utf-8');
+  } catch {
+    // File cache is best-effort
+  }
+}
+
 export async function fetchAllSymbols(type: number = 1): Promise<TseSymbol[]> {
   const now = Date.now();
   const cached = symbolsCaches.get(type);
   if (cached && now - cached.time < CACHE_TTL) {
     return cached.data;
   }
-  const url = `${BASE_URL}/AllSymbols.php?key=${API_KEY}&type=${type}`;
-  const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
-  if (!res.ok) throw new Error(`Failed to fetch symbols (type=${type}): ${res.status}`);
-  const raw = await res.json();
-  // Check for API error response
-  if (raw && !Array.isArray(raw) && raw.code_http) {
-    throw new Error(raw.message_error || `API error: ${raw.code_http}`);
+  try {
+    const url = `${BASE_URL}/AllSymbols.php?key=${API_KEY}&type=${type}`;
+    const res = await fetch(url, { headers: HEADERS, next: { revalidate: 300 } });
+    if (!res.ok) throw new Error(`Failed to fetch symbols (type=${type}): ${res.status}`);
+    const raw = await res.json();
+    // Check for API error response
+    if (raw && !Array.isArray(raw) && raw.code_http) {
+      throw new Error(raw.message_error || `API error: ${raw.code_http}`);
+    }
+    const data: TseSymbol[] = Array.isArray(raw) ? raw : raw.data || raw.symbols || [];
+    symbolsCaches.set(type, { data, time: now });
+    saveFileCache(type, data);
+    return data;
+  } catch (err) {
+    console.warn(`[tse-api] BrsApi failed for type=${type}:`, (err instanceof Error ? err.message : String(err)));
+    // Fallback to file cache
+    const fileData = loadFileCache(type);
+    if (fileData && fileData.length > 0) {
+      console.log(`[tse-api] Using file cache for type=${type} (${fileData.length} items)`);
+      return fileData;
+    }
+    throw err;
   }
-  const data: TseSymbol[] = Array.isArray(raw) ? raw : raw.data || raw.symbols || [];
-  symbolsCaches.set(type, { data, time: now });
-  return data;
 }
 
 export async function fetchIndices(): Promise<TseIndex[]> {
