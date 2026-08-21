@@ -1,0 +1,820 @@
+     1→'use client';
+     2→
+     3→import { useRef, useEffect, useState } from 'react';
+     4→import {
+     5→  Card,
+     6→  CardContent,
+     7→  CardDescription,
+     8→  CardHeader,
+     9→  CardTitle,
+    10→} from '@/components/ui/card';
+    11→import { Badge } from '@/components/ui/badge';
+    12→import {
+    13→  BookOpen,
+    14→  Database,
+    15→  Workflow,
+    16→  Boxes,
+    17→  Server,
+    18→  Cpu,
+    19→  Brain,
+    20→  BarChart3,
+    21→  Layers,
+    22→  ChevronLeft,
+    23→  ArrowLeftRight,
+    24→  Monitor,
+    25→  Globe,
+    26→  GitBranch,
+    27→  ArrowDown,
+    28→  FileCode,
+    29→  Zap,
+    30→} from 'lucide-react';
+    31→
+    32→const sections = [
+    33→  { id: 'architecture', label: 'نمای کلی معماری سیستم', icon: Boxes },
+    34→  { id: 'bpmn', label: 'نمودار فرآیند کسب‌وکار', icon: Workflow },
+    35→  { id: 'uml', label: 'نمودار کلاس UML', icon: FileCode },
+    36→  { id: 'components', label: 'معماری کامپوننت‌ها', icon: Layers },
+    37→  { id: 'dataflow', label: 'جریان داده', icon: ArrowLeftRight },
+    38→  { id: 'stack', label: 'پشته فناوری', icon: Database },
+    39→] as const;
+    40→
+    41→export default function DocsPage() {
+    42→  const containerRef = useRef<HTMLDivElement>(null);
+    43→  const [activeSection, setActiveSection] = useState('architecture');
+    44→
+    45→  useEffect(() => {
+    46→    const container = containerRef.current;
+    47→    if (!container) return;
+    48→
+    49→    const observer = new IntersectionObserver(
+    50→      (entries) => {
+    51→        for (const entry of entries) {
+    52→          if (entry.isIntersecting) {
+    53→            setActiveSection(entry.target.id);
+    54→          }
+    55→        }
+    56→      },
+    57→      { root: container, threshold: 0.3, rootMargin: '-80px 0px -40% 0px' },
+    58→    );
+    59→
+    60→    sections.forEach((s) => {
+    61→      const el = container.querySelector(`#${s.id}`);
+    62→      if (el) observer.observe(el);
+    63→    });
+    64→
+    65→    return () => observer.disconnect();
+    66→  }, []);
+    67→
+    68→  const scrollTo = (id: string) => {
+    69→    const el = containerRef.current?.querySelector(`#${id}`);
+    70→    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    71→  };
+    72→
+    73→  return (
+    74→    <div className="flex flex-col gap-4 max-h-[calc(100vh-140px)] overflow-hidden">
+    75→      {/* ─── Sticky Header with TOC ─── */}
+    76→      <div className="shrink-0 bg-amber-50/90 backdrop-blur-sm border border-amber-200 rounded-xl px-5 py-3">
+    77→        <div className="flex items-center gap-3 mb-2">
+    78→          <BookOpen className="size-5 text-amber-700" />
+    79→          <h1 className="text-lg font-bold text-amber-900">
+    80→            مستندات سیستم تحلیل تکنیکال بازار
+    81→          </h1>
+    82→        </div>
+    83→        <nav className="flex flex-wrap gap-2">
+    84→          {sections.map((s) => {
+    85→            const Icon = s.icon;
+    86→            const isActive = activeSection === s.id;
+    87→            return (
+    88→              <button
+    89→                key={s.id}
+    90→                onClick={() => scrollTo(s.id)}
+    91→                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+    92→                  isActive
+    93→                    ? 'bg-amber-600 text-white shadow-sm'
+    94→                    : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+    95→                }`}
+    96→              >
+    97→                <Icon className="size-3.5" />
+    98→                {s.label}
+    99→              </button>
+   100→            );
+   101→          })}
+   102→        </nav>
+   103→      </div>
+   104→
+   105→      {/* ─── Scrollable Content ─── */}
+   106→      <div
+   107→        ref={containerRef}
+   108→        dir="rtl"
+   109→        className="overflow-y-auto scroll-smooth space-y-6 px-1 pb-6"
+   110→        style={{ scrollbarGutter: 'stable' }}
+   111→      >
+   112→        {/* ═══════ 1. System Architecture DFD ═══════ */}
+   113→        <section id="architecture">
+   114→          <Card className="border-amber-200 bg-amber-50/60">
+   115→            <CardHeader className="pb-2">
+   116→              <div className="flex items-center gap-2">
+   117→                <Boxes className="size-5 text-amber-700" />
+   118→                <CardTitle className="text-amber-900">
+   119→                  نمای کلی معماری سیستم (DFD)
+   120→                </CardTitle>
+   121→              </div>
+   122→              <CardDescription className="text-amber-700/80">
+   123→                نمودار جریان داده — ارتباط بین کاربر، رابط کاربری، موتور تحلیل و منابع داده خارجی
+   124→              </CardDescription>
+   125→            </CardHeader>
+   126→            <CardContent>
+   127→              <div className="w-full overflow-x-auto">
+   128→                <svg
+   129→                  viewBox="0 0 920 540"
+   130→                  className="w-full max-w-4xl mx-auto"
+   131→                  style={{ minWidth: 640 }}
+   132→                >
+   133→                  <defs>
+   134→                    <pattern
+   135→                      id="dfdGrid"
+   136→                      width="20"
+   137→                      height="20"
+   138→                      patternUnits="userSpaceOnUse"
+   139→                    >
+   140→                      <path
+   141→                        d="M 20 0 L 0 0 0 20"
+   142→                        fill="none"
+   143→                        stroke="#fde68a"
+   144→                        strokeWidth="0.5"
+   145→                      />
+   146→                    </pattern>
+   147→                    <marker
+   148→                      id="arrAmber"
+   149→                      markerWidth="10"
+   150→                      markerHeight="7"
+   151→                      refX="10"
+   152→                      refY="3.5"
+   153→                      orient="auto"
+   154→                    >
+   155→                      <polygon points="0 0, 10 3.5, 0 7" fill="#b45309" />
+   156→                    </marker>
+   157→                    <marker
+   158→                      id="arrBlue"
+   159→                      markerWidth="10"
+   160→                      markerHeight="7"
+   161→                      refX="10"
+   162→                      refY="3.5"
+   163→                      orient="auto"
+   164→                    >
+   165→                      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb" />
+   166→                    </marker>
+   167→                    <marker
+   168→                      id="arrGreen"
+   169→                      markerWidth="10"
+   170→                      markerHeight="7"
+   171→                      refX="10"
+   172→                      refY="3.5"
+   173→                      orient="auto"
+   174→                    >
+   175→                      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a" />
+   176→                    </marker>
+   177→                    <marker
+   178→                      id="arrPurple"
+   179→                      markerWidth="10"
+   180→                      markerHeight="7"
+   181→                      refX="10"
+   182→                      refY="3.5"
+   183→                      orient="auto"
+   184→                    >
+   185→                      <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea" />
+   186→                    </marker>
+   187→                    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1">
+   188→                      <stop offset="0%" stopColor="#fcd34d" />
+   189→                      <stop offset="100%" stopColor="#fef3c7" />
+   190→                    </linearGradient>
+   191→                    <filter id="ds">
+   192→                      <feDropShadow
+   193→                        dx="0"
+   194→                        dy="2"
+   195→                        stdDeviation="3"
+   196→                        floodColor="#f59e0b"
+   197→                        floodOpacity="0.25"
+   198→                      />
+   199→                    </filter>
+   200→                  </defs>
+   201→                  <rect
+   202→                    width="920"
+   203→                    height="540"
+   204→                    fill="url(#dfdGrid)"
+   205→                    rx="12"
+   206→                  />
+   207→
+   208→                  {/* Legend */}
+   209→                  <rect
+   210→                    x="20"
+   211→                    y="20"
+   212→                    width="210"
+   213→                    height="120"
+   214→                    rx="8"
+   215→                    fill="#ffffff"
+   216→                    fillOpacity="0.9"
+   217→                    stroke="#fde68a"
+   218→                    strokeWidth="1"
+   219→                  />
+   220→                  <text
+   221→                    x="35"
+   222→                    y="42"
+   223→                    fill="#78350f"
+   224→                    fontSize="11"
+   225→                    fontWeight="bold"
+   226→                  >
+   227→                    راهنما
+   228→                  </text>
+   229→                  <circle
+   230→                    cx="45"
+   231→                    cy="60"
+   232→                    r="10"
+   233→                    fill="#fef3c7"
+   234→                    stroke="#d97706"
+   235→                    strokeWidth="1.5"
+   236→                  />
+   237→                  <text x="62" y="64" fill="#44403c" fontSize="9">
+   238→                    فرآیند (Process)
+   239→                  </text>
+   240→                  <rect
+   241→                    x="35"
+   242→                    y="76"
+   243→                    width="20"
+   244→                    height="14"
+   245→                    rx="7"
+   246→                    fill="#f59e0b"
+   247→                    stroke="#b45309"
+   248→                    strokeWidth="1"
+   249→                  />
+   250→                  <text x="62" y="87" fill="#44403c" fontSize="9">
+   251→                    موجودیت خارجی
+   252→                  </text>
+   253→                  <line
+   254→                    x1="35"
+   255→                    y1="104"
+   256→                    x2="55"
+   257→                    y2="104"
+   258→                    stroke="#b45309"
+   259→                    strokeWidth="2"
+   260→                    markerEnd="url(#arrAmber)"
+   261→                  />
+   262→                  <text x="62" y="108" fill="#44403c" fontSize="9">
+   263→                    جریان داده
+   264→                  </text>
+   265→                  <line
+   266→                    x1="35"
+   267→                    y1="124"
+   268→                    x2="55"
+   269→                    y2="124"
+   270→                    stroke="#b45309"
+   271→                    strokeWidth="1.5"
+   272→                    strokeDasharray="4,3"
+   273→                  />
+   274→                  <text x="62" y="128" fill="#44403c" fontSize="9">
+   275→                    جریان بازگشت
+   276→                  </text>
+   277→
+   278→                  {/* ── User ── */}
+   279→                  <rect
+   280→                    x="20"
+   281→                    y="210"
+   282→                    width="120"
+   283→                    height="60"
+   284→                    rx="30"
+   285→                    fill="#f59e0b"
+   286→                    stroke="#b45309"
+   287→                    strokeWidth="2"
+   288→                    filter="url(#ds)"
+   289→                  />
+   290→                  <text
+   291→                    x="80"
+   292→                    y="235"
+   293→                    textAnchor="middle"
+   294→                    fill="#ffffff"
+   295→                    fontSize="13"
+   296→                    fontWeight="bold"
+   297→                  >
+   298→                    کاربر
+   299→                  </text>
+   300→                  <text
+   301→                    x="80"
+   302→                    y="253"
+   303→                    textAnchor="middle"
+   304→                    fill="#fef3c7"
+   305→                    fontSize="10"
+   306→                  >
+   307→                    User
+   308→                  </text>
+   309→
+   310→                  {/* User → Browser */}
+   311→                  <line
+   312→                    x1="140"
+   313→                    y1="240"
+   314→                    x2="195"
+   315→                    y2="240"
+   316→                    stroke="#b45309"
+   317→                    strokeWidth="2"
+   318→                    markerEnd="url(#arrAmber)"
+   319→                  />
+   320→                  <text
+   321→                    x="167"
+   322→                    y="232"
+   323→                    textAnchor="middle"
+   324→                    fill="#92400e"
+   325→                    fontSize="8"
+   326→                  >
+   327→                    درخواست
+   328→                  </text>
+   329→
+   330→                  {/* ── Browser ── */}
+   331→                  <rect
+   332→                    x="200"
+   333→                    y="210"
+   334→                    width="130"
+   335→                    height="60"
+   336→                    rx="8"
+   337→                    fill="url(#gAmber)"
+   338→                    stroke="#d97706"
+   339→                    strokeWidth="2"
+   340→                    filter="url(#ds)"
+   341→                  />
+   342→                  <text
+   343→                    x="265"
+   344→                    y="235"
+   345→                    textAnchor="middle"
+   346→                    fill="#78350f"
+   347→                    fontSize="12"
+   348→                    fontWeight="bold"
+   349→                  >
+   350→                    مرورگر وب
+   351→                  </text>
+   352→                  <text
+   353→                    x="265"
+   354→                    y="253"
+   355→                    textAnchor="middle"
+   356→                    fill="#b45309"
+   357→                    fontSize="10"
+   358→                  >
+   359→                    Web Browser
+   360→                  </text>
+   361→
+   362→                  {/* Browser → Next.js */}
+   363→                  <line
+   364→                    x1="330"
+   365→                    y1="240"
+   366→                    x2="385"
+   367→                    y2="240"
+   368→                    stroke="#b45309"
+   369→                    strokeWidth="2"
+   370→                    markerEnd="url(#arrAmber)"
+   371→                  />
+   372→                  <text
+   373→                    x="357"
+   374→                    y="232"
+   375→                    textAnchor="middle"
+   376→                    fill="#92400e"
+   377→                    fontSize="8"
+   378→                  >
+   379→                    HTTP
+   380→                  </text>
+   381→
+   382→                  {/* ── Next.js Frontend ── */}
+   383→                  <circle
+   384→                    cx="450"
+   385→                    cy="240"
+   386→                    r="60"
+   387→                    fill="#fef3c7"
+   388→                    stroke="#d97706"
+   389→                    strokeWidth="2.5"
+   390→                    filter="url(#ds)"
+   391→                  />
+   392→                  <text
+   393→                    x="450"
+   394→                    y="232"
+   395→                    textAnchor="middle"
+   396→                    fill="#78350f"
+   397→                    fontSize="12"
+   398→                    fontWeight="bold"
+   399→                  >
+   400→                    Next.js
+   401→                  </text>
+   402→                  <text
+   403→                    x="450"
+   404→                    y="250"
+   405→                    textAnchor="middle"
+   406→                    fill="#b45309"
+   407→                    fontSize="10"
+   408→                  >
+   409→                    Frontend
+   410→                  </text>
+   411→
+   412→                  {/* Next.js → API Routes */}
+   413→                  <line
+   414→                    x1="450"
+   415→                    y1="300"
+   416→                    x2="450"
+   417→                    y2="340"
+   418→                    stroke="#b45309"
+   419→                    strokeWidth="2"
+   420→                    markerEnd="url(#arrAmber)"
+   421→                  />
+   422→
+   423→                  {/* ── API Routes ── */}
+   424→                  <circle
+   425→                    cx="450"
+   426→                    cy="380"
+   427→                    r="40"
+   428→                    fill="#fef3c7"
+   429→                    stroke="#d97706"
+   430→                    strokeWidth="2"
+   431→                    filter="url(#ds)"
+   432→                  />
+   433→                  <text
+   434→                    x="450"
+   435→                    y="377"
+   436→                    textAnchor="middle"
+   437→                    fill="#78350f"
+   438→                    fontSize="11"
+   439→                    fontWeight="bold"
+   440→                  >
+   441→                    API
+   442→                  </text>
+   443→                  <text
+   444→                    x="450"
+   445→                    y="392"
+   446→                    textAnchor="middle"
+   447→                    fill="#b45309"
+   448→                    fontSize="9"
+   449→                  >
+   450→                    Routes
+   451→                  </text>
+   452→
+   453→                  {/* API Routes → TA Engine */}
+   454→                  <line
+   455→                    x1="490"
+   456→                    y1="380"
+   457→                    x2="575"
+   458→                    y2="380"
+   459→                    stroke="#16a34a"
+   460→                    strokeWidth="2"
+   461→                    markerEnd="url(#arrGreen)"
+   462→                  />
+   463→                  <text
+   464→                    x="532"
+   465→                    y="372"
+   466→                    textAnchor="middle"
+   467→                    fill="#16a34a"
+   468→                    fontSize="8"
+   469→                  >
+   470→                    داده خام
+   471→                  </text>
+   472→
+   473→                  {/* ── TA Engine ── */}
+   474→                  <circle
+   475→                    cx="645"
+   476→                    cy="380"
+   477→                    r="58"
+   478→                    fill="#f0fdf4"
+   479→                    stroke="#16a34a"
+   480→                    strokeWidth="2"
+   481→                    filter="url(#ds)"
+   482→                  />
+   483→                  <text
+   484→                    x="645"
+   485→                    y="372"
+   486→                    textAnchor="middle"
+   487→                    fill="#44403c"
+   488→                    fontSize="11"
+   489→                    fontWeight="bold"
+   490→                  >
+   491→                    موتور تحلیل
+   492→                  </text>
+   493→                  <text
+   494→                    x="645"
+   495→                    y="388"
+   496→                    textAnchor="middle"
+   497→                    fill="#78716c"
+   498→                    fontSize="9"
+   499→                  >
+   500→                    تکنیکال
+   501→                  </text>
+   502→                  <text
+   503→                    x="645"
+   504→                    y="403"
+   505→                    textAnchor="middle"
+   506→                    fill="#78716c"
+   507→                    fontSize="8"
+   508→                  >
+   509→                    TA Engine
+   510→                  </text>
+   511→
+   512→                  {/* TA Engine → TSETMC */}
+   513→                  <line
+   514→                    x1="700"
+   515→                    y1="348"
+   516→                    x2="768"
+   517→                    y2="290"
+   518→                    stroke="#2563eb"
+   519→                    strokeWidth="2"
+   520→                    markerEnd="url(#arrBlue)"
+   521→                  />
+   522→                  <line
+   523→                    x1="768"
+   524→                    y1="300"
+   525→                    x2="706"
+   526→                    y2="356"
+   527→                    stroke="#2563eb"
+   528→                    strokeWidth="1.5"
+   529→                    strokeDasharray="4,3"
+   530→                    markerEnd="url(#arrBlue)"
+   531→                  />
+   532→
+   533→                  {/* ── TSETMC API ── */}
+   534→                  <rect
+   535→                    x="760"
+   536→                    y="250"
+   537→                    width="130"
+   538→                    height="55"
+   539→                    rx="28"
+   540→                    fill="#dbeafe"
+   541→                    stroke="#2563eb"
+   542→                    strokeWidth="2"
+   543→                    filter="url(#ds)"
+   544→                  />
+   545→                  <text
+   546→                    x="825"
+   547→                    y="274"
+   548→                    textAnchor="middle"
+   549→                    fill="#2563eb"
+   550→                    fontSize="12"
+   551→                    fontWeight="bold"
+   552→                  >
+   553→                    TSETMC
+   554→                  </text>
+   555→                  <text
+   556→                    x="825"
+   557→                    y="292"
+   558→                    textAnchor="middle"
+   559→                    fill="#1d4ed8"
+   560→                    fontSize="9"
+   561→                  >
+   562→                    API
+   563→                  </text>
+   564→
+   565→                  {/* TA Engine → TGJU */}
+   566→                  <line
+   567→                    x1="700"
+   568→                    y1="412"
+   569→                    x2="768"
+   570→                    y2="462"
+   571→                    stroke="#2563eb"
+   572→                    strokeWidth="2"
+   573→                    markerEnd="url(#arrBlue)"
+   574→                  />
+   575→                  <line
+   576→                    x1="768"
+   577→                    y1="454"
+   578→                    x2="706"
+   579→                    y2="406"
+   580→                    stroke="#2563eb"
+   581→                    strokeWidth="1.5"
+   582→                    strokeDasharray="4,3"
+   583→                    markerEnd="url(#arrBlue)"
+   584→                  />
+   585→
+   586→                  {/* ── TGJU API ── */}
+   587→                  <rect
+   588→                    x="760"
+   589→                    y="435"
+   590→                    width="130"
+   591→                    height="55"
+   592→                    rx="28"
+   593→                    fill="#dbeafe"
+   594→                    stroke="#2563eb"
+   595→                    strokeWidth="2"
+   596→                    filter="url(#ds)"
+   597→                  />
+   598→                  <text
+   599→                    x="825"
+   600→                    y="458"
+   601→                    textAnchor="middle"
+   602→                    fill="#2563eb"
+   603→                    fontSize="12"
+   604→                    fontWeight="bold"
+   605→                  >
+   606→                    TGJU
+   607→                  </text>
+   608→                  <text
+   609→                    x="825"
+   610→                    y="476"
+   611→                    textAnchor="middle"
+   612→                    fill="#1d4ed8"
+   613→                    fontSize="9"
+   614→                  >
+   615→                    API
+   616→                  </text>
+   617→
+   618→                  {/* ── AI Branch ── */}
+   619→                  <line
+   620→                    x1="450"
+   621→                    y1="420"
+   622→                    x2="450"
+   623→                    y2="460"
+   624→                    stroke="#9333ea"
+   625→                    strokeWidth="2"
+   626→                    markerEnd="url(#arrPurple)"
+   627→                  />
+   628→
+   629→                  {/* AI Analysis API */}
+   630→                  <circle
+   631→                    cx="450"
+   632→                    cy="490"
+   633→                    r="30"
+   634→                    fill="#faf5ff"
+   635→                    stroke="#9333ea"
+   636→                    strokeWidth="2"
+   637→                    filter="url(#ds)"
+   638→                  />
+   639→                  <text
+   640→                    x="450"
+   641→                    y="487"
+   642→                    textAnchor="middle"
+   643→                    fill="#9333ea"
+   644→                    fontSize="10"
+   645→                    fontWeight="bold"
+   646→                  >
+   647→                    AI API
+   648→                  </text>
+   649→                  <text
+   650→                    x="450"
+   651→                    y="500"
+   652→                    textAnchor="middle"
+   653→                    fill="#7e22ce"
+   654→                    fontSize="8"
+   655→                  >
+   656→                    Z.ai SDK
+   657→                  </text>
+   658→
+   659→                  {/* AI → LLM */}
+   660→                  <line
+   661→                    x1="480"
+   662→                    y1="490"
+   663→                    x2="558"
+   664→                    y2="490"
+   665→                    stroke="#9333ea"
+   666→                    strokeWidth="2"
+   667→                    markerEnd="url(#arrPurple)"
+   668→                  />
+   669→
+   670→                  {/* LLM */}
+   671→                  <rect
+   672→                    x="565"
+   673→                    y="468"
+   674→                    width="105"
+   675→                    height="46"
+   676→                    rx="23"
+   677→                    fill="#faf5ff"
+   678→                    stroke="#9333ea"
+   679→                    strokeWidth="2"
+   680→                    filter="url(#ds)"
+   681→                  />
+   682→                  <text
+   683→                    x="617"
+   684→                    y="488"
+   685→                    textAnchor="middle"
+   686→                    fill="#9333ea"
+   687→                    fontSize="12"
+   688→                    fontWeight="bold"
+   689→                  >
+   690→                    LLM
+   691→                  </text>
+   692→                  <text
+   693→                    x="617"
+   694→                    y="503"
+   695→                    textAnchor="middle"
+   696→                    fill="#7e22ce"
+   697→                    fontSize="8"
+   698→                  >
+   699→                    مدل زبانی
+   700→                  </text>
+   701→
+   702→                  {/* Return flow labels */}
+   703→                  <line
+   704→                    x1="575"
+   705→                    y1="395"
+   706→                    x2="495"
+   707→                    y2="395"
+   708→                    stroke="#16a34a"
+   709→                    strokeWidth="1.5"
+   710→                    strokeDasharray="6,3"
+   711→                  />
+   712→                  <text
+   713→                    x="535"
+   714→                    y="408"
+   715→                    textAnchor="middle"
+   716→                    fill="#16a34a"
+   717→                    fontSize="8"
+   718→                  >
+   719→                    نتیجه تحلیل
+   720→                  </text>
+   721→                </svg>
+   722→              </div>
+   723→            </CardContent>
+   724→          </Card>
+   725→        </section>
+   726→
+   727→        {/* ═══════ 2. BPMN Process Diagram ═══════ */}
+   728→        <section id="bpmn">
+   729→          <Card className="border-amber-200 bg-amber-50/60">
+   730→            <CardHeader className="pb-2">
+   731→              <div className="flex items-center gap-2">
+   732→                <Workflow className="size-5 text-amber-700" />
+   733→                <CardTitle className="text-amber-900">
+   734→                  نمودار فرآیند کسب‌وکار (BPMN)
+   735→                </CardTitle>
+   736→              </div>
+   737→              <CardDescription className="text-amber-700/80">
+   738→                جریان کاری تحلیل تکنیکال — از جستجوی نماد تا نمایش نتایج
+   739→              </CardDescription>
+   740→            </CardHeader>
+   741→            <CardContent>
+   742→              <div className="w-full overflow-x-auto">
+   743→                <svg
+   744→                  viewBox="0 0 940 260"
+   745→                  className="w-full max-w-5xl mx-auto"
+   746→                  style={{ minWidth: 720 }}
+   747→                >
+   748→                  <defs>
+   749→                    <marker
+   750→                      id="arrBpmn"
+   751→                      markerWidth="10"
+   752→                      markerHeight="7"
+   753→                      refX="10"
+   754→                      refY="3.5"
+   755→                      orient="auto"
+   756→                    >
+   757→                      <polygon points="0 0, 10 3.5, 0 7" fill="#b45309" />
+   758→                    </marker>
+   759→                    <linearGradient
+   760→                      id="gTask"
+   761→                      x1="0"
+   762→                      y1="0"
+   763→                      x2="0"
+   764→                      y2="1"
+   765→                    >
+   766→                      <stop offset="0%" stopColor="#fef3c7" />
+   767→                      <stop offset="100%" stopColor="#fde68a" />
+   768→                    </linearGradient>
+   769→                    <filter id="ds2">
+   770→                      <feDropShadow
+   771→                        dx="0"
+   772→                        dy="1"
+   773→                        stdDeviation="2"
+   774→                        floodColor="#f59e0b"
+   775→                        floodOpacity="0.2"
+   776→                      />
+   777→                    </filter>
+   778→                  </defs>
+   779→
+   780→                  {/* Row 1: Start → Search → Fetch → TA → Scenario → AI → Display → End */}
+   781→
+   782→                  {/* Start */}
+   783→                  <circle
+   784→                    cx="35"
+   785→                    cy="80"
+   786→                    r="18"
+   787→                    fill="#16a34a"
+   788→                    stroke="#44403c"
+   789→                    strokeWidth="2"
+   790→                  />
+   791→                  <polygon
+   792→                    points="29,73 29,87 41,80"
+   793→                    fill="#ffffff"
+   794→                  />
+   795→                  <text
+   796→                    x="35"
+   797→                    y="115"
+   798→                    textAnchor="middle"
+   799→                    fill="#78716c"
+   800→                    fontSize="9"
+   801→                  >
+   802→                    شروع
+   803→                  </text>
+   804→
+   805→                  {/* → Search */}
+   806→                  <line
+   807→                    x1="53"
+   808→                    y1="80"
+   809→                    x2="90"
+   810→                    y2="80"
+   811→                    stroke="#b45309"
+   812→                    strokeWidth="2"
+   813→                    markerEnd="url(#arrBpmn)"
+   814→                  />
+   815→
+   816→                  {/* Symbol Search */}
+   817→                  <rect
+   818→                    x="95"
+   819→                    y="52"
+   820→                    width=

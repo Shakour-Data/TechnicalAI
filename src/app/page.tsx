@@ -2,12 +2,14 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, ChevronLeft, ChevronRight, HelpCircle, BookOpen } from 'lucide-react';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
 import VdssGraph from '@/components/tse/vdss-graph';
 import VdesAnalysis from '@/components/tse/vdes-analysis';
+import HelpPage from '@/components/help-page';
+import DocsPage from '@/components/docs-page';
 import { toPersianDigits } from '@/lib/jalali';
 
 interface AnalysisData {
@@ -54,6 +56,13 @@ const SIDEBAR_ITEMS = [
 ] as const;
 
 type SidebarItem = typeof SIDEBAR_ITEMS[number]['id'];
+type PageId = 'analysis' | 'help' | 'docs';
+
+const NAV_ITEMS: { id: PageId; label: string; icon: typeof BarChart3 }[] = [
+  { id: 'analysis', label: 'تحلیل بازار', icon: BarChart3 },
+  { id: 'help', label: 'راهنما', icon: HelpCircle },
+  { id: 'docs', label: 'مستندات', icon: BookOpen },
+];
 
 // ─── Landing Page Component ─────────────────────────────────────
 const FEATURES = [
@@ -81,14 +90,14 @@ const MARKETS = [
 function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => void }) {
   return (
     <div className="space-y-16 pb-16">
-      {/* ── HERO ── */}
+      {/* HERO */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-amber-900/80 px-6 py-16 sm:px-12 sm:py-24 text-center">
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-400/40 via-transparent to-transparent" />
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-cyan-400/40 via-transparent to-transparent" />
         <div className="relative z-10 max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-amber-300 text-xs font-medium mb-6">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            نسخه 5.0 — تحلیل هوشمند با AI
+            نسخه ۶.۰ — تحلیل هوشمند با AI
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight">
             تحلیل تکنیکال{' '}
@@ -100,7 +109,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
             گراف تصمیم هوشمند و تحلیل متنی تولیدشده توسط هوش مصنوعی.
           </p>
           <div className="max-w-lg mx-auto">
-            <SymbolSearch onSelect={onSearch} placeholder='جستجوی نماد، ارز، طلا، کریپتو، شاخص ...' />
+            <SymbolSearch onSelect={onSearch} placeholder="جستجوی نماد، ارز، طلا، کریپتو، شاخص ..." />
           </div>
           <div className="flex flex-wrap justify-center gap-2 mt-8">
             {MARKETS.map((m) => (
@@ -110,7 +119,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
         </div>
       </section>
 
-      {/* ── FEATURES GRID ── */}
+      {/* FEATURES GRID */}
       <section>
         <div className="text-center mb-10">
           <h3 className="text-2xl font-bold text-gray-900 mb-2">قابلیت‌های کلیدی</h3>
@@ -134,7 +143,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
+      {/* HOW IT WORKS */}
       <section>
         <div className="text-center mb-10">
           <h3 className="text-2xl font-bold text-gray-900 mb-2">چگونه کار می‌کند؟</h3>
@@ -157,7 +166,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
         </div>
       </section>
 
-      {/* ── AI SYSTEM EXPLANATION ── */}
+      {/* AI SYSTEM EXPLANATION */}
       <section className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-amber-50/30 p-8 sm:p-12">
         <div className="max-w-4xl mx-auto">
           <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">سیستم هوشمند ترکیبی AI</h3>
@@ -190,7 +199,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
         </div>
       </section>
 
-      {/* ── DATA SOURCES ── */}
+      {/* DATA SOURCES */}
       <section>
         <div className="text-center mb-10">
           <h3 className="text-2xl font-bold text-gray-900 mb-2">منابع داده</h3>
@@ -215,6 +224,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
   );
 }
 
+// ─── Main Home Component ────────────────────────────────────────
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -223,6 +233,7 @@ export default function Home() {
   const [activePanel, setActivePanel] = useState<SidebarItem>('visual');
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [currentPage, setCurrentPage] = useState<PageId>('analysis');
 
   // Store last fetch params for auto-refresh
   const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string; finpySector?: string; finpyIndex?: string; webId?: number } | null>(null);
@@ -240,10 +251,10 @@ export default function Home() {
       setData(null);
       lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
       try {
-        const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(tgjuKey)}`);
+        const res = await fetch('/api/tgju-analysis?key=' + encodeURIComponent(tgjuKey));
         if (!res.ok) {
           let errMsg = 'خطا در دریافت داده‌های تاریخی';
-          try { const err = await res.json(); if (err.error) errMsg = err.error; } catch { /* non-JSON error */ }
+          try { const err = await res.json(); if (err.error) errMsg = err.error; } catch (_) { /* non-JSON error */ }
           throw new Error(errMsg);
         }
         const json = await res.json();
@@ -273,7 +284,7 @@ export default function Home() {
         // 1. Try webId (TSETMC CDN)
         if (webId) {
           setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ...');
-          const res = await fetch(`/api/finpy-sector?webId=${encodeURIComponent(String(webId))}`);
+          const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)));
           if (res.ok) {
             try {
               const json = await res.json();
@@ -285,14 +296,14 @@ export default function Home() {
                 return;
               }
               if (json.error) { setError(json.error); gotError = true; }
-            } catch { /* invalid JSON */ }
+            } catch (_) { /* invalid JSON */ }
           } else { gotError = true; }
         }
 
         // 2. Main indices via finpy-tse
         if (finpyIndex) {
           setLoadingMessage('در حال دریافت داده‌های شاخص اصلی ...');
-          const res = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(finpyIndex)}`);
+          const res = await fetch('/api/finpy-sector?indexKey=' + encodeURIComponent(finpyIndex));
           if (res.ok) {
             try {
               const json = await res.json();
@@ -304,14 +315,14 @@ export default function Home() {
                 return;
               }
               if (json.error) { setError(json.error); gotError = true; }
-            } catch { /* invalid JSON */ }
+            } catch (_) { /* invalid JSON */ }
           } else { gotError = true; }
         }
 
         // 3. Sector indices via finpy-tse
         if (finpySector) {
           setLoadingMessage('در حال دریافت داده‌های شاخص گروه ...');
-          const res = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
+          const res = await fetch('/api/finpy-sector?sector=' + encodeURIComponent(finpySector));
           if (res.ok) {
             try {
               const json = await res.json();
@@ -323,7 +334,7 @@ export default function Home() {
                 return;
               }
               if (json.error) { setError(json.error); gotError = true; }
-            } catch { /* invalid JSON */ }
+            } catch (_) { /* invalid JSON */ }
           } else { gotError = true; }
         }
 
@@ -344,10 +355,10 @@ export default function Home() {
     setData(null);
     lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
     try {
-      const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}`);
+      const res = await fetch('/api/analysis?symbol=' + encodeURIComponent(symbol));
       if (!res.ok) {
         let errMsg = 'خطا در دریافت داده‌ها';
-        try { const err = await res.json(); if (err.error) errMsg = err.error; } catch { /* non-JSON error */ }
+        try { const err = await res.json(); if (err.error) errMsg = err.error; } catch (_) { /* non-JSON error */ }
         throw new Error(errMsg);
       }
       const json = await res.json();
@@ -360,7 +371,7 @@ export default function Home() {
     }
   }, []);
 
-  // ── Auto-refresh: every 60s + on tab focus ──
+  // Auto-refresh: every 60s + on tab focus
   const doRefresh = useCallback(async () => {
     const params = lastFetchRef.current;
     if (!params) return;
@@ -368,8 +379,8 @@ export default function Home() {
     setRefreshing(true);
     try {
       await handleSelect(params.symbol, params.category, params.insCode, params.tgjuKey, params.finpySector, params.finpyIndex, params.webId);
-    } catch {
-      // Silently handle refresh errors to avoid unhandled rejections
+    } catch (_) {
+      // Silently handle refresh errors
     } finally {
       setRefreshing(false);
     }
@@ -414,63 +425,10 @@ export default function Home() {
 
   const isTgjuData = data?.isTgju;
 
-  return (
-    <div dir="rtl" className="min-h-screen bg-white text-gray-900 flex flex-col">
-      {/* ── HEADER ────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur-xl">
-        <div className="max-w-[1800px] mx-auto px-4 py-3 flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-600/30 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-amber-700" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-gray-900 leading-tight">تحلیل تکنیکال بازار</h1>
-              <p className="text-[10px] text-gray-500">بورس + ارز + طلا + کریپتو + فارکس + بورس جهانی (TSETMC &amp; TGJU)</p>
-            </div>
-          </div>
-
-          <div className="flex-1 min-w-[240px] max-w-xl">
-            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، ارز، طلا، کریپتو، شاخص ...' />
-          </div>
-
-          {data?.info && (
-            <div className="flex items-center gap-4 text-sm shrink-0">
-              <div className="text-left">
-                <div className="text-gray-500 text-xs">{data.info.name}</div>
-                <div className="font-bold text-lg text-gray-900">
-                  {toFa(data.info.lastPrice)}
-                  <span className={`text-xs mr-2 ${data.info.change >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {data.info.change >= 0 ? '▲' : '▼'} {toFa(Math.abs(data.info.change))}%
-                  </span>
-                </div>
-              </div>
-              {isTgjuData && (
-                <span className="px-2 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold flex items-center gap-1">
-                  <Coins className="w-3 h-3" /> TGJU
-                </span>
-              )}
-              <div className={`px-3 py-1.5 rounded-lg border ${signalBg}`}>
-                <div className={`flex items-center gap-1.5 text-xs font-bold ${signalColor}`}>
-                  <SignalIcon className="w-3.5 h-3.5" />
-                  {data.ta.overallSignal === 'bullish' ? 'صعودی' : data.ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
-                </div>
-              </div>
-              {/* Refresh button */}
-              <button
-                onClick={doRefresh}
-                disabled={refreshing || loading}
-                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 cursor-pointer"
-                title="به‌روزرسانی"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* ── MAIN CONTENT ──────────────────────────────────────── */}
-      <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
+  // ─── renderAnalysisContent: all analysis page views via closure ───
+  function renderAnalysisContent() {
+    return (
+      <div>
         {!data && !loading && !error && (
           <LandingPage onSearch={handleSelect} />
         )}
@@ -521,7 +479,42 @@ export default function Home() {
 
         {data && !loading && (
           <div className="flex gap-4 items-start">
-            {/* ── MAIN CONTENT AREA ── */}
+            {/* RIGHT SIDEBAR (first in RTL = visual right) */}
+            <aside className={`shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden opacity-0' : 'w-56'} hidden lg:block`}>
+              <div className="sticky top-[76px] space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 px-3 mb-3">ابزارهای تحلیلی</h3>
+                {SIDEBAR_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activePanel === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActivePanel(item.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
+                        isActive
+                          ? item.activeBg + ' ' + item.color + ' border-current/20 shadow-sm'
+                          : 'border-transparent ' + item.hoverBg + ' text-gray-600'
+                      }`}
+                    >
+                      <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? item.color : 'text-gray-400'}`} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Collapse toggle */}
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="w-full flex items-center justify-center gap-1 px-4 py-2 rounded-xl text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all cursor-pointer mt-4"
+                  title={sidebarCollapsed ? 'نمایش سایدبار' : 'بستن سایدبار'}
+                >
+                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
+                  <span>جمع‌شوندگی</span>
+                </button>
+              </div>
+            </aside>
+
+            {/* MAIN CONTENT AREA */}
             <div className="flex-1 min-w-0 space-y-4">
               {/* Info Grid */}
               {data.info && (
@@ -530,6 +523,7 @@ export default function Home() {
                     { label: 'اولین', value: toFa(data.info.openPrice) },
                     { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-700' },
                     { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-700' },
+                    { label: 'پایانی', value: toFa(data.info.closePrice) },
                     ...(data.ta.hasVolume ? [
                       { label: 'حجم معاملات', value: toPersianDigits((data.info.volume / 1e6).toFixed(1)) + 'M' },
                       { label: 'ارزش معاملات', value: toPersianDigits((data.info.value / 1e9).toFixed(1)) + 'B' },
@@ -553,12 +547,12 @@ export default function Home() {
                 </div>
               )}
 
-              {/* ── PANEL: Indicators ── */}
+              {/* PANEL: Indicators */}
               {activePanel === 'indicators' && (
                 <IndicatorsPanel ta={data.ta} />
               )}
 
-              {/* ── PANEL: Decision Graph (گراف تصمیم) ── */}
+              {/* PANEL: Decision Graph */}
               {activePanel === 'graph' && (
                 <VdssGraph
                   symbolName={data.info?.name ?? data.symbol}
@@ -576,7 +570,7 @@ export default function Home() {
                 />
               )}
 
-              {/* ── PANEL: Visual Describer (توضیح‌دهنده تصویری) ── */}
+              {/* PANEL: Visual Describer */}
               {activePanel === 'visual' && (
                 <div className="space-y-4">
                   <div id="chart-export-wrapper" ref={chartWrapperRef}>
@@ -620,67 +614,118 @@ export default function Home() {
                 </div>
               )}
             </div>
-
-            {/* ── RIGHT SIDEBAR ── */}
-            <aside className={`shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden opacity-0' : 'w-56'} hidden lg:block`}>
-              <div className="sticky top-[76px] space-y-2">
-                <h3 className="text-xs font-bold text-gray-500 px-3 mb-3">ابزارهای تحلیلی</h3>
-                {SIDEBAR_ITEMS.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activePanel === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActivePanel(item.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
-                        isActive
-                          ? `${item.activeBg} ${item.color} border-current/20 shadow-sm`
-                          : `border-transparent ${item.hoverBg} text-gray-600 hover:${item.color}`
-                      }`}
-                    >
-                      <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? item.color : 'text-gray-400'}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-
-                {/* Collapse toggle */}
-                <button
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                  className="w-full flex items-center justify-center gap-1 px-4 py-2 rounded-xl text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all cursor-pointer mt-4"
-                  title={sidebarCollapsed ? 'نمایش سایدبار' : 'بستن سایدبار'}
-                >
-                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
-                  <span>جمع‌شوندگی</span>
-                </button>
-              </div>
-            </aside>
-
-            {/* Mobile bottom nav */}
-            <div className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-200 px-2 py-2 flex items-center gap-1">
-              {SIDEBAR_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = activePanel === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActivePanel(item.id)}
-                    className={`flex-1 flex flex-col items-center gap-1 py-1.5 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
-                      isActive ? `${item.color} ${item.activeBg}` : 'text-gray-500'
-                    }`}
-                  >
-                    <Icon className="w-4.5 h-4.5" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
         )}
+
+        {/* Mobile bottom nav */}
+        {data && !loading && (
+          <div className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-200 px-2 py-2 flex items-center gap-1">
+            {SIDEBAR_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activePanel === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActivePanel(item.id)}
+                  className={`flex-1 flex flex-col items-center gap-1 py-1.5 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
+                    isActive ? item.color + ' ' + item.activeBg : 'text-gray-500'
+                  }`}
+                >
+                  <Icon className="w-4.5 h-4.5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-white text-gray-900 flex flex-col">
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur-xl">
+        <div className="max-w-[1800px] mx-auto px-4 py-3 flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-600/30 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-gray-900 leading-tight">تحلیل تکنیکال بازار</h1>
+              <p className="text-[10px] text-gray-500">بورس + ارز + طلا + کریپتو + فارکس + بورس جهانی (TSETMC و TGJU)</p>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-[240px] max-w-xl">
+            <SymbolSearch onSelect={handleSelect} placeholder="جستجوی نماد، ارز، طلا، کریپتو، شاخص ..." />
+          </div>
+
+          {/* Page Navigation */}
+          <div className="flex items-center gap-1 bg-[#f3f4f6] rounded-lg p-0.5 border border-[#e5e7eb]">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentPage(item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                    isActive ? 'bg-white text-amber-800 shadow-sm border border-[#e5e7eb]' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {data?.info && (
+            <div className="flex items-center gap-4 text-sm shrink-0">
+              <div className="text-left">
+                <div className="text-gray-500 text-xs">{data.info.name}</div>
+                <div className="font-bold text-lg text-gray-900">
+                  {toFa(data.info.lastPrice)}
+                  <span className={`text-xs mr-2 ${data.info.change >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {data.info.change >= 0 ? '▲' : '▼'} {toFa(Math.abs(data.info.change))}%
+                  </span>
+                </div>
+              </div>
+              {isTgjuData && (
+                <span className="px-2 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold flex items-center gap-1">
+                  <Coins className="w-3 h-3" /> TGJU
+                </span>
+              )}
+              <div className={`px-3 py-1.5 rounded-lg border ${signalBg}`}>
+                <div className={`flex items-center gap-1.5 text-xs font-bold ${signalColor}`}>
+                  <SignalIcon className="w-3.5 h-3.5" />
+                  {data.ta.overallSignal === 'bullish' ? 'صعودی' : data.ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
+                </div>
+              </div>
+              {/* Refresh button */}
+              <button
+                onClick={doRefresh}
+                disabled={refreshing || loading}
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 cursor-pointer"
+                title="به‌روزرسانی"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
+        {currentPage === 'help' && <HelpPage />}
+        {currentPage === 'docs' && <DocsPage />}
+        {currentPage === 'analysis' && renderAnalysisContent()}
       </main>
 
-      <footer className={`mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500 ${data ? 'lg:mb-14' : ''}`}>
-        داده‌های بورس از TSETMC (تعدیل شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v5.0
+      <footer className={`mt-auto border-t border-gray-200 bg-white py-3 text-center text-[10px] text-gray-500 ${data && currentPage === 'analysis' ? 'lg:mb-14' : ''}`}>
+        داده‌های بورس از TSETMC (تعدیل‌شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v6.0
       </footer>
     </div>
   );

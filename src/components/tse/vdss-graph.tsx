@@ -124,12 +124,17 @@ const NODE_DEFS: Record<string, { title: string; type: string; desc: string; col
 
 const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;
 
-const SCENARIO_META: Record<string, { label: string; color: string }> = {
-  R1: { label: 'تداوم صعود', color: COLORS.green },
-  R2: { label: 'پولبک سالم', color: COLORS.cyan },
-  R3: { label: 'اصلاح کنترل‌شده', color: COLORS.orange },
-  R4: { label: 'اصلاح عمیق', color: COLORS.gold },
-  R5: { label: 'تضعیف ساختار', color: COLORS.red },
+const SCENARIO_META: Record<string, { label: string; color: string; displayNum: string }> = {
+  R1: { label: 'تداوم صعود', color: COLORS.green, displayNum: '۱' },
+  R2: { label: 'پولبک سالم', color: COLORS.cyan, displayNum: '۲' },
+  R3: { label: 'اصلاح کنترل‌شده', color: COLORS.orange, displayNum: '۳' },
+  R4: { label: 'اصلاح عمیق', color: COLORS.gold, displayNum: '۴' },
+  R5: { label: 'تضعیف ساختار', color: COLORS.red, displayNum: '۵' },
+};
+
+const SCENARIO_DISPLAY: Record<string, string> = {
+  R1: 'سناریوی ۱', R2: 'سناریوی ۲', R3: 'سناریوی ۳',
+  R4: 'سناریوی ۴', R5: 'سناریوی ۵',
 };
 
 const TYPE_FILTERS = [
@@ -238,6 +243,7 @@ export default function VdssGraph(props: VdssGraphProps) {
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [selectedPathIdx, setSelectedPathIdx] = useState<number | null>(null);
   const graphRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -281,15 +287,26 @@ export default function VdssGraph(props: VdssGraphProps) {
     );
   }, [allPaths, activeFilter]);
 
-  // ── Visible edges/nodes based on filter ────────────────────────────
+  // ── Top 10 paths (sorted by probability, from allPaths not filtered) ──
+  const topPaths = useMemo(() => allPaths.slice(0, 10), [allPaths]);
+
+  // ── Visible edges/nodes based on filter OR selected path ──────────
   const { visibleEdgeIndices, visibleNodes } = useMemo(() => {
+    // If a specific path is selected, show only that path's nodes/edges
+    if (selectedPathIdx !== null) {
+      const p = allPaths[selectedPathIdx];
+      if (p) {
+        const edgeSet = new Set<number>(p.edges);
+        const nodeSet = new Set<string>(p.nodes);
+        return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
+      }
+    }
     if (activeFilter === 'all') {
       const allEdgeIdx = EDGES.map((_, i) => i);
       const allNodes = new Set(Object.keys(NODE_POSITIONS));
       return { visibleEdgeIndices: allEdgeIdx, visibleNodes: allNodes };
     }
     if (SCENARIO_KEYS.includes(activeFilter as any)) {
-      // Show all edges/nodes on paths to this scenario
       const edgeSet = new Set<number>();
       const nodeSet = new Set<string>();
       for (const p of filteredPaths) {
@@ -298,7 +315,6 @@ export default function VdssGraph(props: VdssGraphProps) {
       }
       return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
     }
-    // Type filter
     const edgeSet = new Set<number>();
     const nodeSet = new Set<string>();
     EDGES.forEach((e, i) => {
@@ -309,7 +325,7 @@ export default function VdssGraph(props: VdssGraphProps) {
       }
     });
     return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
-  }, [activeFilter, filteredPaths]);
+  }, [activeFilter, filteredPaths, selectedPathIdx, allPaths]);
 
   // ── Node values ──────────────────────────────────────────────────
   const nodeValues: Record<string, string> = {
@@ -432,7 +448,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 const ep = edgeProbs[String(ei)] ?? 0;
                 return (
                   <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
-                    <b className="text-[#374151]">{e[0]} ← {e[1]}</b>
+                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e[0]] || e[0]} ← {SCENARIO_DISPLAY[e[1]] || e[1]}</b>
                     <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e[2]}
                   </li>
@@ -450,7 +466,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 const ep = edgeProbs[String(ei)] ?? 0;
                 return (
                   <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
-                    <b className="text-[#374151]">{e[0]} → {e[1]}</b>
+                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e[0]] || e[0]} → {SCENARIO_DISPLAY[e[1]] || e[1]}</b>
                     <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e[2]}
                   </li>
@@ -527,13 +543,13 @@ export default function VdssGraph(props: VdssGraphProps) {
           );
         })}
         <button
-          onClick={() => { setSelectedNode(null); setActiveFilter('all'); }}
+          onClick={() => { setSelectedNode(null); setActiveFilter('all'); setSelectedPathIdx(null); }}
           className="text-xs px-3 py-1.5 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6]/50 text-[#374151] hover:bg-[#e5e7eb] transition-all cursor-pointer mr-auto"
         >بازنشانی</button>
       </div>
 
       {/* ═══ Graph Workspace ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-3">
         {/* Graph Shell */}
         <div
           ref={shellRef}
@@ -588,10 +604,10 @@ export default function VdssGraph(props: VdssGraphProps) {
                   } as React.CSSProperties}
                 >
                   {isResultNode && (
-                    <span className="block text-[9px] font-bold mb-1" style={{ color: scenarioColor }}>نتیجه {id}</span>
+                    <span className="block text-[9px] font-bold mb-1" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[id]}</span>
                   )}
                   {!isResultNode && (
-                    <span className="block text-[9px] font-bold mb-1" style={{ color: isVisible ? scenarioColor : '#555' }}>{id} | {def.type.split(' ').slice(0, 2).join(' ')}</span>
+                    <span className="block text-[9px] font-bold mb-1" style={{ color: isVisible ? scenarioColor : '#555' }}>{NODE_DEFS[id].title.split(' ')[0]} | {def.type.split(' ').slice(0, 2).join(' ')}</span>
                   )}
                   <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{def.title}</div>
                   <div className="text-[10px] text-[#6b7280] mt-1" dir="ltr">{nodeValues[id] ?? '--'}</div>
@@ -618,7 +634,7 @@ export default function VdssGraph(props: VdssGraphProps) {
           </div>
         </div>
 
-        {/* ═══ Right Panel: Path Probabilities ═══ */}
+        {/* ═══ Left Panel: Path Probabilities & Path Selection ═══ */}
         <div className="rounded-2xl border border-[#e5e7eb] p-4 flex flex-col"
           style={{ background: 'linear-gradient(160deg, #ffffff, #f3f4f6)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
           <h2 className="text-sm font-bold text-[#111827] mb-3">📋 احتمال مسیرها</h2>
@@ -639,7 +655,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                   return (
                     <div
                       key={key}
-                      onClick={() => setActiveFilter(key)}
+                      onClick={() => { setActiveFilter(key); setSelectedPathIdx(null); }}
                       className={`rounded-xl p-3 cursor-pointer transition-all border ${
                         isActive
                           ? 'border-opacity-60'
@@ -651,7 +667,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                       }}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold" style={{ color: meta.color }}>{key} | {meta.label}</span>
+                        <span className="text-xs font-bold" style={{ color: meta.color }}>{SCENARIO_DISPLAY[key]} | {meta.label}</span>
                         <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((pathProb * 100).toFixed(1))}٪</span>
                       </div>
                       {/* Probability bar */}
@@ -670,29 +686,41 @@ export default function VdssGraph(props: VdssGraphProps) {
                 })}
               </div>
 
-              {/* Top paths list */}
+              {/* Top 10 paths list - CLICKABLE */}
               <div className="border-t border-[#e5e7eb] pt-3 mt-3">
-                <h3 className="text-xs font-bold text-[#111827] mb-2">مسیرهای اصلی (تا ۱۰ مسیر)</h3>
+                <h3 className="text-xs font-bold text-[#111827] mb-2">۱۰ مسیر اصلی (بر اساس احتمال)</h3>
                 <div className="space-y-1.5">
-                  {filteredPaths.slice(0, 10).map((p, i) => {
+                  {topPaths.map((p, i) => {
                     const meta = SCENARIO_META[p.target];
+                    const isSelected = selectedPathIdx === i;
                     return (
-                      <div key={i} className="flex items-center gap-2 text-[10px]">
-                        <span className="w-4 text-center font-bold" style={{ color: meta.color }}>{toFa(i + 1)}</span>
-                        <span className="flex-1 text-[#374151]" dir="ltr">
-                          {p.nodes.join(' → ')}
+                      <div
+                        key={i}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedPathIdx(null);
+                            setActiveFilter('all');
+                          } else {
+                            setSelectedPathIdx(i);
+                            setSelectedNode(null);
+                          }
+                        }}
+                        className={`flex items-center gap-2 text-[10px] p-2 rounded-lg cursor-pointer transition-all border ${
+                          isSelected
+                            ? 'border-amber-300 bg-amber-50 shadow-sm'
+                            : 'border-transparent hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="w-5 text-center font-bold text-[#6b7280]">{toPersianDigits(i + 1)}</span>
+                        <span className="flex-1 text-[#374151] overflow-hidden" dir="ltr">
+                          {p.nodes.map(n => SCENARIO_DISPLAY[n] || n).join(' → ')}
                         </span>
-                        <span className="font-bold min-w-[40px] text-left" style={{ color: meta.color }}>
+                        <span className="font-bold min-w-[42px] text-left" style={{ color: meta.color }}>
                           {toPersianDigits((p.prob * 100).toFixed(1))}٪
                         </span>
                       </div>
                     );
                   })}
-                  {filteredPaths.length > 10 && (
-                    <div className="text-[10px] text-[#B0A89E] text-center pt-1">
-                      و {toFa(filteredPaths.length - 10)} مسیر دیگر...
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -726,7 +754,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 } as React.CSSProperties}
               >
                 <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
-                <span className="text-xs font-bold text-[#374151]">{key} | {meta.label}</span>
+                <span className="text-xs font-bold text-[#374151]">{SCENARIO_DISPLAY[key]} | {meta.label}</span>
                 <small className="block text-[10px] text-[#6b7280] leading-relaxed mt-2" dir="ltr">
                   {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
                 </small>
