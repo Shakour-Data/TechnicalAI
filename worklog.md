@@ -328,3 +328,42 @@ Stage Summary:
 - page.tsx: Added AbortController with signal to all 3 fetch paths in handleSelect (tgju-analysis, finpy-sector, analysis)
 - Both files now properly silence abort errors and prevent stale state updates
 - Agent browser verification: zero console errors on AED load and rapid symbol switching
+
+---
+Task ID: 2
+Agent: main
+Task: Create ml-narrative-v11.ts (V11 Narrative Engine)
+
+Work Log:
+- Created /home/z/my-project/src/lib/ml-narrative-v11.ts
+- Defined interfaces: V11ScenarioInput, V11ScenarioResult, V11Result
+- Implemented computeV11Probabilities(): calculates cumulative probabilities (Ri OR worse), grouped bullish/bearish/neutral metrics, and risk profile classification
+- Risk profile logic: very_bullish (>=55% and 2x bearish), very_bearish (inverse), bullish/bearish (dominant), neutral (default)
+- Implemented buildV11PromptSection(): generates Persian text block with fa-IR number formatting for LLM prompt injection
+- TypeScript compilation: clean (0 errors)
+- ESLint: clean (0 errors)
+
+Stage Summary:
+- V11 Narrative Engine created with cumulative & exclusive probability computation
+- Exports: computeV11Probabilities, buildV11PromptSection, and all interfaces
+- File: /home/z/my-project/src/lib/ml-narrative-v11.ts
+---
+Task ID: 2-6
+Agent: main
+Task: Rebuild v11 features (احتمال تجمعی + احتمال اختصاصی سناریو) lost from previous session
+
+Work Log:
+- Surveyed current codebase (v6): ta-engine.ts returns raw R1-R5 probabilities summing to 100
+- Created src/lib/ml-narrative-v11.ts: computeV11Probabilities() with cumulative and exclusive probabilities, risk profile, and LLM prompt builder
+- Created src/app/api/v11-analysis/route.ts: lightweight API endpoint for v11 probability computation
+- Updated src/components/tse/vdes-analysis.tsx: added v11 import, useMemo computation from client-side raw scenarios, updated scenario cards to show both اختصاصی and تجمعی, added v11 badge, bullish/bearish summary, and risk profile display
+- Updated src/app/api/ai-analysis/route.ts: injected v11 probability data into LLM prompt (buildPrompt function), updated cache version from v5 to v11
+- Updated src/components/tse/vdss-graph.tsx: added v11 import and computation, added cumulative probability labels on graph nodes (R1-R5), updated left panel path probability rows with تجمعی, updated bottom result cards with both اختصاصی and تجمعی
+- Verified with agent browser: loaded خودرو symbol, confirmed all 5 scenarios show correct اختصاصی and تجمعی values, verified math (R1=22%/100%, R2=29%/78%, R3=27%/49%, R4=18%/22%, R5=4%/4%), zero console errors, both tabs (Visual Explainer + Decision Graph) show v11 features
+
+Stage Summary:
+- v11 successfully rebuilt with احتمال تجمعی and احتمال اختصاصی سناریو
+- All computation is done client-side (no extra API call needed) using useMemo
+- V11 data is also injected into AI analysis LLM prompt for richer AI narratives
+- Files created: src/lib/ml-narrative-v11.ts, src/app/api/v11-analysis/route.ts
+- Files modified: src/components/tse/vdes-analysis.tsx, src/components/tse/vdss-graph.tsx, src/app/api/ai-analysis/route.ts

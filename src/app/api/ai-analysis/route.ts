@@ -19,7 +19,7 @@ const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 3_600_000;
 
 function cacheKey(body: Record<string, unknown>): string {
-  const k = { v: 5, s: body.symbolName, p: body.currentPrice, t: body.trendDirection, r: body.rsi, a: body.adx };
+  const k = { v: 11, s: body.symbolName, p: body.currentPrice, t: body.trendDirection, r: body.rsi, a: body.adx };
   return JSON.stringify(k);
 }
 
@@ -244,6 +244,35 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
     .join('\n');
 
+  // V11 probabilities section
+  let v11Block = '';
+  const v11Probs = body.v11Probabilities as {
+    scenarios: Array<{ key: string; name: string; rawProbability: number; cumulativeProbability: number }>;
+    bullishCumulative: number;
+    bearishCumulative: number;
+    neutralCumulative: number;
+    riskProfile: string;
+  } | undefined;
+  if (v11Probs?.scenarios) {
+    const v11Lines = v11Probs.scenarios.map((s, i) =>
+      `- \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)} (${s.name}): \u0627\u062d\u062a\u0645\u0627\u0644 \u0627\u062e\u062a\u0635\u0627\u0635\u06cc ${toPersianNum(s.rawProbability)}\u066a | \u0627\u062d\u062a\u0645\u0627\u0644 \u062a\u062c\u0645\u0639\u06cc ${toPersianNum(s.cumulativeProbability)}\u066a`
+    ).join('\n');
+    const riskLabels: Record<string, string> = {
+      very_bullish: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc',
+      bullish: '\u0635\u0639\u0648\u062f\u06cc',
+      neutral: '\u062e\u0646\u062b\u06cc',
+      bearish: '\u0646\u0632\u0648\u0644\u06cc',
+      very_bearish: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc',
+    };
+    v11Block = `
+
+**\u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a v11:**
+${v11Lines}
+- \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0635\u0639\u0648\u062f\u06cc: ${toPersianNum(v11Probs.bullishCumulative)}\u066a
+- \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0646\u0632\u0648\u0644\u06cc: ${toPersianNum(v11Probs.bearishCumulative)}\u066a
+- \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0631\u06cc\u0633\u06a9: ${riskLabels[v11Probs.riskProfile] || v11Probs.riskProfile}`;
+  }
+
   return `
 **\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644:**
 \u0634\u0645\u0627 \u06cc\u06a9 **\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0628\u0627 20 \u0633\u0627\u0644 \u062a\u062c\u0631\u0628\u0647** \u0647\u0633\u062a\u06cc\u062f.
@@ -270,7 +299,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
 
 **\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
 ${scenarioBlock}
-
+${v11Block}
 **روش‌های تحلیلی مورد استفاده:**
 ${methodsStr}
 

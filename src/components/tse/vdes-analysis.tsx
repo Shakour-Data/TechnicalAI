@@ -2,6 +2,7 @@
 
 import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
 // Chart is rendered in page.tsx with id="chart-export-wrapper"
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -608,6 +609,21 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
     : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
 
+  // ── V11 Probabilities (computed client-side from raw scenarios) ─────
+  const v11Result = useMemo<V11Result>(() => computeV11Probabilities({
+    R1: scenarios.R1.probability,
+    R2: scenarios.R2.probability,
+    R3: scenarios.R3.probability,
+    R4: scenarios.R4.probability,
+    R5: scenarios.R5.probability,
+  }), [scenarios.R1.probability, scenarios.R2.probability, scenarios.R3.probability, scenarios.R4.probability, scenarios.R5.probability]);
+
+  const v11Map = useMemo(() => {
+    const m = new Map<string, V11Result['scenarios'][number]>();
+    for (const s of v11Result.scenarios) m.set(s.key, s);
+    return m;
+  }, [v11Result]);
+
   // ── AI Analysis Text ───────────────────────────────────────
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(true);
@@ -631,6 +647,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             trendDirection, trendAngle, trendR2,
             scenarios, hasVolume: hasVolume ?? false,
             resistanceStrengths, supportStrengths,
+            v11Probabilities: v11Result,
           }),
           signal: controller.signal,
         });
@@ -1102,17 +1119,31 @@ ${SCENARIO_KEYS.map(k => {
         </div>
       </div>
 
-      {/* ═══ SCENARIO PROBABILITIES ═══ */}
+      {/* ═══ SCENARIO PROBABILITIES (V11) ═══ */}
       <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
-        <h2 className="text-sm font-semibold mb-4 text-amber-800 flex items-center gap-2">
-          <span></span>
-          احتمالات سناریوها
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+            <span></span>
+            احتمالات سناریوها
+            <span className="text-[10px] font-normal text-[#6b7280] bg-[#f3f4f6] px-2 py-0.5 rounded-full">v11</span>
+          </h2>
+          <div className="flex items-center gap-3 text-[10px]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-700" />
+              <span className="text-[#6b7280]">صعودی: <b className="text-[#111827]">{toFa(v11Result.bullishCumulative)}٪</b></span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
+              <span className="text-[#6b7280]">نزولی: <b className="text-[#111827]">{toFa(v11Result.bearishCumulative)}٪</b></span>
+            </span>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {SCENARIO_KEYS.map(key => {
             const s = scenarios[key];
             const meta = SCENARIO_META[key];
+            const v11 = v11Map.get(key);
             return (
               <div
                 key={key}
@@ -1123,13 +1154,18 @@ ${SCENARIO_KEYS.map(k => {
                   <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{SCENARIO_NUMBER[key]}</span>
                   <span className="text-[10px] text-[#6b7280]">{meta.label}</span>
                 </div>
-                <div className="text-center my-2">
+                <div className="text-center my-1.5">
                   <span
                     className="inline-block text-2xl font-black tabular-nums"
                     style={{ color: meta.badgeColor }}
                   >
                     {toFa(s.probability)}٪
                   </span>
+                </div>
+                {/* V11: احتمال اختصاصی and تجمعی */}
+                <div className="flex justify-between text-[9px] text-[#6b7280] mb-2 px-1">
+                  <span>اختصاصی: <b style={{ color: meta.badgeColor }}>{v11 ? toFa(v11.rawProbability) : toFa(s.probability)}٪</b></span>
+                  <span>تجمعی: <b className="text-[#374151]">{v11 ? toFa(v11.cumulativeProbability) : '—'}٪</b></span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-[#e5e7eb] overflow-hidden mb-2">
                   <div
@@ -1147,6 +1183,19 @@ ${SCENARIO_KEYS.map(k => {
 
         <div className="mt-4 text-center text-xs text-[#6b7280]">
           مجموع احتمالات: <b className="text-[#374151]">{toFa(totalProb)}٪</b> (برابر ۱۰۰٪)
+          {v11Result.riskProfile !== 'neutral' && (
+            <span className="mr-3">
+              پروفایل ریسک: <b className={
+                v11Result.riskProfile === 'very_bullish' || v11Result.riskProfile === 'bullish'
+                  ? 'text-emerald-700'
+                  : 'text-red-700'
+              }>{
+                v11Result.riskProfile === 'very_bullish' ? 'صعودی قوی' :
+                v11Result.riskProfile === 'bullish' ? 'صعودی' :
+                v11Result.riskProfile === 'bearish' ? 'نزولی' : 'نزولی قوی'
+              }</b>
+            </span>
+          )}
         </div>
       </div>
 
