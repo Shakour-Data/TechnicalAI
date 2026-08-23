@@ -95,20 +95,27 @@ export async function GET(req: NextRequest) {
       ? symbolInfo as Record<string, unknown>
       : null;
 
+    // Calculate change from candle data: last close vs previous close
+    const lastCandle = reversed[reversed.length - 1];
+    const prevCandle = reversed.length > 1 ? reversed[reversed.length - 2] : lastCandle;
+    const lastClose = Number(lastCandle?.close ?? 0);
+    const prevClose = Number(prevCandle?.close ?? 0);
+    const changePercent = prevClose > 0 ? ((lastClose - prevClose) / prevClose) * 100 : 0;
+
     return NextResponse.json({
       symbol,
       candles: reversed,
       info: info ? {
         name: String(info.l30 ?? symbol),
         symbol: String(info.l18 ?? symbol),
-        lastPrice: Number(info.pl ?? ohlcv[ohlcv.length - 1]?.close ?? 0),
-        change: Number(info.plp ?? 0),
-        closePrice: Number(info.pc ?? 0),
-        closeChange: Number(info.pcp ?? 0),
+        lastPrice: Number(info.pl ?? lastClose),
+        change: changePercent,
+        closePrice: Number(info.pc ?? lastClose),
+        closeChange: lastClose - prevClose,
         openPrice: Number(info.pf ?? 0),
         minPrice: Number(info.pmin ?? 0),
         maxPrice: Number(info.pmax ?? 0),
-        yesterdayClose: Number(info.py ?? 0),
+        yesterdayClose: Number(info.py ?? prevClose),
         volume: Number(info.tvol ?? 0),
         value: Number(info.tval ?? 0),
         trades: Number(info.tno ?? 0),
@@ -120,6 +127,8 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
     console.error(`[analysis] Error for symbol=${symbol}:`, msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    // 404 for data-not-found, 502 only for actual upstream failures
+    const isNotFound = msg.includes('یافت نشد') || msg.includes('No candle');
+    return NextResponse.json({ error: msg }, { status: isNotFound ? 404 : 502 });
   }
 }

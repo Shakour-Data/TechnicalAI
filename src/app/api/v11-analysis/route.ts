@@ -13,11 +13,15 @@ export async function POST(req: NextRequest) {
     }
 
     const input: V11ScenarioInput = {
-      R1: scenarios.R1?.probability ?? 20,
-      R2: scenarios.R2?.probability ?? 20,
-      R3: scenarios.R3?.probability ?? 20,
-      R4: scenarios.R4?.probability ?? 20,
-      R5: scenarios.R5?.probability ?? 20,
+      R1: scenarios.R1?.probability ?? 11,
+      R2: scenarios.R2?.probability ?? 11,
+      R3: scenarios.R3?.probability ?? 11,
+      R4: scenarios.R4?.probability ?? 11,
+      R5: scenarios.R5?.probability ?? 11,
+      R6: scenarios.R6?.probability ?? 11,
+      R7: scenarios.R7?.probability ?? 11,
+      R8: scenarios.R8?.probability ?? 11,
+      R9: scenarios.R9?.probability ?? 11,
     };
 
     const v11 = computeV11Probabilities(input);

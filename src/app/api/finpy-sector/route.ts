@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMainIndexHistory, fetchSectorIndexHistory } from '@/lib/tsetmc-index-api';
+import { fetchMainIndexHistory, fetchSectorIndexHistory, fetchSectorByName } from '@/lib/tsetmc-index-api';
 import { SECTOR_INDICES, type IndustryIndex } from '@/lib/industry-indices';
 import { analyze, type OHLCV } from '@/lib/ta-engine';
 
@@ -10,7 +10,9 @@ function buildResponse(
   candles: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>,
   label: string,
 ) {
-  const ohlcv: OHLCV[] = candles.map((c) => ({
+  // For TA analysis, use only the last 500 candles to limit memory usage
+  const taCandles = candles.length > 500 ? candles.slice(-500) : candles;
+  const ohlcv: OHLCV[] = taCandles.map((c) => ({
     date: c.date,
     open: c.open,
     high: c.high,
@@ -78,21 +80,22 @@ export async function GET(req: NextRequest) {
     // ── Sector/industry index by webId (string to preserve precision) ──
     if (webIdParam) {
       const candles = await fetchSectorIndexHistory(webIdParam);
-      const label = SECTOR_INDICES.find(s => String(s.webId) === webIdParam)?.symbol || `شاخص ${webIdParam}`;
+      const label = SECTOR_INDICES.find(s => s.webId === webIdParam)?.symbol || `شاخص ${webIdParam}`;
       return buildResponse(candles, label);
     }
 
     // ── Sector/industry index by name ──
     if (sector) {
       const sectorDef = findSectorByName(sector);
-      if (!sectorDef || !sectorDef.webId) {
-        return NextResponse.json({
-          error: `شاخص گروه «${sector}» یافت نشد.`,
-          candles: [],
-        }, { status: 404 });
+      if (sectorDef) {
+        // Use finpySector name to route through Python service (which handles alias resolution)
+        const candles = await fetchSectorByName(sectorDef.finpySector!);
+        return buildResponse(candles, sectorDef.symbol);
       }
-      const candles = await fetchSectorIndexHistory(String(sectorDef.webId));
-      return buildResponse(candles, sectorDef.symbol);
+      return NextResponse.json({
+        error: `شاخص گروه «${sector}» یافت نشد.`,
+        candles: [],
+      }, { status: 404 });
     }
 
     return NextResponse.json(

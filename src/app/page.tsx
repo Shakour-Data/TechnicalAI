@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, ChevronLeft, ChevronRight, HelpCircle, BookOpen } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, ChevronLeft, ChevronRight, HelpCircle, BookOpen, BrainCircuit } from 'lucide-react';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
 import VdssGraph from '@/components/tse/vdss-graph';
 import VdesAnalysis from '@/components/tse/vdes-analysis';
+import MLForecast from '@/components/tse/ml-forecast';
 import HelpPage from '@/components/help-page';
 import DocsPage from '@/components/docs-page';
 import { toPersianDigits } from '@/lib/jalali';
@@ -53,6 +54,7 @@ const SIDEBAR_ITEMS = [
   { id: 'indicators', label: 'اندیکاتورها', icon: Activity, color: 'text-cyan-700', activeBg: 'bg-cyan-50 border-cyan-200', hoverBg: 'hover:bg-cyan-50/50' },
   { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-800', activeBg: 'bg-amber-50 border-amber-200', hoverBg: 'hover:bg-amber-50/50' },
   { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-700', activeBg: 'bg-purple-50 border-purple-200', hoverBg: 'hover:bg-purple-50/50' },
+  { id: 'forecast', label: 'پیش‌بینی ML', icon: BrainCircuit, color: 'text-violet-700', activeBg: 'bg-violet-50 border-violet-200', hoverBg: 'hover:bg-violet-50/50' },
 ] as const;
 
 type SidebarItem = typeof SIDEBAR_ITEMS[number]['id'];
@@ -288,7 +290,7 @@ export default function Home() {
     // Index: fetch historical data via TSETMC CDN (webId), then finpy-tse (finpyIndex/finpySector)
     if (category === 'index') {
       setLoading(true);
-      setLoadingMessage('در حال دریافت داده‌های تاریخی شاخص ...');
+      setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ... (حدود ۳۰ ثانیه برای بار اول)');
       setError(null);
       setData(null);
       lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
@@ -296,9 +298,14 @@ export default function Home() {
       try {
         // 1. Try webId (TSETMC CDN)
         if (webId) {
+<<<<<<< Updated upstream
           setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ...');
           const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)), { signal: controller.signal });
           if (controller.signal.aborted) return;
+=======
+          setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ... (حدود ۳۰ ثانیه برای بار اول)');
+          const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)));
+>>>>>>> Stashed changes
           if (res.ok) {
             try {
               const json = await res.json();
@@ -399,7 +406,15 @@ export default function Home() {
     }
   }, []);
 
-  // Auto-refresh: every 60s + on tab focus
+  // Full page reload every 15 minutes
+  useEffect(() => {
+    const timer = setInterval(() => {
+      window.location.reload();
+    }, 900_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Auto-refresh: data re-fetch + on tab focus
   const doRefresh = useCallback(async () => {
     const params = lastFetchRef.current;
     if (!params) return;
@@ -431,7 +446,10 @@ export default function Home() {
     return () => window.removeEventListener('focus', onFocus);
   }, [data, doRefresh]);
 
-  const lastPrice = data?.ta ? data.candles[data.candles.length - 1]?.close ?? 0 : 0;
+  // Use info.lastPrice (live) when available, otherwise fall back to last candle close.
+  // This ensures header price and all analysis panels show the same reference price.
+  const lastPrice = data?.info?.lastPrice
+    ?? (data?.ta ? data.candles[data.candles.length - 1]?.close ?? 0 : 0);
   const signalColor = data?.ta?.overallSignal === 'bullish' ? 'text-emerald-700' : data?.ta?.overallSignal === 'bearish' ? 'text-red-700' : 'text-amber-700';
   const signalBg = data?.ta?.overallSignal === 'bullish' ? 'bg-emerald-50 border-emerald-200' : data?.ta?.overallSignal === 'bearish' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200';
   const SignalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
@@ -595,6 +613,16 @@ export default function Home() {
                   trendDirection={data.ta.trend.medium.direction}
                   bullScore={data.ta.bullScore}
                   scenarios={data.ta.scenarios}
+                  decisionGraph={data.ta.decisionGraph}
+                />
+              )}
+
+              {/* PANEL: ML Forecast */}
+              {activePanel === 'forecast' && (
+                <MLForecast
+                  symbolName={data.info?.name ?? data.symbol}
+                  candles={data.candles}
+                  currentPrice={lastPrice}
                 />
               )}
 
@@ -716,7 +744,7 @@ export default function Home() {
                 <div className="font-bold text-lg text-gray-900">
                   {toFa(data.info.lastPrice)}
                   <span className={`text-xs mr-2 ${data.info.change >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {data.info.change >= 0 ? '▲' : '▼'} {toFa(Math.abs(data.info.change))}%
+                    {data.info.change >= 0 ? '▲' : '▼'} {toFaDecimal(Math.abs(data.info.change))}%
                   </span>
                 </div>
               </div>

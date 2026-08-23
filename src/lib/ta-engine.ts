@@ -10,6 +10,7 @@ import {
   NUM_FEATURES,
   type FeatureKey,
 } from './ml-model';
+import { buildDecisionGraph, type GraphData } from './decision-graph';
 
 export interface OHLCV {
   date: string;
@@ -109,6 +110,10 @@ export interface TAResult {
     R3: ScenarioResult;
     R4: ScenarioResult;
     R5: ScenarioResult;
+    R6: ScenarioResult;
+    R7: ScenarioResult;
+    R8: ScenarioResult;
+    R9: ScenarioResult;
   };
   // Summary
   bullScore: number;
@@ -125,6 +130,38 @@ export interface TAResult {
   adaptiveFactors: { momentum: number; volatility: number; trend: number };
   // Volume availability flag
   hasVolume: boolean;
+  // Decision Graph (computed probabilities from 35+ node graph)
+  decisionGraph: GraphData | null;
+  // ── Extended Indicators (24 additional indicators) ──
+  extendedIndicators: {
+    // Trend
+    wma: Record<string, number>;
+    hma: number;
+    tma: number;
+    lma: number;
+    maAlignment: number; // 0-1 alignment score
+    heikenAshi: { open: number; high: number; low: number; close: number };
+    // Oscillators
+    awesomeOsc: number;
+    momentum: number;
+    modifiedRSI: number;
+    fastStochK: number;
+    fisherTransform: number;
+    pvo: number;
+    confidenceIndex: number;
+    strengthIndex: number;
+    // Volume
+    ad: number;
+    vpt: number;
+    vosc: number;
+    chaikinAD: number;
+    forceIndex: number;
+    // Volatility
+    keltnerChannels: { upper: number; middle: number; lower: number };
+    envelopes: { upper: number; middle: number; lower: number };
+    stdDev: number;
+    hv: number;
+  };
 }
 
 // ─── Helper: SMA ──────────────────────────────────────────────────────────────
@@ -561,15 +598,15 @@ function linearRegression(values: number[]): { slope: number; intercept: number;
   return { slope, intercept, r2 };
 }
 
-// ─── Helper: Round to nice number ─────────────────────────────────────────────
+// ─── Helper: Round to nice number (per spec price-range rules) ─────────────
 function roundToNice(price: number): number {
   const abs = Math.abs(price);
   let step: number;
   if (abs >= 100000) step = 100;
-  else if (abs >= 10000) step = 50;
-  else if (abs >= 1000) step = 10;
-  else if (abs >= 100) step = 5;
-  else step = 1;
+  else if (abs >= 10000) step = 10;
+  else if (abs >= 1000) step = 5;
+  else if (abs >= 100) step = 1;
+  else step = 0.5;
   return Math.round(price / step) * step;
 }
 
@@ -1149,6 +1186,301 @@ function trainSRWeights(data: OHLCV[]): number[] {
   return weights.map(w => w / sum);
 }
 
+// ─── Helper: WMA Array (full series) ─────────────────────────────────────
+function calcWMAArray(closes: number[], period: number): number[] {
+  const result: number[] = [];
+  if (closes.length < period) return closes.map(() => 0);
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { result.push(0); continue; }
+    let numer = 0;
+    let denom = 0;
+    for (let j = 0; j < period; j++) {
+      const weight = period - j;
+      numer += closes[i - period + 1 + j] * weight;
+      denom += weight;
+    }
+    result.push(numer / denom);
+  }
+  return result;
+}
+
+// ─── Helper: WMA (latest value) ────────────────────────────────────
+function calcWMA(closes: number[], period: number): number {
+  if (closes.length < period) return 0;
+  const slice = closes.slice(-period);
+  let numer = 0;
+  let denom = 0;
+  for (let i = 0; i < period; i++) {
+    const weight = period - i;
+    numer += slice[i] * weight;
+    denom += weight;
+  }
+  return numer / denom;
+}
+
+// ─── Helper: HMA (Hull Moving Average) ─────────────────────────────
+function calcHMA(closes: number[], period: number = 20): number {
+  if (closes.length < period) return 0;
+  const halfPeriod = Math.max(1, Math.floor(period / 2));
+  const sqrtPeriod = Math.max(1, Math.floor(Math.sqrt(period)));
+  const wmaHalf = calcWMAArray(closes, halfPeriod);
+  const wmaFull = calcWMAArray(closes, period);
+  // Build difference series: 2*WMA(half) - WMA(full)
+  const diff: number[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    diff.push(2 * wmaHalf[i] - wmaFull[i]);
+  }
+  return calcWMA(diff, sqrtPeriod);
+}
+
+// ─── Helper: TMA (Triangular Moving Average) ───────────────────────
+function calcTMA(closes: number[], period: number = 20): number {
+  if (closes.length < period) return 0;
+  const halfPeriod = Math.max(1, Math.floor(period / 2) + 1);
+  // SMA of SMA
+  const firstSMA = smaArray(closes, halfPeriod);
+  const nonZero = firstSMA.filter(v => v > 0);
+  return nonZero.length >= halfPeriod ? sma(nonZero, halfPeriod) : (nonZero[nonZero.length - 1] ?? 0);
+}
+
+// ─── Helper: LMA (Linear Moving Average = (SMA+EMA)/2) ─────────────
+function calcLMA(closes: number[], period: number = 20): number {
+  return (sma(closes, period) + emaCalc(closes, period)) / 2;
+}
+
+// ─── Helper: MA Ribbon Alignment Score ─────────────────────────────
+function calcMARibbonAlignment(closes: number[]): number {
+  const emaPeriods = [5, 10, 20, 50, 100, 200];
+  const emaVals: number[] = [];
+  for (const p of emaPeriods) {
+    emaVals.push(emaCalc(closes, p));
+  }
+  // Count aligned pairs (short-term above long-term = bullish alignment)
+  let aligned = 0;
+  let total = 0;
+  for (let i = 0; i < emaVals.length - 1; i++) {
+    if (emaVals[i] > 0 && emaVals[i + 1] > 0) {
+      total++;
+      if (emaVals[i] > emaVals[i + 1]) aligned++;
+    }
+  }
+  return total > 0 ? aligned / total : 0.5;
+}
+
+// ─── Helper: Heiken Ashi (latest bar) ──────────────────────────────
+function calcHeikenAshi(data: OHLCV[]): { open: number; high: number; low: number; close: number } {
+  if (data.length === 0) return { open: 0, high: 0, low: 0, close: 0 };
+  let prevHAOpen = 0;
+  let prevHAClose = 0;
+  for (let i = 0; i < data.length; i++) {
+    const haClose = (data[i].open + data[i].high + data[i].low + data[i].close) / 4;
+    const haOpen = i === 0 ? (data[i].open + data[i].close) / 2 : (prevHAOpen + prevHAClose) / 2;
+    const haHigh = Math.max(data[i].high, haOpen, haClose);
+    const haLow = Math.min(data[i].low, haOpen, haClose);
+    prevHAOpen = haOpen;
+    prevHAClose = haClose;
+    if (i === data.length - 1) {
+      return { open: haOpen, high: haHigh, low: haLow, close: haClose };
+    }
+  }
+  return { open: 0, high: 0, low: 0, close: 0 };
+}
+
+// ─── Helper: Awesome Oscillator ─────────────────────────────────────
+function calcAwesomeOscillator(data: OHLCV[]): number {
+  if (data.length < 34) return 0;
+  const medians = data.map(d => (d.high + d.low) / 2);
+  return sma(medians, 5) - sma(medians, 34);
+}
+
+// ─── Helper: Momentum ──────────────────────────────────────────────
+function calcMomentum(closes: number[], period: number = 10): number {
+  if (closes.length < period + 1) return 0;
+  return closes[closes.length - 1] - closes[closes.length - 1 - period];
+}
+
+// ─── Helper: Fast Stochastic %K (14,3) — smoothed %K without %D ────
+function calcFastStochastic(data: OHLCV[], kPeriod: number = 14, smoothK: number = 3): number {
+  if (data.length < kPeriod) return 50;
+  const rawKs: number[] = [];
+  for (let i = kPeriod - 1; i < data.length; i++) {
+    let lowest = Infinity;
+    let highest = -Infinity;
+    for (let j = i - kPeriod + 1; j <= i; j++) {
+      if (data[j].low < lowest) lowest = data[j].low;
+      if (data[j].high > highest) highest = data[j].high;
+    }
+    const range = highest - lowest;
+    rawKs.push(range === 0 ? 50 : ((data[i].close - lowest) / range) * 100);
+  }
+  if (rawKs.length < smoothK) return rawKs[rawKs.length - 1] ?? 50;
+  const slice = rawKs.slice(-smoothK);
+  return slice.reduce((a, b) => a + b, 0) / smoothK;
+}
+
+// ─── Helper: Fisher Transform ──────────────────────────────────────
+function calcFisherTransform(data: OHLCV[], period: number = 9): number {
+  if (data.length < period) return 0;
+  let fisher = 0;
+  for (let i = period; i < data.length; i++) {
+    let maxH = -Infinity;
+    let minL = Infinity;
+    for (let j = i - period + 1; j <= i; j++) {
+      if (data[j].high > maxH) maxH = data[j].high;
+      if (data[j].low < minL) minL = data[j].low;
+    }
+    const range = maxH - minL;
+    if (range === 0) continue;
+    const raw = 2 * ((data[i].close - minL) / range - 0.5);
+    const val = Math.max(0.0001, Math.min(0.9999, (raw + 1) / 2));
+    fisher = 0.5 * Math.log(val / (1 - val)) + 0.5 * fisher;
+  }
+  return fisher;
+}
+
+// ─── Helper: PVO (Price Volume Oscillator) ─────────────────────────
+function calcPVO(data: OHLCV[], shortPeriod: number = 12, longPeriod: number = 26): number {
+  if (data.length < longPeriod) return 0;
+  const volumes = data.map(d => d.volume);
+  const emaShort = emaCalc(volumes, shortPeriod);
+  const emaLong = emaCalc(volumes, longPeriod);
+  if (emaLong === 0) return 0;
+  return ((emaShort - emaLong) / emaLong) * 100;
+}
+
+// ─── Helper: Confidence Index (composite) ──────────────────────────
+function calcConfidenceIndex(
+  rsiVal: number, mfiVal: number, macdLine: number, macdSignal: number,
+  adxVal: number, stochKVal: number, trendR2: number
+): number {
+  let score = 0;
+  let count = 0;
+  score += rsiVal > 50 ? 1 : 0; count++;
+  if (mfiVal !== 50) { score += mfiVal > 50 ? 1 : 0; count++; }
+  score += macdLine > macdSignal ? 1 : 0; count++;
+  score += stochKVal > 50 ? 1 : 0; count++;
+  const trendStrength = Math.min(adxVal / 50, 1);
+  const trendReliability = trendR2;
+  return count > 0 ? (score / count) * (0.5 + 0.25 * trendStrength + 0.25 * trendReliability) : 0.5;
+}
+
+// ─── Helper: Strength Index (composite) ────────────────────────────
+function calcStrengthIndex(
+  rsiVal: number, macdHist: number, adxVal: number,
+  atrVal: number, price: number, ema12Val: number, ema26Val: number
+): number {
+  const rsiStrength = (rsiVal - 50) / 50;
+  const macdStrength = Math.tanh(macdHist / (atrVal > 0 ? atrVal : 1) * 2);
+  const adxStrength = adxVal / 100;
+  const emaSpread = price > 0 ? (ema12Val - ema26Val) / price * 10 : 0;
+  const emaStrength = Math.tanh(emaSpread);
+  const directional = (rsiStrength + macdStrength + emaStrength) / 3;
+  return (directional * 0.5 + 0.5) * (0.3 + 0.7 * adxStrength);
+}
+
+// ─── Helper: A/D (Accumulation/Distribution) Line ──────────────────
+function calcAccumDist(data: OHLCV[]): number {
+  let adVal = 0;
+  for (let i = 0; i < data.length; i++) {
+    const h = data[i].high;
+    const l = data[i].low;
+    if (h === l) continue;
+    const clv = ((data[i].close - l) - (h - data[i].close)) / (h - l);
+    adVal += clv * data[i].volume;
+  }
+  return adVal;
+}
+
+// ─── Helper: VPT (Volume Price Trend) ──────────────────────────────
+function calcVPT(data: OHLCV[]): number {
+  if (data.length < 2) return 0;
+  let vptVal = 0;
+  for (let i = 1; i < data.length; i++) {
+    const prevClose = data[i - 1].close;
+    if (prevClose === 0) continue;
+    vptVal += data[i].volume * ((data[i].close - prevClose) / prevClose);
+  }
+  return vptVal;
+}
+
+// ─── Helper: VOSC (Volume Oscillator) ──────────────────────────────
+function calcVOSC(data: OHLCV[], shortPeriod: number = 5, longPeriod: number = 10): number {
+  if (data.length < longPeriod) return 0;
+  const volumes = data.map(d => d.volume);
+  const smaShort = sma(volumes, shortPeriod);
+  const smaLong = sma(volumes, longPeriod);
+  if (smaLong === 0) return 0;
+  return ((smaShort - smaLong) / smaLong) * 100;
+}
+
+// ─── Helper: Chaikin A/D Line ──────────────────────────────────────
+function calcChaikinAD(data: OHLCV[]): number {
+  let cad = 0;
+  for (let i = 0; i < data.length; i++) {
+    const h = data[i].high;
+    const l = data[i].low;
+    if (h === l) continue;
+    const clv = ((data[i].close - l) - (h - data[i].close)) / (h - l);
+    cad += clv * data[i].volume;
+  }
+  return cad;
+}
+
+// ─── Helper: Force Index ───────────────────────────────────────────
+function calcForceIndex(data: OHLCV[], period: number = 13): number {
+  if (data.length < 2) return 0;
+  const rawFI: number[] = [];
+  for (let i = 1; i < data.length; i++) {
+    rawFI.push((data[i].close - data[i - 1].close) * data[i].volume);
+  }
+  return emaCalc(rawFI, period);
+}
+
+// ─── Helper: Keltner Channels ──────────────────────────────────────
+function calcKeltnerChannels(data: OHLCV[], emaPeriod: number = 20, multiplier: number = 2): { upper: number; middle: number; lower: number } {
+  const closes = data.map(d => d.close);
+  const middle = emaCalc(closes, emaPeriod);
+  const atrVal = calcATR(data, emaPeriod);
+  return {
+    upper: middle + multiplier * atrVal,
+    middle,
+    lower: middle - multiplier * atrVal,
+  };
+}
+
+// ─── Helper: Envelopes ─────────────────────────────────────────────
+function calcEnvelopes(closes: number[], period: number = 20, percent: number = 2.5): { upper: number; middle: number; lower: number } {
+  const middle = sma(closes, period);
+  return {
+    upper: middle * (1 + percent / 100),
+    middle,
+    lower: middle * (1 - percent / 100),
+  };
+}
+
+// ─── Helper: Standard Deviation ────────────────────────────────────
+function calcStdDev(closes: number[], period: number = 20): number {
+  if (closes.length < period) return 0;
+  const slice = closes.slice(-period);
+  const mean = slice.reduce((a, b) => a + b, 0) / period;
+  const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period;
+  return Math.sqrt(variance);
+}
+
+// ─── Helper: Historical Volatility ─────────────────────────────────
+function calcHV(closes: number[], period: number = 20): number {
+  if (closes.length < period + 1) return 0;
+  const logReturns: number[] = [];
+  for (let i = closes.length - period; i < closes.length; i++) {
+    if (i < 1 || closes[i - 1] <= 0 || closes[i] <= 0) continue;
+    logReturns.push(Math.log(closes[i] / closes[i - 1]));
+  }
+  if (logReturns.length < 2) return 0;
+  const mean = logReturns.reduce((a, b) => a + b, 0) / logReturns.length;
+  const variance = logReturns.reduce((a, b) => a + (b - mean) ** 2, 0) / (logReturns.length - 1);
+  return Math.sqrt(variance) * Math.sqrt(252);
+}
+
 // ─── Support / Resistance (7-Method ML-Based System) ─────────────────────
 function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistances: number[];
@@ -1700,22 +2032,23 @@ function createTrainingData(
  */
 const VDSS_GRAPH = {
   // outgoing edges from each node: [target, type]
+  // v11: 9 scenario terminals — R1(most bullish) to R9(most bearish)
   outgoing: {
     A: [['B', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    B: [['C', 'up'], ['G', 'pullback'], ['A', 'risk']] as [string, string][],
+    B: [['C', 'up'], ['G', 'pullback'], ['A', 'risk'], ['R3', 'terminal']] as [string, string][],
     C: [['D', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    D: [['E', 'up'], ['B', 'pullback'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    E: [['F', 'up'], ['D', 'pullback'], ['G', 'pullback'], ['H', 'down'], ['R1', 'terminal']] as [string, string][],
+    D: [['E', 'up'], ['B', 'pullback'], ['G', 'pullback'], ['L', 'risk'], ['R3', 'terminal']] as [string, string][],
+    E: [['F', 'up'], ['D', 'pullback'], ['G', 'pullback'], ['H', 'down'], ['R2', 'terminal']] as [string, string][],
     F: [['R1', 'terminal'], ['E', 'pullback'], ['D', 'down'], ['G', 'risk']] as [string, string][],
-    G: [['B', 'up'], ['A', 'pullback'], ['H', 'down'], ['L', 'risk'], ['R2', 'terminal']] as [string, string][],
-    H: [['G', 'pullback'], ['I', 'down'], ['B', 'up'], ['L', 'risk'], ['R2', 'terminal']] as [string, string][],
-    I: [['H', 'pullback'], ['J', 'down'], ['G', 'up'], ['L', 'risk'], ['R3', 'terminal']] as [string, string][],
-    J: [['I', 'pullback'], ['K', 'down'], ['H', 'up'], ['L', 'risk'], ['R3', 'terminal']] as [string, string][],
-    K: [['J', 'pullback'], ['I', 'up'], ['L', 'risk'], ['R4', 'terminal'], ['R5', 'terminal']] as [string, string][],
-    L: [['C', 'up'], ['H', 'pullback'], ['J', 'down'], ['K', 'risk'], ['R5', 'terminal']] as [string, string][],
+    G: [['B', 'up'], ['A', 'pullback'], ['H', 'down'], ['L', 'risk'], ['R4', 'terminal']] as [string, string][],
+    H: [['G', 'pullback'], ['I', 'down'], ['B', 'up'], ['L', 'risk'], ['R5', 'terminal']] as [string, string][],
+    I: [['H', 'pullback'], ['J', 'down'], ['G', 'up'], ['L', 'risk'], ['R6', 'terminal']] as [string, string][],
+    J: [['I', 'pullback'], ['K', 'down'], ['H', 'up'], ['L', 'risk'], ['R7', 'terminal']] as [string, string][],
+    K: [['J', 'pullback'], ['I', 'up'], ['L', 'risk'], ['R8', 'terminal'], ['R9', 'terminal']] as [string, string][],
+    L: [['C', 'up'], ['H', 'pullback'], ['J', 'down'], ['K', 'risk'], ['R9', 'terminal']] as [string, string][],
   },
   // which result scenario each terminal node maps to
-  terminalMap: { R1: 'R1', R2: 'R2', R3: 'R3', R4: 'R4', R5: 'R5' } as Record<string, string>,
+  terminalMap: { R1: 'R1', R2: 'R2', R3: 'R3', R4: 'R4', R5: 'R5', R6: 'R6', R7: 'R7', R8: 'R8', R9: 'R9' } as Record<string, string>,
   startNode: 'A' as string,
 };
 
@@ -1856,14 +2189,14 @@ function calculatePathProbabilities(
   }
 
   // Group raw probabilities by scenario
-  const rawSums: Record<string, number> = { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0 };
+  const rawSums: Record<string, number> = { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0, R9: 0 };
   for (const rp of rawPaths) {
     rawSums[rp.scenario] = (rawSums[rp.scenario] ?? 0) + rp.prob;
   }
 
   // Compute calibration factors: scenarioProbs[scenario] / rawSum[scenario]
   const calibrationFactors: Record<string, number> = {};
-  for (const scenario of ['R1', 'R2', 'R3', 'R4', 'R5']) {
+  for (const scenario of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9']) {
     const rawSum = rawSums[scenario] ?? 0;
     const targetProb = (scenarioProbs[scenario] ?? 20) / 100; // convert from percentage
     calibrationFactors[scenario] = rawSum > 1e-10 ? targetProb / rawSum : 1.0;
@@ -1880,13 +2213,86 @@ function calculatePathProbabilities(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SCENARIO TARGET BUILDER — ATR-based, S/R levels, max 1 ATR range
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function buildBullishTargets(price: number, atr: number, resistances: number[]): Array<{min: number; max: number}> {
+  // Filter resistances above price, take up to 4
+  const above = resistances.filter(r => r > price);
+  // Use price-range-based rounding per spec
+  const rnd = (n: number) => roundToNice(n);
+
+  const results: Array<{min: number; max: number}> = [];
+  let prevMax = price;
+
+  for (let i = 0; i < 4; i++) {
+    const base = above[i] ?? (price + (i + 1) * 0.25 * atr);
+    // Ensure base is above previous target and above price
+    const safeBase = Math.max(base, prevMax + 1);
+    let min = rnd(Math.max(safeBase - 0.25 * atr, prevMax + 1));
+    let max = rnd(Math.min(safeBase + 0.5 * atr, min + atr));
+    if (max <= min) max = rnd(min + 0.25 * atr);
+    if (min <= prevMax) min = rnd(prevMax + 1);
+    if (max <= min) max = rnd(min + 0.25 * atr);
+    // Enforce max 1 ATR range
+    if (max - min > atr) max = rnd(min + atr);
+    results.push({min, max});
+    prevMax = max;
+  }
+  return results;
+}
+
+function buildBearishTargets(price: number, atr: number, supports: number[]): Array<{min: number; max: number}> {
+  // Filter supports below price, take up to 4
+  const below = supports.filter(s => s < price);
+  const rnd = (n: number) => roundToNice(n);
+
+  const results: Array<{min: number; max: number}> = [];
+  let prevMin = price;
+
+  for (let i = 0; i < 4; i++) {
+    const base = below[i] ?? (price - (i + 1) * 0.25 * atr);
+    const safeBase = Math.min(base, prevMin - 1);
+    let max = rnd(Math.min(safeBase + 0.25 * atr, prevMin - 1));
+    let min = rnd(Math.max(safeBase - 0.5 * atr, max - atr));
+    if (min >= max) min = rnd(max - 0.25 * atr);
+    if (max >= prevMin) max = rnd(prevMin - 1);
+    if (min >= max) min = rnd(max - 0.25 * atr);
+    // Enforce max 1 ATR range
+    if (max - min > atr) min = rnd(max - atr);
+    results.push({min, max});
+    prevMin = min;
+  }
+  return results;
+}
+
+function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1: number | undefined): {min: number; max: number} {
+  const rnd = (n: number) => roundToNice(n);
+  const lower = s1 != null ? Math.min(s1, price - 0.5 * atr) : price - 0.5 * atr;
+  const upper = r1 != null ? Math.max(r1, price + 0.5 * atr) : price + 0.5 * atr;
+  return {
+    min: rnd(Math.min(lower, price)),
+    max: rnd(Math.max(upper, price)),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // LAYER 4 — Scenario Probability Calculation (Adaptive with ML)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Calculates the 5 VDss scenario probabilities (R1-R5) that sum to 100.
+<<<<<<< Updated upstream
+ * Calculates the 9 VDss scenario probabilities (R1-R9) that sum to 100.
  * Uses bull/bear consensus, key indicator values, S/R levels, and
  * ML-derived adaptive factors for fine-tuning.
+ *
+ * R1=صعود هیجانی, R2=صعود قوی, R3=صعود تدریجی,
+ * R4=پولبک سالم, R5=رنج خنثی,
+ * R6=اصلاح خفیف, R7=اصلاح متوسط, R8=اصلاح عمیق, R9=تضعیف ساختار
+=======
+ * Calculates 9 VDss scenario probabilities (R1-R9) that sum to 100.
+ * R1-R4: Bullish (ascending strength), R5: Range, R6-R9: Bearish (descending).
+>>>>>>> Stashed changes
  */
 function calculateScenarioProbabilities(
   bullConsensus: number,
@@ -1898,67 +2304,141 @@ function calculateScenarioProbabilities(
   mfi: number,
   stochK: number,
   mlModel: AdaptiveWeightModel
-): { R1: number; R2: number; R3: number; R4: number; R5: number; factors: { momentum: number; volatility: number; trend: number } } {
+): { R1: number; R2: number; R3: number; R4: number; R5: number; R6: number; R7: number; R8: number; R9: number; factors: { momentum: number; volatility: number; trend: number } } {
+<<<<<<< Updated upstream
   // Distance metrics to key levels (spec uses exp(-3 * ...))
+=======
+>>>>>>> Stashed changes
   const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
   const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
 
-  // Binary risk flags (per spec) — MFI only used when volume is available
   const overboughtRisk = (rsi > 70 || (mfi > 80 && mfi !== 50) || stochK > 80) ? 1 : 0;
   const oversoldBounce = (rsi < 30 || (mfi < 20 && mfi !== 50) || stochK < 20) ? 1 : 0;
 
-  // Extract adaptive factors from ML model if trained
   let momentum = 0.7;
   let volatility = 0.5;
   let trend = 0.6;
 
   if (mlModel.isTrained && mlModel.weights) {
     const coefs = mlModel.getCoefficients();
-    momentum = sigmoid(coefs[0] ?? 0);   // rsi coefficient → momentum factor
-    volatility = sigmoid(coefs[10] ?? 0); // atr coefficient → volatility factor
-    trend = sigmoid(coefs[11] ?? 0);     // trend coefficient → trend factor
+    momentum = sigmoid(coefs[0] ?? 0);
+    volatility = sigmoid(coefs[10] ?? 0);
+    trend = sigmoid(coefs[11] ?? 0);
   }
 
-  // Below MA100 flag
   const belowMA100 = price < MA100 ? 1 : 0;
+  const bearish = 1 - bullConsensus;
 
-  // ── Raw scenario probabilities (matching user spec) ─────────────────────
+<<<<<<< Updated upstream
+  // ── Raw scenario probabilities (v11: 9 scenarios) ─────────────────────
 
-  // R1: Strong Bullish — aggressive breakout
+  // R1: صعود هیجانی — Explosive Bullish (aggressive breakout)
   const raw_R1 =
-    bullConsensus * distR1 * (1 - overboughtRisk * momentum * 0.7) +
+    bullConsensus ** 2 * distR1 * (1 - overboughtRisk * momentum * 0.5) +
     oversoldBounce * 0.3 * distR1 * momentum;
 
-  // R2: Gradual Uptrend — steady rise
+  // R2: صعود قوی — Strong Bullish (solid uptrend)
   const raw_R2 =
-    ((1 - Math.abs(bullConsensus - 0.65)) * 0.8 +
-    (bullConsensus > 0.4 ? 0.2 : 0)) * trend;
+    bullConsensus ** 1.5 * trend * (1 - overboughtRisk * 0.3);
 
-  // R3: Range-bound
+  // R3: صعود تدریجی — Gradual Bullish (moderate rise)
   const raw_R3 =
-    (1 - Math.abs(bullConsensus - 0.5)) * 0.6 * (1 + (1 - volatility) * 0.2);
+    bullConsensus * trend * 0.5 * (1 - volatility * 0.3);
 
-  // R4: Moderate Correction
+  // R4: پولبک سالم — Healthy Pullback (brief dip, holds S1)
   const raw_R4 =
-    ((1 - bullConsensus) * distS1 * 0.7 +
-    overboughtRisk * 0.5 * momentum) *
+    (1 - bullConsensus) * distS1 * 0.35 +
+    bullConsensus * 0.12;
+
+  // R5: رنج خنثی — Range-bound Neutral (sideways)
+  const raw_R5 =
+    (1 - Math.abs(bullConsensus - 0.5)) * 0.4 * (1 + (1 - volatility) * 0.3);
+
+  // R6: اصلاح خفیف — Mild Correction (small drop)
+  const raw_R6 =
+    (1 - bullConsensus) * 0.25 * volatility;
+
+  // R7: اصلاح متوسط — Moderate Correction (to S2-S3)
+  const raw_R7 =
+    ((1 - bullConsensus) * distS1 * 0.45 +
+    overboughtRisk * 0.3 * momentum) *
     (0.8 + 0.2 * (1 - trend));
 
-  // R5: Deep Correction
-  const raw_R5 =
-    ((1 - bullConsensus) ** 2 * 0.5 + belowMA100 * 0.2) *
-    (1 + (1 - trend) * 0.3);
+  // R8: اصلاح عمیق — Deep Correction (near MA100)
+  const raw_R8 =
+    (1 - bullConsensus) ** 1.5 * 0.35 +
+    belowMA100 * 0.2;
+
+  // R9: تضعیف ساختار — Structure Breakdown (MA100 broken)
+  const raw_R9 =
+    (1 - bullConsensus) ** 2 * 0.25 * (1 + (1 - trend) * 0.5);
 
   // ── Normalize to sum = 100 ───────────────────────────────────────────
-  const sum = raw_R1 + raw_R2 + raw_R3 + raw_R4 + raw_R5;
-  const pR1 = sum > 0 ? Math.round(raw_R1 / sum * 100) : 20;
-  const pR2 = sum > 0 ? Math.round(raw_R2 / sum * 100) : 20;
-  const pR3 = sum > 0 ? Math.round(raw_R3 / sum * 100) : 20;
-  const pR4 = sum > 0 ? Math.round(raw_R4 / sum * 100) : 20;
-  const pR5 = 100 - (pR1 + pR2 + pR3 + pR4);
+  const sum = raw_R1 + raw_R2 + raw_R3 + raw_R4 + raw_R5 + raw_R6 + raw_R7 + raw_R8 + raw_R9;
+  const pR1 = sum > 0 ? Math.round(raw_R1 / sum * 100) : 11;
+  const pR2 = sum > 0 ? Math.round(raw_R2 / sum * 100) : 11;
+  const pR3 = sum > 0 ? Math.round(raw_R3 / sum * 100) : 11;
+  const pR4 = sum > 0 ? Math.round(raw_R4 / sum * 100) : 11;
+  const pR5 = sum > 0 ? Math.round(raw_R5 / sum * 100) : 11;
+  const pR6 = sum > 0 ? Math.round(raw_R6 / sum * 100) : 11;
+  const pR7 = sum > 0 ? Math.round(raw_R7 / sum * 100) : 11;
+  const pR8 = sum > 0 ? Math.round(raw_R8 / sum * 100) : 11;
+  const pR9 = 100 - (pR1 + pR2 + pR3 + pR4 + pR5 + pR6 + pR7 + pR8);
+=======
+  // ── Raw probabilities ───────────────────────────────────────────────
+
+  // R1: صعودی با احتیاط — mild bull, needs confirmation
+  const raw_R1 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
+
+  // R2: صعودی قوی — solid uptrend
+  const raw_R2 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
+
+  // R3: صعودی شتابدار — strong momentum
+  const raw_R3 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
+
+  // R4: شوک صعودی — explosive breakout
+  const raw_R4 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
+
+  // R5: رنج کم‌نوسان — neutral
+  const raw_R5 = (1 - Math.abs(bullConsensus - 0.5) * 2) * 0.45 * (1 + (1 - volatility) * 0.4);
+
+  // R6: نزولی با احتیاط — mild bear
+  const raw_R6 = bearish * 0.4 * trend * (1 - oversoldBounce * 0.3);
+
+  // R7: نزولی قوی — solid downtrend
+  const raw_R7 = bearish ** 1.3 * 0.5 * trend * (1 - oversoldBounce * 0.4);
+
+  // R8: نزولی شتاب‌دار — strong bearish momentum
+  const raw_R8 = bearish ** 1.6 * 0.35 * momentum * (1 - oversoldBounce * 0.5);
+
+  // R9: شوک نزولی — crash
+  const raw_R9 = bearish ** 2 * distS1 * 0.25 * (1 + belowMA100 * 0.5) + overboughtRisk * 0.15 * momentum;
+
+  // ── Normalize to sum = 100, clamp to [2, 35] per spec ──────────
+  const raw = [raw_R1, raw_R2, raw_R3, raw_R4, raw_R5, raw_R6, raw_R7, raw_R8, raw_R9];
+  const sum = raw.reduce((a, b) => a + b, 0) || 1;
+  // First pass: percentage with spec bounds (min 2%, max 35%)
+  let clamped = raw.map(r => Math.min(35, Math.max(2, Math.round(r / sum * 100))));
+  // Adjust to ensure sum = 100
+  const clampedSum = clamped.reduce((a, b) => a + b, 0);
+  const diff = 100 - clampedSum;
+  if (diff !== 0) {
+    // Distribute difference proportionally to values that aren't at bounds
+    const adjustable = clamped.map((v, i) => (diff > 0 ? v < 35 : v > 2) ? i : -1).filter(i => i >= 0);
+    const adjSum = adjustable.reduce((s, i) => s + clamped[i], 0);
+    for (const i of adjustable) {
+      clamped[i] = Math.min(35, Math.max(2, Math.round(clamped[i] + diff * (clamped[i] / (adjSum || 1)))));
+    }
+    // Final adjustment on last element to guarantee sum = 100
+    const finalSum = clamped.reduce((a, b) => a + b, 0);
+    clamped[8] = Math.min(35, Math.max(2, clamped[8] + (100 - finalSum)));
+  }
+  const [pR1, pR2, pR3, pR4, pR5, pR6, pR7, pR8, pR9] = clamped;
+>>>>>>> Stashed changes
 
   return {
     R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5,
+    R6: pR6, R7: pR7, R8: pR8, R9: pR9,
     factors: { momentum, volatility, trend },
   };
 }
@@ -1988,14 +2468,25 @@ export function analyze(data: OHLCV[]): TAResult {
         medium: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
         long: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
       },
-      scenarios: { R1: emptyScenario(), R2: emptyScenario(), R3: emptyScenario(), R4: emptyScenario(), R5: emptyScenario() },
+      scenarios: { R1: emptyScenario(), R2: emptyScenario(), R3: emptyScenario(), R4: emptyScenario(), R5: emptyScenario(), R6: emptyScenario(), R7: emptyScenario(), R8: emptyScenario(), R9: emptyScenario() },
       bullScore: 0.5, bearScore: 0.5, overallSignal: 'neutral',
       bullConsensus: 0.5, isMLTrained: false, mlAccuracy: 0.5, mlWeights: null,
       edgeWeights: { up: 0.3, down: 0.3, pullback: 0.25, risk: 0.15 },
-      calibrationFactors: { R1: 1, R2: 1, R3: 1, R4: 1, R5: 1 },
-      scenarioSums: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0 },
+      calibrationFactors: { R1: 1, R2: 1, R3: 1, R4: 1, R5: 1, R6: 1, R7: 1, R8: 1, R9: 1 },
+      scenarioSums: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0, R9: 0 },
       adaptiveFactors: { momentum: 0.7, volatility: 0.5, trend: 0.6 },
       hasVolume: false,
+      decisionGraph: null,
+      extendedIndicators: {
+        wma: {}, hma: 0, tma: 0, lma: 0, maAlignment: 0.5,
+        heikenAshi: { open: 0, high: 0, low: 0, close: 0 },
+        awesomeOsc: 0, momentum: 0, modifiedRSI: 50, fastStochK: 50,
+        fisherTransform: 0, pvo: 0, confidenceIndex: 0.5, strengthIndex: 0.5,
+        ad: 0, vpt: 0, vosc: 0, chaikinAD: 0, forceIndex: 0,
+        keltnerChannels: { upper: 0, middle: 0, lower: 0 },
+        envelopes: { upper: 0, middle: 0, lower: 0 },
+        stdDev: 0, hv: 0,
+      },
     };
   }
 
@@ -2013,6 +2504,10 @@ export function analyze(data: OHLCV[]): TAResult {
   const emaPeriods = [9, 12, 21, 26, 50, 100, 200];
   const emaResult: Record<string, number> = {};
   for (const p of emaPeriods) emaResult[`ema${p}`] = emaCalc(closes, p);
+
+  // ── Extended Moving Averages ──────────────────────────────────────────────
+  const wmaResult: Record<string, number> = {};
+  for (const p of [10, 20]) wmaResult[`wma${p}`] = calcWMA(closes, p);
 
   // ── Oscillators ──────────────────────────────────────────────────────────
   const rsi = calcRSI(closes);
@@ -2124,8 +2619,9 @@ export function analyze(data: OHLCV[]): TAResult {
   const bullScore = bullConsensus;
   const bearScore = 1 - bullConsensus;
 
-  // ── Layer 4: Scenario Probabilities ───────────────────────────────────────
+  // ── Layer 4-6: Decision Graph Probability Engine (replaces old heuristic + old 12-node graph) ─
   const ma100Val = smaResult.sma100 ?? price;
+<<<<<<< Updated upstream
   const scenarioResult = calculateScenarioProbabilities(
     bullConsensus, price, R1_level, S1_level, ma100Val,
     rsi, mfi, stoch.k, mlModel
@@ -2135,15 +2631,91 @@ export function analyze(data: OHLCV[]): TAResult {
   const pR3 = scenarioResult.R3;
   const pR4 = scenarioResult.R4;
   const pR5 = scenarioResult.R5;
+  const pR6 = scenarioResult.R6;
+  const pR7 = scenarioResult.R7;
+  const pR8 = scenarioResult.R8;
+  const pR9 = scenarioResult.R9;
+=======
+  const R1_nearest = resistances[0] ?? price * 1.05;
+  const S1_nearest = supports[0] ?? price * 0.95;
+  const srAvgStr = resistanceStrengths.length > 0 || supportStrengths.length > 0
+    ? [...resistanceStrengths, ...supportStrengths].reduce((s, l) => s + l.score, 0) / ([...resistanceStrengths, ...supportStrengths].length || 1) / 10
+    : 0.3;
+>>>>>>> Stashed changes
 
-  // ── Layer 5: VDss Edge Weights ────────────────────────────────────────────
-  const edgeWeights = calculateEdgeWeights(bullConsensus, adxResult.adx, mlModel);
+  // Extract ML adaptive factors directly from ML model
+  let mlMomentumFactor = 0.7;
+  let mlVolatilityFactor = 0.5;
+  let mlTrendFactor = 0.6;
+  if (mlModel.isTrained && mlModel.weights) {
+    const coefs = mlModel.getCoefficients();
+    mlMomentumFactor = sigmoid(coefs[0] ?? 0);
+    mlVolatilityFactor = sigmoid(coefs[10] ?? 0);
+    mlTrendFactor = sigmoid(coefs[11] ?? 0);
+  }
 
+<<<<<<< Updated upstream
   // ── Layer 6: Path Probabilities with Calibration ──────────────────────────
-  const scenarioProbsForGraph: Record<string, number> = { R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5 };
+  const scenarioProbsForGraph: Record<string, number> = { R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5, R6: pR6, R7: pR7, R8: pR8, R9: pR9 };
   const pathResult = calculatePathProbabilities(edgeWeights, scenarioProbsForGraph);
+=======
+  const graphData = buildDecisionGraph({
+    price,
+    bullConsensus,
+    rsi,
+    mfi,
+    cci,
+    stochK: stoch.k,
+    stochD: stoch.d,
+    adx: adxResult.adx,
+    diPlus: adxResult.diPlus,
+    diMinus: adxResult.diMinus,
+    macdHist: macd.histogram,
+    atr,
+    bbUpper: bb.upper,
+    bbMiddle: bb.middle,
+    bbLower: bb.lower,
+    sar,
+    ichimokuTenkan: ichimoku.tenkan,
+    ichimokuKijun: ichimoku.kijun,
+    ichimokuSenkouA: ichimoku.senkouA,
+    ichimokuSenkouB: ichimoku.senkouB,
+    maAlignment: calcMARibbonAlignment(closes),
+    momentum: calcMomentum(closes, 10),
+    awesomeOsc: calcAwesomeOscillator(data),
+    fisherTransform: calcFisherTransform(data, 9),
+    confidenceIndex: calcConfidenceIndex(rsi, mfi, macd.line, macd.signal, adxResult.adx, stoch.k, trend.short.r2),
+    strengthIndex: calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atr, price, emaResult.ema12, emaResult.ema26),
+    hasVolume,
+    distToR1: R1_nearest > 0 ? (R1_nearest - price) / price : 0.05,
+    distToS1: price > 0 && S1_nearest > 0 ? (price - S1_nearest) / price : 0.05,
+    srAvgStrength: clamp(srAvgStr, 0, 1),
+    mlMomentum: mlMomentumFactor,
+    mlVolatility: mlVolatilityFactor,
+    mlTrend: mlTrendFactor,
+  });
+>>>>>>> Stashed changes
 
-  // ── Layer 7: Adaptive model update (register current observation) ─────────
+  // Use decision graph scenario probabilities (sum to 100)
+  const pR1 = graphData.scenarioProbabilities.R1 ?? 11;
+  const pR2 = graphData.scenarioProbabilities.R2 ?? 11;
+  const pR3 = graphData.scenarioProbabilities.R3 ?? 11;
+  const pR4 = graphData.scenarioProbabilities.R4 ?? 11;
+  const pR5 = graphData.scenarioProbabilities.R5 ?? 11;
+  const pR6 = graphData.scenarioProbabilities.R6 ?? 11;
+  const pR7 = graphData.scenarioProbabilities.R7 ?? 11;
+  const pR8 = graphData.scenarioProbabilities.R8 ?? 11;
+  const pR9 = graphData.scenarioProbabilities.R9 ?? 11;
+
+  // Keep edge weights for backward compat (derive from graph)
+  const edgeWeights = {
+    up: graphData.branchProbabilities.trend * bullConsensus + 0.1,
+    down: graphData.branchProbabilities.trend * (1 - bullConsensus) + 0.1,
+    pullback: 0.25,
+    risk: 0.15 * (1.2 - adxResult.adx / 100),
+  };
+
+  // Layer 7: Adaptive model update
   if (data.length > 6) {
     const futureReturn = (price - data[data.length - 6].close) / data[data.length - 6].close;
     const label = futureReturn > 0.01 ? 1 : 0;
@@ -2154,48 +2726,159 @@ export function analyze(data: OHLCV[]): TAResult {
   const overallSignal: 'bullish' | 'bearish' | 'neutral' =
     bullConsensus > 0.58 ? 'bullish' : bullConsensus < 0.42 ? 'bearish' : 'neutral';
 
-  // ── Scenario Descriptions ───────────────────────────────────────────────
+  // ── Scenario Descriptions with ATR-based S/R targets ────────────────────
   const fmt = (n: number) => Math.round(n).toLocaleString('fa-IR');
+  const rp = (n: number) => Math.round(n); // round price
+
+  // Helper: build a target range ≤ 1 ATR around a base level, ensuring ordering
+  const bullTargets = buildBullishTargets(price, atr, resistances);
+  const bearTargets = buildBearishTargets(price, atr, supports);
+  const rangeTarget = buildRangeTarget(price, atr, supports[0], resistances[0]);
+
   const scenarios = {
     R1: {
+<<<<<<< Updated upstream
       name: 'صعود هیجانی',
-      nameEn: 'Strong Bullish',
+      nameEn: 'Explosive Bullish',
       probability: pR1,
-      targetMin: R2_level,
-      targetMax: R5_level,
-      description: `عبور از مقاومت‌های ${fmt(R1_level)} و ${fmt(R2_level)} با شتاب بالا. هدف: ${fmt(R2_level)} تا ${fmt(R5_level)} ریال.`,
+      targetMin: R3_level,
+      targetMax: R6_level,
+      description: `عبور پرشتاب از مقاومت‌های ${fmt(R1_level)} و ${fmt(R2_level)}. هدف: ${fmt(R3_level)} تا ${fmt(R6_level)} ریال.`,
     },
     R2: {
-      name: 'صعود تدریجی',
-      nameEn: 'Gradual Uptrend',
+      name: 'صعود قوی',
+      nameEn: 'Strong Bullish',
       probability: pR2,
-      targetMin: R1_level,
-      targetMax: R3_level,
-      description: `حرکت صعودی آرام با پولبک‌های موقت. هدف: ${fmt(R1_level)} تا ${fmt(R3_level)} ریال.`,
+      targetMin: R2_level,
+      targetMax: R4_level,
+      description: `حرکت صعودی قوی با حجم مناسب. هدف: ${fmt(R2_level)} تا ${fmt(R4_level)} ریال.`,
     },
     R3: {
-      name: 'نوسان در محدوده',
-      nameEn: 'Range-bound',
+      name: 'صعود تدریجی',
+      nameEn: 'Gradual Bullish',
       probability: pR3,
-      targetMin: S1_level,
-      targetMax: R1_level,
-      description: `نوسان بین حمایت ${fmt(S1_level)} و مقاومت ${fmt(R1_level)} ریال.`,
+      targetMin: R1_level,
+      targetMax: R2_level,
+      description: `رشد آرام و پایدار. هدف: ${fmt(R1_level)} تا ${fmt(R2_level)} ریال.`,
     },
     R4: {
-      name: 'اصلاح متوسط',
-      nameEn: 'Moderate Correction',
+      name: 'پولبک سالم',
+      nameEn: 'Healthy Pullback',
       probability: pR4,
-      targetMin: S3_level,
-      targetMax: S1_level,
-      description: `اصلاح تا محدوده حمایت ${fmt(S3_level)} تا ${fmt(S1_level)} ریال.`,
+      targetMin: S1_level,
+      targetMax: R1_level,
+      description: `اصلاح موقت و سالم تا حمایت ${fmt(S1_level)} با حفظ ساختار صعودی.`,
     },
     R5: {
+      name: 'رنج خنثی',
+      nameEn: 'Range-bound Neutral',
+      probability: pR5,
+      targetMin: S1_level,
+      targetMax: R1_level,
+      description: `نوسان بین حمایت ${fmt(S1_level)} و مقاومت ${fmt(R1_level)} ریال بدون جهت مشخص.`,
+    },
+    R6: {
+      name: 'اصلاح خفیف',
+      nameEn: 'Mild Correction',
+      probability: pR6,
+      targetMin: S2_level,
+      targetMax: S1_level,
+      description: `اصلاح خفیف تا محدوده ${fmt(S2_level)} تا ${fmt(S1_level)} ریال.`,
+    },
+    R7: {
+      name: 'اصلاح متوسط',
+      nameEn: 'Moderate Correction',
+      probability: pR7,
+      targetMin: S3_level,
+      targetMax: S2_level,
+      description: `اصلاح متوسط تا حمایت‌های ${fmt(S3_level)} تا ${fmt(S2_level)} ریال.`,
+    },
+    R8: {
       name: 'اصلاح عمیق',
       nameEn: 'Deep Correction',
-      probability: pR5,
+      probability: pR8,
       targetMin: S5_level,
       targetMax: S3_level,
-      description: `شکست ساختار و افت تا حمایت‌های ${fmt(S5_level)} تا ${fmt(S3_level)} ریال.`,
+      description: `افت شدید تا حمایت‌های ${fmt(S5_level)} تا ${fmt(S3_level)} ریال. نزدیک به MA100.`,
+    },
+    R9: {
+      name: 'تضعیف ساختار',
+      nameEn: 'Structure Breakdown',
+      probability: pR9,
+      targetMin: S6_level,
+      targetMax: S5_level,
+      description: `شکست معتبر MA100 و تضعیف کامل ساختار. هدف: ${fmt(S6_level)} تا ${fmt(S5_level)} ریال.`,
+=======
+      name: 'صعودی با احتیاط',
+      nameEn: 'Cautious Bullish',
+      probability: pR1,
+      targetMin: bullTargets[0].min,
+      targetMax: bullTargets[0].max,
+      description: `حرکت صعودی محتاطانه با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ریال.`, },
+    R2: {
+      name: 'صعودی قوی',
+      nameEn: 'Strong Bullish',
+      probability: pR2,
+      targetMin: bullTargets[1].min,
+      targetMax: bullTargets[1].max,
+      description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ریال.`,
+    },
+    R3: {
+      name: 'صعودی شتابدار',
+      nameEn: 'Accelerating Bullish',
+      probability: pR3,
+      targetMin: bullTargets[2].min,
+      targetMax: bullTargets[2].max,
+      description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ریال.`,
+    },
+    R4: {
+      name: 'شوک صعودی',
+      nameEn: 'Bullish Shock',
+      probability: pR4,
+      targetMin: bullTargets[3].min,
+      targetMax: bullTargets[3].max,
+      description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ریال.`,
+    },
+    R5: {
+      name: 'رنج کم‌نوسان',
+      nameEn: 'Low Volatility Range',
+      probability: pR5,
+      targetMin: rangeTarget.min,
+      targetMax: rangeTarget.max,
+      description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ریال.`,
+    },
+    R6: {
+      name: 'نزولی با احتیاط',
+      nameEn: 'Cautious Bearish',
+      probability: pR6,
+      targetMin: bearTargets[0].min,
+      targetMax: bearTargets[0].max,
+      description: `نزول محتاطانه تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ریال.`,
+    },
+    R7: {
+      name: 'نزولی قوی',
+      nameEn: 'Strong Bearish',
+      probability: pR7,
+      targetMin: bearTargets[1].min,
+      targetMax: bearTargets[1].max,
+      description: `نزول قوی تا ${fmt(bearTargets[1].min)} تا ${fmt(bearTargets[1].max)} ریال.`,
+    },
+    R8: {
+      name: 'نزولی شتاب‌دار',
+      nameEn: 'Accelerating Bearish',
+      probability: pR8,
+      targetMin: bearTargets[2].min,
+      targetMax: bearTargets[2].max,
+      description: `شتاب نزولی تا ${fmt(bearTargets[2].min)} تا ${fmt(bearTargets[2].max)} ریال.`,
+    },
+    R9: {
+      name: 'شوک نزولی',
+      nameEn: 'Bearish Shock',
+      probability: pR9,
+      targetMin: bearTargets[3].min,
+      targetMax: bearTargets[3].max,
+      description: `شوک نزولی تا ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ریال.`,
+>>>>>>> Stashed changes
     },
   };
 
@@ -2232,15 +2915,47 @@ export function analyze(data: OHLCV[]): TAResult {
     bullScore,
     bearScore,
     overallSignal,
-    // ── VDss ML Metadata (Layers 3-6) ──
+    // ── VDss ML Metadata ──
     bullConsensus,
     isMLTrained: mlModel.isTrained,
     mlAccuracy: mlModel.recentAccuracy,
     mlWeights: mlModel.weights,
     edgeWeights,
-    calibrationFactors: pathResult.calibrationFactors,
-    scenarioSums: pathResult.scenarioSums,
-    adaptiveFactors: scenarioResult.factors,
+    calibrationFactors: {} as Record<string, number>,
+    scenarioSums: graphData.scenarioProbabilities,
+    adaptiveFactors: { momentum: mlMomentumFactor, volatility: mlVolatilityFactor, trend: mlTrendFactor },
     hasVolume,
+    // Decision Graph (primary probability source)
+    decisionGraph: graphData,
+    // ── Extended Indicators (24 additional) ──
+    extendedIndicators: {
+      // Trend
+      wma: wmaResult,
+      hma: calcHMA(closes, 20),
+      tma: calcTMA(closes, 20),
+      lma: calcLMA(closes, 20),
+      maAlignment: calcMARibbonAlignment(closes),
+      heikenAshi: calcHeikenAshi(data),
+      // Oscillators
+      awesomeOsc: calcAwesomeOscillator(data),
+      momentum: calcMomentum(closes, 10),
+      modifiedRSI: calcRSI(closes, 21),
+      fastStochK: calcFastStochastic(data, 14, 3),
+      fisherTransform: calcFisherTransform(data, 9),
+      pvo: hasVolume ? calcPVO(data, 12, 26) : 0,
+      confidenceIndex: calcConfidenceIndex(rsi, mfi, macd.line, macd.signal, adxResult.adx, stoch.k, trend.short.r2),
+      strengthIndex: calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atr, price, emaResult.ema12, emaResult.ema26),
+      // Volume (zero when no volume)
+      ad: hasVolume ? calcAccumDist(data) : 0,
+      vpt: hasVolume ? calcVPT(data) : 0,
+      vosc: hasVolume ? calcVOSC(data, 5, 10) : 0,
+      chaikinAD: hasVolume ? calcChaikinAD(data) : 0,
+      forceIndex: hasVolume ? calcForceIndex(data, 13) : 0,
+      // Volatility
+      keltnerChannels: calcKeltnerChannels(data, 20, 2),
+      envelopes: calcEnvelopes(closes, 20, 2.5),
+      stdDev: calcStdDev(closes, 20),
+      hv: calcHV(closes, 20),
+    },
   };
 }

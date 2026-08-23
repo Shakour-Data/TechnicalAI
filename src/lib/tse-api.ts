@@ -112,7 +112,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // File-based cache for resilience when BrsApi is blocked
 const FILE_CACHE_DIR = join(process.cwd(), 'db');
-const FILE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours for file cache (BrsApi unreliable)
+const FILE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days for file cache (BrsApi unreliable)
 
 function fileCachePath(type: number): string {
   return join(FILE_CACHE_DIR, `symbols-type-${type}.json`);
@@ -132,7 +132,7 @@ function loadFileCache(type: number, force = false): TseSymbol[] | null {
 }
 
 // ── Candlestick file-based cache ──
-const CANDLE_FILE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours for candlestick cache (less time-sensitive)
+const CANDLE_FILE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days for candlestick cache (BrsApi unreliable)
 
 function candleFileCachePath(symbol: string, type: number): string {
   const safe = symbol.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
@@ -276,38 +276,85 @@ export async function fetchSymbolData(symbol: string): Promise<Record<string, un
   }
 }
 
+// finpy-tse unified service URL (port 3031 — index + stock data)
+const FINPY_SERVICE_URL = 'http://localhost:3031';
+
+/**
+ * Fallback 1: Try finpy-tse Python library via service (port 3031).
+ * Uses Get_Price_History with 30s timeout.
+ * Returns null if service is down or finpy-tse times out.
+ */
+async function fetchFromFinpyService(symbol: string): Promise<CandleData[] | null> {
+  try {
+    const url = `${FINPY_SERVICE_URL}/api/stock-history?symbol=${encodeURIComponent(symbol)}&adjust=1`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(45000) });
+    if (!res.ok) return null;
+    const data = await res.json() as { candles?: CandleData[]; source?: string };
+    if (!data.candles || data.candles.length === 0) return null;
+    console.log(`[tse-api] finpy-tse service returned ${data.candles.length} candles for ${symbol} (source: ${data.source || 'unknown'})`);
+    return data.candles;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchCandlestick(
   symbol: string,
   type: number = 3, // ⚠️ ALWAYS use type=3 (تعدیل‌شده / adjusted). Never use 1 (realtime) or 2 (unadjusted).
 ): Promise<CandleData[]> {
-  // Try file cache first
+  // Try file cache first (7-day TTL)
   const cached = loadCandleFileCache(symbol, type);
   if (cached && cached.length > 0) {
     console.log(`[tse-api] Using candlestick file cache for ${symbol} (${cached.length} candles)`);
     return cached;
   }
 
+  let brsApiResponded = false;
+  let finpyResponded = false;
+
+  // Try BrsApi
   try {
     const url = `${BASE_URL}/Candlestick.php?key=${API_KEY}&type=${type}&l18=${encodeURIComponent(symbol)}`;
     const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(BRSAPI_TIMEOUT) });
+    brsApiResponded = true;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const candles: CandleData[] = Array.isArray(data)
       ? data
       : data.candle_daily_adjusted || data.candle_daily || data.data || data.candlesticks || [];
-    // Save to file cache on success
-    if (candles.length > 0) saveCandleFileCache(symbol, type, candles);
-    return candles;
+    if (candles.length > 0) {
+      saveCandleFileCache(symbol, type, candles);
+      return candles;
+    }
   } catch (err) {
     console.warn(`[tse-api] BrsApi candlestick failed for ${symbol}:`, err instanceof Error ? err.message : String(err));
-    // Try expired cache as last resort
-    const stale = loadCandleFileCache(symbol, type, true);
-    if (stale && stale.length > 0) {
-      console.log(`[tse-api] Using expired candlestick cache for ${symbol} (${stale.length} candles)`);
-      return stale;
-    }
-    throw new Error(`دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.`);
   }
+
+  // Try finpy-tse library as fallback (Python service on port 3031)
+  // Uses finpy_tse.Get_Price_History(stock=symbol, adjust_price=True)
+  // with 30s timeout — falls through to file cache if unavailable
+  console.log(`[tse-api] BRS failed for ${symbol}, trying finpy-tse library fallback...`);
+  const finpyCandles = await fetchFromFinpyService(symbol);
+  if (finpyCandles) {
+    finpyResponded = true;
+    if (finpyCandles.length > 0) {
+      saveCandleFileCache(symbol, type, finpyCandles);
+      return finpyCandles;
+    }
+  }
+
+  // Try expired file cache as last resort
+  const stale = loadCandleFileCache(symbol, type, true);
+  if (stale && stale.length > 0) {
+    console.log(`[tse-api] Using expired candlestick cache for ${symbol} (${stale.length} candles)`);
+    return stale;
+  }
+
+  // Distinguish between "symbol not found" and "server unreachable"
+  if (brsApiResponded || finpyResponded) {
+    throw new Error(`داده‌ای برای نماد «${symbol}» یافت نشد. لطفاً نام نماد را بررسی کنید.`);
+  }
+  throw new Error(`خطا در اتصال به سرور داده. لطفاً بعداً تلاش کنید.`);
 }
 
 export async function fetchHistory(symbol: string): Promise<HistoryData[]> {

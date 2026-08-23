@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         name: instrument?.title || key,
         symbol: key,
         lastPrice: lastCandle.close,
-        change,
+        change: changePercent,
         closePrice: lastCandle.close,
         closeChange: change,
         openPrice: lastCandle.open,

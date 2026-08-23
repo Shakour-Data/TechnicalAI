@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
+<<<<<<< Updated upstream
 import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
+=======
+import { type GraphData } from '@/lib/decision-graph';
+>>>>>>> Stashed changes
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -36,7 +40,12 @@ export interface VdssGraphProps {
     R3: Scenario;
     R4: Scenario;
     R5: Scenario;
+    R6: Scenario;
+    R7: Scenario;
+    R8: Scenario;
+    R9: Scenario;
   };
+  decisionGraph: GraphData | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -51,318 +60,178 @@ const COLORS = {
   down: '#ff7b32',
   risk: '#ef4d62',
   cyan: '#3ad5db',
-  blue: '#4186ff',
   purple: '#a04ac5',
   gold: '#ffb11b',
-  green: '#34c98b',
-  red: '#ef4d62',
-  orange: '#ff7b32',
 };
 
 const EDGE_COLORS: Record<string, string> = {
+  'branch-trend': COLORS.cyan,
+  'branch-breakout': COLORS.gold,
+  'branch-reversal': COLORS.purple,
   up: COLORS.up,
   pullback: COLORS.pullback,
   down: COLORS.down,
   risk: COLORS.risk,
 };
 
-// [from, to, label, type]
-const EDGES: [string, string, string, string][] = [
-  ['A','B','آزمون R1','up'], ['A','G','رد R1 / افت شتاب','pullback'], ['A','L','پایش روند','risk'],
-  ['B','C','تثبیت بالای R1','up'], ['B','G','رد قیمت و پولبک','pullback'], ['B','A','نوسان در کریدور','risk'],
-  ['C','D','آزمون R2','up'], ['C','G','بازگشت زیر R1','pullback'], ['C','L','شکست خط روند','risk'],
-  ['D','E','عبور از R2','up'], ['D','B','رد R2','pullback'], ['D','G','اصلاح سریع','pullback'], ['D','L','واگرایی شتاب','risk'],
-  ['E','F','تداوم شتاب تا هدف','up'], ['E','D','توقف / عرضه','pullback'], ['E','G','اصلاح تا S1','pullback'], ['E','H','شکست S1','down'], ['E','R1','تثبیت در کریدور','up'],
-  ['F','R1','حفظ بالای هدف','up'], ['F','E','رد هدف‌ها','pullback'], ['F','D','بازگشت زیر کریدور','down'], ['F','G','شکست روند','risk'],
-  ['G','B','بازپس‌گیری R1','up'], ['G','A','بازگشت به مرجع','pullback'], ['G','H','شکست S1','down'], ['G','L','واکنش به خط روند','risk'], ['G','R2','حفظ S1 و بازیابی','pullback'],
-  ['H','G','بازگشت بالای S1','pullback'], ['H','I','شکست S2','down'], ['H','B','بازیابی تا R1','up'], ['H','L','ارزیابی روند','risk'], ['H','R2','بازگشت سریع از S2','pullback'],
-  ['I','H','حفظ S3 / بازگشت','pullback'], ['I','J','شکست S3','down'], ['I','G','بازگشت قدرتمند','up'], ['I','L','اعتبار روند','risk'], ['I','R3','حفظ S3','down'],
-  ['J','I','بازگشت از S4','pullback'], ['J','K','شکست S4','down'], ['J','H','بازگشت تا S2','up'], ['J','L','فاصله تا MA100','risk'], ['J','R3','بازگشت از S4','down'],
-  ['K','J','حفظ ناحیه و بازگشت','pullback'], ['K','I','بازیابی S3','up'], ['K','L','شکست MA100','risk'], ['K','R4','حفظ MA100','down'], ['K','R5','شکست MA100','risk'],
-  ['L','C','حفظ روند صعودی','up'], ['L','H','شکست روند / حفظ S2','pullback'], ['L','J','شکست روند میانی','down'], ['L','K','حفظ خط پایه','risk'], ['L','R5','شکست کامل روند','risk']
-];
+const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
 
-// Node positions (absolute, right/top within 1500x780 container)
-const NODE_POSITIONS: Record<string, { right: number; top: number }> = {
-  A:  { right: 670, top: 336 },
-  B:  { right: 930, top: 230 },
-  C:  { right: 1170, top: 115 },
-  D:  { right: 935, top: 42 },
-  E:  { right: 625, top: 42 },
-  F:  { right: 312, top: 42 },
-  G:  { right: 930, top: 450 },
-  H:  { right: 1170, top: 565 },
-  I:  { right: 680, top: 590 },
-  J:  { right: 375, top: 590 },
-  K:  { right: 72, top: 590 },
-  L:  { right: 348, top: 337 },
-  R1: { right: 75, top: 136 },
-  R2: { right: 1110, top: 350 },
-  R3: { right: 925, top: 665 },
-  R4: { right: 275, top: 665 },
-  R5: { right: 15, top: 345 },
-};
-
-const NODE_DEFS: Record<string, { title: string; type: string; desc: string; color: string; isTerminal?: boolean }> = {
-  A:  { title: 'گره تصمیم (ریشه)', type: 'گره تصمیم‌گیری', desc: 'نقطه صفر تصمیم — قیمت فعلی سهم.', color: COLORS.cyan },
-  B:  { title: 'آزمون مقاومت R1', type: 'گره رویداد شانسی', desc: 'واکنش بازار به مقاومت اول. تثبیت بالای آن شرط ادامه صعود است.', color: COLORS.gold },
-  C:  { title: 'تثبیت بالای R1', type: 'گره تأیید روند', desc: 'تثبیت بالای R1، احتمال حرکت به سمت R2 را افزایش می‌دهد.', color: COLORS.green },
-  D:  { title: 'آزمون مقاومت R2', type: 'گره سنجش تقاضا', desc: 'کیفیت تقاضا در این سطح تعیین‌کننده ادامه مسیر است.', color: COLORS.gold },
-  E:  { title: 'کریدور صعودی', type: 'گره نتیجه', desc: 'هدف میانی صعود. تثبیت در این کریدور تأیید روند است.', color: COLORS.green, isTerminal: true },
-  F:  { title: 'هدف توسعه‌ای', type: 'گره نتیجه', desc: 'هدف نهایی در صورت تداوم شتاب بالا.', color: COLORS.green, isTerminal: true },
-  G:  { title: 'پولبک به حمایت S1', type: 'گره حمایت', desc: 'مرز تفکیک پولبک سالم از اصلاح ساختاری.', color: COLORS.blue },
-  H:  { title: 'حمایت S2', type: 'گره حمایت', desc: 'سطح دومین ایستگاه بازسازی ساختار کوتاه‌مدت.', color: COLORS.blue },
-  I:  { title: 'حمایت S3', type: 'گره حمایت', desc: 'سطح ارزیابی قدرت تقاضا در اصلاح‌های عمیق‌تر.', color: COLORS.orange },
-  J:  { title: 'حمایت S4', type: 'گره حمایت', desc: 'آخرین سطح قبل از ناحیه بحرانی MA100.', color: COLORS.orange },
-  K:  { title: 'MA100 — گره بحرانی', type: 'گره ریسک', desc: 'شکست معتبر این ناحیه به منزله ابطال روند صعودی است.', color: COLORS.red },
-  L:  { title: 'خطوط روند', type: 'گره کنترل', desc: 'حفظ قیمت بالای این خطوط برای تداوم روند صعودی حیاتی است.', color: COLORS.purple },
-  R1: { title: 'سناریوی ۱ — تداوم صعود', type: 'گره نتیجه', desc: 'رسیدن یا تثبیت در کریدور صعودی.', color: COLORS.green, isTerminal: true },
-  R2: { title: 'سناریوی ۲ — پولبک سالم', type: 'گره نتیجه', desc: 'حفظ S1 و بازپس‌گیری مقاومت R1.', color: COLORS.cyan, isTerminal: true },
-  R3: { title: 'سناریوی ۳ — اصلاح کنترل‌شده', type: 'گره نتیجه', desc: 'حرکت به حمایت‌های میانی.', color: COLORS.orange, isTerminal: true },
-  R4: { title: 'سناریوی ۴ — اصلاح عمیق', type: 'گره نتیجه', desc: 'آزمون ناحیه نزدیک به MA100.', color: COLORS.gold, isTerminal: true },
-  R5: { title: 'سناریوی ۵ — تضعیف ساختار', type: 'گره نتیجه', desc: 'شکست معتبر MA100.', color: COLORS.red, isTerminal: true },
-};
-
-const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;
-
-const SCENARIO_META: Record<string, { label: string; color: string; displayNum: string }> = {
-  R1: { label: 'تداوم صعود', color: COLORS.green, displayNum: '۱' },
-  R2: { label: 'پولبک سالم', color: COLORS.cyan, displayNum: '۲' },
-  R3: { label: 'اصلاح کنترل‌شده', color: COLORS.orange, displayNum: '۳' },
-  R4: { label: 'اصلاح عمیق', color: COLORS.gold, displayNum: '۴' },
-  R5: { label: 'تضعیف ساختار', color: COLORS.red, displayNum: '۵' },
+const SCENARIO_META: Record<string, { label: string; color: string }> = {
+  R1: { label: 'صعودی با احتیاط', color: '#047857' },
+  R2: { label: 'صعودی قوی', color: '#059669' },
+  R3: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
+  R4: { label: 'شوک صعودی', color: '#0891b2' },
+  R5: { label: 'رنج کم‌نوسان', color: '#b45309' },
+  R6: { label: 'نزولی با احتیاط', color: '#c2410c' },
+  R7: { label: 'نزولی قوی', color: '#ea580c' },
+  R8: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
+  R9: { label: 'شوک نزولی', color: '#b91c1c' },
 };
 
 const SCENARIO_DISPLAY: Record<string, string> = {
+  ROOT: 'ریشه',
+  BR1: 'پیروی از روند', BR2: 'شکست', BR3: 'بازگشت',
+  EA: 'وضعیت روند', EB: 'وضعیت شکست', EC: 'وضعیت واگرایی',
   R1: 'سناریوی ۱', R2: 'سناریوی ۲', R3: 'سناریوی ۳',
-  R4: 'سناریوی ۴', R5: 'سناریوی ۵',
+  R4: 'سناریوی ۴', R5: 'سناریوی ۵', R6: 'سناریوی ۶',
+  R7: 'سناریوی ۷', R8: 'سناریوی ۸', R9: 'سناریوی ۹',
+};
+
+const BRANCH_META: Record<string, { label: string; color: string }> = {
+  trend: { label: 'پیروی از روند', color: COLORS.cyan },
+  breakout: { label: 'شکست', color: COLORS.gold },
+  reversal: { label: 'بازگشت', color: COLORS.purple },
 };
 
 const TYPE_FILTERS = [
   { key: 'all', label: 'همه مسیرها' },
   { key: 'up', label: 'صعودی' },
-  { key: 'pullback', label: 'پولبک و بازگشت' },
-  { key: 'down', label: 'اصلاحی' },
-  { key: 'risk', label: 'ابطال و ریسک' },
+  { key: 'pullback', label: 'رنج و خنثی' },
+  { key: 'down', label: 'نزولی' },
+  { key: 'risk', label: 'شوک و ریسک' },
 ];
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Graph Algorithms
-// ═══════════════════════════════════════════════════════════════════════════════
-
-interface EdgeInfo {
-  from: string;
-  to: string;
-  label: string;
-  type: string;
-  prob: number;
-}
-
-interface PathInfo {
-  nodes: string[];
-  edges: number[];
-  prob: number;
-  target: string;
-}
-
-// Calculate edge probabilities based on market conditions
-function calcEdgeProbabilities(
-  bullScore: number, adxVal: number
-): Record<string, number> {
-  const adxW = Math.min(adxVal / 100, 1);
-  const typeWeights: Record<string, number> = {
-    up: bullScore * 0.6 + adxW * 0.4,
-    pullback: 0.3,
-    down: (1 - bullScore) * 0.6 + adxW * 0.4,
-    risk: 0.15 * (1.2 - adxW),
-  };
-
-  // Build adjacency: for each node, group outgoing edges by type
-  const adj: Record<string, { idx: number; type: string }[]> = {};
-  EDGES.forEach((e, i) => {
-    if (!adj[e[0]]) adj[e[0]] = [];
-    adj[e[0]].push({ idx: i, type: e[3] });
-  });
-
-  const edgeProbs: Record<string, number> = {};
-
-  for (const [node, outEdges] of Object.entries(adj)) {
-    // Sum weights of outgoing edges
-    const totalWeight = outEdges.reduce((sum, e) => sum + (typeWeights[e.type] ?? 0.1), 0);
-    if (totalWeight === 0) {
-      outEdges.forEach(e => { edgeProbs[String(e.idx)] = 1 / outEdges.length; });
-      continue;
-    }
-    outEdges.forEach(e => {
-      edgeProbs[String(e.idx)] = (typeWeights[e.type] ?? 0.1) / totalWeight;
-    });
-  }
-
-  return edgeProbs;
-}
-
-// Find all paths from 'A' to terminal nodes using DFS
-function findAllPaths(edgeProbs: Record<string, number>): PathInfo[] {
-  const adj: Record<string, { to: string; edgeIdx: number }[]> = {};
-  EDGES.forEach((e, i) => {
-    if (!adj[e[0]]) adj[e[0]] = [];
-    adj[e[0]].push({ to: e[1], edgeIdx: i });
-  });
-
-  const paths: PathInfo[] = [];
-  const MAX_PATHS = 200;
-
-  function dfs(node: string, visited: Set<string>, currentPath: string[], edgeIndices: number[], currentProb: number) {
-    if (SCENARIO_KEYS.includes(node as any)) {
-      paths.push({ nodes: [...currentPath, node], edges: [...edgeIndices], prob: currentProb, target: node });
-      return;
-    }
-    if (paths.length >= MAX_PATHS) return;
-    if (visited.has(node)) return;
-    visited.add(node);
-
-    const outs = adj[node] ?? [];
-    for (const { to, edgeIdx } of outs) {
-      const ep = edgeProbs[String(edgeIdx)] ?? 0.1;
-      dfs(to, visited, [...currentPath, node], [...edgeIndices, edgeIdx], currentProb * ep);
-    }
-    visited.delete(node);
-  }
-
-  dfs('A', new Set(), [], [], 1);
-  return paths.sort((a, b) => b.prob - a.prob);
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function VdssGraph(props: VdssGraphProps) {
-  const { symbolName, currentPrice, resistances, supports, ma100, scenarios, rsi, adx, bullScore } = props;
-  const R1_level = resistances[0] ?? currentPrice * 1.05;
-  const S1_level = supports[0] ?? currentPrice * 0.95;
+  const {
+    symbolName,
+    currentPrice,
+    scenarios,
+    decisionGraph,
+  } = props;
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [selectedPathIdx, setSelectedPathIdx] = useState<number | null>(null);
   const graphRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const shellRef = useRef<HTMLDivElement>(null);
 
-  // ── Edge probabilities (using TA engine's bullScore) ──────────────
-  const edgeProbs = useMemo(() =>
-    calcEdgeProbabilities(bullScore, adx),
-  [bullScore, adx]
-  );
+  // ── Derived data from decisionGraph ──────────────────────────────
+  const edges = decisionGraph?.edges ?? [];
+  const nodes = decisionGraph?.nodes ?? [];
+  const nodePositions = decisionGraph?.nodePositions ?? {};
+  const edgeProbabilities = decisionGraph?.edgeProbabilities ?? {};
+  const branchProbs = decisionGraph?.branchProbabilities ?? { trend: 0.33, breakout: 0.33, reversal: 0.34 };
+  const scenarioProbabilities = decisionGraph?.scenarioProbabilities ?? {};
+  const pathContributions = decisionGraph?.pathContributions ?? {};
+  const nodeValues = decisionGraph?.nodeValues ?? {};
 
-  // ── All paths with raw probabilities ─────────────────────────────
-  const allPathsRaw = useMemo(() => findAllPaths(edgeProbs), [edgeProbs]);
+  // Build node lookup map
+  const nodeMap = useMemo(() => {
+    const map: Record<string, (typeof nodes)[number]> = {};
+    for (const n of nodes) map[n.id] = n;
+    return map;
+  }, [nodes]);
 
-  // ── Calibrate path probabilities to match TA engine scenario probabilities ──
-  const allPaths = useMemo(() => {
-    // Compute raw sum per target
-    const rawSums: Record<string, number> = {};
-    for (const key of SCENARIO_KEYS) rawSums[key] = 0;
-    for (const p of allPathsRaw) rawSums[p.target] += p.prob;
-
-    // Scale each path so the sum per target matches scenario probability
-    return allPathsRaw.map(p => {
-      const rawSum = rawSums[p.target] || 0.0001;
-      const targetProb = scenarios[p.target as keyof typeof scenarios].probability / 100;
-      const scale = targetProb / rawSum;
-      return { ...p, prob: p.prob * scale };
-    });
-  }, [allPathsRaw, scenarios]);
-
-  // ── Filtered paths ────────────────────────────────────────────────
-  const filteredPaths = useMemo(() => {
-    if (activeFilter === 'all') return allPaths;
-    // Check if filter is a scenario key
-    if (SCENARIO_KEYS.includes(activeFilter as any)) {
-      return allPaths.filter(p => p.target === activeFilter);
-    }
-    // Type filter: paths must use only edges of this type
-    return allPaths.filter(p =>
-      p.edges.every(ei => EDGES[ei][3] === activeFilter)
-    );
-  }, [allPaths, activeFilter]);
-
-  // ── Top 10 paths (sorted by probability, from allPaths not filtered) ──
-  const topPaths = useMemo(() => allPaths.slice(0, 10), [allPaths]);
-
-  // ── Visible edges/nodes based on filter OR selected path ──────────
+  // ── Visible edges/nodes based on filter ──────────────────────────
   const { visibleEdgeIndices, visibleNodes } = useMemo(() => {
-    // If a specific path is selected, show only that path's nodes/edges
-    if (selectedPathIdx !== null) {
-      const p = allPaths[selectedPathIdx];
-      if (p) {
-        const edgeSet = new Set<number>(p.edges);
-        const nodeSet = new Set<string>(p.nodes);
-        return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
-      }
-    }
     if (activeFilter === 'all') {
-      const allEdgeIdx = EDGES.map((_, i) => i);
-      const allNodes = new Set(Object.keys(NODE_POSITIONS));
+      const allEdgeIdx = edges.map((_, i) => i);
+      const allNodes = new Set(nodes.map(n => n.id));
       return { visibleEdgeIndices: allEdgeIdx, visibleNodes: allNodes };
     }
-    if (SCENARIO_KEYS.includes(activeFilter as any)) {
+    if (SCENARIO_KEYS.includes(activeFilter as typeof SCENARIO_KEYS[number])) {
+      // Show edges going TO this scenario node, plus their source nodes
       const edgeSet = new Set<number>();
-      const nodeSet = new Set<string>();
-      for (const p of filteredPaths) {
-        p.edges.forEach(ei => edgeSet.add(ei));
-        p.nodes.forEach(n => nodeSet.add(n));
-      }
+      const nodeSet = new Set<string>(['ROOT', activeFilter]);
+      edges.forEach((e, i) => {
+        if (e.to === activeFilter) {
+          edgeSet.add(i);
+          nodeSet.add(e.from);
+        }
+      });
+      // Also show intermediate nodes connected to those sources
+      edges.forEach((e, i) => {
+        if (nodeSet.has(e.to) && !e.to.startsWith('R')) {
+          edgeSet.add(i);
+          nodeSet.add(e.from);
+        }
+      });
       return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
     }
+    if (activeFilter === 'trend' || activeFilter === 'breakout' || activeFilter === 'reversal') {
+      const branchType = `branch-${activeFilter}` as const;
+      const edgeSet = new Set<number>();
+      const nodeSet = new Set<string>(['ROOT']);
+      edges.forEach((e, i) => {
+        if (e.type === branchType || (e.type !== `branch-trend` && e.type !== `branch-breakout` && e.type !== `branch-reversal` && nodeSet.has(e.from))) {
+          // Include branch-type edges
+          if (e.type === branchType) {
+            edgeSet.add(i);
+            nodeSet.add(e.from);
+            nodeSet.add(e.to);
+          }
+        }
+      });
+      // Now add all edges whose source is already in nodeSet
+      const expanded = new Set<number>();
+      const expandedNodes = new Set<string>(nodeSet);
+      edges.forEach((e, i) => {
+        if (expandedNodes.has(e.from)) {
+          expanded.add(i);
+          expandedNodes.add(e.to);
+        }
+      });
+      return { visibleEdgeIndices: [...expanded], visibleNodes: expandedNodes };
+    }
+    // Type filter (up/pullback/down/risk)
     const edgeSet = new Set<number>();
-    const nodeSet = new Set<string>();
-    EDGES.forEach((e, i) => {
-      if (e[3] === activeFilter) {
+    const nodeSet = new Set<string>(['ROOT']);
+    edges.forEach((e, i) => {
+      if (e.type === activeFilter) {
         edgeSet.add(i);
-        nodeSet.add(e[0]);
-        nodeSet.add(e[1]);
+        nodeSet.add(e.from);
+        nodeSet.add(e.to);
       }
     });
     return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
-  }, [activeFilter, filteredPaths, selectedPathIdx, allPaths]);
-
-  // ── Node values ──────────────────────────────────────────────────
-  const nodeValues: Record<string, string> = {
-    A: toFa(currentPrice),
-    B: toFa(R1_level),
-    D: toFa(resistances[1] ?? currentPrice * 1.10),
-    E: `${toFa(Math.round(R1_level + (resistances[1] ?? R1_level * 1.05 - R1_level) * 0.5))} — ${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 0.8))}`,
-    F: `${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 1.2))} — ${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 2.0))}`,
-    G: toFa(S1_level),
-    H: toFa(supports[1] ?? currentPrice * 0.90),
-    I: toFa(supports[2] ?? currentPrice * 0.85),
-    J: toFa(supports[3] ?? currentPrice * 0.80),
-    K: toFa(ma100),
-    L: props.trendDirection === 'up' ? 'صعودی' : props.trendDirection === 'down' ? 'نزولی' : 'خنثی',
-  };
-  for (const key of SCENARIO_KEYS) {
-    const s = scenarios[key];
-    nodeValues[key] = `${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`;
-  }
+  }, [activeFilter, edges, nodes]);
 
   // ── Draw SVG edges ───────────────────────────────────────────────
   const drawEdges = useCallback(() => {
     const svg = svgRef.current;
     const graph = graphRef.current;
-    if (!svg || !graph) return;
+    if (!svg || !graph || edges.length === 0) return;
 
     let markersSvg = '';
-    for (const [k, c] of Object.entries(EDGE_COLORS)) {
-      markersSvg += `<marker id="arrow-${k}" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="${c}"/></marker>`;
+    const seenColors = new Set<string>();
+    for (const e of edges) {
+      const c = EDGE_COLORS[e.type];
+      if (c && !seenColors.has(e.type)) {
+        seenColors.add(e.type);
+        markersSvg += `<marker id="arrow-${e.type}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="${c}"/></marker>`;
+      }
     }
 
     let pathsSvg = '';
     const graphRect = graph.getBoundingClientRect();
 
-    for (let ei = 0; ei < EDGES.length; ei++) {
-      const [fromId, toId, label, type] = EDGES[ei];
+    for (let ei = 0; ei < edges.length; ei++) {
+      const { from: fromId, to: toId, label, type } = edges[ei];
       const isVisible = visibleEdgeIndices.includes(ei);
       const fromEl = nodeRefs.current[fromId];
       const toEl = nodeRefs.current[toId];
@@ -379,7 +248,8 @@ export default function VdssGraph(props: VdssGraphProps) {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist === 0) continue;
 
-      const bend = Math.min(52, Math.max(18, dist * 0.11));
+      // Curved edges with bend proportional to distance
+      const bend = Math.min(40, Math.max(12, dist * 0.08));
       const mx = (ax + bx) / 2;
       const my = (ay + by) / 2;
       const nx = -dy / dist;
@@ -388,22 +258,24 @@ export default function VdssGraph(props: VdssGraphProps) {
       const cy = my + ny * bend;
 
       const d = `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`;
-      const prob = edgeProbs[String(ei)] ?? 0;
+      const prob = edgeProbabilities[ei] ?? 0;
       const probLabel = toPersianDigits((prob * 100).toFixed(0)) + '٪';
+      const edgeColor = EDGE_COLORS[type] ?? '#6b7280';
 
-      pathsSvg += `<path d="${d}" stroke="${EDGE_COLORS[type]}" stroke-width="${isVisible ? 2 : 1}" opacity="${isVisible ? 0.72 : 0.06}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
+      pathsSvg += `<path d="${d}" stroke="${edgeColor}" stroke-width="${isVisible ? 2 : 0.8}" opacity="${isVisible ? 0.7 : 0.05}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
 
-      // Edge probability label (only for visible edges)
-      if (isVisible) {
-        pathsSvg += `<text x="${cx}" y="${cy - 6}" fill="#374151" font-size="9" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round" opacity="0.85" data-type="${type}" class="edge-label">${label}</text>`;
-        pathsSvg += `<text x="${cx}" y="${cy + 8}" fill="${EDGE_COLORS[type]}" font-size="10" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">${probLabel}</text>`;
+      // Edge labels — skip deterministic root→branch and branch→event edges (index < 6)
+      if (isVisible && ei >= 6) {
+        pathsSvg += `<text x="${cx}" y="${cy - 5}" fill="#374151" font-size="8" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" opacity="0.8" data-type="${type}" class="edge-label">${label}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy + 7}" fill="${edgeColor}" font-size="9" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" opacity="0.85" class="edge-prob">${probLabel}</text>`;
       }
     }
 
     svg.innerHTML = `<defs>${markersSvg}</defs>${pathsSvg}`;
-  }, [visibleEdgeIndices, edgeProbs]);
+  }, [visibleEdgeIndices, edges, edgeProbabilities]);
 
   useEffect(() => { drawEdges(); }, [drawEdges]);
+
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
@@ -412,6 +284,7 @@ export default function VdssGraph(props: VdssGraphProps) {
     return () => observer.disconnect();
   }, [drawEdges]);
 
+<<<<<<< Updated upstream
   // ── Aggregated path probabilities per target (calibrated = matches scenario prob) ──
   const pathProbsByTarget = useMemo(() => {
     const result: Record<string, number> = {};
@@ -439,33 +312,72 @@ export default function VdssGraph(props: VdssGraphProps) {
     return m;
   }, [v11]);
 
+=======
+>>>>>>> Stashed changes
   // ── Detail panel content ─────────────────────────────────────────
   const detailContent = useMemo(() => {
     if (!selectedNode) return null;
-    const def = NODE_DEFS[selectedNode];
-    if (!def) return null;
-    const relations = EDGES.filter(e => e[0] === selectedNode || e[1] === selectedNode);
-    const inputs = relations.filter(e => e[1] === selectedNode);
-    const outputs = relations.filter(e => e[0] === selectedNode);
+    const node = nodeMap[selectedNode];
+    if (!node) return null;
+
+    // For terminal scenario nodes, show branch breakdown
+    if (node.isTerminal && SCENARIO_KEYS.includes(selectedNode as typeof SCENARIO_KEYS[number])) {
+      const contrib = pathContributions[selectedNode] ?? { trend: 0, breakout: 0, reversal: 0 };
+      const meta = SCENARIO_META[selectedNode];
+      const s = scenarios[selectedNode as keyof typeof scenarios];
+      return (
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold" style={{ color: meta.color }}>{node.title}</h3>
+          <p className="text-xs text-[#374151]">{node.desc}</p>
+          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#e5e7eb] bg-[#f3f4f6] text-[#374151]">{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
+          <div className="text-xs text-[#6b7280]" dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
+
+          <div className="mt-3 pt-3 border-t border-[#e5e7eb]">
+            <p className="text-xs font-bold text-[#374151] mb-2">سهم هر استراتژی:</p>
+            {Object.entries(BRANCH_META).map(([bKey, bMeta]) => {
+              const val = contrib[bKey as 'trend' | 'breakout' | 'reversal'];
+              const pct = (val * 100).toFixed(1);
+              return (
+                <div key={bKey} className="flex items-center justify-between py-1.5 border-b border-dashed border-[#e5e7eb]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: bMeta.color }} />
+                    <span className="text-[11px] text-[#374151]">{bMeta.label}</span>
+                  </div>
+                  <span className="text-[11px] font-bold" style={{ color: bMeta.color }}>{toPersianDigits(pct)}٪</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-[11px] font-bold text-[#111827]">مجموع</span>
+              <span className="text-[11px] font-black" style={{ color: meta.color }}>{toFa(s?.probability ?? 0)}٪</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // For non-terminal nodes, show incoming/outgoing edges
+    const inputs = edges.filter(e => e.to === selectedNode);
+    const outputs = edges.filter(e => e.from === selectedNode);
 
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-[#111827]">{def.title}</h3>
+        <h3 className="text-sm font-bold text-[#111827]">{node.title}</h3>
         <p className="text-xs text-[#374151]"><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
-        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#e5e7eb] bg-[#f3f4f6] text-[#374151]">{def.type}</span>
-        <p className="text-xs text-[#6b7280] leading-relaxed">{def.desc}</p>
+        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#e5e7eb] bg-[#f3f4f6] text-[#374151]">{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
+        <p className="text-xs text-[#6b7280] leading-relaxed">{node.desc}</p>
         {inputs.length > 0 && (
           <div>
             <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای ورودی ({toFa(inputs.length)}):</p>
             <ul className="space-y-1">
               {inputs.map((e, i) => {
-                const ei = EDGES.indexOf(e);
-                const ep = edgeProbs[String(ei)] ?? 0;
+                const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
+                const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
                   <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
-                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e[0]] || e[0]} ← {SCENARIO_DISPLAY[e[1]] || e[1]}</b>
-                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
-                    <br />{e[2]}
+                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${edgeColor}20`, color: edgeColor }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+                    <br />{e.label}
                   </li>
                 );
               })}
@@ -477,13 +389,13 @@ export default function VdssGraph(props: VdssGraphProps) {
             <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای خروجی ({toFa(outputs.length)}):</p>
             <ul className="space-y-1">
               {outputs.map((e, i) => {
-                const ei = EDGES.indexOf(e);
-                const ep = edgeProbs[String(ei)] ?? 0;
+                const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
+                const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
                   <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
-                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e[0]] || e[0]} → {SCENARIO_DISPLAY[e[1]] || e[1]}</b>
-                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
-                    <br />{e[2]}
+                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${edgeColor}20`, color: edgeColor }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+                    <br />{e.label}
                   </li>
                 );
               })}
@@ -492,14 +404,29 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
       </div>
     );
-  }, [selectedNode, nodeValues, edgeProbs]);
+  }, [selectedNode, nodeMap, nodeValues, edges, edgeProbabilities, pathContributions, scenarios]);
 
   // ── All filter buttons ────────────────────────────────────────────
   const allFilters = [
     ...TYPE_FILTERS,
     { key: 'sep1', label: '│', isSep: true as const },
+    ...Object.entries(BRANCH_META).map(([k, v]) => ({ key: k, label: v.label, branchKey: k, branchColor: v.color })),
+    { key: 'sep2', label: '│', isSep: true as const },
     ...SCENARIO_KEYS.map(k => ({ key: k, label: SCENARIO_META[k].label, scenarioKey: k })),
   ];
+
+  // ═══ Design dimensions ═══
+  const DESIGN_W = 1500;
+  const DESIGN_H = 820;
+  const DISPLAY_W = 1200;
+  const DISPLAY_H = DESIGN_H;
+  const scaleX = DISPLAY_W / DESIGN_W;
+  const scaleY = DISPLAY_H / DESIGN_H;
+
+  // ── Loading state ────────────────────────────────────────────────
+  if (!decisionGraph) {
+    return <VdssGraphSkeleton />;
+  }
 
   return (
     <div className="space-y-3" dir="rtl">
@@ -511,7 +438,7 @@ export default function VdssGraph(props: VdssGraphProps) {
             style={{ boxShadow: 'inset 0 0 22px rgba(146,64,14,.06), 0 0 22px rgba(146,64,14,.04)' }}>◈</div>
           <div>
             <h2 className="text-base font-bold text-[#111827]">گراف تصمیم {symbolName}</h2>
-            <p className="text-[11px] text-[#6b7280]">مدل ۱۲پایه گره‌ـ‌مسیر | مبتنی بر EMV و مسیرهای بحرانی</p>
+            <p className="text-[11px] text-[#6b7280]">مدل ۳‌شاخه‌ای | پیروی از روند، شکست، بازگشت | ۲۷ مسیر به ۹ سناریو</p>
           </div>
         </div>
         <div className="text-left text-xs text-[#6b7280] leading-relaxed pr-4 border-r border-[#e5e7eb]">
@@ -523,9 +450,9 @@ export default function VdssGraph(props: VdssGraphProps) {
       {/* ═══ Metric Cards ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color="text-cyan-700" />
-        <MetricCard label="مقاومت آنی (R1)" value={toFa(R1_level) + ' ریال'} color="text-amber-800" />
-        <MetricCard label="حمایت تفکیک‌کننده (S1)" value={toFa(S1_level) + ' ریال'} color="text-blue-700" />
-        <MetricCard label="میانگین متحرک ۱۰۰" value={toFa(ma100) + ' ریال'} color="text-[#374151]" />
+        <MetricCard label="احتمال روند" value={toPersianDigits((branchProbs.trend * 100).toFixed(0)) + '٪'} color="text-cyan-700" />
+        <MetricCard label="احتمال شکست" value={toPersianDigits((branchProbs.breakout * 100).toFixed(0)) + '٪'} color="text-amber-700" />
+        <MetricCard label="احتمال بازگشت" value={toPersianDigits((branchProbs.reversal * 100).toFixed(0)) + '٪'} color="text-purple-700" />
       </div>
 
       {/* ═══ Toolbar ═══ */}
@@ -536,8 +463,10 @@ export default function VdssGraph(props: VdssGraphProps) {
             return <span key={`sep-${i}`} className="text-[#B0A89E] mx-1">│</span>;
           }
           const isScenario = 'scenarioKey' in btn;
+          const isBranch = 'branchKey' in btn;
           const isActive = activeFilter === btn.key;
-          const meta = isScenario ? SCENARIO_META[btn.scenarioKey] : null;
+          const meta = isScenario ? SCENARIO_META[(btn as { scenarioKey: string }).scenarioKey] : null;
+          const bColor = isBranch ? (btn as { branchColor: string }).branchColor : null;
           return (
             <button
               key={btn.key}
@@ -546,19 +475,27 @@ export default function VdssGraph(props: VdssGraphProps) {
                 isActive
                   ? isScenario
                     ? 'text-[#111827] border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.06)]'
-                    : 'text-[#111827] border-cyan-500/60 bg-cyan-50 shadow-[0_0_18px_rgba(58,213,219,.10)]'
+                    : isBranch
+                      ? 'text-[#111827] border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.06)]'
+                      : 'text-[#111827] border-cyan-500/60 bg-cyan-50 shadow-[0_0_18px_rgba(58,213,219,.10)]'
                   : 'text-[#374151] border-[#e5e7eb] bg-[#f3f4f6]/50 hover:bg-[#e5e7eb]'
               }`}
-              style={isActive && isScenario && meta ? {
-                borderColor: meta.color + '80',
-                background: meta.color + '12',
-                color: meta.color,
-              } : undefined}
+              style={
+                isActive && isScenario && meta ? {
+                  borderColor: meta.color + '80',
+                  background: meta.color + '12',
+                  color: meta.color,
+                } : isActive && isBranch && bColor ? {
+                  borderColor: bColor + '80',
+                  background: bColor + '12',
+                  color: bColor,
+                } : undefined
+              }
             >{btn.label}</button>
           );
         })}
         <button
-          onClick={() => { setSelectedNode(null); setActiveFilter('all'); setSelectedPathIdx(null); }}
+          onClick={() => { setSelectedNode(null); setActiveFilter('all'); }}
           className="text-xs px-3 py-1.5 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6]/50 text-[#374151] hover:bg-[#e5e7eb] transition-all cursor-pointer mr-auto"
         >بازنشانی</button>
       </div>
@@ -568,57 +505,131 @@ export default function VdssGraph(props: VdssGraphProps) {
         {/* Graph Shell */}
         <div
           ref={shellRef}
-          className="relative overflow-auto border border-[#e5e7eb] border-t-0 rounded-b-2xl min-h-[500px] max-h-[700px]"
+          className="relative overflow-auto border border-[#e5e7eb] border-t-0 rounded-b-2xl min-h-[900px]"
           style={{
             background: 'radial-gradient(circle at 49% 49%, rgba(180,200,220,.18), transparent 36%), #ffffff',
             boxShadow: '0 4px 16px rgba(0,0,0,.06)',
           }}
         >
-          <div ref={graphRef} className="relative mx-auto" style={{ width: 1100, height: 780, minWidth: 1100, minHeight: 780 }}>
+          <div ref={graphRef} className="relative mx-auto" style={{ width: DISPLAY_W, height: DISPLAY_H, minWidth: DISPLAY_W, minHeight: DISPLAY_H }}>
             <svg ref={svgRef} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" aria-label="مسیرهای گراف تصمیم" />
 
             {/* Nodes */}
-            {Object.entries(NODE_POSITIONS).map(([id, pos]) => {
-              const def = NODE_DEFS[id];
-              if (!def) return null;
-              const isTerminal = def.isTerminal;
-              const isResultNode = SCENARIO_KEYS.includes(id as any);
-              const isSelected = selectedNode === id;
-              const isVisible = visibleNodes.has(id);
-              const scenarioProb = isResultNode ? scenarios[id as keyof typeof scenarios].probability : null;
-              const scenarioColor = isResultNode ? SCENARIO_META[id].color : def.color;
+            {nodes.map(node => {
+              const pos = nodePositions[node.id];
+              if (!pos) return null;
+
+              const isTerminal = node.isTerminal ?? false;
+              const isResultNode = SCENARIO_KEYS.includes(node.id as typeof SCENARIO_KEYS[number]);
+              const isBranchNode = ['BR1', 'BR2', 'BR3'].includes(node.id);
+              const isEventNode = ['EA', 'EB', 'EC'].includes(node.id);
+              const isSelected = selectedNode === node.id;
+              const isVisible = visibleNodes.has(node.id);
+              const scenarioProb = isResultNode ? (scenarioProbabilities[node.id] ?? 0) : null;
+              const scenarioColor = isResultNode ? (SCENARIO_META[node.id]?.color ?? node.color) : node.color;
+
+              const nodeWidth = isResultNode ? 155 : isBranchNode ? 145 : isEventNode ? 160 : 130;
+              const nodeMinH = isResultNode ? 82 : isBranchNode ? 65 : isEventNode ? 55 : 60;
+
+              // Decision nodes: rounded-lg with colored left border (3px), white bg, shadow
+              // Event nodes: rounded-lg with dotted left border (2px), light bg
+              // Terminal nodes: rounded-lg with solid bg (color at 10% opacity), colored text
+              let borderStyle: React.CSSProperties['borderLeftStyle'] = 'solid';
+              let borderLeftWidth = '0px';
+              let bgStyle = isVisible
+                ? 'linear-gradient(145deg, #ffffff, #f3f4f6)'
+                : 'rgba(243,244,246,0.5)';
+              let boxShadowStyle = isVisible
+                ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
+                : 'none';
+
+              if (node.type === 'decision' && !isTerminal) {
+                borderLeftWidth = '3px';
+                borderStyle = 'solid';
+                bgStyle = isVisible ? 'linear-gradient(145deg, #ffffff, #f3f4f6)' : 'rgba(243,244,246,0.5)';
+                boxShadowStyle = isVisible
+                  ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
+                  : 'none';
+              } else if (node.type === 'event') {
+                borderLeftWidth = '2px';
+                borderStyle = 'dotted';
+                bgStyle = isVisible ? 'linear-gradient(145deg, #fafbfc, #f3f4f6)' : 'rgba(243,244,246,0.5)';
+                boxShadowStyle = isVisible
+                  ? `0 2px 8px rgba(0,0,0,.04)`
+                  : 'none';
+              } else if (isTerminal) {
+                borderLeftWidth = '0px';
+                borderStyle = 'solid';
+                bgStyle = isVisible
+                  ? `linear-gradient(145deg, color-mix(in srgb, ${scenarioColor} 10%, #ffffff), color-mix(in srgb, ${scenarioColor} 5%, #f9fafb))`
+                  : 'rgba(243,244,246,0.5)';
+                boxShadowStyle = isVisible
+                  ? `inset 0 0 18px color-mix(in srgb, ${scenarioColor} 6%, transparent), 0 2px 10px rgba(0,0,0,.04)`
+                  : 'none';
+              }
+
+              const selectedShadow = isSelected
+                ? `0 0 0 2px color-mix(in srgb, ${scenarioColor} 28%, transparent), 0 0 28px color-mix(in srgb, ${scenarioColor} 25%, transparent)`
+                : boxShadowStyle;
 
               return (
                 <div
-                  key={id}
-                  ref={el => { nodeRefs.current[id] = el; }}
-                  onClick={() => setSelectedNode(id)}
-                  className={`absolute cursor-pointer transition-all duration-200 z-[2] text-center ${
-                    isTerminal ? 'w-[160px] min-h-[85px]' : 'w-[138px] min-h-[72px]'
-                  }`}
+                  key={node.id}
+                  ref={el => { nodeRefs.current[node.id] = el; }}
+                  onClick={() => setSelectedNode(node.id)}
+                  className={`absolute cursor-pointer transition-all duration-200 z-[2] text-center ${isSelected ? 'ring-2 ring-offset-1' : ''}`}
                   style={{
-                    right: pos.right * (1100 / 1500),
-                    top: pos.top * (780 / 780),
+                    right: pos.right * scaleX,
+                    top: pos.top * scaleY,
+                    width: nodeWidth,
+                    minWidth: nodeWidth,
+                    minHeight: nodeMinH,
                     '--node-color': scenarioColor,
-                    padding: '8px 7px',
-                    border: `1px solid ${scenarioColor}${isTerminal ? '' : 'aa'}`,
-                    borderWidth: isTerminal ? '2px' : '1px',
-                    borderRadius: '12px',
-                    background: isVisible
-                      ? `linear-gradient(145deg, #ffffff, #f3f4f6)`
-                      : 'rgba(243,244,246,0.5)',
-                    boxShadow: isVisible
-                      ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
-                      : 'none',
+                    padding: isResultNode ? '7px 6px' : '6px 5px',
+                    border: isTerminal
+                      ? `2px solid ${scenarioColor}`
+                      : `1px solid ${scenarioColor}aa`,
+                    borderLeftWidth,
+                    borderLeftStyle: borderStyle,
+                    borderLeftColor: scenarioColor,
+                    borderRadius: isTerminal ? '12px' : isBranchNode ? '14px' : '10px',
+                    background: bgStyle,
+                    boxShadow: selectedShadow,
                     opacity: isVisible ? 1 : 0.12,
                     transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
                     filter: isSelected ? 'brightness(1.18)' : isVisible ? 'none' : 'grayscale(0.8) blur(0.5px)',
-                    ...(isSelected ? {
-                      boxShadow: `0 0 0 2px color-mix(in srgb, ${scenarioColor} 28%, transparent), 0 0 28px color-mix(in srgb, ${scenarioColor} 25%, transparent)`,
-                    } : {}),
                   } as React.CSSProperties}
                 >
+                  {/* Root node */}
+                  {node.id === 'ROOT' && (
+                    <>
+                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: isVisible ? scenarioColor : '#555' }}>تصمیم</span>
+                      <div className={`text-[12px] font-black leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
+                      <div className="text-[10px] text-[#6b7280] mt-1" dir="ltr">{nodeValues[node.id] ?? '--'}</div>
+                    </>
+                  )}
+
+                  {/* Branch nodes */}
+                  {isBranchNode && (
+                    <>
+                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: isVisible ? scenarioColor : '#555' }}>{node.type === 'decision' ? 'استراتژی' : node.titleEn}</span>
+                      <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
+                      <div className="text-[11px] font-black mt-1" style={{ color: scenarioColor }}>{nodeValues[node.id] ?? '--'}</div>
+                    </>
+                  )}
+
+                  {/* Event nodes */}
+                  {isEventNode && (
+                    <>
+                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: isVisible ? scenarioColor : '#555' }}>رویداد شانسی</span>
+                      <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
+                      <div className="text-[9px] text-[#6b7280] mt-0.5" dir="ltr">{nodeValues[node.id] ?? '--'}</div>
+                    </>
+                  )}
+
+                  {/* Terminal scenario nodes */}
                   {isResultNode && (
+<<<<<<< Updated upstream
                     <span className="block text-[9px] font-bold mb-1" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[id]}</span>
                   )}
                   {!isResultNode && (
@@ -637,43 +648,63 @@ export default function VdssGraph(props: VdssGraphProps) {
                       >{toFa(scenarioProb)}٪</span>
                       <span className="text-[8px] text-[#6b7280]">تجمعی: {toFa(v11Map.get(id)?.cumulativeProbability ?? scenarioProb)}٪</span>
                     </div>
+=======
+                    <>
+                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[node.id]}</span>
+                      <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
+                      <div className="text-[9px] text-[#6b7280] mt-0.5" dir="ltr">{nodeValues[node.id] ?? '--'}</div>
+                      {scenarioProb !== null && (
+                        <span
+                          className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-sm font-black"
+                          style={{
+                            background: `color-mix(in srgb, ${scenarioColor} 17%, transparent)`,
+                            color: scenarioColor,
+                          }}
+                        >{toFa(scenarioProb * 100)}٪</span>
+                      )}
+                    </>
+>>>>>>> Stashed changes
                   )}
                 </div>
               );
             })}
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-[#e5e7eb] bg-[#ffffff]/90 text-[10px] text-[#374151] leading-7 z-10">
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعود و تأیید</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />پولبک و بازگشت</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />اصلاح</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ef4d62]" />ریسک / ابطال</div>
+            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-[#e5e7eb] bg-[#ffffff]/90 text-[10px] text-[#374151] leading-6 z-10">
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.cyan }} />پیروی از روند</div>
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.gold }} />شکست</div>
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.purple }} />بازگشت</div>
+              <div className="border-t border-[#e5e7eb] my-1" />
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعودی</div>
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />خنثی / رنج</div>
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />نزولی</div>
+              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ef4d62]" />شوک / ریسک</div>
             </div>
           </div>
         </div>
 
-        {/* ═══ Left Panel: Path Probabilities & Path Selection ═══ */}
+        {/* ═══ Right Panel: Scenario Probabilities & Detail ═══ */}
         <div className="rounded-2xl border border-[#e5e7eb] p-4 flex flex-col"
           style={{ background: 'linear-gradient(160deg, #ffffff, #f3f4f6)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-          <h2 className="text-sm font-bold text-[#111827] mb-3">📋 احتمال مسیرها</h2>
+          <h2 className="text-sm font-bold text-[#111827] mb-3">📋 احتمال سناریوها</h2>
 
           {selectedNode && detailContent ? (
-            <div className="border-t border-[#e5e7eb] pt-3 flex-1 overflow-y-auto max-h-[580px] custom-scrollbar">
+            <div className="border-t border-[#e5e7eb] pt-3 flex-1 overflow-y-auto max-h-[860px] custom-scrollbar">
               {detailContent}
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto max-h-[580px] space-y-3 custom-scrollbar">
-              {/* Path probabilities per target */}
+            <div className="flex-1 overflow-y-auto max-h-[860px] space-y-3 custom-scrollbar">
+              {/* Scenario probabilities from backend */}
               <div className="space-y-2">
                 {SCENARIO_KEYS.map(key => {
                   const meta = SCENARIO_META[key];
-                  const s = scenarios[key];
-                  const pathProb = pathProbsByTarget[key] ?? 0;
+                  const prob = scenarioProbabilities[key] ?? 0;
                   const isActive = activeFilter === key;
+                  const s = scenarios[key as keyof typeof scenarios];
                   return (
                     <div
                       key={key}
-                      onClick={() => { setActiveFilter(key); setSelectedPathIdx(null); }}
+                      onClick={() => { setActiveFilter(key); setSelectedNode(null); }}
                       className={`rounded-xl p-3 cursor-pointer transition-all border ${
                         isActive
                           ? 'border-opacity-60'
@@ -685,68 +716,34 @@ export default function VdssGraph(props: VdssGraphProps) {
                       }}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold" style={{ color: meta.color }}>{SCENARIO_DISPLAY[key]} | {meta.label}</span>
-                        <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((pathProb * 100).toFixed(1))}٪</span>
+                        <span className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</span>
+                        <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((prob * 100).toFixed(1))}٪</span>
                       </div>
-                      {/* Probability bar */}
                       <div className="w-full h-1.5 rounded-full bg-[#e5e7eb] mb-2">
                         <div
                           className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, pathProb * 100)}%`, background: meta.color }}
+                          style={{ width: `${Math.min(100, prob * 100)}%`, background: meta.color }}
                         />
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-[#6b7280]">
+<<<<<<< Updated upstream
                         <span>تعداد مسیرها: {filteredPaths.filter(p => p.target === key).length}</span>
                         <span>تجمعی: <b className="text-[#374151]">{toFa(v11Map.get(key)?.cumulativeProbability ?? s.probability)}٪</b></span>
+=======
+                        <span>تجمیعی: <b className="text-[#374151]">{toFa(s?.probability ?? 0)}٪</b></span>
+>>>>>>> Stashed changes
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Top 10 paths list - CLICKABLE */}
-              <div className="border-t border-[#e5e7eb] pt-3 mt-3">
-                <h3 className="text-xs font-bold text-[#111827] mb-2">۱۰ مسیر اصلی (بر اساس احتمال)</h3>
-                <div className="space-y-1.5">
-                  {topPaths.map((p, i) => {
-                    const meta = SCENARIO_META[p.target];
-                    const isSelected = selectedPathIdx === i;
-                    return (
-                      <div
-                        key={i}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedPathIdx(null);
-                            setActiveFilter('all');
-                          } else {
-                            setSelectedPathIdx(i);
-                            setSelectedNode(null);
-                          }
-                        }}
-                        className={`flex items-center gap-2 text-[10px] p-2 rounded-lg cursor-pointer transition-all border ${
-                          isSelected
-                            ? 'border-amber-300 bg-amber-50 shadow-sm'
-                            : 'border-transparent hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className="w-5 text-center font-bold text-[#6b7280]">{toPersianDigits(i + 1)}</span>
-                        <span className="flex-1 text-[#374151] overflow-hidden" dir="ltr">
-                          {p.nodes.map(n => SCENARIO_DISPLAY[n] || n).join(' → ')}
-                        </span>
-                        <span className="font-bold min-w-[42px] text-left" style={{ color: meta.color }}>
-                          {toPersianDigits((p.prob * 100).toFixed(1))}٪
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
               <div className="border-t border-[#e5e7eb] pt-3 mt-3">
                 <p className="text-[10px] text-[#6b7280] leading-relaxed">
-                  <b>قاعده:</b> عبور یا شکست هر سطح فقط با تثبیت معتبر تلقی می‌شود.<br />
-                  <b>احتمال یال:</b> حاصل توزیع شرطی بر اساس سیگنال‌های تکنیکال.<br />
-                  <b>احتمال مسیر:</b> حاصل‌ضرب احتمال یال‌های مسیر.
+                  <b>ساختار:</b> ۳ استراتژی × ۹ یال = ۲۷ مسیر مستقیم.<br />
+                  <b>احتمال یال:</b> محاسبه‌شده از موتور تصمیم (backend).<br />
+                  <b>احتمال مسیر:</b> P(استراتژی) × P(یال|استراتژی).<br />
+                  <b>احتمال سناریو:</b> تجمیع ۳ مسیر هر سناریو.
                 </p>
               </div>
             </div>
@@ -756,11 +753,13 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       {/* ═══ Scenario Result Cards ═══ */}
       <div className="mt-4 p-4 rounded-2xl border border-[#e5e7eb] bg-[#ffffff]">
-        <h2 className="text-sm font-bold text-[#111827] mb-3">گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <h2 className="text-sm font-bold text-[#111827] mb-3">گره‌های نتیجه و سهم استراتژی‌ها</h2>
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
           {SCENARIO_KEYS.map(key => {
             const s = scenarios[key];
+            if (!s) return null;
             const meta = SCENARIO_META[key];
+            const contrib = pathContributions[key] ?? { trend: 0, breakout: 0, reversal: 0 };
             return (
               <div
                 key={key}
@@ -772,6 +771,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 } as React.CSSProperties}
               >
                 <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
+<<<<<<< Updated upstream
                 <span className="text-xs font-bold text-[#374151]">{SCENARIO_DISPLAY[key]} | {meta.label}</span>
                 <div className="flex items-center justify-between text-[10px] text-[#6b7280] mt-1">
                   <span>اختصاصی: <b style={{ color: meta.color }}>{toFa(s.probability)}٪</b></span>
@@ -779,13 +779,31 @@ export default function VdssGraph(props: VdssGraphProps) {
                 </div>
                 <small className="block text-[10px] text-[#6b7280] leading-relaxed mt-2" dir="ltr">
                   {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
+=======
+                <span className="text-xs font-bold text-[#374151]">{meta.label}</span>
+                <div className="mt-2 space-y-0.5">
+                  {Object.entries(BRANCH_META).map(([bKey, bMeta]) => (
+                    <div key={bKey} className="flex items-center justify-between text-[9px]">
+                      <span className="text-[#6b7280] flex items-center gap-0.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: bMeta.color }} />
+                        {bMeta.label}
+                      </span>
+                      <span className="font-bold text-[#374151]">
+                        {toPersianDigits((contrib[bKey as 'trend' | 'breakout' | 'reversal'] * 100).toFixed(1))}٪
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <small className="block text-[9px] text-[#6b7280] leading-relaxed mt-1.5" dir="ltr">
+                  {toFa(s.targetMin)} — {toFa(s.targetMax)}
+>>>>>>> Stashed changes
                 </small>
               </div>
             );
           })}
         </div>
         <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-amber-700/60 bg-amber-50 text-[11px] text-[#374151] leading-relaxed">
-          <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی بر اساس فرمول‌های تعریف‌شده (ADX, RSI, MFI, CCI و فاصله از سطوح) محاسبه شده‌اند. احتمال مسیرها از حاصل‌ضرب احتمال شرطی یال‌ها به دست می‌آید.
+          <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی سرور محاسبه شده‌اند. هر استراتژی ۹ یال شرطی دارد و مجموع ۲۷ مسیر، احتمال نهایی هر سناریو را تشکیل می‌دهد.
         </div>
       </div>
     </div>
