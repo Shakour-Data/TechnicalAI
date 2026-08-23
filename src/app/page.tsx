@@ -238,11 +238,19 @@ export default function Home() {
   // Store last fetch params for auto-refresh
   const lastFetchRef = useRef<{ symbol: string; category?: string; insCode?: string; tgjuKey?: string; finpySector?: string; finpyIndex?: string; webId?: number } | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
 
   // Chart container ref for image export
   const chartWrapperRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: number) => {
+    // Abort any previous in-flight fetch
+    if (fetchControllerRef.current) {
+      fetchControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
+
     // TGJU instrument: fetch historical data via tgju.org chart API
     if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
       setLoading(true);
@@ -251,23 +259,28 @@ export default function Home() {
       setData(null);
       lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
       try {
-        const res = await fetch('/api/tgju-analysis?key=' + encodeURIComponent(tgjuKey));
+        const res = await fetch('/api/tgju-analysis?key=' + encodeURIComponent(tgjuKey), { signal: controller.signal });
+        if (controller.signal.aborted) return;
         if (!res.ok) {
           let errMsg = 'خطا در دریافت داده‌های تاریخی';
           try { const err = await res.json(); if (err.error) errMsg = err.error; } catch (_) { /* non-JSON error */ }
           throw new Error(errMsg);
         }
         const json = await res.json();
+        if (controller.signal.aborted) return;
         if (!json.candles || json.candles.length === 0 || !json.ta) {
           throw new Error(json.error || 'داده‌های تاریخی کافی برای تحلیل وجود ندارد');
         }
         setData({ ...json, isTgju: true });
         setActivePanel('visual');
       } catch (err) {
+        if (controller.signal.aborted) return;
         setError(String(err));
       } finally {
-        setLoading(false);
-        setLoadingMessage(null);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setLoadingMessage(null);
+        }
       }
       return;
     }
@@ -284,10 +297,12 @@ export default function Home() {
         // 1. Try webId (TSETMC CDN)
         if (webId) {
           setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ...');
-          const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)));
+          const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)), { signal: controller.signal });
+          if (controller.signal.aborted) return;
           if (res.ok) {
             try {
               const json = await res.json();
+              if (controller.signal.aborted) return;
               if (json.candles && json.candles.length > 0 && json.ta) {
                 setData(json);
                 setActivePanel('visual');
@@ -303,10 +318,12 @@ export default function Home() {
         // 2. Main indices via finpy-tse
         if (finpyIndex) {
           setLoadingMessage('در حال دریافت داده‌های شاخص اصلی ...');
-          const res = await fetch('/api/finpy-sector?indexKey=' + encodeURIComponent(finpyIndex));
+          const res = await fetch('/api/finpy-sector?indexKey=' + encodeURIComponent(finpyIndex), { signal: controller.signal });
+          if (controller.signal.aborted) return;
           if (res.ok) {
             try {
               const json = await res.json();
+              if (controller.signal.aborted) return;
               if (json.candles && json.candles.length > 0 && json.ta) {
                 setData(json);
                 setActivePanel('visual');
@@ -322,10 +339,12 @@ export default function Home() {
         // 3. Sector indices via finpy-tse
         if (finpySector) {
           setLoadingMessage('در حال دریافت داده‌های شاخص گروه ...');
-          const res = await fetch('/api/finpy-sector?sector=' + encodeURIComponent(finpySector));
+          const res = await fetch('/api/finpy-sector?sector=' + encodeURIComponent(finpySector), { signal: controller.signal });
+          if (controller.signal.aborted) return;
           if (res.ok) {
             try {
               const json = await res.json();
+              if (controller.signal.aborted) return;
               if (json.candles && json.candles.length > 0 && json.ta) {
                 setData(json);
                 setActivePanel('visual');
@@ -342,10 +361,14 @@ export default function Home() {
           setError('داده‌های تاریخی این شاخص در حال حاضر قابل دسترسی نیست.');
         }
       } catch (err) {
+        if (controller.signal.aborted) return;
         setError(String(err));
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setLoadingMessage(null);
+        }
       }
-      setLoading(false);
-      setLoadingMessage(null);
       return;
     }
 
@@ -355,19 +378,24 @@ export default function Home() {
     setData(null);
     lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId };
     try {
-      const res = await fetch('/api/analysis?symbol=' + encodeURIComponent(symbol));
+      const res = await fetch('/api/analysis?symbol=' + encodeURIComponent(symbol), { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (!res.ok) {
         let errMsg = 'خطا در دریافت داده‌ها';
         try { const err = await res.json(); if (err.error) errMsg = err.error; } catch (_) { /* non-JSON error */ }
         throw new Error(errMsg);
       }
       const json = await res.json();
+      if (controller.signal.aborted) return;
       setData(json);
       setActivePanel('visual');
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(String(err));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 

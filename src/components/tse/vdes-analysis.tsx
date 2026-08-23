@@ -654,6 +654,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : String(err);
+        if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
         setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
       } finally {
         if (!cancelled) setAiLoading(false);

@@ -309,3 +309,22 @@ Stage Summary:
 - vdes-analysis.tsx: Better exportPDF node guard
 - Caddyfile: 120s proxy timeout
 - All lint checks pass, zero console errors in browser verification
+---
+Task ID: 1
+Agent: main
+Task: Fix "cancelled" console error in VdesAnalysis for price_aed
+
+Work Log:
+- Investigated error: `[VdesAnalysis v11] Error for price_aed: "cancelled"`
+- Found the error came from an OLD cached version of vdes-analysis.tsx (compiled chunk hash 6b4971e3 vs current 248fcdc6)
+- The old code had a `console.error` that logged abort errors instead of silently handling them
+- Added robust string-based abort detection in vdes-analysis.tsx catch block (line 657): checks for "cancelled", "aborted", "abort", "cancel" in error message
+- Added AbortController to page.tsx handleSelect for ALL three fetch paths (TGJU, index, TSE) to prevent stale data updates on rapid symbol switching
+- Added fetchControllerRef to page.tsx for proper cleanup between fetches
+- Verified fix with agent-browser: selected AED (درهم امارات), no console errors; rapid switching AED→USD→AED, no errors
+
+Stage Summary:
+- vdes-analysis.tsx: Added string-based abort/cancel error filtering in AI analysis useEffect catch block
+- page.tsx: Added AbortController with signal to all 3 fetch paths in handleSelect (tgju-analysis, finpy-sector, analysis)
+- Both files now properly silence abort errors and prevent stale state updates
+- Agent browser verification: zero console errors on AED load and rapid symbol switching
