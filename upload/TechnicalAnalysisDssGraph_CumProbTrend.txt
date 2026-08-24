@@ -1,0 +1,463 @@
+# 📊 پاسخ: روند احتمالات اختصاصی و تجمعی هر سناریو برای ۳۰ روز
+
+## ✅ پاسخ کوتاه
+
+**بله، باید در همین سند باشد!** این یک بخش حیاتی از خروجی سیستم است. روند احتمالات اختصاصی و تجمعی هر سناریو برای ۳۰ روز آینده باید به‌عنوان **خروجی کامل و اصلی سیستم** در سند گنجانده شود.
+
+---
+
+## 🧮 بخش جدید: روند احتمالات اختصاصی و تجمعی سناریوها (۳۰ روز)
+
+### ۱. توضیح مفهوم
+
+برای هر سناریو (۱ تا ۹)، سیستم باید **روند تغییرات احتمال** را در طول ۳۰ روز آینده محاسبه و ارائه دهد:
+
+```yaml
+scenario_probability_trend:
+  description: |
+    این بخش روند تغییرات احتمال اختصاصی (Individual) و تجمعی (Cumulative) 
+    هر سناریو را در ۳۰ روز آینده نشان می‌دهد.
+    
+    - احتمال اختصاصی (Individual Probability): احتمال وقوع هر سناریو در هر روز
+    - احتمال تجمعی (Cumulative Probability): احتمال وقوع هر سناریو تا هر روز (جمع تجمعی)
+    
+  output_format: |
+    برای هر سناریو (۱-۹):
+    - day_1: {individual_prob: 0.08, cumulative_prob: 0.08}
+    - day_5: {individual_prob: 0.10, cumulative_prob: 0.18}
+    - day_10: {individual_prob: 0.12, cumulative_prob: 0.30}
+    - day_20: {individual_prob: 0.10, cumulative_prob: 0.40}
+    - day_30: {individual_prob: 0.08, cumulative_prob: 0.48}
+```
+
+### ۲. فرمول محاسبه روند احتمالات
+
+#### الف) احتمال اختصاصی در هر روز:
+
+```
+P_Scenario_S[t+h] = P_Scenario_S_Current × Decay_Factor_h + 
+                     P_Scenario_S_Forecast[h]
+
+که:
+- P_Scenario_S_Current: احتمال فعلی سناریو S
+- P_Scenario_S_Forecast[h]: احتمال پیش‌بینی‌شده سناریو S در گام h
+- Decay_Factor_h: تابع زوال نمایی دوگانه
+
+Decay_Factor_h = α × exp(-h/τ₁) + (1-α) × exp(-h/τ₂)
+- α = 0.7 (وزن جزء کوتاه‌مدت)
+- τ₁ = 5 (ثابت زمانی کوتاه‌مدت)
+- τ₂ = 20 (ثابت زمانی بلندمدت)
+```
+
+#### ب) احتمال تجمعی در هر روز:
+
+```
+P_Scenario_S_Cumulative[t+h] = Σ_{j=1}^{h} P_Scenario_S[t+j]
+
+که:
+- P_Scenario_S_Cumulative[t+h]: احتمال تجمعی سناریو S تا گام h
+- P_Scenario_S[t+j]: احتمال اختصاصی سناریو S در گام j
+```
+
+### ۳. نمونه کامل خروجی (BTC/USDT - مثال)
+
+#### جدول روند احتمالات اختصاصی و تجمعی:
+
+```yaml
+scenario_probability_trend:
+  instrument: "BTC/USDT"
+  timeframe: "Daily"
+  timestamp: "2024-01-15T14:30:00Z"
+  
+  # سناریو ۱: شوک صعودی
+  scenario_1_shock_up:
+    name: "شوک صعودی"
+    current_probability: 0.08
+    trend:
+      day_1: {individual_prob: 0.08, cumulative_prob: 0.08}
+      day_2: {individual_prob: 0.09, cumulative_prob: 0.17}
+      day_3: {individual_prob: 0.10, cumulative_prob: 0.27}
+      day_4: {individual_prob: 0.11, cumulative_prob: 0.38}
+      day_5: {individual_prob: 0.12, cumulative_prob: 0.50}
+      day_6: {individual_prob: 0.11, cumulative_prob: 0.61}
+      day_7: {individual_prob: 0.10, cumulative_prob: 0.71}
+      day_8: {individual_prob: 0.09, cumulative_prob: 0.80}
+      day_9: {individual_prob: 0.08, cumulative_prob: 0.88}
+      day_10: {individual_prob: 0.07, cumulative_prob: 0.95}
+      day_15: {individual_prob: 0.06, cumulative_prob: 1.25}
+      day_20: {individual_prob: 0.05, cumulative_prob: 1.50}
+      day_25: {individual_prob: 0.04, cumulative_prob: 1.70}
+      day_30: {individual_prob: 0.03, cumulative_prob: 1.85}
+    trend_direction: "نزولی"  # به مرور زمان احتمال شوک صعودی کم می‌شود
+    peak_day: 5
+    peak_probability: 0.12
+    interpretation: "احتمال شوک صعودی در ۵ روز اول بیشتر است و سپس کاهش می‌یابد"
+
+  # سناریو ۲: صعودی شتاب‌دار
+  scenario_2_accelerated_bull:
+    name: "صعودی شتاب‌دار"
+    current_probability: 0.15
+    trend:
+      day_1: {individual_prob: 0.15, cumulative_prob: 0.15}
+      day_2: {individual_prob: 0.16, cumulative_prob: 0.31}
+      day_3: {individual_prob: 0.17, cumulative_prob: 0.48}
+      day_4: {individual_prob: 0.18, cumulative_prob: 0.66}
+      day_5: {individual_prob: 0.19, cumulative_prob: 0.85}
+      day_6: {individual_prob: 0.18, cumulative_prob: 1.03}
+      day_7: {individual_prob: 0.17, cumulative_prob: 1.20}
+      day_8: {individual_prob: 0.16, cumulative_prob: 1.36}
+      day_9: {individual_prob: 0.15, cumulative_prob: 1.51}
+      day_10: {individual_prob: 0.14, cumulative_prob: 1.65}
+      day_15: {individual_prob: 0.12, cumulative_prob: 2.25}
+      day_20: {individual_prob: 0.10, cumulative_prob: 2.75}
+      day_25: {individual_prob: 0.09, cumulative_prob: 3.20}
+      day_30: {individual_prob: 0.08, cumulative_prob: 3.60}
+    trend_direction: "نزولی"
+    peak_day: 5
+    peak_probability: 0.19
+    interpretation: "احتمال صعودی شتاب‌دار در ۵ روز اول بیشتر است و سپس کاهش می‌یابد"
+
+  # سناریو ۳: صعودی قوی
+  scenario_3_strong_bull:
+    name: "صعودی قوی"
+    current_probability: 0.28
+    trend:
+      day_1: {individual_prob: 0.28, cumulative_prob: 0.28}
+      day_2: {individual_prob: 0.29, cumulative_prob: 0.57}
+      day_3: {individual_prob: 0.30, cumulative_prob: 0.87}
+      day_4: {individual_prob: 0.31, cumulative_prob: 1.18}
+      day_5: {individual_prob: 0.32, cumulative_prob: 1.50}
+      day_6: {individual_prob: 0.31, cumulative_prob: 1.81}
+      day_7: {individual_prob: 0.30, cumulative_prob: 2.11}
+      day_8: {individual_prob: 0.29, cumulative_prob: 2.40}
+      day_9: {individual_prob: 0.28, cumulative_prob: 2.68}
+      day_10: {individual_prob: 0.27, cumulative_prob: 2.95}
+      day_15: {individual_prob: 0.25, cumulative_prob: 4.20}
+      day_20: {individual_prob: 0.23, cumulative_prob: 5.35}
+      day_25: {individual_prob: 0.21, cumulative_prob: 6.40}
+      day_30: {individual_prob: 0.20, cumulative_prob: 7.40}
+    trend_direction: "نزولی"
+    peak_day: 5
+    peak_probability: 0.32
+    interpretation: "احتمال صعودی قوی در ۵ روز اول بیشتر است و سپس به تدریج کاهش می‌یابد"
+
+  # سناریو ۴: صعودی خفیف
+  scenario_4_weak_bull:
+    name: "صعودی خفیف"
+    current_probability: 0.12
+    trend:
+      day_1: {individual_prob: 0.12, cumulative_prob: 0.12}
+      day_2: {individual_prob: 0.13, cumulative_prob: 0.25}
+      day_3: {individual_prob: 0.14, cumulative_prob: 0.39}
+      day_4: {individual_prob: 0.15, cumulative_prob: 0.54}
+      day_5: {individual_prob: 0.16, cumulative_prob: 0.70}
+      day_6: {individual_prob: 0.15, cumulative_prob: 0.85}
+      day_7: {individual_prob: 0.14, cumulative_prob: 0.99}
+      day_8: {individual_prob: 0.13, cumulative_prob: 1.12}
+      day_9: {individual_prob: 0.12, cumulative_prob: 1.24}
+      day_10: {individual_prob: 0.11, cumulative_prob: 1.35}
+      day_15: {individual_prob: 0.10, cumulative_prob: 1.85}
+      day_20: {individual_prob: 0.09, cumulative_prob: 2.30}
+      day_25: {individual_prob: 0.08, cumulative_prob: 2.70}
+      day_30: {individual_prob: 0.07, cumulative_prob: 3.05}
+    trend_direction: "نزولی"
+    peak_day: 5
+    peak_probability: 0.16
+    interpretation: "احتمال صعودی خفیف در ۵ روز اول بیشتر است و سپس کاهش می‌یابد"
+
+  # سناریو ۵: رنج
+  scenario_5_range:
+    name: "رنج"
+    current_probability: 0.15
+    trend:
+      day_1: {individual_prob: 0.15, cumulative_prob: 0.15}
+      day_2: {individual_prob: 0.15, cumulative_prob: 0.30}
+      day_3: {individual_prob: 0.15, cumulative_prob: 0.45}
+      day_4: {individual_prob: 0.15, cumulative_prob: 0.60}
+      day_5: {individual_prob: 0.15, cumulative_prob: 0.75}
+      day_6: {individual_prob: 0.15, cumulative_prob: 0.90}
+      day_7: {individual_prob: 0.15, cumulative_prob: 1.05}
+      day_8: {individual_prob: 0.15, cumulative_prob: 1.20}
+      day_9: {individual_prob: 0.15, cumulative_prob: 1.35}
+      day_10: {individual_prob: 0.15, cumulative_prob: 1.50}
+      day_15: {individual_prob: 0.14, cumulative_prob: 2.20}
+      day_20: {individual_prob: 0.13, cumulative_prob: 2.85}
+      day_25: {individual_prob: 0.12, cumulative_prob: 3.45}
+      day_30: {individual_prob: 0.11, cumulative_prob: 4.00}
+    trend_direction: "نزولی"
+    peak_day: 1-10
+    peak_probability: 0.15
+    interpretation: "احتمال رنج در ۱۰ روز اول پایدار است و سپس به تدریج کاهش می‌یابد"
+
+  # سناریو ۶: نزولی خفیف
+  scenario_6_weak_bear:
+    name: "نزولی خفیف"
+    current_probability: 0.08
+    trend:
+      day_1: {individual_prob: 0.08, cumulative_prob: 0.08}
+      day_2: {individual_prob: 0.08, cumulative_prob: 0.16}
+      day_3: {individual_prob: 0.09, cumulative_prob: 0.25}
+      day_4: {individual_prob: 0.09, cumulative_prob: 0.34}
+      day_5: {individual_prob: 0.10, cumulative_prob: 0.44}
+      day_6: {individual_prob: 0.10, cumulative_prob: 0.54}
+      day_7: {individual_prob: 0.10, cumulative_prob: 0.64}
+      day_8: {individual_prob: 0.10, cumulative_prob: 0.74}
+      day_9: {individual_prob: 0.10, cumulative_prob: 0.84}
+      day_10: {individual_prob: 0.09, cumulative_prob: 0.93}
+      day_15: {individual_prob: 0.08, cumulative_prob: 1.33}
+      day_20: {individual_prob: 0.07, cumulative_prob: 1.68}
+      day_25: {individual_prob: 0.06, cumulative_prob: 1.98}
+      day_30: {individual_prob: 0.05, cumulative_prob: 2.23}
+    trend_direction: "نزولی"
+    peak_day: 5-9
+    peak_probability: 0.10
+    interpretation: "احتمال نزولی خفیف در روزهای ۵-۹ بیشتر است و سپس کاهش می‌یابد"
+
+  # سناریو ۷: نزولی قوی
+  scenario_7_strong_bear:
+    name: "نزولی قوی"
+    current_probability: 0.08
+    trend:
+      day_1: {individual_prob: 0.08, cumulative_prob: 0.08}
+      day_2: {individual_prob: 0.08, cumulative_prob: 0.16}
+      day_3: {individual_prob: 0.09, cumulative_prob: 0.25}
+      day_4: {individual_prob: 0.09, cumulative_prob: 0.34}
+      day_5: {individual_prob: 0.10, cumulative_prob: 0.44}
+      day_6: {individual_prob: 0.10, cumulative_prob: 0.54}
+      day_7: {individual_prob: 0.10, cumulative_prob: 0.64}
+      day_8: {individual_prob: 0.10, cumulative_prob: 0.74}
+      day_9: {individual_prob: 0.09, cumulative_prob: 0.83}
+      day_10: {individual_prob: 0.09, cumulative_prob: 0.92}
+      day_15: {individual_prob: 0.08, cumulative_prob: 1.32}
+      day_20: {individual_prob: 0.07, cumulative_prob: 1.67}
+      day_25: {individual_prob: 0.06, cumulative_prob: 1.97}
+      day_30: {individual_prob: 0.05, cumulative_prob: 2.22}
+    trend_direction: "نزولی"
+    peak_day: 5-8
+    peak_probability: 0.10
+    interpretation: "احتمال نزولی قوی در روزهای ۵-۸ بیشتر است و سپس کاهش می‌یابد"
+
+  # سناریو ۸: نزولی شتاب‌دار
+  scenario_8_accelerated_bear:
+    name: "نزولی شتاب‌دار"
+    current_probability: 0.04
+    trend:
+      day_1: {individual_prob: 0.04, cumulative_prob: 0.04}
+      day_2: {individual_prob: 0.04, cumulative_prob: 0.08}
+      day_3: {individual_prob: 0.05, cumulative_prob: 0.13}
+      day_4: {individual_prob: 0.05, cumulative_prob: 0.18}
+      day_5: {individual_prob: 0.06, cumulative_prob: 0.24}
+      day_6: {individual_prob: 0.06, cumulative_prob: 0.30}
+      day_7: {individual_prob: 0.06, cumulative_prob: 0.36}
+      day_8: {individual_prob: 0.06, cumulative_prob: 0.42}
+      day_9: {individual_prob: 0.05, cumulative_prob: 0.47}
+      day_10: {individual_prob: 0.05, cumulative_prob: 0.52}
+      day_15: {individual_prob: 0.04, cumulative_prob: 0.72}
+      day_20: {individual_prob: 0.03, cumulative_prob: 0.87}
+      day_25: {individual_prob: 0.03, cumulative_prob: 1.02}
+      day_30: {individual_prob: 0.02, cumulative_prob: 1.12}
+    trend_direction: "نزولی"
+    peak_day: 5-8
+    peak_probability: 0.06
+    interpretation: "احتمال نزولی شتاب‌دار در روزهای ۵-۸ بیشتر است و سپس کاهش می‌یابد"
+
+  # سناریو ۹: شوک نزولی
+  scenario_9_shock_down:
+    name: "شوک نزولی"
+    current_probability: 0.02
+    trend:
+      day_1: {individual_prob: 0.02, cumulative_prob: 0.02}
+      day_2: {individual_prob: 0.02, cumulative_prob: 0.04}
+      day_3: {individual_prob: 0.03, cumulative_prob: 0.07}
+      day_4: {individual_prob: 0.03, cumulative_prob: 0.10}
+      day_5: {individual_prob: 0.04, cumulative_prob: 0.14}
+      day_6: {individual_prob: 0.04, cumulative_prob: 0.18}
+      day_7: {individual_prob: 0.04, cumulative_prob: 0.22}
+      day_8: {individual_prob: 0.04, cumulative_prob: 0.26}
+      day_9: {individual_prob: 0.03, cumulative_prob: 0.29}
+      day_10: {individual_prob: 0.03, cumulative_prob: 0.32}
+      day_15: {individual_prob: 0.02, cumulative_prob: 0.42}
+      day_20: {individual_prob: 0.02, cumulative_prob: 0.52}
+      day_25: {individual_prob: 0.01, cumulative_prob: 0.57}
+      day_30: {individual_prob: 0.01, cumulative_prob: 0.62}
+    trend_direction: "نزولی"
+    peak_day: 5-8
+    peak_probability: 0.04
+    interpretation: "احتمال شوک نزولی در روزهای ۵-۸ بیشتر است و سپس کاهش می‌یابد"
+```
+
+### ۴. روند احتمالات تجمعی دسته‌ای (Bullish, Neutral, Bearish)
+
+```yaml
+cumulative_probability_trend:
+  bullish:
+    day_1: {individual_prob: 0.63, cumulative_prob: 0.63}
+    day_5: {individual_prob: 0.79, cumulative_prob: 0.79}
+    day_10: {individual_prob: 0.59, cumulative_prob: 0.59}
+    day_15: {individual_prob: 0.53, cumulative_prob: 0.53}
+    day_20: {individual_prob: 0.47, cumulative_prob: 0.47}
+    day_25: {individual_prob: 0.42, cumulative_prob: 0.42}
+    day_30: {individual_prob: 0.38, cumulative_prob: 0.38}
+    trend_direction: "نزولی"
+    interpretation: "احتمال صعودی در ۵ روز اول افزایش می‌یابد و سپس کاهش می‌یابد"
+    
+  neutral:
+    day_1: {individual_prob: 0.15, cumulative_prob: 0.15}
+    day_5: {individual_prob: 0.15, cumulative_prob: 0.15}
+    day_10: {individual_prob: 0.15, cumulative_prob: 0.15}
+    day_15: {individual_prob: 0.14, cumulative_prob: 0.14}
+    day_20: {individual_prob: 0.13, cumulative_prob: 0.13}
+    day_25: {individual_prob: 0.12, cumulative_prob: 0.12}
+    day_30: {individual_prob: 0.11, cumulative_prob: 0.11}
+    trend_direction: "نزولی"
+    interpretation: "احتمال رنج در ۱۰ روز اول پایدار است و سپس کاهش می‌یابد"
+    
+  bearish:
+    day_1: {individual_prob: 0.22, cumulative_prob: 0.22}
+    day_5: {individual_prob: 0.30, cumulative_prob: 0.30}
+    day_10: {individual_prob: 0.26, cumulative_prob: 0.26}
+    day_15: {individual_prob: 0.23, cumulative_prob: 0.23}
+    day_20: {individual_prob: 0.20, cumulative_prob: 0.20}
+    day_25: {individual_prob: 0.17, cumulative_prob: 0.17}
+    day_30: {individual_prob: 0.15, cumulative_prob: 0.15}
+    trend_direction: "نزولی"
+    interpretation: "احتمال نزولی در ۵ روز اول افزایش می‌یابد و سپس کاهش می‌یابد"
+```
+
+### ۵. گراف روند احتمالات (نمودار)
+
+```yaml
+probability_trend_chart:
+  type: "line_chart"
+  x_axis: "روز (Day)"
+  y_axis: "احتمال (Probability)"
+  
+  lines:
+    - scenario_1_shock_up: {color: "red", linestyle: "dashed"}
+    - scenario_2_accelerated_bull: {color: "green", linestyle: "dashed"}
+    - scenario_3_strong_bull: {color: "dark_green", linestyle: "solid"}
+    - scenario_4_weak_bull: {color: "light_green", linestyle: "dotted"}
+    - scenario_5_range: {color: "gray", linestyle: "solid"}
+    - scenario_6_weak_bear: {color: "light_red", linestyle: "dotted"}
+    - scenario_7_strong_bear: {color: "dark_red", linestyle: "solid"}
+    - scenario_8_accelerated_bear: {color: "purple", linestyle: "dashed"}
+    - scenario_9_shock_down: {color: "black", linestyle: "dashed"}
+    
+  cumulative_lines:
+    - bullish_cumulative: {color: "blue", linestyle: "solid"}
+    - neutral_cumulative: {color: "gray", linestyle: "solid"}
+    - bearish_cumulative: {color: "orange", linestyle: "solid"}
+```
+
+### ۶. تفسیر روند احتمالات
+
+```yaml
+trend_interpretation:
+  key_observations:
+    - "در ۵ روز اول، احتمال صعودی (Bullish) به اوج خود می‌رسد (۰.۷۹)"
+    - "احتمال شوک صعودی در ۵ روز اول بیشتر است (۰.۱۲)"
+    - "احتمال شوک نزولی در ۵-۸ روز اول بیشتر است (۰.۰۴)"
+    - "احتمال رنج در ۱۰ روز اول پایدار است (۰.۱۵)"
+    - "از روز ۱۰ به بعد، احتمال نزولی به تدریج افزایش می‌یابد"
+    
+  actionable_insights:
+    - "بهترین زمان ورود: روز ۱-۵ (احتمال صعودی بالا)"
+    - "بهترین زمان خروج: روز ۱۰-۱۵ (احتمال نزولی افزایش می‌یابد)"
+    - "ریسک اصلی: شوک نزولی در روزهای ۵-۸"
+    - "مدیریت ریسک: حد ضرر را در روز ۵-۸ نزدیک‌تر کنید"
+    
+  scenario_dominance:
+    day_1_5:
+      dominant_scenario: "صعودی قوی"
+      probability: 0.32
+      action: "ورود به معامله خرید"
+    day_6_15:
+      dominant_scenario: "صعودی قوی"
+      probability: 0.27
+      action: "نگهداری موقعیت با حد ضرر محافظه‌کارانه"
+    day_16_30:
+      dominant_scenario: "رنج"
+      probability: 0.13
+      action: "خروج تدریجی از موقعیت"
+```
+
+### ۷. فرمول محاسبه روند برای پیاده‌سازی
+
+```python
+def calculate_scenario_probability_trend(scenario_probabilities, decay_params, horizon=30):
+    """
+    محاسبه روند احتمالات اختصاصی و تجمعی هر سناریو برای ۳۰ روز
+    
+    Args:
+        scenario_probabilities: دیکشنری احتمالات فعلی ۹ سناریو
+        decay_params: پارامترهای تابع زوال
+        horizon: افق پیش‌بینی (۳۰ روز)
+    
+    Returns:
+        دیکشنری روند احتمالات
+    """
+    
+    α = decay_params['alpha']  # وزن جزء کوتاه‌مدت
+    τ₁ = decay_params['tau_short']  # ثابت زمانی کوتاه‌مدت
+    τ₂ = decay_params['tau_long']  # ثابت زمانی بلندمدت
+    
+    # محاسبه تابع زوال
+    decay_factors = []
+    for h in range(1, horizon + 1):
+        decay = α * np.exp(-h/τ₁) + (1-α) * np.exp(-h/τ₂)
+        decay_factors.append(decay)
+    
+    # نرمال‌سازی
+    total_decay = sum(decay_factors)
+    normalized_decay = [d / total_decay for d in decay_factors]
+    
+    # محاسبه روند برای هر سناریو
+    trend_results = {}
+    for scenario_id, current_prob in scenario_probabilities.items():
+        scenario_trend = []
+        cumulative_prob = 0
+        
+        for h in range(1, horizon + 1):
+            # احتمال اختصاصی در گام h
+            individual_prob = current_prob * normalized_decay[h-1]
+            
+            # احتمال تجمعی
+            cumulative_prob += individual_prob
+            
+            scenario_trend.append({
+                'day': h,
+                'individual_prob': round(individual_prob, 4),
+                'cumulative_prob': round(cumulative_prob, 4)
+            })
+        
+        trend_results[scenario_id] = {
+            'current_probability': current_prob,
+            'trend': scenario_trend
+        }
+    
+    return trend_results
+```
+
+---
+
+## 📋 نتیجه‌گیری
+
+**بله، روند احتمالات اختصاصی و تجمعی هر سناریو برای ۳۰ روز باید در همین سند باشد.** این بخش به‌عنوان **خروجی کامل و اصلی سیستم** در سند گنجانده شده و باید در خروجی نهایی سیستم (decision_graph_output) به‌صورت کامل ارائه شود.
+
+### 🔑 نکات کلیدی:
+
+1. **احتمال اختصاصی (Individual Probability)**: احتمال وقوع هر سناریو در هر روز جداگانه
+2. **احتمال تجمعی (Cumulative Probability)**: احتمال وقوع هر سناریو تا هر روز (جمع تجمعی)
+3. **روند (Trend)**: تغییرات احتمال در طول زمان (صعودی/نزولی/پایدار)
+4. **نقطه اوج (Peak)**: روزی که احتمال هر سناریو به بیشترین مقدار می‌رسد
+5. **تفسیر (Interpretation)**: تحلیل روند و ارائه بینش‌های عملی
+
+### 📊 کاربردها:
+
+- **تعیین زمان ورود/خروج**: بر اساس اوج احتمالات
+- **مدیریت ریسک**: شناسایی روزهای پرریسک
+- **تنظیم حد ضرر**: نزدیک‌تر کردن حد ضرر در روزهای پرریسک
+- **برنامه‌ریزی معاملات**: بر اساس تغییر روند احتمالات
+- **تحلیل سناریو**: شناسایی سناریوی غالب در هر بازه زمانی
+
+**این بخش باید در خروجی نهایی سیستم (decision_graph_output) به‌صورت کامل و دقیق ارائه شود.**

@@ -244,7 +244,6 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
     .join('\n');
 
-<<<<<<< Updated upstream
   // V11 probabilities section
   let v11Block = '';
   const v11Probs = body.v11Probabilities as {
@@ -273,24 +272,6 @@ ${v11Lines}
 - \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0646\u0632\u0648\u0644\u06cc: ${toPersianNum(v11Probs.bearishCumulative)}\u066a
 - \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0631\u06cc\u0633\u06a9: ${riskLabels[v11Probs.riskProfile] || v11Probs.riskProfile}`;
   }
-=======
-  // Persona instruction block
-  const personaSigPhrases = persona.signaturePhrases.slice(0, 3).join(" | ");
-  const personaBlock = `\n**\u0634\u062e\u0635\u06cc\u062a \u0646\u0648\u0634\u062a\u0627\u0631\u06cc:** ${persona.name}
-- \u06af\u0631\u0627\u06cc\u0634 \u062a\u062d\u0644\u06cc\u0644\u06af\u0631 u0627\u0631\u0634\u062f u0628اu0632\u0627\u0631\u0627\u06ccc مu0627u0644u06cc با 20 سال u062aجربه** u0647u0633u062au06ccد.
-- \u0644u062du0646 u063au0627u0644u0628: ${persona.toneAffinity}
-- عu0628u0627u0631u0627u062a u0627u0645u0636u0627u06cc: ${personaSigPhrases}
-- u0645u062au0646 u0628u0627u06ccu062f u0628u0627 u0644u062du0646 u0648 u0633u0628u06a9 u0645u0646u062du0635u0631u0628u0641u0631u062f ${persona.name} u0646u06480634u062au0647 u063448u062f.`;
-
-  // School/style/tone instruction
-  const styleBlock = `\n**\u0645\u06a9\u062a\u0628 \u062a\u062d\u0644\u06cc\u0644:** ${school}
-**\u0633\u0628\u06a9 \u0631\u0648\u0627\u06cc\u062a:** ${style}
-**\u0644\u062d\u0646 \u062a\u062d\u0644\u06cc\u0644\u06cc:** ${tone}
-- \u062au062du064406ccu0644 بu0627u06ccد u0639u0645u062fu062au0627u064b u0628u0631u0627u0633u0627u0633 اu0635u0648u0644 ${school} u0628u0627u0634u062f.
-- سu0627u062eu062au0627u0631 u0645u062au0646 u0628u0627u06ccu062f u0627u0632 u0646u0648u0639 u00ab${style}u00bb u0628u06270634u062f.
-- u0644u062du0646 u06a9u0644u06cc u0628u0627u06ccu062f u00ab${tone}u00bb u0628u06270634u062f.`;
-
->>>>>>> Stashed changes
 
   return `
 **\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644:**

@@ -3,11 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
-<<<<<<< Updated upstream
-import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
-=======
 import { type GraphData } from '@/lib/decision-graph';
->>>>>>> Stashed changes
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -284,36 +280,7 @@ export default function VdssGraph(props: VdssGraphProps) {
     return () => observer.disconnect();
   }, [drawEdges]);
 
-<<<<<<< Updated upstream
-  // ── Aggregated path probabilities per target (calibrated = matches scenario prob) ──
-  const pathProbsByTarget = useMemo(() => {
-    const result: Record<string, number> = {};
-    for (const key of SCENARIO_KEYS) result[key] = 0;
-    for (const p of filteredPaths) {
-      result[p.target] = (result[p.target] ?? 0) + p.prob;
-    }
-    // After calibration, these should match scenario probabilities
-    return result;
-  }, [filteredPaths]);
 
-  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + scenarios[k].probability, 0);
-
-  // ── V11 Probabilities ──
-  const v11 = useMemo<V11Result>(() => computeV11Probabilities({
-    R1: scenarios.R1.probability,
-    R2: scenarios.R2.probability,
-    R3: scenarios.R3.probability,
-    R4: scenarios.R4.probability,
-    R5: scenarios.R5.probability,
-  }), [scenarios.R1.probability, scenarios.R2.probability, scenarios.R3.probability, scenarios.R4.probability, scenarios.R5.probability]);
-  const v11Map = useMemo(() => {
-    const m = new Map<string, V11Result['scenarios'][number]>();
-    for (const s of v11.scenarios) m.set(s.key, s);
-    return m;
-  }, [v11]);
-
-=======
->>>>>>> Stashed changes
   // ── Detail panel content ─────────────────────────────────────────
   const detailContent = useMemo(() => {
     if (!selectedNode) return null;
@@ -629,26 +596,6 @@ export default function VdssGraph(props: VdssGraphProps) {
 
                   {/* Terminal scenario nodes */}
                   {isResultNode && (
-<<<<<<< Updated upstream
-                    <span className="block text-[9px] font-bold mb-1" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[id]}</span>
-                  )}
-                  {!isResultNode && (
-                    <span className="block text-[9px] font-bold mb-1" style={{ color: isVisible ? scenarioColor : '#555' }}>{NODE_DEFS[id].title.split(' ')[0]} | {def.type.split(' ').slice(0, 2).join(' ')}</span>
-                  )}
-                  <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{def.title}</div>
-                  <div className="text-[10px] text-[#6b7280] mt-1" dir="ltr">{nodeValues[id] ?? '--'}</div>
-                  {isResultNode && scenarioProb !== null && (
-                    <div className="mt-1.5 flex flex-col items-center gap-0.5">
-                      <span
-                        className="inline-block px-2.5 py-0.5 rounded-full text-sm font-bold"
-                        style={{
-                          background: `color-mix(in srgb, ${scenarioColor} 17%, transparent)`,
-                          color: scenarioColor,
-                        }}
-                      >{toFa(scenarioProb)}٪</span>
-                      <span className="text-[8px] text-[#6b7280]">تجمعی: {toFa(v11Map.get(id)?.cumulativeProbability ?? scenarioProb)}٪</span>
-                    </div>
-=======
                     <>
                       <span className="block text-[9px] font-bold mb-0.5" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[node.id]}</span>
                       <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
@@ -660,10 +607,9 @@ export default function VdssGraph(props: VdssGraphProps) {
                             background: `color-mix(in srgb, ${scenarioColor} 17%, transparent)`,
                             color: scenarioColor,
                           }}
-                        >{toFa(scenarioProb * 100)}٪</span>
+                        >{toFa(scenarioProb)}٪</span>
                       )}
                     </>
->>>>>>> Stashed changes
                   )}
                 </div>
               );
@@ -726,12 +672,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                         />
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-[#6b7280]">
-<<<<<<< Updated upstream
-                        <span>تعداد مسیرها: {filteredPaths.filter(p => p.target === key).length}</span>
-                        <span>تجمعی: <b className="text-[#374151]">{toFa(v11Map.get(key)?.cumulativeProbability ?? s.probability)}٪</b></span>
-=======
                         <span>تجمیعی: <b className="text-[#374151]">{toFa(s?.probability ?? 0)}٪</b></span>
->>>>>>> Stashed changes
                       </div>
                     </div>
                   );
@@ -771,15 +712,6 @@ export default function VdssGraph(props: VdssGraphProps) {
                 } as React.CSSProperties}
               >
                 <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
-<<<<<<< Updated upstream
-                <span className="text-xs font-bold text-[#374151]">{SCENARIO_DISPLAY[key]} | {meta.label}</span>
-                <div className="flex items-center justify-between text-[10px] text-[#6b7280] mt-1">
-                  <span>اختصاصی: <b style={{ color: meta.color }}>{toFa(s.probability)}٪</b></span>
-                  <span>تجمعی: <b className="text-[#374151]">{toFa(v11Map.get(key)?.cumulativeProbability ?? s.probability)}٪</b></span>
-                </div>
-                <small className="block text-[10px] text-[#6b7280] leading-relaxed mt-2" dir="ltr">
-                  {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
-=======
                 <span className="text-xs font-bold text-[#374151]">{meta.label}</span>
                 <div className="mt-2 space-y-0.5">
                   {Object.entries(BRANCH_META).map(([bKey, bMeta]) => (
@@ -789,14 +721,13 @@ export default function VdssGraph(props: VdssGraphProps) {
                         {bMeta.label}
                       </span>
                       <span className="font-bold text-[#374151]">
-                        {toPersianDigits((contrib[bKey as 'trend' | 'breakout' | 'reversal'] * 100).toFixed(1))}٪
+                        {toPersianDigits((contrib[bKey as 'trend' | 'breakout' | 'reversal']).toFixed(1))}٪
                       </span>
                     </div>
                   ))}
                 </div>
                 <small className="block text-[9px] text-[#6b7280] leading-relaxed mt-1.5" dir="ltr">
                   {toFa(s.targetMin)} — {toFa(s.targetMax)}
->>>>>>> Stashed changes
                 </small>
               </div>
             );

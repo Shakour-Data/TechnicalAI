@@ -298,14 +298,9 @@ export default function Home() {
       try {
         // 1. Try webId (TSETMC CDN)
         if (webId) {
-<<<<<<< Updated upstream
-          setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ...');
-          const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)), { signal: controller.signal });
-          if (controller.signal.aborted) return;
-=======
           setLoadingMessage('در حال دریافت داده‌های شاخص از TSETMC ... (حدود ۳۰ ثانیه برای بار اول)');
           const res = await fetch('/api/finpy-sector?webId=' + encodeURIComponent(String(webId)));
->>>>>>> Stashed changes
+
           if (res.ok) {
             try {
               const json = await res.json();

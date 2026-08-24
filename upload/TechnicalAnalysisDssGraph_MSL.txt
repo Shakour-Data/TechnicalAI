@@ -1,0 +1,1673 @@
+# 📚 مستند کامل و جامع: سیستم مکتب، سبک و لحن تحلیل (نسخه ۴.۰)
+
+---
+
+## 🎯 معرفی کلی
+
+سیستم **مکتب، سبک و لحن تحلیل** یک چارچوب هوشمند و خودکار برای تعیین **روش‌شناسی، ساختار ارائه و حالت احساسی** تحلیل‌های تولیدشده توسط سیستم گراف تصمیم است. این سیستم با استفاده از یادگیری ماشین، داده‌های بازار و بازخورد عملکرد، به‌صورت پویا مناسب‌ترین ترکیب را برای هر شرایط بازار و هر مخاطب خاص انتخاب می‌کند.
+
+---
+
+## 📋 فهرست مطالب
+
+1. [مکتب تحلیل (School of Analysis)](#۱-مکتب-تحلیل-school-of-analysis)
+2. [سبک تحلیل (Analysis Style)](#۲-سبک-تحلیل-analysis-style)
+3. [لحن تحلیل (Analysis Tone)](#۳-لحن-تحلیل-analysis-tone)
+4. [سیستم تعامل و ترکیب](#۴-سیستم-تعامل-و-ترکیب)
+5. [الگوریتم‌های انتخاب پویا](#۵-الگوریتم‌های-انتخاب-پویا)
+6. [وزن‌دهی پیشرفته](#۶-وزن‌دهی-پیشرفته)
+7. [سیستم بازخورد و بهبود](#۷-سیستم-بازخورد-و-بهبود)
+8. [خروجی نهایی](#۸-خروجی-نهایی)
+9. [مثال‌های عملی](#۹-مثال‌های-عملی)
+
+---
+
+## ۱. مکتب تحلیل (School of Analysis)
+
+### ۱.۱. تعریف و مفهوم
+
+**مکتب تحلیل** به چارچوب فکری، روش‌شناسی و فلسفه تحلیلی گفته می‌شود که بر اساس آن، داده‌های بازار تفسیر و تحلیل می‌شوند. هر مکتب دارای اصول، ابزارها و قواعد خاص خود است که نحوه نگاه به بازار و استخراج سیگنال‌های معاملاتی را تعیین می‌کند.
+
+### ۱.۲. مکاتب شش‌گانه
+
+#### 📊 مکتب کلاسیک (Classical School)
+
+```yaml
+school_classical:
+  id: "classical"
+  name: "مکتب کلاسیک"
+  name_en: "Classical School"
+  
+  # اصول بنیادین
+  core_principles:
+    - "قیمت همه‌چیز را تعدیل می‌کند"
+    - "تاریخ خود را تکرار می‌کند"
+    - "روندها تا زمانی که شکسته نشوند، معتبر هستند"
+    
+  # ابزارهای اصلی
+  primary_tools:
+    - "سطوح حمایت و مقاومت"
+    - "خطوط روند و کانال‌ها"
+    - "الگوهای کلاسیک (سر و شانه، مثلث، پرچم، گوه)"
+    - "میانگین‌های متحرک ساده"
+    
+  # نشانه‌های تشخیص
+  detection_signals:
+    - "تعداد الگوهای کلاسیک تشخیص‌داده‌شده ≥ ۲"
+    - "اعتبار الگوهای کلاسیک > ۰.۶"
+    - "قدرت سطوح حمایت/مقاومت > ۳"
+    - "نسبت الگوهای کلاسیک به کل الگوها > ۰.۴"
+    
+  # نقاط قوت
+  strengths:
+    - "سادگی و فهم آسان"
+    - "کاربرد در تمام بازارها"
+    - "تأیید بصری قوی"
+    - "مناسب برای تایم‌فریم‌های بلندمدت"
+    
+  # نقاط ضعف
+  weaknesses:
+    - "تشخیص الگوها ذهنی است"
+    - "در بازارهای با نوسان بالا کمتر مؤثر است"
+    - "زمان‌بر بودن تشخیص"
+    
+  # وزن پایه
+  base_weight: 0.30
+  
+  # ضریب تطبیق با شرایط
+  adaptive_factors:
+    trend_strength: 0.2
+    pattern_quality: 0.4
+    timeframe_weight: 0.2
+    volatility_adjustment: 0.2
+```
+
+#### 📈 مکتب اسیلاتوری (Oscillator School)
+
+```yaml
+school_oscillator:
+  id: "oscillator"
+  name: "مکتب اسیلاتوری"
+  name_en: "Oscillator School"
+  
+  core_principles:
+    - "حرکت قیمت دارای نوسانات周期ی است"
+    - "اشباع خرید و فروش نشانه برگشت است"
+    - "واگرایی‌ها سیگنال‌های قوی هستند"
+    
+  primary_tools:
+    - "RSI (شاخص قدرت نسبی)"
+    - "MACD (شاخص حرکت)"
+    - "Stochastic (استوکاستیک)"
+    - "CCI (شاخص کانال کالا)"
+    - "واگرایی‌ها و همگرایی‌ها"
+    
+  detection_signals:
+    - "تعداد واگرایی‌های تشخیص‌داده‌شده ≥ ۳"
+    - "RSI در مناطق اشباع (> ۷۰ یا < ۳۰)"
+    - "MACD با هیستوگرام قابل توجه"
+    - "ADX بین ۲۰-۴۰ (روند متوسط)"
+    
+  strengths:
+    - "تشخیص نقاط برگشت"
+    - "مناسب برای بازارهای رنج"
+    - "سیگنال‌های زودهنگام"
+    - "قابل اتوماتیک‌سازی"
+    
+  weaknesses:
+    - "سیگنال‌های اشتباه در روندهای قوی"
+    - "نیاز به تأیید با سایر ابزارها"
+    - "در بازارهای با نوسان کم کمتر مؤثر است"
+    
+  base_weight: 0.25
+  
+  adaptive_factors:
+    divergence_count: 0.3
+    rsi_extreme: 0.3
+    adx_level: 0.2
+    volatility: 0.2
+```
+
+#### 💰 مکتب حجم و عرضه/تقاضا (Volume & Supply/Demand School)
+
+```yaml
+school_volume:
+  id: "volume"
+  name: "مکتب حجم و عرضه/تقاضا"
+  name_en: "Volume & Supply/Demand School"
+  
+  core_principles:
+    - "حجم تأییدکننده اصلی قیمت است"
+    - "قیمت‌ها به سمت نواحی با حجم بالا حرکت می‌کنند"
+    - "جریان پول، جهت‌دهنده اصلی بازار است"
+    
+  primary_tools:
+    - "حجم معاملات"
+    - "OBV (شاخص تعادل حجم)"
+    - "VWAP (میانگین وزنی قیمت با حجم)"
+    - "Chaikin A/D (انباشت/توزیع)"
+    - "نواحی عرضه و تقاضا"
+    - "Volume Profile"
+    
+  detection_signals:
+    - "داده‌های حجم موجود باشد"
+    - "حجم در نقاط کلیدی > میانگین ۲۰ روزه"
+    - "OBV هم‌جهت با قیمت یا واگرایی قابل توجه"
+    - "حداقل ۳ اندیکاتور حجم سیگنال قوی"
+    
+  strengths:
+    - "تأیید قوی سیگنال‌ها"
+    - "شناسایی جریان واقعی پول"
+    - "مناسب برای کشف نهنگ‌ها"
+    - "کمک به تشخیص شکست‌های واقعی"
+    
+  weaknesses:
+    - "وابستگی به داده‌های حجم"
+    - "در بازارهای با حجم کم کمتر مؤثر است"
+    - "نیاز به تحلیل چندگانه"
+    
+  base_weight: 0.15
+  
+  volume_dependent: true  # در صورت عدم وجود داده حجم حذف می‌شود
+  
+  adaptive_factors:
+    volume_availability: 0.4
+    volume_anomaly: 0.3
+    obv_trend: 0.3
+```
+
+#### 🎯 مکتب هارمونیک (Harmonic School)
+
+```yaml
+school_harmonic:
+  id: "harmonic"
+  name: "مکتب هارمونیک"
+  name_en: "Harmonic School"
+  
+  core_principles:
+    - "بازار از الگوهای هندسی پیروی می‌کند"
+    - "نسبت‌های فیبوناچی قوانین طبیعی بازار هستند"
+    - "PRZ (منطقه برگشت احتمالی) قابل محاسبه است"
+    
+  primary_tools:
+    - "الگوهای گارتلی، خفاش، خرچنگ، پروانه"
+    - "نسبت‌های فیبوناچی (۰.۲۳۶، ۰.۳۸۲، ۰.۵، ۰.۶۱۸، ۰.۷۸۶)"
+    - "PRZ (Potential Reversal Zone)"
+    - "نسبت‌های BC و AB"
+    
+  detection_signals:
+    - "حداقل ۲ الگوی هارمونیک با اعتبار > ۰.۶"
+    - "نسبت‌های فیبوناچی دقیق (تلرانس < ۰.۰۵)"
+    - "PRZ با تلاقی حداقل ۳ نسبت فیبوناچی"
+    - "واگرایی در PRZ تأییدکننده"
+    
+  strengths:
+    - "دقت بالا در نقاط برگشت"
+    - "قابلیت محاسبه خودکار"
+    - "مناسب برای تمام تایم‌فریم‌ها"
+    - "ترکیب با سایر مکاتب"
+    
+  weaknesses:
+    - "پیچیدگی یادگیری"
+    - "تعداد الگوهای کم در برخی بازارها"
+    - "نیاز به محاسبات دقیق"
+    
+  base_weight: 0.10
+  
+  adaptive_factors:
+    harmonic_pattern_count: 0.4
+    fibonacci_confluence: 0.3
+    prz_quality: 0.3
+```
+
+#### 🔄 مکتب ترکیبی (Hybrid School)
+
+```yaml
+school_hybrid:
+  id: "hybrid"
+  name: "مکتب ترکیبی"
+  name_en: "Hybrid School"
+  
+  core_principles:
+    - "هیچ مکتبی به تنهایی کامل نیست"
+    - "ترکیب مکاتب، قدرت تحلیل را افزایش می‌دهد"
+    - "یادگیری ماشین بهترین ترکیب را پیدا می‌کند"
+    
+  primary_tools:
+    - "همه ابزارهای مکاتب دیگر"
+    - "الگوریتم‌های یادگیری ماشین"
+    - "وزن‌دهی پویا"
+    - "سیستم‌های مبتنی بر قاعده"
+    
+  detection_signals:
+    - "هیچ مکتبی غالب نباشد (وزن < ۰.۴)"
+    - "ترکیب متوازن از الگوها، اندیکاتورها و سطوح"
+    - "رژیم بازار نامشخص یا در حال تغییر"
+    - "اطمینان کلی پایین (۰.۴-۰.۶)"
+    
+  strengths:
+    - "انعطاف‌پذیری بالا"
+    - "سازگاری با تمام شرایط"
+    - "کمترین خطای سیستماتیک"
+    - "یادگیری از همه مکاتب"
+    
+  weaknesses:
+    - "پیچیدگی اجرا"
+    - "نیاز به محاسبات زیاد"
+    - "تفسیرپذیری کمتر"
+    
+  base_weight: 0.10
+  
+  adaptive_factors:
+    school_diversity: 0.3
+    regime_uncertainty: 0.3
+    confidence_level: 0.2
+    ml_confidence: 0.2
+```
+
+#### 🌊 مکتب الیوت (Elliott School)
+
+```yaml
+school_elliott:
+  id: "elliott"
+  name: "مکتب الیوت"
+  name_en: "Elliott School"
+  
+  core_principles:
+    - "بازار در الگوهای موجی حرکت می‌کند"
+    - "امواج حرکتی (۵ موجی) و اصلاحی (۳ موجی)"
+    - "نسبت‌های فیبوناچی بین امواج"
+    
+  primary_tools:
+    - "امواج الیوت (Impulse, Zigzag, Flat)"
+    - "نسبت‌های فیبوناچی بین امواج"
+    - "شمارش امواج"
+    - "قوانین جایگزینی (Alternation)"
+    
+  detection_signals:
+    - "حداقل ۵ موج متوالی تشخیص‌داده‌شده"
+    - "نسبت‌های فیبوناچی دقیق بین امواج"
+    - "تأیید با واگرایی در انتهای موج ۵"
+    - "ADX > ۲۵ (روند قوی)"
+    
+  strengths:
+    - "شناسایی ساختار کامل بازار"
+    - "پیش‌بینی اهداف قیمتی"
+    - "تشخیص نقاط برگشت اصلی"
+    - "مناسب برای بازارهای روندی"
+    
+  weaknesses:
+    - "تشخیص ذهنی"
+    - "پیچیدگی یادگیری"
+    - "تفسیرهای متفاوت از یک موج"
+    - "در بازارهای رنج کمتر مؤثر است"
+    
+  base_weight: 0.10
+  
+  adaptive_factors:
+    wave_count: 0.3
+    fib_accuracy: 0.3
+    trend_strength: 0.2
+    divergence_confirmation: 0.2
+```
+
+### ۱.۳. فرمول‌های محاسبه وزن مکاتب
+
+#### فرمول اصلی وزن مکتب:
+
+```
+School_Weight_i = Base_Weight_i × Asset_Multiplier_i × Timeframe_Multiplier_i × Regime_Multiplier_i
+```
+
+#### مؤلفه‌های تأثیرگذار:
+
+```yaml
+weight_calculation_components:
+  
+  # ۱. ضریب دارایی
+  asset_multiplier:
+    cryptocurrency:
+      classical: 0.9
+      oscillator: 1.1
+      volume: 0.8
+      harmonic: 1.2
+      hybrid: 1.0
+      elliott: 1.0
+      
+    forex:
+      classical: 1.1
+      oscillator: 0.9
+      volume: 0.6
+      harmonic: 0.9
+      hybrid: 1.0
+      elliott: 1.1
+      
+    stocks:
+      classical: 1.0
+      oscillator: 0.9
+      volume: 1.2
+      harmonic: 0.8
+      hybrid: 1.0
+      elliott: 0.9
+      
+    commodities:
+      classical: 1.0
+      oscillator: 1.0
+      volume: 1.1
+      harmonic: 0.9
+      hybrid: 1.0
+      elliott: 1.0
+  
+  # ۲. ضریب تایم‌فریم
+  timeframe_multiplier:
+    daily:
+      classical: 1.2
+      oscillator: 1.0
+      volume: 1.1
+      harmonic: 1.0
+      hybrid: 1.0
+      elliott: 1.1
+      
+    hourly:
+      classical: 0.8
+      oscillator: 1.2
+      volume: 0.9
+      harmonic: 1.1
+      hybrid: 1.0
+      elliott: 0.9
+      
+    weekly:
+      classical: 1.3
+      oscillator: 0.8
+      volume: 1.0
+      harmonic: 1.0
+      hybrid: 1.0
+      elliott: 1.2
+      
+    monthly:
+      classical: 1.4
+      oscillator: 0.7
+      volume: 0.9
+      harmonic: 0.9
+      hybrid: 0.9
+      elliott: 1.3
+  
+  # ۳. ضریب رژیم بازار
+  regime_multiplier:
+    "Strong Bull":
+      classical: 1.0
+      oscillator: 0.8
+      volume: 1.0
+      harmonic: 1.0
+      hybrid: 0.9
+      elliott: 1.2
+      
+    "Weak Bull":
+      classical: 1.0
+      oscillator: 1.1
+      volume: 1.0
+      harmonic: 1.0
+      hybrid: 1.0
+      elliott: 0.9
+      
+    "Strong Bear":
+      classical: 0.9
+      oscillator: 1.0
+      volume: 0.9
+      harmonic: 0.9
+      hybrid: 1.1
+      elliott: 1.0
+      
+    "Weak Bear":
+      classical: 0.9
+      oscillator: 1.1
+      volume: 1.0
+      harmonic: 1.0
+      hybrid: 1.1
+      elliott: 0.9
+      
+    "Range":
+      classical: 0.8
+      oscillator: 1.3
+      volume: 0.8
+      harmonic: 1.1
+      hybrid: 1.2
+      elliott: 0.6
+```
+
+#### نرمال‌سازی وزن‌ها:
+
+```
+Total_Weight = Σ(School_Weight_i)
+School_Weight_Normalized_i = School_Weight_i / Total_Weight
+```
+
+---
+
+## ۲. سبک تحلیل (Analysis Style)
+
+### ۲.۱. تعریف و مفهوم
+
+**سبک تحلیل** به نحوه ارائه، ساختاردهی و جزئیات محتوای تحلیلی گفته می‌شود. سبک تعیین می‌کند که تحلیل چقدر مفصل باشد، بر چه جنبه‌هایی تأکید شود و برای چه مخاطبی مناسب است.
+
+### ۲.۲. سبک‌های پنج‌گانه
+
+#### 👔 سبک اجرایی و تصمیم‌گیری (Executive & Decision-Making)
+
+```yaml
+style_executive:
+  id: "executive"
+  name: "سبک اجرایی و تصمیم‌گیری"
+  name_en: "Executive & Decision-Making Style"
+  
+  # ویژگی‌های اصلی
+  characteristics:
+    - "مختصر و متمرکز بر تصمیم"
+    - "تأکید بر EMV (Expected Monetary Value)"
+    - "مدیریت ریسک در اولویت"
+    - "خلاصه اجرایی در ابتدا"
+    - "استفاده از بولت‌پوینت‌ها"
+    
+  # مخاطب هدف
+  target_audience:
+    - "مدیران ارشد"
+    - "سرمایه‌گذاران نهادی"
+    - "مدیران صندوق‌ها"
+    - "کمیته‌های سرمایه‌گذاری"
+    
+  # ساختار پیشنهادی
+  structure:
+    - "چکیده اجرایی (۱ پاراگراف)"
+    - "تصمیم پیشنهادی (BUY/SELL/HOLD)"
+    - "دلایل کلیدی (حداکثر ۵ مورد)"
+    - "ریسک‌های اصلی"
+    - "نتیجه‌گیری نهایی"
+    
+  # طول پیشنهادی
+  length: "short (۲۰۰-۴۰۰ کلمه)"
+  
+  # شاخص‌های کلیدی
+  key_indicators_priority:
+    - "EMV"
+    - "Risk-Reward Ratio"
+    - "VaR"
+    - "Max Drawdown"
+    - "Confidence Score"
+```
+
+#### 🔬 سبک تحلیلی-تکنیکال (Analytical-Technical Style)
+
+```yaml
+style_analytical:
+  id: "analytical"
+  name: "سبک تحلیلی-تکنیکال"
+  name_en: "Analytical-Technical Style"
+  
+  characteristics:
+    - "جزئیات کامل فنی"
+    - "بررسی تمام اندیکاتورها و الگوها"
+    - "نمودارها و تصاویر تحلیلی"
+    - "تحلیل دقیق سطوح"
+    - "شواهد و مدارک کامل"
+    
+  target_audience:
+    - "تحلیل‌گران حرفه‌ای"
+    - "معامله‌گران فعال"
+    - "تیم‌های تحقیقاتی"
+    - "تریدرهای حرفه‌ای"
+    
+  structure:
+    - "مرور کلی بازار"
+    - "تحلیل روند (چند تایم‌فریم)"
+    - "تحلیل اندیکاتورها (۵۳+ مورد)"
+    - "الگوهای تشخیص‌داده‌شده"
+    - "سطوح حمایت و مقاومت"
+    - "سناریوهای احتمالی"
+    - "نتیجه‌گیری و توصیه"
+    
+  length: "long (۱۰۰۰-۳۰۰۰ کلمه)"
+  
+  key_indicators_priority:
+    - "All 53+ indicators"
+    - "Patterns (Classical, Harmonic, Candlestick)"
+    - "Divergences"
+    - "Trend Lines"
+    - "Fibonacci Levels"
+```
+
+#### 🔮 سبک پیش‌بینی و آینده‌نگر (Forecasting & Forward-Looking Style)
+
+```yaml
+style_forecasting:
+  id: "forecasting"
+  name: "سبک پیش‌بینی و آینده‌نگر"
+  name_en: "Forecasting & Forward-Looking Style"
+  
+  characteristics:
+    - "تأکید بر پیش‌بینی‌های آینده"
+    - "سناریوهای مختلف با احتمالات"
+    - "تحلیل روند احتمالات"
+    - "مدل‌های پیش‌بینی (ML)"
+    - "افق‌های زمانی مختلف"
+    
+  target_audience:
+    - "برنامه‌ریزان استراتژیک"
+    - "مدیران صندوق‌ها"
+    - "تحلیل‌گران کلان"
+    - "سرمایه‌گذاران بلندمدت"
+    
+  structure:
+    - "خلاصه پیش‌بینی‌ها"
+    - "سناریوهای ۱-۳۰ روزه"
+    - "روند احتمالات (جدول و نمودار)"
+    - "نقاط عطف آینده"
+    - "تأثیر رویدادهای خبری"
+    - "راهبردهای پیشنهادی"
+    
+  length: "medium-long (۵۰۰-۱۵۰۰ کلمه)"
+  
+  key_indicators_priority:
+    - "Forecasted Prices"
+    - "Scenario Probabilities"
+    - "Cumulative Probabilities"
+    - "Trend of Probabilities"
+    - "NLP Sentiment"
+    - "GNN Correlations"
+```
+
+#### ⚡ سبک معاملاتی و عملیاتی (Trading & Operational Style)
+
+```yaml
+style_trading:
+  id: "trading"
+  name: "سبک معاملاتی و عملیاتی"
+  name_en: "Trading & Operational Style"
+  
+  characteristics:
+    - "تأکید بر نقاط ورود/خروج"
+    - "مدیریت ریسک عملیاتی"
+    - "دستورات معاملاتی دقیق"
+    - "حد ضرر و حد سود مشخص"
+    - "حجم معاملات پیشنهادی"
+    
+  target_audience:
+    - "معامله‌گران روزانه"
+    - "تیم‌های اجرایی"
+    - "پراپ تریدرها"
+    - "معامله‌گران الگوریتمی"
+    
+  structure:
+    - "اقدام پیشنهادی (BUY/SELL)"
+    - "نقطه ورود دقیق"
+    - "حد ضرر (Stop Loss)"
+    - "حد سود (Take Profit)"
+    - "حجم معامله"
+    - "نسبت ریسک به بازده"
+    - "مدیریت موقعیت"
+    
+  length: "short (۱۵۰-۳۰۰ کلمه)"
+  
+  key_indicators_priority:
+    - "Entry Price"
+    - "Stop Loss"
+    - "Take Profit"
+    - "Position Size"
+    - "Risk-Reward Ratio"
+    - "Trailing Stop"
+```
+
+#### 📖 سبک آموزشی-تفسیری (Educational-Interpretive Style)
+
+```yaml
+style_educational:
+  id: "educational"
+  name: "سبک آموزشی-تفسیری"
+  name_en: "Educational-Interpretive Style"
+  
+  characteristics:
+    - "توضیح مفاهیم به زبان ساده"
+    - "تفسیر سیگنال‌ها با مثال"
+    - "آموزش گام‌به‌گام"
+    - "پرهیز از اصطلاحات پیچیده"
+    - "تمرکز بر درک مفاهیم"
+    
+  target_audience:
+    - "سرمایه‌گذاران تازه‌کار"
+    - "آموزش‌دهندگان"
+    - "تحلیل‌گران مبتدی"
+    - "عموم مردم"
+    
+  structure:
+    - "مفهوم کلی (به زبان ساده)"
+    - "چرا این اتفاق می‌افتد؟"
+    - "چه سیگنال‌هایی وجود دارد؟"
+    - "این به چه معناست؟"
+    - "چگونه باید عمل کرد؟"
+    - "مثال عملی"
+    
+  length: "medium (۴۰۰-۸۰۰ کلمه)"
+  
+  key_indicators_priority:
+    - "Simple Explanations"
+    - "Visual Aids"
+    - "Real Examples"
+    - "Common Mistakes"
+    - "Actionable Takeaways"
+```
+
+### ۲.۳. فرمول انتخاب سبک
+
+```
+Style_Score_j = (Compatibility_Score_j × 0.4) + 
+                (Audience_Match_j × 0.3) + 
+                (Market_Context_Match_j × 0.2) + 
+                (Primary_School_Match_j × 0.1)
+
+Primary_Style = argmax(Style_Score_j)
+```
+
+---
+
+## ۳. لحن تحلیل (Analysis Tone)
+
+### ۳.۱. تعریف و مفهوم
+
+**لحن تحلیل** به حالت احساسی، شدت و نحوه بیان تحلیل‌ها گفته می‌شود. لحن تعیین می‌کند که تحلیل با چه روحیه‌ای ارائه شود و چه تأثیری بر مخاطب بگذارد.
+
+### ۳.۲. لحن‌های شش‌گانه
+
+#### 🛡️ لحن محافظه‌کارانه (Conservative Tone)
+
+```yaml
+tone_conservative:
+  id: "conservative"
+  name: "لحن محافظه‌کارانه"
+  name_en: "Conservative Tone"
+  
+  characteristics:
+    - "تأکید بر مدیریت ریسک"
+    - "محتاطانه و دقیق"
+    - "حجم معاملات کمتر"
+    - "تأکید بر حفظ سرمایه"
+    - "پرهیز از ریسک‌های غیرضروری"
+    
+  conditions:
+    confidence_score: "< 0.6"
+    volatility: "high (> 3%)"
+    regime: "Bearish"
+    max_drawdown: "> 10%"
+    
+  intensity_levels:
+    low: "موارد عادی"
+    medium: "نوسان متوسط"
+    high: "بحران یا ریسک بالا"
+    
+  keywords:
+    - "با احتیاط"
+    - "مدیریت ریسک"
+    - "حفظ سرمایه"
+    - "انتظار"
+    - "محافظه‌کارانه"
+```
+
+#### 🚀 لحن تهاجمی (Aggressive Tone)
+
+```yaml
+tone_aggressive:
+  id: "aggressive"
+  name: "لحن تهاجمی"
+  name_en: "Aggressive Tone"
+  
+  characteristics:
+    - "تأکید بر فرصت‌های سودآوری"
+    - "ورود سریع به معامله"
+    - "حجم معاملات بیشتر"
+    - "اعتماد به تحلیل"
+    - "ریسک‌پذیری بیشتر"
+    
+  conditions:
+    confidence_score: "> 0.8"
+    volatility: "low (< 2%)"
+    regime: "Strong Bull"
+    trend_strength: "> 0.7"
+    
+  intensity_levels:
+    low: "فرصت‌های معمولی"
+    medium: "فرصت‌های خوب"
+    high: "فرصت‌های عالی"
+    
+  keywords:
+    - "ورود سریع"
+    - "سودآوری بالا"
+    - "فرصت استثنایی"
+    - "بهترین زمان"
+    - "اقدام قاطع"
+```
+
+#### ⚖️ لحن متعادل (Balanced Tone)
+
+```yaml
+tone_balanced:
+  id: "balanced"
+  name: "لحن متعادل"
+  name_en: "Balanced Tone"
+  
+  characteristics:
+    - "ترکیب فرصت و ریسک"
+    - "منطقی و مبتنی بر داده"
+    - "بررسی موافقان و مخالفان"
+    - "تصمیمات محاسبه‌شده"
+    - "نگاه همه‌جانبه"
+    
+  conditions:
+    confidence_score: "0.6-0.8"
+    mixed_signals: true
+    regime: "Weak Bull or Weak Bear"
+    
+  intensity_levels:
+    low: "سیگنال‌های مختلط"
+    medium: "سیگنال‌های واضح‌تر"
+    high: "سیگنال‌های قوی اما با ریسک"
+    
+  keywords:
+    - "بررسی همه جوانب"
+    - "متوازن"
+    - "منطقی"
+    - "محاسبه‌شده"
+    - "همه‌جانبه"
+```
+
+#### ⚠️ لحن هشداردهنده (Warning Tone)
+
+```yaml
+tone_warning:
+  id: "warning"
+  name: "لحن هشداردهنده"
+  name_en: "Warning Tone"
+  
+  characteristics:
+    - "تأکید بر خطرات"
+    - "هشدار برگشت روند"
+    - "توصیه به خروج"
+    - "نشانه‌های خطر"
+    - "اقدام پیشگیرانه"
+    
+  conditions:
+    divergence_present: true
+    near_key_levels: true
+    overbought_oversold: true
+    bearish_reversal_signals: true
+    
+  intensity_levels:
+    low: "هشدار ملایم"
+    medium: "هشدار جدی"
+    high: "هشدار فوری"
+    
+  keywords:
+    - "هشدار"
+    - "خطر"
+    - "برگشت"
+    - "خروج"
+    - "اقدام فوری"
+```
+
+#### 😊 لحن خوش‌بینانه (Optimistic Tone)
+
+```yaml
+tone_optimistic:
+  id: "optimistic"
+  name: "لحن خوش‌بینانه"
+  name_en: "Optimistic Tone"
+  
+  characteristics:
+    - "تأکید بر فرصت‌های رشد"
+    - "اعتماد به روند صعودی"
+    - "چشم‌انداز مثبت"
+    - "تشویق به ورود"
+    - "اعتماد به آینده"
+    
+  conditions:
+    regime: "Strong Bull"
+    forecast_positive: true
+    nlp_sentiment: "positive (> 0.7)"
+    gnn_correlation: "positive"
+    
+  intensity_levels:
+    low: "خوش‌بینی ملایم"
+    medium: "خوش‌بینی قابل توجه"
+    high: "خوش‌بینی شدید"
+    
+  keywords:
+    - "فرصت رشد"
+    - "چشم‌انداز مثبت"
+    - "روند صعودی"
+    - "اعتماد"
+    - "آینده روشن"
+```
+
+#### 🎯 لحن واقع‌گرایانه (Realistic Tone)
+
+```yaml
+tone_realistic:
+  id: "realistic"
+  name: "لحن واقع‌گرایانه"
+  name_en: "Realistic Tone"
+  
+  characteristics:
+    - "پذیرش عدم‌قطعیت"
+    - "سناریوهای مختلف با احتمالات"
+    - "تصمیمات مبتنی بر داده"
+    - "بدون اغراق"
+    - "شفافیت کامل"
+    
+  conditions:
+    confidence_score: "0.4-0.7"
+    market_uncertainty: true
+    mixed_regime: true
+    
+  intensity_levels:
+    low: "عدم‌قطعیت بالا"
+    medium: "عدم‌قطعیت متوسط"
+    high: "عدم‌قطعیت پایین"
+    
+  keywords:
+    - "بر اساس داده"
+    - "احتمالات"
+    - "سناریوهای مختلف"
+    - "شفاف"
+    - "واقع‌گرایانه"
+```
+
+### ۳.۳. فرمول انتخاب لحن
+
+```
+Tone_Score_k = (Condition_Match_k × 0.5) + 
+               (Confidence_Factor_k × 0.2) + 
+               (School_Style_Match_k × 0.2) + 
+               (Intensity_Calibration_k × 0.1)
+
+Primary_Tone = argmax(Tone_Score_k)
+
+Tone_Intensity = calculate_intensity(
+    confidence_score,
+    volatility,
+    regime_type,
+    divergence_presence
+)
+```
+
+---
+
+## ۴. سیستم تعامل و ترکیب
+
+### ۴.۱. ماتریس سازگاری مکتب و سبک
+
+```yaml
+compatibility_matrix_school_style:
+  # مکتب کلاسیک
+  classical:
+    executive: 0.8
+    analytical: 1.0
+    forecasting: 0.6
+    trading: 0.7
+    educational: 0.5
+    
+  # مکتب اسیلاتوری
+  oscillator:
+    executive: 0.6
+    analytical: 0.9
+    forecasting: 0.8
+    trading: 0.7
+    educational: 0.6
+    
+  # مکتب حجم
+  volume:
+    executive: 0.7
+    analytical: 0.9
+    forecasting: 0.7
+    trading: 0.8
+    educational: 0.4
+    
+  # مکتب هارمونیک
+  harmonic:
+    executive: 0.5
+    analytical: 0.8
+    forecasting: 0.9
+    trading: 0.6
+    educational: 0.7
+    
+  # مکتب ترکیبی
+  hybrid:
+    executive: 0.9
+    analytical: 0.9
+    forecasting: 0.9
+    trading: 0.8
+    educational: 0.6
+    
+  # مکتب الیوت
+  elliott:
+    executive: 0.6
+    analytical: 0.8
+    forecasting: 0.9
+    trading: 0.5
+    educational: 0.5
+```
+
+### ۴.۲. ماتریس سازگاری مکتب و لحن
+
+```yaml
+compatibility_matrix_school_tone:
+  classical:
+    conservative: 0.8
+    aggressive: 0.6
+    balanced: 0.9
+    warning: 0.7
+    optimistic: 0.7
+    realistic: 0.9
+    
+  oscillator:
+    conservative: 0.7
+    aggressive: 0.7
+    balanced: 0.8
+    warning: 0.9
+    optimistic: 0.6
+    realistic: 0.8
+    
+  volume:
+    conservative: 0.9
+    aggressive: 0.5
+    balanced: 0.8
+    warning: 0.6
+    optimistic: 0.5
+    realistic: 0.9
+    
+  harmonic:
+    conservative: 0.6
+    aggressive: 0.6
+    balanced: 0.7
+    warning: 0.7
+    optimistic: 0.8
+    realistic: 0.8
+    
+  hybrid:
+    conservative: 0.7
+    aggressive: 0.8
+    balanced: 0.9
+    warning: 0.7
+    optimistic: 0.7
+    realistic: 0.9
+    
+  elliott:
+    conservative: 0.5
+    aggressive: 0.6
+    balanced: 0.7
+    warning: 0.7
+    optimistic: 0.9
+    realistic: 0.8
+```
+
+### ۴.۳. ماتریس سازگاری سبک و لحن
+
+```yaml
+compatibility_matrix_style_tone:
+  executive:
+    conservative: 0.8
+    aggressive: 0.9
+    balanced: 0.7
+    warning: 0.6
+    optimistic: 0.7
+    realistic: 0.8
+    
+  analytical:
+    conservative: 0.7
+    aggressive: 0.5
+    balanced: 0.8
+    warning: 0.7
+    optimistic: 0.6
+    realistic: 0.9
+    
+  forecasting:
+    conservative: 0.6
+    aggressive: 0.7
+    balanced: 0.7
+    warning: 0.6
+    optimistic: 0.8
+    realistic: 0.9
+    
+  trading:
+    conservative: 0.9
+    aggressive: 0.9
+    balanced: 0.7
+    warning: 0.8
+    optimistic: 0.7
+    realistic: 0.7
+    
+  educational:
+    conservative: 0.6
+    aggressive: 0.4
+    balanced: 0.7
+    warning: 0.5
+    optimistic: 0.6
+    realistic: 0.8
+```
+
+---
+
+## ۵. الگوریتم‌های انتخاب پویا
+
+### ۵.۱. الگوریتم انتخاب مکتب
+
+```python
+def select_school(context):
+    """
+    انتخاب مکتب تحلیل بر اساس شرایط بازار و داده‌های موجود
+    """
+    # ۱. محاسبه وزن پایه هر مکتب
+    school_weights = {}
+    
+    for school in SCHOOLS:
+        # وزن پایه
+        weight = school['base_weight']
+        
+        # ضریب دارایی
+        weight *= get_asset_multiplier(school['id'], context['asset'])
+        
+        # ضریب تایم‌فریم
+        weight *= get_timeframe_multiplier(school['id'], context['timeframe'])
+        
+        # ضریب رژیم بازار
+        weight *= get_regime_multiplier(school['id'], context['regime'])
+        
+        # ضریب تطبیق با شرایط
+        weight *= get_adaptive_factor(school['id'], context)
+        
+        school_weights[school['id']] = weight
+    
+    # ۲. نرمال‌سازی وزن‌ها
+    total_weight = sum(school_weights.values())
+    normalized_weights = {k: v/total_weight for k, v in school_weights.items()}
+    
+    # ۳. انتخاب مکاتب اصلی و فرعی
+    sorted_schools = sorted(normalized_weights.items(), key=lambda x: x[1], reverse=True)
+    
+    primary_school = sorted_schools[0]
+    secondary_school = sorted_schools[1]
+    
+    # ۴. بررسی شرط غالب بودن
+    if primary_school[1] > 0.45:
+        status = "confirmed"
+    elif primary_school[1] > 0.35:
+        status = "tentative"
+    else:
+        # اگر هیچ مکتبی غالب نباشد، مکتب ترکیبی انتخاب می‌شود
+        primary_school = ('hybrid', 0.3)
+        status = "hybrid"
+    
+    return {
+        'primary': primary_school[0],
+        'primary_weight': primary_school[1],
+        'secondary': secondary_school[0],
+        'secondary_weight': secondary_school[1],
+        'status': status,
+        'all_weights': normalized_weights,
+        'reasoning': generate_school_reasoning(normalized_weights, context)
+    }
+```
+
+### ۵.۲. الگوریتم انتخاب سبک
+
+```python
+def select_style(primary_school, context):
+    """
+    انتخاب سبک تحلیل بر اساس مکتب غالب و شرایط بازار
+    """
+    style_scores = {}
+    
+    for style in STYLES:
+        # امتیاز سازگاری با مکتب
+        compatibility = get_compatibility_score(primary_school, style['id'])
+        
+        # امتیاز تطابق با مخاطب
+        audience_match = get_audience_match(style['id'], context['audience'])
+        
+        # امتیاز تطابق با شرایط بازار
+        market_match = get_market_context_match(style['id'], context)
+        
+        # امتیاز نهایی
+        score = (compatibility * 0.4) + \
+                (audience_match * 0.3) + \
+                (market_match * 0.2) + \
+                (get_school_style_match(primary_school, style['id']) * 0.1)
+        
+        style_scores[style['id']] = score
+    
+    # انتخاب بهترین سبک
+    primary_style = max(style_scores.items(), key=lambda x: x[1])
+    secondary_style = sorted(style_scores.items(), key=lambda x: x[1], reverse=True)[1]
+    
+    return {
+        'primary': primary_style[0],
+        'primary_score': primary_style[1],
+        'secondary': secondary_style[0],
+        'secondary_score': secondary_style[1],
+        'detail_level': get_detail_level(primary_style[1]),
+        'length': get_style_length(primary_style[0]),
+        'reasoning': generate_style_reasoning(primary_style, context)
+    }
+```
+
+### ۵.۳. الگوریتم انتخاب لحن
+
+```python
+def select_tone(primary_school, primary_style, context):
+    """
+    انتخاب لحن تحلیل بر اساس مکتب، سبک و شرایط بازار
+    """
+    tone_scores = {}
+    
+    for tone in TONES:
+        # امتیاز تطابق با شرایط
+        condition_match = check_tone_conditions(tone['id'], context)
+        
+        # امتیاز سازگاری با مکتب
+        school_match = get_tone_school_match(tone['id'], primary_school)
+        
+        # امتیاز سازگاری با سبک
+        style_match = get_tone_style_match(tone['id'], primary_style)
+        
+        # امتیاز شدت
+        intensity = calculate_tone_intensity(tone['id'], context)
+        
+        score = (condition_match * 0.5) + \
+                (school_match * 0.2) + \
+                (style_match * 0.2) + \
+                (intensity * 0.1)
+        
+        tone_scores[tone['id']] = score
+    
+    # انتخاب لحن اصلی
+    primary_tone = max(tone_scores.items(), key=lambda x: x[1])
+    
+    # محاسبه شدت لحن
+    intensity = calculate_final_intensity(primary_tone[0], context)
+    
+    # انتخاب لحن دوم
+    secondary_tone = sorted(tone_scores.items(), key=lambda x: x[1], reverse=True)[1]
+    
+    return {
+        'primary': primary_tone[0],
+        'primary_score': primary_tone[1],
+        'intensity': intensity,
+        'secondary': secondary_tone[0],
+        'secondary_score': secondary_tone[1],
+        'keywords': get_tone_keywords(primary_tone[0], intensity),
+        'reasoning': generate_tone_reasoning(primary_tone, context)
+    }
+```
+
+---
+
+## ۶. وزن‌دهی پیشرفته
+
+### ۶.۱. سیستم وزن‌دهی چندلایه
+
+```yaml
+multi_layer_weighting:
+  description: "سیستم وزن‌دهی چندلایه برای انتخاب مکاتب، سبک‌ها و لحن‌ها"
+  
+  layer_1_market_context:
+    weight: 0.30
+    factors:
+      - asset_type
+      - timeframe
+      - market_regime
+      - volatility_level
+      - trend_strength
+      
+  layer_2_signal_quality:
+    weight: 0.25
+    factors:
+      - confidence_score
+      - pattern_quality
+      - divergence_strength
+      - volume_confirmation
+      - gnn_signal
+      - nlp_sentiment
+      
+  layer_3_historical_performance:
+    weight: 0.25
+    factors:
+      - school_win_rate
+      - school_sharpe
+      - school_avg_return
+      - school_max_drawdown
+      - style_effectiveness
+      - tone_satisfaction
+      
+  layer_4_adaptive_learning:
+    weight: 0.20
+    factors:
+      - recent_performance
+      - regime_adaptation
+      - user_feedback
+      - market_evolution
+      - continuous_learning
+```
+
+### ۶.۲. فرمول وزن‌دهی نهایی
+
+```
+Final_Weight_i = Σ_{layer=1}^{4} (Layer_Weight_layer × Factor_Score_layer_i)
+
+که:
+- Final_Weight_i: وزن نهایی مکتب/سبک/لحن i
+- Layer_Weight_layer: وزن لایه (۰.۳۰، ۰.۲۵، ۰.۲۵، ۰.۲۰)
+- Factor_Score_layer_i: امتیاز عامل i در لایه مربوطه
+```
+
+### ۶.۳. به‌روزرسانی وزن‌ها با یادگیری
+
+```python
+def update_weights_daily(performance_data):
+    """
+    به‌روزرسانی روزانه وزن‌ها بر اساس عملکرد واقعی
+    """
+    for school in SCHOOLS:
+        # محاسبه عملکرد ۳ ماه اخیر
+        win_rate = calculate_win_rate(school['id'], performance_data)
+        sharpe = calculate_sharpe(school['id'], performance_data)
+        drawdown = calculate_drawdown(school['id'], performance_data)
+        
+        # محاسبه ضریب تنظیم
+        adjustment_factor = 1.0
+        adjustment_factor *= (1 + (win_rate - 0.55) * 0.5)  # افزایش/کاهش بر اساس نرخ برد
+        adjustment_factor *= (1 + (sharpe - 1.5) * 0.2)     # افزایش/کاهش بر اساس شارپ
+        adjustment_factor *= (1 - (drawdown - 0.15) * 0.3)  # کاهش در صورت افزایش ضرر
+        
+        # محدود کردن ضریب
+        adjustment_factor = max(0.8, min(1.2, adjustment_factor))
+        
+        # به‌روزرسانی وزن
+        school['base_weight'] *= adjustment_factor
+        
+    # نرمال‌سازی نهایی
+    normalize_weights(SCHOOLS)
+```
+
+---
+
+## ۷. سیستم بازخورد و بهبود
+
+### ۷.۱. جمع‌آوری بازخورد
+
+```yaml
+feedback_collection:
+  types:
+    - performance_feedback:
+        - win_rate
+        - sharpe_ratio
+        - max_drawdown
+        - profit_factor
+        
+    - user_feedback:
+        - satisfaction_score (1-5)
+        - usefulness_rating
+        - accuracy_rating
+        - comments
+        
+    - market_adaptation:
+        - regime_change_accuracy
+        - adaptation_speed
+        - stability_score
+        
+  frequency:
+    - real_time: "هر معامله"
+    - daily: "هر روز"
+    - weekly: "هر هفته"
+    - monthly: "هر ماه"
+```
+
+### ۷.۲. الگوریتم بهبود
+
+```python
+def improve_system(feedback_data):
+    """
+    بهبود سیستم بر اساس بازخوردهای جمع‌آوری‌شده
+    """
+    improvements = []
+    
+    # ۱. به‌روزرسانی وزن مکاتب
+    for school in SCHOOLS:
+        performance = get_school_performance(school['id'], feedback_data)
+        if performance < 0.5:
+            new_weight = school['base_weight'] * 0.8
+            improvements.append(f"کاهش وزن {school['name']} به {new_weight:.3f}")
+            school['base_weight'] = new_weight
+        elif performance > 0.7:
+            new_weight = school['base_weight'] * 1.1
+            improvements.append(f"افزایش وزن {school['name']} به {new_weight:.3f}")
+            school['base_weight'] = new_weight
+    
+    # ۲. به‌روزرسانی ماتریس‌های سازگاری
+    for school in SCHOOLS:
+        for style in STYLES:
+            compatibility = get_actual_compatibility(school['id'], style['id'])
+            if compatibility > 0:
+                update_compatibility_matrix(school['id'], style['id'], compatibility)
+    
+    # ۳. به‌روزرسانی آستانه‌های لحن
+    for tone in TONES:
+        optimal_conditions = find_optimal_conditions(tone['id'], feedback_data)
+        if optimal_conditions:
+            update_tone_conditions(tone['id'], optimal_conditions)
+    
+    # ۴. نرمال‌سازی نهایی
+    normalize_weights(SCHOOLS)
+    
+    return {
+        'improvements': improvements,
+        'new_weights': {s['id']: s['base_weight'] for s in SCHOOLS},
+        'suggestions': generate_suggestions(improvements)
+    }
+```
+
+---
+
+## ۸. خروجی نهایی
+
+### ۸.۱. ساختار خروجی کامل
+
+```yaml
+final_school_style_tone_output:
+  # اطلاعات پایه
+  metadata:
+    instrument: "BTC/USDT"
+    timeframe: "Daily"
+    timestamp: "2024-01-15T14:30:00Z"
+    analysis_id: "ANL-20240115-001"
+    
+  # مکتب تحلیل
+  school_of_analysis:
+    primary:
+      id: "classical"
+      name: "مکتب کلاسیک"
+      name_en: "Classical School"
+      weight: 0.52
+      confidence: "high"
+      status: "confirmed"
+      reasoning:
+        - "تشخیص ۳ الگوی کلاسیک با اعتبار > ۰.۶"
+        - "قدرت سطوح حمایت/مقاومت > ۰.۸"
+        - "نسبت الگوهای کلاسیک به کل = ۰.۴۵"
+        - "رژیم بازار Strong Bull تطابق دارد"
+        
+    secondary:
+      id: "oscillator"
+      name: "مکتب اسیلاتوری"
+      weight: 0.28
+      reasoning: "تشخیص ۲ واگرایی RSI با شدت متوسط"
+      
+    all_schools:
+      classical: 0.52
+      oscillator: 0.28
+      harmonic: 0.12
+      hybrid: 0.05
+      volume: 0.02
+      elliott: 0.01
+      
+  # سبک تحلیل
+  analysis_style:
+    primary:
+      id: "analytical"
+      name: "سبک تحلیلی-تکنیکال"
+      name_en: "Analytical-Technical Style"
+      score: 0.87
+      detail_level: "high"
+      length: "medium-long"
+      focus: "analysis + decision"
+      reasoning:
+        - "مکتب کلاسیک نیاز به تحلیل دقیق سطوح دارد"
+        - "وجود ۳ الگوی کلاسیک نیاز به توضیح کامل دارد"
+        - "مخاطب حرفه‌ای (سطح pro)"
+        
+    secondary:
+      id: "executive"
+      name: "سبک اجرایی"
+      score: 0.72
+      
+  # لحن تحلیل
+  analysis_tone:
+    primary:
+      id: "realistic"
+      name: "لحن واقع‌گرایانه"
+      name_en: "Realistic Tone"
+      score: 0.85
+      intensity: "medium-high"
+      keywords:
+        - "احتمالات"
+        - "سناریوهای مختلف"
+        - "تحلیل مبتنی بر داده"
+        - "ریسک‌های کنترل‌شده"
+        - "عدم‌قطعیت قابل مدیریت"
+      reasoning:
+        - "اطمینان کلی = ۰.۷۵ (متوسط-بالا)"
+        - "رژیم بازار = Strong Bull (اطمینان ۰.۸۷)"
+        - "نوسان = متوسط (ATR/Price = ۰.۰۲۵)"
+        - "واگرایی مثبت RSI تشخیص داده شده"
+        - "اخبار مثبت (NLP Sentiment = ۰.۶۸)"
+        
+    secondary:
+      id: "optimistic"
+      name: "لحن خوش‌بینانه"
+      score: 0.72
+      intensity: "medium"
+      
+  # ترکیب نهایی
+  final_combination:
+    statement: "تحلیل بر اساس مکتب کلاسیک با سبک تحلیلی-تکنیکال و لحن واقع‌گرایانه"
+    confidence: 0.82
+    recommendation: "مناسب برای گزارش‌های تحلیلی حرفه‌ای با تأکید بر داده‌ها و سناریوها"
+    
+  # تفسیرپذیری
+  interpretability:
+    key_factors:
+      - factor: "تعداد الگوهای کلاسیک"
+        impact: 0.35
+      - factor: "قدرت سطوح حمایت/مقاومت"
+        impact: 0.25
+      - factor: "اطمینان کلی"
+        impact: 0.20
+      - factor: "رژیم بازار"
+        impact: 0.12
+      - factor: "واگرایی‌ها"
+        impact: 0.08
+```
+
+### ۸.۲. خروجی برای پرامپت تولید متن
+
+```yaml
+prompt_ready_output:
+  # برای استفاده در پرامپت LLM
+  
+  school_style_tone_prompt: |
+    شما یک تحلیل‌گر حرفه‌ای بازارهای مالی هستید. 
+    
+    مکتب تحلیل شما: مکتب کلاسیک با وزن ۰.۵۲
+    سبک تحلیل شما: تحلیلی-تکنیکال با جزئیات بالا
+    لحن تحلیل شما: واقع‌گرایانه با شدت متوسط-بالا
+    
+    قواعد تحلیل:
+    - بر اساس داده‌ها و شواهد موجود تحلیل کنید
+    - سناریوهای مختلف را با احتمالات دقیق بررسی کنید
+    - ریسک‌ها را شفاف بیان کنید
+    - از اصطلاحات تخصصی با توضیح مناسب استفاده کنید
+    - نتیجه‌گیری را بر اساس محاسبات EMV ارائه دهید
+```
+
+---
+
+## ۹. مثال‌های عملی
+
+### ۹.۱. مثال ۱: بازار صعودی قوی (BTC/USDT)
+
+```yaml
+example_1_strong_bull:
+  context:
+    instrument: "BTC/USDT"
+    timeframe: "Daily"
+    regime: "Strong Bull"
+    confidence: 0.87
+    volatility: "low"
+    patterns: "classical + harmonic"
+    
+  result:
+    school:
+      primary: "classical"
+      weight: 0.48
+      secondary: "harmonic"
+      weight: 0.28
+      
+    style:
+      primary: "analytical"
+      score: 0.89
+      secondary: "executive"
+      
+    tone:
+      primary: "realistic"
+      intensity: "medium"
+      secondary: "optimistic"
+      
+    combination: "مکتب کلاسیک + سبک تحلیلی-تکنیکال + لحن واقع‌گرایانه"
+    reasoning: "روند صعودی قوی با الگوهای کلاسیک و هارمونیک تأیید شده است. تحلیل باید دقیق و مبتنی بر داده باشد با نگاه خوش‌بینانه اما محتاطانه"
+```
+
+### ۹.۲. مثال ۲: بازار رنج (ETH/USDT)
+
+```yaml
+example_2_range_market:
+  context:
+    instrument: "ETH/USDT"
+    timeframe: "4h"
+    regime: "Range"
+    confidence: 0.55
+    volatility: "low"
+    patterns: "none"
+    
+  result:
+    school:
+      primary: "oscillator"
+      weight: 0.42
+      secondary: "hybrid"
+      weight: 0.31
+      
+    style:
+      primary: "trading"
+      score: 0.82
+      secondary: "forecasting"
+      
+    tone:
+      primary: "conservative"
+      intensity: "medium"
+      secondary: "balanced"
+      
+    combination: "مکتب اسیلاتوری + سبک معاملاتی + لحن محافظه‌کارانه"
+    reasoning: "بازار در رنج است، بهترین ابزارها اسیلاتورها هستند. استراتژی معاملاتی با ریسک مدیریت‌شده و لحن محافظه‌کارانه"
+```
+
+### ۹.۳. مثال ۳: بازار نزولی شتاب‌دار (SOL/USDT)
+
+```yaml
+example_3_accelerated_bear:
+  context:
+    instrument: "SOL/USDT"
+    timeframe: "Daily"
+    regime: "Strong Bear"
+    confidence: 0.72
+    volatility: "high"
+    patterns: "elliott wave"
+    
+  result:
+    school:
+      primary: "elliott"
+      weight: 0.38
+      secondary: "oscillator"
+      weight: 0.29
+      
+    style:
+      primary: "forecasting"
+      score: 0.85
+      secondary: "analytical"
+      
+    tone:
+      primary: "warning"
+      intensity: "high"
+      secondary: "conservative"
+      
+    combination: "مکتب الیوت + سبک پیش‌بینی + لحن هشداردهنده"
+    reasoning: "بازار در موج نزولی است، تحلیل امواج الیوت و پیش‌بینی ادامه روند با هشدار جدی برای مدیریت ریسک"
+```
+
+---
+
+## 📊 خلاصه نهایی
+
+### جدول مقایسه مکاتب
+
+| مکتب | وزن پایه | بهترین تایم‌فریم | بهترین بازار | نقاط قوت |
+|-------|---------|----------------|--------------|---------|
+| کلاسیک | ۰.۳۰ | Daily, Weekly | روندی | سادگی، بصری |
+| اسیلاتوری | ۰.۲۵ | Hourly, 4h | رنج | دقت در برگشت‌ها |
+| حجم | ۰.۱۵ | Daily | تایید سیگنال | تأیید قوی |
+| هارمونیک | ۰.۱۰ | All | نقاط برگشت | دقت بالا |
+| ترکیبی | ۰.۱۰ | All | نامشخص | انعطاف‌پذیری |
+| الیوت | ۰.۱۰ | Daily, Weekly | روندی قوی | ساختار کامل |
+
+### جدول مقایسه سبک‌ها
+
+| سبک | طول | جزئیات | مخاطب | کاربرد |
+|-----|-----|--------|-------|--------|
+| اجرایی | کوتاه | کم | مدیران | تصمیم‌گیری |
+| تحلیلی | بلند | زیاد | تحلیل‌گران | تحقیق |
+| پیش‌بینی | متوسط-بلند | متوسط | برنامه‌ریزان | استراتژی |
+| معاملاتی | کوتاه | کم | تریدرها | اجرا |
+| آموزشی | متوسط | متوسط | مبتدیان | یادگیری |
+
+### جدول مقایسه لحن‌ها
+
+| لحن | شدت | شرایط | کلمات کلیدی |
+|-----|-----|--------|------------|
+| محافظه‌کارانه | متغیر | ریسک بالا | احتیاط، حفظ سرمایه |
+| تهاجمی | متغیر | فرصت عالی | ورود سریع، سود بالا |
+| متعادل | ثابت | سیگنال‌های مختلط | متوازن، منطقی |
+| هشداردهنده | بالا | خطر برگشت | هشدار، خروج |
+| خوش‌بینانه | متغیر | روند صعودی | رشد، اعتماد |
+| واقع‌گرایانه | متغیر | عدم‌قطعیت | داده، احتمالات |
+
+---
+
+## 🎯 جمع‌بندی نهایی
+
+**سیستم مکتب، سبک و لحن تحلیل (نسخه ۴.۰)** یک چارچوب کامل، خودکار و هوشمند برای تعیین روش‌شناسی، ساختار ارائه و حالت احساسی تحلیل‌های بازار است که:
+
+### ✅ ویژگی‌های اصلی:
+1. **۶ مکتب تحلیل** با وزن‌دهی پویا
+2. **۵ سبک تحلیل** با سازگاری با مکتب
+3. **۶ لحن تحلیل** با شدت‌های مختلف
+4. **ماتریس‌های سازگاری** کامل بین مؤلفه‌ها
+5. **الگوریتم‌های انتخاب** مبتنی بر داده
+6. **سیستم بازخورد** برای بهبود مستمر
+7. **خروجی ساختاریافته** برای استفاده در پرامپت
+
+### 🎯 کاربردها:
+- تولید گزارش‌های تحلیلی خودکار
+- شخصی‌سازی تحلیل بر اساس مخاطب
+- تطبیق با شرایط مختلف بازار
+- بهبود مستمر از طریق یادگیری
+
+### 🔑 مزایا:
+- **کاملاً خودکار** - بدون نیاز به دخالت انسانی
+- **دقیق و علمی** - مبتنی بر داده و فرمول‌های ریاضی
+- **انعطاف‌پذیر** - قابل تطبیق با هر بازار و شرایط
+- **قابل توسعه** - قابلیت افزودن مکاتب و سبک‌های جدید
+
+**این سیستم آماده پیاده‌سازی و اتصال به پرامپت تولید متن تحلیلی است.**

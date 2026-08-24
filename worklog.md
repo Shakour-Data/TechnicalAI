@@ -107,7 +107,6 @@ Work Log:
 - Verified: no console errors, header price ۶۴۷ matches VDES reference price ۶۴۷, header target ۶۴۸-۶۶۰ matches R1 card ۶۴۸-۶۶۰, RSI badge "اشباع خرید شدید" matches analysis text.
 
 Stage Summary:
-<<<<<<< Updated upstream
 - Search dropdown: working (cached instruments data)
 - Analysis: working with candlestick file cache as resilience layer
 - Error UX: Persian messages, retry/back buttons
@@ -328,10 +327,71 @@ Stage Summary:
 - V11 data is also injected into AI analysis LLM prompt for richer AI narratives
 - Files created: src/lib/ml-narrative-v11.ts, src/app/api/v11-analysis/route.ts
 - Files modified: src/components/tse/vdes-analysis.tsx, src/components/tse/vdss-graph.tsx, src/app/api/ai-analysis/route.ts
-=======
-- All 4 fixes verified consistent in browser
-- Data flow: API → info.lastPrice = currentPrice for all panels
-- Target prices: header badge = dominant bullish scenario targetMin/targetMax = scenario card values
-- RSI: 5-level system consistent between badge and text
-- ML trend: clearly labeled as (ML) to distinguish from TA signal
->>>>>>> Stashed changes
+
+---
+Task ID: 2-a
+Agent: Sub-agent
+Task: Resolve all git merge conflict markers in ta-engine.ts
+
+Work Log:
+- Found 9 conflict markers (18 lines) across 6 conflict regions in src/lib/ta-engine.ts
+- Also found and fixed 1 conflict in worklog.md
+- Conflict 1 (JSDoc comment): Kept upstream — more detailed documentation of 9 VDss scenarios
+- Conflict 2 (comment line): Kept upstream — helpful "Distance metrics to key levels" comment
+- Conflict 3 (calculateScenarioProbabilities body): Kept stashed — has clamping logic (min 2%, max 35% per spec) and proportional redistribution
+- Conflict 4 (Layer 4-6 call site): Kept stashed — creates R1_nearest/S1_nearest/srAvgStr variables needed by buildDecisionGraph
+- Conflict 5 (Layer 6 graph computation): Kept stashed — calls buildDecisionGraph() to create graphData, required by downstream code at line 2635+
+- Conflict 6 (scenario descriptions R1-R9): Kept stashed — uses ATR-based bullTargets/bearTargets/rangeTarget, naming matches decision-graph.ts (صعودی با احتیاط vs صعود هیجانی)
+- Key insight: Conflicts 4+5+6 are coupled — upstream version would break because graphData is undefined at usage point, and edgeWeights used before declaration
+- Verified: rg returns empty for conflict markers in ta-engine.ts
+- Verified: bun run lint produces no ta-engine errors
+
+Stage Summary:
+- All 9 conflict markers resolved (6 conflict regions)
+- File: /home/z/my-project/src/lib/ta-engine.ts
+- Also fixed: /home/z/my-project/worklog.md (1 conflict region, kept upstream detailed history)
+- No parsing errors, lint clean
+
+---
+Task ID: 2-b
+Agent: Sub-agent
+Task: Resolve all git merge conflict markers in vdss-graph.tsx
+
+Work Log:
+- Found 10 conflict marker lines across 5 conflict regions in src/components/tse/vdss-graph.tsx
+- Conflict 1 (import, line 6): Kept stashed `GraphData` import — required by `VdssGraphProps.decisionGraph` at line 48. Dropped upstream `computeV11Probabilities`/`V11Result` import — only used in upstream blocks that were removed.
+- Conflict 2 (v11 computation, line 283): Kept stashed (empty). Upstream defined `pathProbsByTarget`, `v11`, `v11Map` but referenced undefined `filteredPaths` variable — entire block would fail to compile.
+- Conflict 3 (terminal node rendering, line 597): Kept stashed structure (uses `node.id`, `node.title`), fixed `scenarioProb * 100` → `scenarioProb` bug (scenarioProbabilities are already 0-100 from decision-graph.ts finalPcts). Upstream used undefined `id`, `def`, `NODE_DEFS` variables and prematurely closed the isResultNode block — completely broken.
+- Conflict 4 (left panel probability row, line 675): Kept stashed. Upstream referenced undefined `filteredPaths` and `v11Map`.
+- Conflict 5 (bottom result cards, line 715): Kept stashed (branch contribution breakdown using `pathContributions`/`BRANCH_META` — new functionality referencing variables used elsewhere). Fixed `contrib[...] * 100` → `contrib[...]` bug (pathContributions values are already 0-100). Upstream referenced undefined `v11Map`.
+- Verified: `rg '<<<<<<|>>>>>>|=======' vdss-graph.tsx` returns empty
+- Verified: `bun run lint 2>&1 | rg vdss-graph` returns empty
+
+Stage Summary:
+- All 5 conflict regions resolved (10 marker lines removed)
+- All upstream v11 references removed — upstream v11 blocks were coupled to undefined variables (filteredPaths, id, def, NODE_DEFS) making them uncompilable
+- Two stashed bugs fixed: scenarioProb*100 and contrib*100 (values already in 0-100 range)
+- File: /home/z/my-project/src/components/tse/vdss-graph.tsx
+- Lint clean, no conflict markers remaining
+
+---
+Task ID: 2-c
+Agent: Sub-agent
+Task: Resolve all git merge conflict markers in vdes-analysis.tsx
+
+Work Log:
+- Found 6 conflict marker lines across 2 conflict regions in src/components/tse/vdes-analysis.tsx
+- Conflict 1 (line 654, fetch body v11 param): Kept upstream `v11Probabilities: v11Result` — matches the key name `body.v11Probabilities` expected by ai-analysis/route.ts. Stashed version used wrong key `v11Result`.
+- Conflict 2 (line 1161, scenario probabilities UI): Kept upstream — uses `v11Map.get(key)` (correct for Map type), `v11?.rawProbability`/`v11?.cumulativeProbability` (correct property names). Stashed version had 3 bugs: `v11Map[key]` (bracket on Map), `v?.cum` (wrong prop), `v11Result.rangeCumulative` (non-existent prop).
+- Fixed duplicate v11Result definitions: Removed second definition (R1-R5 only, shadows correct R1-R9 version). Kept first v11Result (all 9 scenarios) + second v11Map (Map type).
+- Removed first v11Map (Record type with {raw, cum, category}) that conflicted with Map-type usage.
+- Fixed `v11Map[k]` → `v11Map.get(k)` and `v?.cum` → `v?.cumulativeProbability` at 3 locations (PDF HTML string, text export, XLSX export).
+- Fixed `v11Result.rangeCumulative` → `v11Result.neutralCumulative` at 3 locations (variable declaration, PDF HTML string, text export) — V11Result interface uses `neutralCumulative`.
+- Verified: `rg '<<<<<<|>>>>>>|=======' vdes-analysis.tsx` returns empty
+- Verified: `bun run lint 2>&1 | rg vdes-analysis` returns empty
+
+Stage Summary:
+- Both conflict regions resolved, keeping upstream version for both
+- 4 additional bugs fixed from merge artifacts: duplicate v11Result (R1-R5 vs R1-R9), Record vs Map type mismatch, wrong property names (cum/cumulativeProbability), wrong field name (rangeCumulative/neutralCumulative)
+- File: /home/z/my-project/src/components/tse/vdes-analysis.tsx
+- Note: ai-analysis/route.ts still has a merge conflict at line 247 (separate file, not part of this task)

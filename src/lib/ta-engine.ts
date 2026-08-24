@@ -2281,7 +2281,6 @@ function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
-<<<<<<< Updated upstream
  * Calculates the 9 VDss scenario probabilities (R1-R9) that sum to 100.
  * Uses bull/bear consensus, key indicator values, S/R levels, and
  * ML-derived adaptive factors for fine-tuning.
@@ -2289,10 +2288,7 @@ function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1
  * R1=صعود هیجانی, R2=صعود قوی, R3=صعود تدریجی,
  * R4=پولبک سالم, R5=رنج خنثی,
  * R6=اصلاح خفیف, R7=اصلاح متوسط, R8=اصلاح عمیق, R9=تضعیف ساختار
-=======
- * Calculates 9 VDss scenario probabilities (R1-R9) that sum to 100.
- * R1-R4: Bullish (ascending strength), R5: Range, R6-R9: Bearish (descending).
->>>>>>> Stashed changes
+
  */
 function calculateScenarioProbabilities(
   bullConsensus: number,
@@ -2305,10 +2301,7 @@ function calculateScenarioProbabilities(
   stochK: number,
   mlModel: AdaptiveWeightModel
 ): { R1: number; R2: number; R3: number; R4: number; R5: number; R6: number; R7: number; R8: number; R9: number; factors: { momentum: number; volatility: number; trend: number } } {
-<<<<<<< Updated upstream
   // Distance metrics to key levels (spec uses exp(-3 * ...))
-=======
->>>>>>> Stashed changes
   const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
   const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
 
@@ -2329,62 +2322,6 @@ function calculateScenarioProbabilities(
   const belowMA100 = price < MA100 ? 1 : 0;
   const bearish = 1 - bullConsensus;
 
-<<<<<<< Updated upstream
-  // ── Raw scenario probabilities (v11: 9 scenarios) ─────────────────────
-
-  // R1: صعود هیجانی — Explosive Bullish (aggressive breakout)
-  const raw_R1 =
-    bullConsensus ** 2 * distR1 * (1 - overboughtRisk * momentum * 0.5) +
-    oversoldBounce * 0.3 * distR1 * momentum;
-
-  // R2: صعود قوی — Strong Bullish (solid uptrend)
-  const raw_R2 =
-    bullConsensus ** 1.5 * trend * (1 - overboughtRisk * 0.3);
-
-  // R3: صعود تدریجی — Gradual Bullish (moderate rise)
-  const raw_R3 =
-    bullConsensus * trend * 0.5 * (1 - volatility * 0.3);
-
-  // R4: پولبک سالم — Healthy Pullback (brief dip, holds S1)
-  const raw_R4 =
-    (1 - bullConsensus) * distS1 * 0.35 +
-    bullConsensus * 0.12;
-
-  // R5: رنج خنثی — Range-bound Neutral (sideways)
-  const raw_R5 =
-    (1 - Math.abs(bullConsensus - 0.5)) * 0.4 * (1 + (1 - volatility) * 0.3);
-
-  // R6: اصلاح خفیف — Mild Correction (small drop)
-  const raw_R6 =
-    (1 - bullConsensus) * 0.25 * volatility;
-
-  // R7: اصلاح متوسط — Moderate Correction (to S2-S3)
-  const raw_R7 =
-    ((1 - bullConsensus) * distS1 * 0.45 +
-    overboughtRisk * 0.3 * momentum) *
-    (0.8 + 0.2 * (1 - trend));
-
-  // R8: اصلاح عمیق — Deep Correction (near MA100)
-  const raw_R8 =
-    (1 - bullConsensus) ** 1.5 * 0.35 +
-    belowMA100 * 0.2;
-
-  // R9: تضعیف ساختار — Structure Breakdown (MA100 broken)
-  const raw_R9 =
-    (1 - bullConsensus) ** 2 * 0.25 * (1 + (1 - trend) * 0.5);
-
-  // ── Normalize to sum = 100 ───────────────────────────────────────────
-  const sum = raw_R1 + raw_R2 + raw_R3 + raw_R4 + raw_R5 + raw_R6 + raw_R7 + raw_R8 + raw_R9;
-  const pR1 = sum > 0 ? Math.round(raw_R1 / sum * 100) : 11;
-  const pR2 = sum > 0 ? Math.round(raw_R2 / sum * 100) : 11;
-  const pR3 = sum > 0 ? Math.round(raw_R3 / sum * 100) : 11;
-  const pR4 = sum > 0 ? Math.round(raw_R4 / sum * 100) : 11;
-  const pR5 = sum > 0 ? Math.round(raw_R5 / sum * 100) : 11;
-  const pR6 = sum > 0 ? Math.round(raw_R6 / sum * 100) : 11;
-  const pR7 = sum > 0 ? Math.round(raw_R7 / sum * 100) : 11;
-  const pR8 = sum > 0 ? Math.round(raw_R8 / sum * 100) : 11;
-  const pR9 = 100 - (pR1 + pR2 + pR3 + pR4 + pR5 + pR6 + pR7 + pR8);
-=======
   // ── Raw probabilities ───────────────────────────────────────────────
 
   // R1: صعودی با احتیاط — mild bull, needs confirmation
@@ -2434,7 +2371,6 @@ function calculateScenarioProbabilities(
     clamped[8] = Math.min(35, Math.max(2, clamped[8] + (100 - finalSum)));
   }
   const [pR1, pR2, pR3, pR4, pR5, pR6, pR7, pR8, pR9] = clamped;
->>>>>>> Stashed changes
 
   return {
     R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5,
@@ -2621,27 +2557,11 @@ export function analyze(data: OHLCV[]): TAResult {
 
   // ── Layer 4-6: Decision Graph Probability Engine (replaces old heuristic + old 12-node graph) ─
   const ma100Val = smaResult.sma100 ?? price;
-<<<<<<< Updated upstream
-  const scenarioResult = calculateScenarioProbabilities(
-    bullConsensus, price, R1_level, S1_level, ma100Val,
-    rsi, mfi, stoch.k, mlModel
-  );
-  const pR1 = scenarioResult.R1;
-  const pR2 = scenarioResult.R2;
-  const pR3 = scenarioResult.R3;
-  const pR4 = scenarioResult.R4;
-  const pR5 = scenarioResult.R5;
-  const pR6 = scenarioResult.R6;
-  const pR7 = scenarioResult.R7;
-  const pR8 = scenarioResult.R8;
-  const pR9 = scenarioResult.R9;
-=======
   const R1_nearest = resistances[0] ?? price * 1.05;
   const S1_nearest = supports[0] ?? price * 0.95;
   const srAvgStr = resistanceStrengths.length > 0 || supportStrengths.length > 0
     ? [...resistanceStrengths, ...supportStrengths].reduce((s, l) => s + l.score, 0) / ([...resistanceStrengths, ...supportStrengths].length || 1) / 10
     : 0.3;
->>>>>>> Stashed changes
 
   // Extract ML adaptive factors directly from ML model
   let mlMomentumFactor = 0.7;
@@ -2654,11 +2574,6 @@ export function analyze(data: OHLCV[]): TAResult {
     mlTrendFactor = sigmoid(coefs[11] ?? 0);
   }
 
-<<<<<<< Updated upstream
-  // ── Layer 6: Path Probabilities with Calibration ──────────────────────────
-  const scenarioProbsForGraph: Record<string, number> = { R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5, R6: pR6, R7: pR7, R8: pR8, R9: pR9 };
-  const pathResult = calculatePathProbabilities(edgeWeights, scenarioProbsForGraph);
-=======
   const graphData = buildDecisionGraph({
     price,
     bullConsensus,
@@ -2694,7 +2609,6 @@ export function analyze(data: OHLCV[]): TAResult {
     mlVolatility: mlVolatilityFactor,
     mlTrend: mlTrendFactor,
   });
->>>>>>> Stashed changes
 
   // Use decision graph scenario probabilities (sum to 100)
   const pR1 = graphData.scenarioProbabilities.R1 ?? 11;
@@ -2737,78 +2651,6 @@ export function analyze(data: OHLCV[]): TAResult {
 
   const scenarios = {
     R1: {
-<<<<<<< Updated upstream
-      name: 'صعود هیجانی',
-      nameEn: 'Explosive Bullish',
-      probability: pR1,
-      targetMin: R3_level,
-      targetMax: R6_level,
-      description: `عبور پرشتاب از مقاومت‌های ${fmt(R1_level)} و ${fmt(R2_level)}. هدف: ${fmt(R3_level)} تا ${fmt(R6_level)} ریال.`,
-    },
-    R2: {
-      name: 'صعود قوی',
-      nameEn: 'Strong Bullish',
-      probability: pR2,
-      targetMin: R2_level,
-      targetMax: R4_level,
-      description: `حرکت صعودی قوی با حجم مناسب. هدف: ${fmt(R2_level)} تا ${fmt(R4_level)} ریال.`,
-    },
-    R3: {
-      name: 'صعود تدریجی',
-      nameEn: 'Gradual Bullish',
-      probability: pR3,
-      targetMin: R1_level,
-      targetMax: R2_level,
-      description: `رشد آرام و پایدار. هدف: ${fmt(R1_level)} تا ${fmt(R2_level)} ریال.`,
-    },
-    R4: {
-      name: 'پولبک سالم',
-      nameEn: 'Healthy Pullback',
-      probability: pR4,
-      targetMin: S1_level,
-      targetMax: R1_level,
-      description: `اصلاح موقت و سالم تا حمایت ${fmt(S1_level)} با حفظ ساختار صعودی.`,
-    },
-    R5: {
-      name: 'رنج خنثی',
-      nameEn: 'Range-bound Neutral',
-      probability: pR5,
-      targetMin: S1_level,
-      targetMax: R1_level,
-      description: `نوسان بین حمایت ${fmt(S1_level)} و مقاومت ${fmt(R1_level)} ریال بدون جهت مشخص.`,
-    },
-    R6: {
-      name: 'اصلاح خفیف',
-      nameEn: 'Mild Correction',
-      probability: pR6,
-      targetMin: S2_level,
-      targetMax: S1_level,
-      description: `اصلاح خفیف تا محدوده ${fmt(S2_level)} تا ${fmt(S1_level)} ریال.`,
-    },
-    R7: {
-      name: 'اصلاح متوسط',
-      nameEn: 'Moderate Correction',
-      probability: pR7,
-      targetMin: S3_level,
-      targetMax: S2_level,
-      description: `اصلاح متوسط تا حمایت‌های ${fmt(S3_level)} تا ${fmt(S2_level)} ریال.`,
-    },
-    R8: {
-      name: 'اصلاح عمیق',
-      nameEn: 'Deep Correction',
-      probability: pR8,
-      targetMin: S5_level,
-      targetMax: S3_level,
-      description: `افت شدید تا حمایت‌های ${fmt(S5_level)} تا ${fmt(S3_level)} ریال. نزدیک به MA100.`,
-    },
-    R9: {
-      name: 'تضعیف ساختار',
-      nameEn: 'Structure Breakdown',
-      probability: pR9,
-      targetMin: S6_level,
-      targetMax: S5_level,
-      description: `شکست معتبر MA100 و تضعیف کامل ساختار. هدف: ${fmt(S6_level)} تا ${fmt(S5_level)} ریال.`,
-=======
       name: 'صعودی با احتیاط',
       nameEn: 'Cautious Bullish',
       probability: pR1,
@@ -2878,7 +2720,6 @@ export function analyze(data: OHLCV[]): TAResult {
       targetMin: bearTargets[3].min,
       targetMax: bearTargets[3].max,
       description: `شوک نزولی تا ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ریال.`,
->>>>>>> Stashed changes
     },
   };
 

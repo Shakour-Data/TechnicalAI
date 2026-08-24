@@ -1,0 +1,658 @@
+  2301→  stochK: number,
+  2302→  mlModel: AdaptiveWeightModel
+  2303→): { R1: number; R2: number; R3: number; R4: number; R5: number; R6: number; R7: number; R8: number; R9: number; factors: { momentum: number; volatility: number; trend: number } } {
+  2304→<<<<<<< Updated upstream
+  2305→  // Distance metrics to key levels (spec uses exp(-3 * ...))
+  2306→=======
+  2307→>>>>>>> Stashed changes
+  2308→  const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
+  2309→  const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
+  2310→
+  2311→  const overboughtRisk = (rsi > 70 || (mfi > 80 && mfi !== 50) || stochK > 80) ? 1 : 0;
+  2312→  const oversoldBounce = (rsi < 30 || (mfi < 20 && mfi !== 50) || stochK < 20) ? 1 : 0;
+  2313→
+  2314→  let momentum = 0.7;
+  2315→  let volatility = 0.5;
+  2316→  let trend = 0.6;
+  2317→
+  2318→  if (mlModel.isTrained && mlModel.weights) {
+  2319→    const coefs = mlModel.getCoefficients();
+  2320→    momentum = sigmoid(coefs[0] ?? 0);
+  2321→    volatility = sigmoid(coefs[10] ?? 0);
+  2322→    trend = sigmoid(coefs[11] ?? 0);
+  2323→  }
+  2324→
+  2325→  const belowMA100 = price < MA100 ? 1 : 0;
+  2326→  const bearish = 1 - bullConsensus;
+  2327→
+  2328→<<<<<<< Updated upstream
+  2329→  // ── Raw scenario probabilities (v11: 9 scenarios) ─────────────────────
+  2330→
+  2331→  // R1: صعود هیجانی — Explosive Bullish (aggressive breakout)
+  2332→  const raw_R1 =
+  2333→    bullConsensus ** 2 * distR1 * (1 - overboughtRisk * momentum * 0.5) +
+  2334→    oversoldBounce * 0.3 * distR1 * momentum;
+  2335→
+  2336→  // R2: صعود قوی — Strong Bullish (solid uptrend)
+  2337→  const raw_R2 =
+  2338→    bullConsensus ** 1.5 * trend * (1 - overboughtRisk * 0.3);
+  2339→
+  2340→  // R3: صعود تدریجی — Gradual Bullish (moderate rise)
+  2341→  const raw_R3 =
+  2342→    bullConsensus * trend * 0.5 * (1 - volatility * 0.3);
+  2343→
+  2344→  // R4: پولبک سالم — Healthy Pullback (brief dip, holds S1)
+  2345→  const raw_R4 =
+  2346→    (1 - bullConsensus) * distS1 * 0.35 +
+  2347→    bullConsensus * 0.12;
+  2348→
+  2349→  // R5: رنج خنثی — Range-bound Neutral (sideways)
+  2350→  const raw_R5 =
+  2351→    (1 - Math.abs(bullConsensus - 0.5)) * 0.4 * (1 + (1 - volatility) * 0.3);
+  2352→
+  2353→  // R6: اصلاح خفیف — Mild Correction (small drop)
+  2354→  const raw_R6 =
+  2355→    (1 - bullConsensus) * 0.25 * volatility;
+  2356→
+  2357→  // R7: اصلاح متوسط — Moderate Correction (to S2-S3)
+  2358→  const raw_R7 =
+  2359→    ((1 - bullConsensus) * distS1 * 0.45 +
+  2360→    overboughtRisk * 0.3 * momentum) *
+  2361→    (0.8 + 0.2 * (1 - trend));
+  2362→
+  2363→  // R8: اصلاح عمیق — Deep Correction (near MA100)
+  2364→  const raw_R8 =
+  2365→    (1 - bullConsensus) ** 1.5 * 0.35 +
+  2366→    belowMA100 * 0.2;
+  2367→
+  2368→  // R9: تضعیف ساختار — Structure Breakdown (MA100 broken)
+  2369→  const raw_R9 =
+  2370→    (1 - bullConsensus) ** 2 * 0.25 * (1 + (1 - trend) * 0.5);
+  2371→
+  2372→  // ── Normalize to sum = 100 ───────────────────────────────────────────
+  2373→  const sum = raw_R1 + raw_R2 + raw_R3 + raw_R4 + raw_R5 + raw_R6 + raw_R7 + raw_R8 + raw_R9;
+  2374→  const pR1 = sum > 0 ? Math.round(raw_R1 / sum * 100) : 11;
+  2375→  const pR2 = sum > 0 ? Math.round(raw_R2 / sum * 100) : 11;
+  2376→  const pR3 = sum > 0 ? Math.round(raw_R3 / sum * 100) : 11;
+  2377→  const pR4 = sum > 0 ? Math.round(raw_R4 / sum * 100) : 11;
+  2378→  const pR5 = sum > 0 ? Math.round(raw_R5 / sum * 100) : 11;
+  2379→  const pR6 = sum > 0 ? Math.round(raw_R6 / sum * 100) : 11;
+  2380→  const pR7 = sum > 0 ? Math.round(raw_R7 / sum * 100) : 11;
+  2381→  const pR8 = sum > 0 ? Math.round(raw_R8 / sum * 100) : 11;
+  2382→  const pR9 = 100 - (pR1 + pR2 + pR3 + pR4 + pR5 + pR6 + pR7 + pR8);
+  2383→=======
+  2384→  // ── Raw probabilities ───────────────────────────────────────────────
+  2385→
+  2386→  // R1: صعودی با احتیاط — mild bull, needs confirmation
+  2387→  const raw_R1 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
+  2388→
+  2389→  // R2: صعودی قوی — solid uptrend
+  2390→  const raw_R2 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
+  2391→
+  2392→  // R3: صعودی شتابدار — strong momentum
+  2393→  const raw_R3 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
+  2394→
+  2395→  // R4: شوک صعودی — explosive breakout
+  2396→  const raw_R4 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
+  2397→
+  2398→  // R5: رنج کم‌نوسان — neutral
+  2399→  const raw_R5 = (1 - Math.abs(bullConsensus - 0.5) * 2) * 0.45 * (1 + (1 - volatility) * 0.4);
+  2400→
+  2401→  // R6: نزولی با احتیاط — mild bear
+  2402→  const raw_R6 = bearish * 0.4 * trend * (1 - oversoldBounce * 0.3);
+  2403→
+  2404→  // R7: نزولی قوی — solid downtrend
+  2405→  const raw_R7 = bearish ** 1.3 * 0.5 * trend * (1 - oversoldBounce * 0.4);
+  2406→
+  2407→  // R8: نزولی شتاب‌دار — strong bearish momentum
+  2408→  const raw_R8 = bearish ** 1.6 * 0.35 * momentum * (1 - oversoldBounce * 0.5);
+  2409→
+  2410→  // R9: شوک نزولی — crash
+  2411→  const raw_R9 = bearish ** 2 * distS1 * 0.25 * (1 + belowMA100 * 0.5) + overboughtRisk * 0.15 * momentum;
+  2412→
+  2413→  // ── Normalize to sum = 100, clamp to [2, 35] per spec ──────────
+  2414→  const raw = [raw_R1, raw_R2, raw_R3, raw_R4, raw_R5, raw_R6, raw_R7, raw_R8, raw_R9];
+  2415→  const sum = raw.reduce((a, b) => a + b, 0) || 1;
+  2416→  // First pass: percentage with spec bounds (min 2%, max 35%)
+  2417→  let clamped = raw.map(r => Math.min(35, Math.max(2, Math.round(r / sum * 100))));
+  2418→  // Adjust to ensure sum = 100
+  2419→  const clampedSum = clamped.reduce((a, b) => a + b, 0);
+  2420→  const diff = 100 - clampedSum;
+  2421→  if (diff !== 0) {
+  2422→    // Distribute difference proportionally to values that aren't at bounds
+  2423→    const adjustable = clamped.map((v, i) => (diff > 0 ? v < 35 : v > 2) ? i : -1).filter(i => i >= 0);
+  2424→    const adjSum = adjustable.reduce((s, i) => s + clamped[i], 0);
+  2425→    for (const i of adjustable) {
+  2426→      clamped[i] = Math.min(35, Math.max(2, Math.round(clamped[i] + diff * (clamped[i] / (adjSum || 1)))));
+  2427→    }
+  2428→    // Final adjustment on last element to guarantee sum = 100
+  2429→    const finalSum = clamped.reduce((a, b) => a + b, 0);
+  2430→    clamped[8] = Math.min(35, Math.max(2, clamped[8] + (100 - finalSum)));
+  2431→  }
+  2432→  const [pR1, pR2, pR3, pR4, pR5, pR6, pR7, pR8, pR9] = clamped;
+  2433→>>>>>>> Stashed changes
+  2434→
+  2435→  return {
+  2436→    R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5,
+  2437→    R6: pR6, R7: pR7, R8: pR8, R9: pR9,
+  2438→    factors: { momentum, volatility, trend },
+  2439→  };
+  2440→}
+  2441→
+  2442→// ═══════════════════════════════════════════════════════════════════════════════
+  2443→// MAIN ANALYSIS FUNCTION
+  2444→// ═══════════════════════════════════════════════════════════════════════════════
+  2445→export function analyze(data: OHLCV[]): TAResult {
+  2446→  if (!data || data.length < 2) {
+  2447→    const empty = () => 0;
+  2448→    const emptyScenario = (): ScenarioResult => ({ name: '', nameEn: '', probability: 20, targetMin: 0, targetMax: 0, description: '' });
+  2449→    return {
+  2450→      sma: {}, ema: {}, rsi: 50, mfi: 50, cci: 0, stochK: 50, stochD: 50,
+  2451→      williamsR: -50, macd: { line: 0, signal: 0, histogram: 0 },
+  2452→      adx: 0, diPlus: 0, diMinus: 0, sar: 0, atr: 0,
+  2453→      bollingerBands: { upper: 0, middle: 0, lower: 0 }, obv: 0,
+  2454→      ichimoku: { tenkan: 0, kijun: 0, senkouA: 0, senkouB: 0, chikou: 0 },
+  2455→      vwap: 0,
+  2456→      smaArray: {},
+  2457→      emaArray: {},
+  2458→      ichimokuArrays: { tenkan: [], kijun: [], senkouA: [], senkouB: [] },
+  2459→      vwapArray: [],
+  2460→      resistances: [], supports: [],
+  2461→      supportStrengths: [], resistanceStrengths: [], priceTargets: [],
+  2462→      trend: {
+  2463→        short: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
+  2464→        medium: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
+  2465→        long: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
+  2466→      },
+  2467→      scenarios: { R1: emptyScenario(), R2: emptyScenario(), R3: emptyScenario(), R4: emptyScenario(), R5: emptyScenario(), R6: emptyScenario(), R7: emptyScenario(), R8: emptyScenario(), R9: emptyScenario() },
+  2468→      bullScore: 0.5, bearScore: 0.5, overallSignal: 'neutral',
+  2469→      bullConsensus: 0.5, isMLTrained: false, mlAccuracy: 0.5, mlWeights: null,
+  2470→      edgeWeights: { up: 0.3, down: 0.3, pullback: 0.25, risk: 0.15 },
+  2471→      calibrationFactors: { R1: 1, R2: 1, R3: 1, R4: 1, R5: 1, R6: 1, R7: 1, R8: 1, R9: 1 },
+  2472→      scenarioSums: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0, R9: 0 },
+  2473→      adaptiveFactors: { momentum: 0.7, volatility: 0.5, trend: 0.6 },
+  2474→      hasVolume: false,
+  2475→      decisionGraph: null,
+  2476→      extendedIndicators: {
+  2477→        wma: {}, hma: 0, tma: 0, lma: 0, maAlignment: 0.5,
+  2478→        heikenAshi: { open: 0, high: 0, low: 0, close: 0 },
+  2479→        awesomeOsc: 0, momentum: 0, modifiedRSI: 50, fastStochK: 50,
+  2480→        fisherTransform: 0, pvo: 0, confidenceIndex: 0.5, strengthIndex: 0.5,
+  2481→        ad: 0, vpt: 0, vosc: 0, chaikinAD: 0, forceIndex: 0,
+  2482→        keltnerChannels: { upper: 0, middle: 0, lower: 0 },
+  2483→        envelopes: { upper: 0, middle: 0, lower: 0 },
+  2484→        stdDev: 0, hv: 0,
+  2485→      },
+  2486→    };
+  2487→  }
+  2488→
+  2489→  const closes = data.map(d => d.close);
+  2490→  const price = closes[closes.length - 1];
+  2491→
+  2492→  // ── Detect volume availability ──────────────────────────────────────────
+  2493→  const hasVolume = data.some(d => d.volume > 0);
+  2494→
+  2495→  // ── Moving Averages ──────────────────────────────────────────────────────
+  2496→  const smaPeriods = [5, 9, 10, 21, 50, 100, 200];
+  2497→  const smaResult: Record<string, number> = {};
+  2498→  for (const p of smaPeriods) smaResult[`sma${p}`] = sma(closes, p);
+  2499→
+  2500→  const emaPeriods = [9, 12, 21, 26, 50, 100, 200];
+  2501→  const emaResult: Record<string, number> = {};
+  2502→  for (const p of emaPeriods) emaResult[`ema${p}`] = emaCalc(closes, p);
+  2503→
+  2504→  // ── Extended Moving Averages ──────────────────────────────────────────────
+  2505→  const wmaResult: Record<string, number> = {};
+  2506→  for (const p of [10, 20]) wmaResult[`wma${p}`] = calcWMA(closes, p);
+  2507→
+  2508→  // ── Oscillators ──────────────────────────────────────────────────────────
+  2509→  const rsi = calcRSI(closes);
+  2510→  // MFI requires volume — return neutral 50 when no volume data
+  2511→  const mfi = hasVolume ? calcMFI(data) : 50;
+  2512→  const cci = calcCCI(data);
+  2513→  const stoch = calcStochastic(data);
+  2514→  const williamsR = calcWilliamsR(data);
+  2515→  const macd = calcMACD(closes);
+  2516→
+  2517→  // ── Trend ────────────────────────────────────────────────────────────────
+  2518→  const adxResult = calcADX(data);
+  2519→  const sar = calcSAR(data);
+  2520→
+  2521→  // ── Volatility ───────────────────────────────────────────────────────────
+  2522→  const atr = calcATR(data);
+  2523→  const bb = calcBollingerBands(closes);
+  2524→
+  2525→  // ── Volume ───────────────────────────────────────────────────────────────
+  2526→  // OBV requires volume — return 0 when no volume data
+  2527→  const obv = hasVolume ? calcOBV(data) : 0;
+  2528→
+  2529→  // ── Ichimoku Cloud ────────────────────────────────────────────────────
+  2530→  const ichimoku = calcIchimoku(data);
+  2531→  const ichimokuArrays = calcIchimokuArrays(data);
+  2532→
+  2533→  // ── VWAP ─────────────────────────────────────────────────────────────
+  2534→  const vwap = hasVolume ? calcVWAP(data) : 0;
+  2535→  const vwapArr = hasVolume ? calcVWAPArray(data) : data.map(() => 0);
+  2536→
+  2537→  // ── MA Arrays for chart overlays ──────────────────────────────────────
+  2538→  const smaArrResult: Record<string, number[]> = {};
+  2539→  for (const p of smaPeriods) smaArrResult[`sma${p}`] = smaArray(closes, p);
+  2540→
+  2541→  const emaArrResult: Record<string, number[]> = {};
+  2542→  for (const p of emaPeriods) emaArrResult[`ema${p}`] = emaArrayCalc(closes, p);
+  2543→
+  2544→  // ── Support / Resistance ────────────────────────────────────────────────
+  2545→  const { resistances, supports, supportStrengths, resistanceStrengths, priceTargets } = calcSupportResistance(data, price);
+  2546→
+  2547→  // ── Trend Lines ─────────────────────────────────────────────────────────
+  2548→  const trend = {
+  2549→    short: calcTrend(closes, 21),
+  2550→    medium: calcTrend(closes, 50),
+  2551→    long: calcTrend(closes, Math.min(100, closes.length)),
+  2552→  };
+  2553→
+  2554→  // ═══════════════════════════════════════════════════════════════════════════
+  2555→  // VDss 7-LAYER PROBABILITY ENGINE
+  2556→  // ═══════════════════════════════════════════════════════════════════════════
+  2557→
+  2558→  const R1_level = resistances[0] ?? price * 1.05;
+  2559→  const R2_level = resistances[1] ?? price * 1.10;
+  2560→  const R3_level = resistances[2] ?? price * 1.15;
+  2561→  const R4_level = resistances[3] ?? price * 1.20;
+  2562→  const R5_level = resistances[4] ?? price * 1.30;
+  2563→  const R6_level = resistances[5] ?? price * 1.40;
+  2564→  const S1_level = supports[0] ?? price * 0.95;
+  2565→  const S2_level = supports[1] ?? price * 0.90;
+  2566→  const S3_level = supports[2] ?? price * 0.85;
+  2567→  const S4_level = supports[3] ?? price * 0.80;
+  2568→  const S5_level = supports[4] ?? price * 0.75;
+  2569→  const S6_level = supports[5] ?? price * 0.70;
+  2570→
+  2571→  // ── Layer 1+2: Compute features at current bar ───────────────────────────
+  2572→  const currentFeatures = computeFeaturesAtBar(data, data.length - 1);
+  2573→  const featureArray = FEATURES_ORDER.map(k => currentFeatures[k] ?? 0.5);
+  2574→
+  2575→  // ── Layer 3: ML Training & Bull Consensus ─────────────────────────────────
+  2576→  const mlModel = new AdaptiveWeightModel(70, 10);
+  2577→  const { X: trainX, y: trainY } = createTrainingData(data);
+  2578→  const trained = mlModel.train(trainX, trainY);
+  2579→
+  2580→  let bullConsensus: number;
+  2581→  const fallbackWeights: Record<string, number> = {
+  2582→    rsi: 0.15, mfi: 0.12, cci: 0.10, adx: 0.08,
+  2583→    macd: 0.14, stoch: 0.10, bb: 0.08,
+  2584→    ma21: 0.10, ma100: 0.08, ema: 0.10,
+  2585→    atr: 0.05, trend: 0.10, sr: 0.05,
+  2586→    stochCross: 0.06, macdCross: 0.06, div: 0.08,
+  2587→  };
+  2588→
+  2589→  if (trained && mlModel.isTrained && mlModel.weights) {
+  2590→    // Use ML-derived weights
+  2591→    const weights = mlModel.weights;
+  2592→    let weightedSum = 0;
+  2593→    for (let i = 0; i < NUM_FEATURES; i++) {
+  2594→      weightedSum += weights[i] * featureArray[i];
+  2595→    }
+  2596→    bullConsensus = weightedSum;
+  2597→
+  2598→    // Blend with ML direct prediction (weight based on accuracy)
+  2599→    const mlScore = mlModel.predictScore(featureArray);
+  2600→    if (mlScore !== null) {
+  2601→      const mlWeight = clamp(mlModel.recentAccuracy * 0.30, 0, 0.30);
+  2602→      bullConsensus = bullConsensus * (1 - mlWeight) + mlScore * mlWeight;
+  2603→    }
+  2604→  } else {
+  2605→    // Fallback: fixed weights
+  2606→    const wTotal = Object.values(fallbackWeights).reduce((a, b) => a + b, 0);
+  2607→    let sum = 0;
+  2608→    for (const key of FEATURES_ORDER) {
+  2609→      sum += (fallbackWeights[key] ?? 0) * (currentFeatures[key] ?? 0.5);
+  2610→    }
+  2611→    bullConsensus = sum / wTotal;
+  2612→  }
+  2613→  bullConsensus = clamp(bullConsensus, 0, 1);
+  2614→
+  2615→  const bullScore = bullConsensus;
+  2616→  const bearScore = 1 - bullConsensus;
+  2617→
+  2618→  // ── Layer 4-6: Decision Graph Probability Engine (replaces old heuristic + old 12-node graph) ─
+  2619→  const ma100Val = smaResult.sma100 ?? price;
+  2620→<<<<<<< Updated upstream
+  2621→  const scenarioResult = calculateScenarioProbabilities(
+  2622→    bullConsensus, price, R1_level, S1_level, ma100Val,
+  2623→    rsi, mfi, stoch.k, mlModel
+  2624→  );
+  2625→  const pR1 = scenarioResult.R1;
+  2626→  const pR2 = scenarioResult.R2;
+  2627→  const pR3 = scenarioResult.R3;
+  2628→  const pR4 = scenarioResult.R4;
+  2629→  const pR5 = scenarioResult.R5;
+  2630→  const pR6 = scenarioResult.R6;
+  2631→  const pR7 = scenarioResult.R7;
+  2632→  const pR8 = scenarioResult.R8;
+  2633→  const pR9 = scenarioResult.R9;
+  2634→=======
+  2635→  const R1_nearest = resistances[0] ?? price * 1.05;
+  2636→  const S1_nearest = supports[0] ?? price * 0.95;
+  2637→  const srAvgStr = resistanceStrengths.length > 0 || supportStrengths.length > 0
+  2638→    ? [...resistanceStrengths, ...supportStrengths].reduce((s, l) => s + l.score, 0) / ([...resistanceStrengths, ...supportStrengths].length || 1) / 10
+  2639→    : 0.3;
+  2640→>>>>>>> Stashed changes
+  2641→
+  2642→  // Extract ML adaptive factors directly from ML model
+  2643→  let mlMomentumFactor = 0.7;
+  2644→  let mlVolatilityFactor = 0.5;
+  2645→  let mlTrendFactor = 0.6;
+  2646→  if (mlModel.isTrained && mlModel.weights) {
+  2647→    const coefs = mlModel.getCoefficients();
+  2648→    mlMomentumFactor = sigmoid(coefs[0] ?? 0);
+  2649→    mlVolatilityFactor = sigmoid(coefs[10] ?? 0);
+  2650→    mlTrendFactor = sigmoid(coefs[11] ?? 0);
+  2651→  }
+  2652→
+  2653→<<<<<<< Updated upstream
+  2654→  // ── Layer 6: Path Probabilities with Calibration ──────────────────────────
+  2655→  const scenarioProbsForGraph: Record<string, number> = { R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5, R6: pR6, R7: pR7, R8: pR8, R9: pR9 };
+  2656→  const pathResult = calculatePathProbabilities(edgeWeights, scenarioProbsForGraph);
+  2657→=======
+  2658→  const graphData = buildDecisionGraph({
+  2659→    price,
+  2660→    bullConsensus,
+  2661→    rsi,
+  2662→    mfi,
+  2663→    cci,
+  2664→    stochK: stoch.k,
+  2665→    stochD: stoch.d,
+  2666→    adx: adxResult.adx,
+  2667→    diPlus: adxResult.diPlus,
+  2668→    diMinus: adxResult.diMinus,
+  2669→    macdHist: macd.histogram,
+  2670→    atr,
+  2671→    bbUpper: bb.upper,
+  2672→    bbMiddle: bb.middle,
+  2673→    bbLower: bb.lower,
+  2674→    sar,
+  2675→    ichimokuTenkan: ichimoku.tenkan,
+  2676→    ichimokuKijun: ichimoku.kijun,
+  2677→    ichimokuSenkouA: ichimoku.senkouA,
+  2678→    ichimokuSenkouB: ichimoku.senkouB,
+  2679→    maAlignment: calcMARibbonAlignment(closes),
+  2680→    momentum: calcMomentum(closes, 10),
+  2681→    awesomeOsc: calcAwesomeOscillator(data),
+  2682→    fisherTransform: calcFisherTransform(data, 9),
+  2683→    confidenceIndex: calcConfidenceIndex(rsi, mfi, macd.line, macd.signal, adxResult.adx, stoch.k, trend.short.r2),
+  2684→    strengthIndex: calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atr, price, emaResult.ema12, emaResult.ema26),
+  2685→    hasVolume,
+  2686→    distToR1: R1_nearest > 0 ? (R1_nearest - price) / price : 0.05,
+  2687→    distToS1: price > 0 && S1_nearest > 0 ? (price - S1_nearest) / price : 0.05,
+  2688→    srAvgStrength: clamp(srAvgStr, 0, 1),
+  2689→    mlMomentum: mlMomentumFactor,
+  2690→    mlVolatility: mlVolatilityFactor,
+  2691→    mlTrend: mlTrendFactor,
+  2692→  });
+  2693→>>>>>>> Stashed changes
+  2694→
+  2695→  // Use decision graph scenario probabilities (sum to 100)
+  2696→  const pR1 = graphData.scenarioProbabilities.R1 ?? 11;
+  2697→  const pR2 = graphData.scenarioProbabilities.R2 ?? 11;
+  2698→  const pR3 = graphData.scenarioProbabilities.R3 ?? 11;
+  2699→  const pR4 = graphData.scenarioProbabilities.R4 ?? 11;
+  2700→  const pR5 = graphData.scenarioProbabilities.R5 ?? 11;
+  2701→  const pR6 = graphData.scenarioProbabilities.R6 ?? 11;
+  2702→  const pR7 = graphData.scenarioProbabilities.R7 ?? 11;
+  2703→  const pR8 = graphData.scenarioProbabilities.R8 ?? 11;
+  2704→  const pR9 = graphData.scenarioProbabilities.R9 ?? 11;
+  2705→
+  2706→  // Keep edge weights for backward compat (derive from graph)
+  2707→  const edgeWeights = {
+  2708→    up: graphData.branchProbabilities.trend * bullConsensus + 0.1,
+  2709→    down: graphData.branchProbabilities.trend * (1 - bullConsensus) + 0.1,
+  2710→    pullback: 0.25,
+  2711→    risk: 0.15 * (1.2 - adxResult.adx / 100),
+  2712→  };
+  2713→
+  2714→  // Layer 7: Adaptive model update
+  2715→  if (data.length > 6) {
+  2716→    const futureReturn = (price - data[data.length - 6].close) / data[data.length - 6].close;
+  2717→    const label = futureReturn > 0.01 ? 1 : 0;
+  2718→    mlModel.update(featureArray, label);
+  2719→  }
+  2720→
+  2721→  // ── Overall Signal ──────────────────────────────────────────────────────
+  2722→  const overallSignal: 'bullish' | 'bearish' | 'neutral' =
+  2723→    bullConsensus > 0.58 ? 'bullish' : bullConsensus < 0.42 ? 'bearish' : 'neutral';
+  2724→
+  2725→  // ── Scenario Descriptions with ATR-based S/R targets ────────────────────
+  2726→  const fmt = (n: number) => Math.round(n).toLocaleString('fa-IR');
+  2727→  const rp = (n: number) => Math.round(n); // round price
+  2728→
+  2729→  // Helper: build a target range ≤ 1 ATR around a base level, ensuring ordering
+  2730→  const bullTargets = buildBullishTargets(price, atr, resistances);
+  2731→  const bearTargets = buildBearishTargets(price, atr, supports);
+  2732→  const rangeTarget = buildRangeTarget(price, atr, supports[0], resistances[0]);
+  2733→
+  2734→  const scenarios = {
+  2735→    R1: {
+  2736→<<<<<<< Updated upstream
+  2737→      name: 'صعود هیجانی',
+  2738→      nameEn: 'Explosive Bullish',
+  2739→      probability: pR1,
+  2740→      targetMin: R3_level,
+  2741→      targetMax: R6_level,
+  2742→      description: `عبور پرشتاب از مقاومت‌های ${fmt(R1_level)} و ${fmt(R2_level)}. هدف: ${fmt(R3_level)} تا ${fmt(R6_level)} ریال.`,
+  2743→    },
+  2744→    R2: {
+  2745→      name: 'صعود قوی',
+  2746→      nameEn: 'Strong Bullish',
+  2747→      probability: pR2,
+  2748→      targetMin: R2_level,
+  2749→      targetMax: R4_level,
+  2750→      description: `حرکت صعودی قوی با حجم مناسب. هدف: ${fmt(R2_level)} تا ${fmt(R4_level)} ریال.`,
+  2751→    },
+  2752→    R3: {
+  2753→      name: 'صعود تدریجی',
+  2754→      nameEn: 'Gradual Bullish',
+  2755→      probability: pR3,
+  2756→      targetMin: R1_level,
+  2757→      targetMax: R2_level,
+  2758→      description: `رشد آرام و پایدار. هدف: ${fmt(R1_level)} تا ${fmt(R2_level)} ریال.`,
+  2759→    },
+  2760→    R4: {
+  2761→      name: 'پولبک سالم',
+  2762→      nameEn: 'Healthy Pullback',
+  2763→      probability: pR4,
+  2764→      targetMin: S1_level,
+  2765→      targetMax: R1_level,
+  2766→      description: `اصلاح موقت و سالم تا حمایت ${fmt(S1_level)} با حفظ ساختار صعودی.`,
+  2767→    },
+  2768→    R5: {
+  2769→      name: 'رنج خنثی',
+  2770→      nameEn: 'Range-bound Neutral',
+  2771→      probability: pR5,
+  2772→      targetMin: S1_level,
+  2773→      targetMax: R1_level,
+  2774→      description: `نوسان بین حمایت ${fmt(S1_level)} و مقاومت ${fmt(R1_level)} ریال بدون جهت مشخص.`,
+  2775→    },
+  2776→    R6: {
+  2777→      name: 'اصلاح خفیف',
+  2778→      nameEn: 'Mild Correction',
+  2779→      probability: pR6,
+  2780→      targetMin: S2_level,
+  2781→      targetMax: S1_level,
+  2782→      description: `اصلاح خفیف تا محدوده ${fmt(S2_level)} تا ${fmt(S1_level)} ریال.`,
+  2783→    },
+  2784→    R7: {
+  2785→      name: 'اصلاح متوسط',
+  2786→      nameEn: 'Moderate Correction',
+  2787→      probability: pR7,
+  2788→      targetMin: S3_level,
+  2789→      targetMax: S2_level,
+  2790→      description: `اصلاح متوسط تا حمایت‌های ${fmt(S3_level)} تا ${fmt(S2_level)} ریال.`,
+  2791→    },
+  2792→    R8: {
+  2793→      name: 'اصلاح عمیق',
+  2794→      nameEn: 'Deep Correction',
+  2795→      probability: pR8,
+  2796→      targetMin: S5_level,
+  2797→      targetMax: S3_level,
+  2798→      description: `افت شدید تا حمایت‌های ${fmt(S5_level)} تا ${fmt(S3_level)} ریال. نزدیک به MA100.`,
+  2799→    },
+  2800→    R9: {
+  2801→      name: 'تضعیف ساختار',
+  2802→      nameEn: 'Structure Breakdown',
+  2803→      probability: pR9,
+  2804→      targetMin: S6_level,
+  2805→      targetMax: S5_level,
+  2806→      description: `شکست معتبر MA100 و تضعیف کامل ساختار. هدف: ${fmt(S6_level)} تا ${fmt(S5_level)} ریال.`,
+  2807→=======
+  2808→      name: 'صعودی با احتیاط',
+  2809→      nameEn: 'Cautious Bullish',
+  2810→      probability: pR1,
+  2811→      targetMin: bullTargets[0].min,
+  2812→      targetMax: bullTargets[0].max,
+  2813→      description: `حرکت صعودی محتاطانه با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ریال.`, },
+  2814→    R2: {
+  2815→      name: 'صعودی قوی',
+  2816→      nameEn: 'Strong Bullish',
+  2817→      probability: pR2,
+  2818→      targetMin: bullTargets[1].min,
+  2819→      targetMax: bullTargets[1].max,
+  2820→      description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ریال.`,
+  2821→    },
+  2822→    R3: {
+  2823→      name: 'صعودی شتابدار',
+  2824→      nameEn: 'Accelerating Bullish',
+  2825→      probability: pR3,
+  2826→      targetMin: bullTargets[2].min,
+  2827→      targetMax: bullTargets[2].max,
+  2828→      description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ریال.`,
+  2829→    },
+  2830→    R4: {
+  2831→      name: 'شوک صعودی',
+  2832→      nameEn: 'Bullish Shock',
+  2833→      probability: pR4,
+  2834→      targetMin: bullTargets[3].min,
+  2835→      targetMax: bullTargets[3].max,
+  2836→      description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ریال.`,
+  2837→    },
+  2838→    R5: {
+  2839→      name: 'رنج کم‌نوسان',
+  2840→      nameEn: 'Low Volatility Range',
+  2841→      probability: pR5,
+  2842→      targetMin: rangeTarget.min,
+  2843→      targetMax: rangeTarget.max,
+  2844→      description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ریال.`,
+  2845→    },
+  2846→    R6: {
+  2847→      name: 'نزولی با احتیاط',
+  2848→      nameEn: 'Cautious Bearish',
+  2849→      probability: pR6,
+  2850→      targetMin: bearTargets[0].min,
+  2851→      targetMax: bearTargets[0].max,
+  2852→      description: `نزول محتاطانه تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ریال.`,
+  2853→    },
+  2854→    R7: {
+  2855→      name: 'نزولی قوی',
+  2856→      nameEn: 'Strong Bearish',
+  2857→      probability: pR7,
+  2858→      targetMin: bearTargets[1].min,
+  2859→      targetMax: bearTargets[1].max,
+  2860→      description: `نزول قوی تا ${fmt(bearTargets[1].min)} تا ${fmt(bearTargets[1].max)} ریال.`,
+  2861→    },
+  2862→    R8: {
+  2863→      name: 'نزولی شتاب‌دار',
+  2864→      nameEn: 'Accelerating Bearish',
+  2865→      probability: pR8,
+  2866→      targetMin: bearTargets[2].min,
+  2867→      targetMax: bearTargets[2].max,
+  2868→      description: `شتاب نزولی تا ${fmt(bearTargets[2].min)} تا ${fmt(bearTargets[2].max)} ریال.`,
+  2869→    },
+  2870→    R9: {
+  2871→      name: 'شوک نزولی',
+  2872→      nameEn: 'Bearish Shock',
+  2873→      probability: pR9,
+  2874→      targetMin: bearTargets[3].min,
+  2875→      targetMax: bearTargets[3].max,
+  2876→      description: `شوک نزولی تا ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ریال.`,
+  2877→>>>>>>> Stashed changes
+  2878→    },
+  2879→  };
+  2880→
+  2881→  return {
+  2882→    sma: smaResult,
+  2883→    ema: emaResult,
+  2884→    rsi,
+  2885→    mfi,
+  2886→    cci,
+  2887→    stochK: stoch.k,
+  2888→    stochD: stoch.d,
+  2889→    williamsR,
+  2890→    macd,
+  2891→    adx: adxResult.adx,
+  2892→    diPlus: adxResult.diPlus,
+  2893→    diMinus: adxResult.diMinus,
+  2894→    sar,
+  2895→    atr,
+  2896→    bollingerBands: bb,
+  2897→    obv,
+  2898→    ichimoku,
+  2899→    vwap,
+  2900→    smaArray: smaArrResult,
+  2901→    emaArray: emaArrResult,
+  2902→    ichimokuArrays,
+  2903→    vwapArray: vwapArr,
+  2904→    resistances: resistances.length ? resistances : [R1_level, R2_level, R3_level, R4_level, R5_level, R6_level],
+  2905→    supports: supports.length ? supports : [S1_level, S2_level, S3_level, S4_level, S5_level, S6_level],
+  2906→    supportStrengths,
+  2907→    resistanceStrengths,
+  2908→    priceTargets,
+  2909→    trend,
+  2910→    scenarios,
+  2911→    bullScore,
+  2912→    bearScore,
+  2913→    overallSignal,
+  2914→    // ── VDss ML Metadata ──
+  2915→    bullConsensus,
+  2916→    isMLTrained: mlModel.isTrained,
+  2917→    mlAccuracy: mlModel.recentAccuracy,
+  2918→    mlWeights: mlModel.weights,
+  2919→    edgeWeights,
+  2920→    calibrationFactors: {} as Record<string, number>,
+  2921→    scenarioSums: graphData.scenarioProbabilities,
+  2922→    adaptiveFactors: { momentum: mlMomentumFactor, volatility: mlVolatilityFactor, trend: mlTrendFactor },
+  2923→    hasVolume,
+  2924→    // Decision Graph (primary probability source)
+  2925→    decisionGraph: graphData,
+  2926→    // ── Extended Indicators (24 additional) ──
+  2927→    extendedIndicators: {
+  2928→      // Trend
+  2929→      wma: wmaResult,
+  2930→      hma: calcHMA(closes, 20),
+  2931→      tma: calcTMA(closes, 20),
+  2932→      lma: calcLMA(closes, 20),
+  2933→      maAlignment: calcMARibbonAlignment(closes),
+  2934→      heikenAshi: calcHeikenAshi(data),
+  2935→      // Oscillators
+  2936→      awesomeOsc: calcAwesomeOscillator(data),
+  2937→      momentum: calcMomentum(closes, 10),
+  2938→      modifiedRSI: calcRSI(closes, 21),
+  2939→      fastStochK: calcFastStochastic(data, 14, 3),
+  2940→      fisherTransform: calcFisherTransform(data, 9),
+  2941→      pvo: hasVolume ? calcPVO(data, 12, 26) : 0,
+  2942→      confidenceIndex: calcConfidenceIndex(rsi, mfi, macd.line, macd.signal, adxResult.adx, stoch.k, trend.short.r2),
+  2943→      strengthIndex: calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atr, price, emaResult.ema12, emaResult.ema26),
+  2944→      // Volume (zero when no volume)
+  2945→      ad: hasVolume ? calcAccumDist(data) : 0,
+  2946→      vpt: hasVolume ? calcVPT(data) : 0,
+  2947→      vosc: hasVolume ? calcVOSC(data, 5, 10) : 0,
+  2948→      chaikinAD: hasVolume ? calcChaikinAD(data) : 0,
+  2949→      forceIndex: hasVolume ? calcForceIndex(data, 13) : 0,
+  2950→      // Volatility
+  2951→      keltnerChannels: calcKeltnerChannels(data, 20, 2),
+  2952→      envelopes: calcEnvelopes(closes, 20, 2.5),
+  2953→      stdDev: calcStdDev(closes, 20),
+  2954→      hv: calcHV(closes, 20),
+  2955→    },
+  2956→  };
+  2957→}
+  2958→

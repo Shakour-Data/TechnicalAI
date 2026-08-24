@@ -26,7 +26,6 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import { computeDailyIndicators } from '@/lib/indicator-arrays';
-import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
 
 function renderAIText(text: string): string {
   // Normalize zero-width and look-alike characters that may interfere with regex
@@ -249,7 +248,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
 
   const bullCum = v11Result.bullishCumulative;
   const bearCum = v11Result.bearishCumulative;
-  const rangeCum = v11Result.rangeCumulative;
+  const rangeCum = v11Result.neutralCumulative;
 
   const dominant = SCENARIO_META[highestKey].label;
 
@@ -542,15 +541,6 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     return computeV11Probabilities(input);
   }, [scenarios]);
 
-  // Build a lookup map for v11 scenario results by key
-  const v11Map = useMemo(() => {
-    const map: Record<string, { raw: number; cum: number; category: string }> = {};
-    for (const s of v11Result.scenarios) {
-      map[s.key] = { raw: s.rawProbability, cum: s.cumulativeProbability, category: s.category };
-    }
-    return map;
-  }, [v11Result]);
-
   // ── Dominant scenario ──────────────────────────────────────────
   let highestKey = 'R5';
   let highestProb = 0;
@@ -613,15 +603,6 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
     : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
 
-  // ── V11 Probabilities (computed client-side from raw scenarios) ─────
-  const v11Result = useMemo<V11Result>(() => computeV11Probabilities({
-    R1: scenarios.R1.probability,
-    R2: scenarios.R2.probability,
-    R3: scenarios.R3.probability,
-    R4: scenarios.R4.probability,
-    R5: scenarios.R5.probability,
-  }), [scenarios.R1.probability, scenarios.R2.probability, scenarios.R3.probability, scenarios.R4.probability, scenarios.R5.probability]);
-
   const v11Map = useMemo(() => {
     const m = new Map<string, V11Result['scenarios'][number]>();
     for (const s of v11Result.scenarios) m.set(s.key, s);
@@ -651,17 +632,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             trendDirection, trendAngle, trendR2,
             scenarios, hasVolume: hasVolume ?? false,
             resistanceStrengths, supportStrengths,
-<<<<<<< Updated upstream
             v11Probabilities: v11Result,
-=======
-            v11Result: {
-              bullishCumulative: v11Result.bullishCumulative,
-              bearishCumulative: v11Result.bearishCumulative,
-              rangeCumulative: v11Result.rangeCumulative,
-              riskProfile: v11Result.riskProfile,
-              scenarios: v11Result.scenarios,
-            },
->>>>>>> Stashed changes
           }),
           signal: controller.signal,
         });
@@ -769,20 +740,20 @@ ${SCENARIO_KEYS.map(k => {
   const s = scenarios[k];
   if (!s) return '';
   const m = SCENARIO_META[k];
-  const v = v11Map[k];
+  const v = v11Map.get(k);
   return `<div class="scenario-card" style="border-top-color:${m.border}">
     <div style="display:flex;justify-content:space-between"><strong style="color:${m.badgeColor}">${SCENARIO_NUMBER[k]}</strong></div>
     <div style="font-size:10px;color:#374151;margin:2px 0">${m.label}</div>
     <div class="prob" style="color:${m.badgeColor}">${toFa(s.probability)}٪</div>
     <div class="bar-bg"><div class="bar-fill" style="width:${s.probability}%;background:${m.border}"></div></div>
-    <div class="cum">تجمعی: ${toFa(v?.cum ?? 0)}٪</div>
+    <div class="cum">تجمعی: ${toFa(v?.cumulativeProbability ?? 0)}٪</div>
     <div class="range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال</div>
   </div>`;
 }).join('')}
 </div>
 <div class="summary-bar">
   <div class="summary-item" style="background:rgba(4,120,87,0.06)"><div style="font-size:10px;color:#6b7280">مجموع صعودی</div><div style="font-size:16px;font-weight:900;color:#047857">${toFa(v11Result.bullishCumulative)}٪</div></div>
-  <div class="summary-item" style="background:rgba(180,83,9,0.06)"><div style="font-size:10px;color:#6b7280">رنج</div><div style="font-size:16px;font-weight:900;color:#b45309">${toFa(v11Result.rangeCumulative)}٪</div></div>
+  <div class="summary-item" style="background:rgba(180,83,9,0.06)"><div style="font-size:10px;color:#6b7280">رنج</div><div style="font-size:16px;font-weight:900;color:#b45309">${toFa(v11Result.neutralCumulative)}٪</div></div>
   <div class="summary-item" style="background:rgba(185,28,28,0.06)"><div style="font-size:10px;color:#6b7280">مجموع نزولی</div><div style="font-size:16px;font-weight:900;color:#b91c1c">${toFa(v11Result.bearishCumulative)}٪</div></div>
 </div>
 <div style="text-align:center;font-size:11px;color:#6b7280;margin-top:12px">مجموع احتمالات: <strong style="color:#374151">${toFa(totalProb)}٪</strong></div>
@@ -823,11 +794,11 @@ ${SCENARIO_KEYS.map(k => {
       const s = scenarios[k];
       if (!s) continue;
       const m = SCENARIO_META[k];
-      const v = v11Map[k];
-      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cum ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`);
+      const v = v11Map.get(k);
+      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cumulativeProbability ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`);
     }
     lines.push('');
-    lines.push(`مجموع صعودی: ${toFa(v11Result.bullishCumulative)}٪ | رنج: ${toFa(v11Result.rangeCumulative)}٪ | مجموع نزولی: ${toFa(v11Result.bearishCumulative)}٪`);
+    lines.push(`مجموع صعودی: ${toFa(v11Result.bullishCumulative)}٪ | رنج: ${toFa(v11Result.neutralCumulative)}٪ | مجموع نزولی: ${toFa(v11Result.bearishCumulative)}٪`);
     lines.push(`سیگنال غالب: ${strategy.text}`);
     const text = lines.join('\n');
     const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
@@ -903,7 +874,7 @@ ${SCENARIO_KEYS.map(k => {
       'سناریو': SCENARIO_META[k].label,
       'کد': `سناریوی ${SCENARIO_NUMBER[k]}`,
       'احتمال اختصاصی٪': scenarios[k]?.probability ?? 0,
-      'احتمال تجمعی٪': v11Map[k]?.cum ?? 0,
+      'احتمال تجمعی٪': v11Map.get(k)?.cumulativeProbability ?? 0,
       'هدف_حداقل': Math.round(scenarios[k]?.targetMin ?? 0),
       'هدف_حداکثر': Math.round(scenarios[k]?.targetMax ?? 0),
     }));
@@ -1158,7 +1129,6 @@ ${SCENARIO_KEYS.map(k => {
         </div>
       </div>
 
-<<<<<<< Updated upstream
       {/* ═══ SCENARIO PROBABILITIES (V11) ═══ */}
       <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -1236,183 +1206,6 @@ ${SCENARIO_KEYS.map(k => {
               }</b>
             </span>
           )}
-=======
-      {/* ═══ SCENARIOS (full width) ═══ */}
-      <div className="rounded-2xl border border-[#e5e7eb] bg-[#ffffff] shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-[#e5e7eb] flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-            <span className="w-1.5 h-5 rounded-full bg-amber-700 inline-block" />
-            احتمالات سناریوها
-          </h2>
-          <span className="text-xs text-[#6b7280]">مجموع: <b className="text-[#374151]">{toFa(totalProb)}٪</b></span>
-        </div>
-
-        <div className="p-5">
-          {/* Bullish Scenarios */}
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-600" />
-              <span className="text-[11px] font-bold text-emerald-700">سناریوهای صعودی</span>
-              <span className="text-[10px] text-[#6b7280]">مجموع: <b>{toFa(v11Result.bullishCumulative)}٪</b></span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {SCENARIO_KEYS.filter(k => SCENARIO_META[k].type === 'up').map(key => {
-                const s = scenarios[key];
-                if (!s) return null;
-                const meta = SCENARIO_META[key];
-                const v = v11Map[key];
-                return (
-                  <div
-                    key={key}
-                    className="rounded-xl p-4 bg-[#f3f4f6]/60 border border-[#e5e7eb] hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{SCENARIO_NUMBER[key]}</span>
-                      <span className="text-[11px] font-medium text-[#374151] truncate mr-2" title={meta.label}>{meta.label}</span>
-                    </div>
-                    <div className="flex items-end justify-between mb-3">
-                      <span
-                        className="text-2xl font-black tabular-nums"
-                        style={{ color: meta.badgeColor }}
-                      >
-                        {toFa(s.probability)}٪
-                      </span>
-                      <span className="text-[10px] text-[#6b7280]">تجمعی: <b>{toFa(v?.cum ?? 0)}٪</b></span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-[#e5e7eb] overflow-hidden mb-2">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${s.probability}%`, backgroundColor: meta.border }}
-                      />
-                    </div>
-                    <div className="text-[10px] text-[#6b7280] text-center" dir="ltr">
-                      {toFa(s.targetMin)} — {toFa(s.targetMax)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Neutral Scenario */}
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-amber-600" />
-              <span className="text-[11px] font-bold text-amber-700">سناریوی رنج</span>
-              <span className="text-[10px] text-[#6b7280]">مجموع: <b>{toFa(v11Result.rangeCumulative)}٪</b></span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
-              {SCENARIO_KEYS.filter(k => SCENARIO_META[k].type === 'neutral').map(key => {
-                const s = scenarios[key];
-                if (!s) return null;
-                const meta = SCENARIO_META[key];
-                const v = v11Map[key];
-                return (
-                  <div
-                    key={key}
-                    className="rounded-xl p-4 bg-amber-50/40 border border-amber-200/60 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{SCENARIO_NUMBER[key]}</span>
-                      <span className="text-[11px] font-medium text-[#374151]">{meta.label}</span>
-                    </div>
-                    <div className="flex items-end justify-between mb-3">
-                      <span
-                        className="text-2xl font-black tabular-nums"
-                        style={{ color: meta.badgeColor }}
-                      >
-                        {toFa(s.probability)}٪
-                      </span>
-                      <span className="text-[10px] text-[#6b7280]">تجمعی: <b>{toFa(v?.cum ?? 0)}٪</b></span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-amber-200/60 overflow-hidden mb-2">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${s.probability}%`, backgroundColor: meta.border }}
-                      />
-                    </div>
-                    <div className="text-[10px] text-[#6b7280] text-center" dir="ltr">
-                      {toFa(s.targetMin)} — {toFa(s.targetMax)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Bearish Scenarios */}
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-red-600" />
-              <span className="text-[11px] font-bold text-red-700">سناریوهای نزولی</span>
-              <span className="text-[10px] text-[#6b7280]">مجموع: <b>{toFa(v11Result.bearishCumulative)}٪</b></span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {SCENARIO_KEYS.filter(k => SCENARIO_META[k].type === 'down').map(key => {
-                const s = scenarios[key];
-                if (!s) return null;
-                const meta = SCENARIO_META[key];
-                const v = v11Map[key];
-                return (
-                  <div
-                    key={key}
-                    className="rounded-xl p-4 bg-[#f3f4f6]/60 border border-[#e5e7eb] hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{SCENARIO_NUMBER[key]}</span>
-                      <span className="text-[11px] font-medium text-[#374151] truncate mr-2" title={meta.label}>{meta.label}</span>
-                    </div>
-                    <div className="flex items-end justify-between mb-3">
-                      <span
-                        className="text-2xl font-black tabular-nums"
-                        style={{ color: meta.badgeColor }}
-                      >
-                        {toFa(s.probability)}٪
-                      </span>
-                      <span className="text-[10px] text-[#6b7280]">تجمعی: <b>{toFa(v?.cum ?? 0)}٪</b></span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-[#e5e7eb] overflow-hidden mb-2">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${s.probability}%`, backgroundColor: meta.border }}
-                      />
-                    </div>
-                    <div className="text-[10px] text-[#6b7280] text-center" dir="ltr">
-                      {toFa(s.targetMin)} — {toFa(s.targetMax)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Summary Bar + Risk Profile */}
-          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[#e5e7eb]">
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'rgba(4,120,87,0.06)' }}>
-              <div className="w-2 h-2 rounded-full bg-emerald-600" />
-              <span className="text-[10px] text-[#6b7280]">صعودی</span>
-              <span className="text-sm font-black" style={{ color: '#047857' }}>{toFa(v11Result.bullishCumulative)}٪</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'rgba(180,83,9,0.06)' }}>
-              <div className="w-2 h-2 rounded-full bg-amber-600" />
-              <span className="text-[10px] text-[#6b7280]">رنج</span>
-              <span className="text-sm font-black" style={{ color: '#b45309' }}>{toFa(v11Result.rangeCumulative)}٪</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'rgba(185,28,28,0.06)' }}>
-              <div className="w-2 h-2 rounded-full bg-red-600" />
-              <span className="text-[10px] text-[#6b7280]">نزولی</span>
-              <span className="text-sm font-black" style={{ color: '#b91c1c' }}>{toFa(v11Result.bearishCumulative)}٪</span>
-            </div>
-            <span className="mr-auto" />
-            <span
-              className="px-3 py-1.5 rounded-full text-[10px] font-bold border"
-              style={{ borderColor: riskInfo.color + '33', color: riskInfo.color, background: riskInfo.bg }}
-            >
-              پروفایل ریسک: {riskInfo.label}
-            </span>
-          </div>
->>>>>>> Stashed changes
         </div>
       </div>
 
