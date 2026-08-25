@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
 import { type GraphData } from '@/lib/decision-graph';
+import { type ProbabilityTrendResult, type DayPoint } from '@/lib/probability-trend';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -42,6 +45,7 @@ export interface VdssGraphProps {
     R9: Scenario;
   };
   decisionGraph: GraphData | null;
+  probabilityTrend?: ProbabilityTrendResult | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -737,11 +741,200 @@ export default function VdssGraph(props: VdssGraphProps) {
           <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی سرور محاسبه شده‌اند. هر استراتژی ۹ یال شرطی دارد و مجموع ۲۷ مسیر، احتمال نهایی هر سناریو را تشکیل می‌دهد.
         </div>
       </div>
+
+      {/* ═══ Probability Trend Table ═══ */}
+      {props.probabilityTrend && <ProbabilityTrendTable data={props.probabilityTrend} />}
     </div>
   );
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────────
+
+const TREND_DAYS = [1, 5, 10, 20, 30] as const;
+
+const TREND_GROUP_COLOR: Record<string, { bg: string; text: string; badge: string }> = {
+  bearish: { bg: 'rgba(239,68,68,0.06)', text: '#dc2626', badge: 'rgba(239,68,68,0.12)' },
+  neutral: { bg: 'rgba(107,114,128,0.06)', text: '#6b7280', badge: 'rgba(107,114,128,0.12)' },
+  bullish: { bg: 'rgba(22,163,74,0.06)', text: '#16a34a', badge: 'rgba(22,163,74,0.12)' },
+};
+
+const TREND_GROUP_LABEL: Record<string, string> = {
+  bearish: 'خرسی',
+  neutral: 'خنثی',
+  bullish: 'گاوی',
+};
+
+function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
+  const [open, setOpen] = useState(true);
+
+  // Build a lookup: scenarioKey -> trend array
+  const scenarioMap = useMemo(() => {
+    const m: Record<string, ProbabilityTrendResult['scenarios'][number]> = {};
+    for (const s of data.scenarios) m[s.scenarioKey] = s;
+    return m;
+  }, [data.scenarios]);
+
+  // Group map
+  const groupMap = useMemo(() => {
+    const m: Record<string, ProbabilityTrendResult['groups'][number]> = {};
+    for (const g of data.groups) m[g.group] = g;
+    return m;
+  }, [data.groups]);
+
+  // Get DayPoint by day number (1-indexed)
+  const getDay = (trend: DayPoint[], day: number) =>
+    trend.find(d => d.day === day);
+
+  // Format probability as percentage string with 2 decimals
+  const fmtPct = (v: number) => toPersianDigits((v * 100).toFixed(2)) + '٪';
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+            style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
+          <div className="text-right">
+            <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
+            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها بر اساس مدل افت دوگانه</p>
+          </div>
+        </div>
+        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+      </CollapsibleTrigger>
+
+      <CollapsibleContent>
+        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <Table className="text-[11px] min-w-[900px]">
+            <TableHeader>
+              <TableRow className="border-b border-[#e5e7eb]">
+                <TableHead className="text-right text-[#374151] font-bold px-2 py-2 min-w-[120px]">سناریو</TableHead>
+                {TREND_DAYS.map(day => (
+                  <TableHead key={day} colSpan={2} className="text-center text-[#374151] font-bold px-1.5 py-2 border-r border-[#e5e7eb]">
+                    روز {toPersianDigits(day.toString())}
+                  </TableHead>
+                ))}
+                <TableHead className="text-center text-[#374151] font-bold px-2 py-2 border-r border-[#e5e7eb]">اوج</TableHead>
+              </TableRow>
+              <TableRow className="border-b border-[#e5e7eb] bg-[#f9fafb]">
+                <TableHead className="px-2 py-1" />
+                {TREND_DAYS.map(day => (
+                  <React.Fragment key={day}>
+                    <TableHead className="text-center text-[10px] text-[#6b7280] font-medium px-1 py-1">اختصاصی</TableHead>
+                    <TableHead className="text-center text-[10px] text-[#6b7280] font-medium px-1 py-1">تجمعی</TableHead>
+                  </React.Fragment>
+                ))}
+                <TableHead className="text-center text-[10px] text-[#6b7280] font-medium px-2 py-1">روز</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {/* Scenario rows */}
+              {['R1','R2','R3','R4','R5','R6','R7','R8','R9'].map(key => {
+                const sc = scenarioMap[key];
+                if (!sc) return null;
+                const gc = TREND_GROUP_COLOR[sc.group];
+                return (
+                  <TableRow key={key} className="border-b border-[#e5e7eb]/60 hover:bg-[#f9fafb]">
+                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text, minWidth: 120 }}>
+                      <span className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ background: gc.text }} />
+                      {sc.label}
+                    </TableCell>
+                    {TREND_DAYS.map(day => {
+                      const dp = getDay(sc.trend, day);
+                      const isPeak = sc.peakDay === day;
+                      return (
+                        <React.Fragment key={day}>
+                          <TableCell
+                            className={`text-center px-1 py-1 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
+                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 4 } : { color: '#374151' }}
+                          >
+                            {dp ? fmtPct(dp.individualProb) : '—'}
+                          </TableCell>
+                          <TableCell
+                            className={`text-center px-1 py-1 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
+                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 4 } : { color: '#6b7280' }}
+                          >
+                            {dp ? fmtPct(dp.cumulativeProb) : '—'}
+                          </TableCell>
+                        </React.Fragment>
+                      );
+                    })}
+                    <TableCell className="text-center px-2 py-1 font-bold tabular-nums" style={{ color: gc.text }}>
+                      {toPersianDigits(sc.peakDay.toString())}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+
+              {/* Group trend rows */}
+              <TableRow className="border-t-2 border-[#e5e7eb] bg-[#f3f4f6]">
+                <TableCell className="px-2 py-2 font-black text-[#111827]" colSpan={1}>
+                  روند گروهی
+                </TableCell>
+                {TREND_DAYS.map(day => {
+                  const bearG = groupMap['bearish'];
+                  const neutG = groupMap['neutral'];
+                  const bullG = groupMap['bullish'];
+                  const bCum = getDay(bearG?.trend ?? [], day)?.cumulativeProb ?? 0;
+                  const nCum = getDay(neutG?.trend ?? [], day)?.cumulativeProb ?? 0;
+                  const buCum = getDay(bullG?.trend ?? [], day)?.cumulativeProb ?? 0;
+                  const total = bCum + nCum + buCum;
+                  const bullPct = total > 0 ? buCum / total : 0;
+                  const barColor = bullPct > 0.55 ? '#16a34a' : bullPct < 0.45 ? '#dc2626' : '#6b7280';
+                  return (
+                    <TableCell key={day} colSpan={2} className="text-center px-1 py-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <div className="w-12 h-1.5 rounded-full bg-[#e5e7eb] overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, bullPct * 100)}%`, background: barColor }} />
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums" style={{ color: barColor }}>
+                          {fmtPct(bullPct)}
+                        </span>
+                      </div>
+                    </TableCell>
+                  );
+                })}
+                <TableCell className="px-2 py-2" />
+              </TableRow>
+              {/* Group detail rows */}
+              {(['bearish', 'neutral', 'bullish'] as const).map(g => {
+                const gData = groupMap[g];
+                if (!gData) return null;
+                const gc = TREND_GROUP_COLOR[g];
+                const lastDay = getDay(gData.trend, 30);
+                return (
+                  <TableRow key={g} className="border-b border-[#e5e7eb]/40">
+                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text }}>
+                      <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ background: gc.text }} />
+                      {TREND_GROUP_LABEL[g]}
+                    </TableCell>
+                    {TREND_DAYS.map(day => {
+                      const dp = getDay(gData.trend, day);
+                      return (
+                        <TableCell key={day} colSpan={2} className="text-center px-1 py-1 tabular-nums font-medium" style={{ color: gc.text }}>
+                          {dp ? fmtPct(dp.cumulativeProb) : '—'}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="text-center px-2 py-1 font-bold tabular-nums text-[10px]" style={{ color: gc.text }}>
+                      {lastDay ? fmtPct(lastDay.cumulativeProb) : '—'}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
+            <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص. احتمال تجمعی = مجموع تجمعی از روز ۱ تا آن روز.
+            سلول‌های برجسته نشان‌دهنده روز اوج احتمال هر سناریو هستند. نوار روند گروهی نسبت تجمعی گاوی به کل را نشان می‌دهد.
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (

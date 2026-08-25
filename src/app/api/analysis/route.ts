@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCandlestick, fetchSymbolData, fetchTsetmcIndexHistory, type CandleData } from '@/lib/tse-api';
 import { analyze, type OHLCV } from '@/lib/ta-engine';
+import { calculateProbabilityTrend } from '@/lib/probability-trend';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,13 @@ export async function GET(req: NextRequest) {
 
         const ta = analyze(ohlcv);
 
+        // Compute 30-day probability trend from scenario probabilities
+        const probFractions: Record<string, number> = {};
+        for (const [k, v] of Object.entries(ta.scenarioSums)) {
+          probFractions[k] = v / 100;
+        }
+        const probabilityTrend = calculateProbabilityTrend(probFractions, 30);
+
         const lastCandle = tsetmcCandles[tsetmcCandles.length - 1];
         const prevCandle = tsetmcCandles.length > 1 ? tsetmcCandles[tsetmcCandles.length - 2] : lastCandle;
 
@@ -54,6 +62,7 @@ export async function GET(req: NextRequest) {
             pe: 0,
           },
           ta,
+          probabilityTrend,
         });
       }
 
@@ -90,6 +99,13 @@ export async function GET(req: NextRequest) {
 
     const ta = analyze(ohlcv);
 
+    // Compute 30-day probability trend from scenario probabilities
+    const probFractions2: Record<string, number> = {};
+    for (const [k, v] of Object.entries(ta.scenarioSums)) {
+      probFractions2[k] = v / 100;
+    }
+    const probabilityTrend = calculateProbabilityTrend(probFractions2, 30);
+
     // Extract real-time info from symbol data
     const info = symbolInfo && typeof symbolInfo === 'object' && !Array.isArray(symbolInfo)
       ? symbolInfo as Record<string, unknown>
@@ -123,6 +139,7 @@ export async function GET(req: NextRequest) {
         pe: Number(info.pe ?? 0),
       } : null,
       ta,
+      probabilityTrend,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'خطای ناشناخته';

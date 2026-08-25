@@ -6,6 +6,14 @@ import {
   getScenarioName,
   type MLSelectorInput,
 } from '@/lib/analysis-ml-selector';
+import {
+  selectMSL as selectMSLSystem,
+  getSchoolPrompt,
+  getStylePrompt,
+  getTonePrompt,
+  type MSLConfig,
+  type MarketContext,
+} from '@/lib/msl-system';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,8 +174,47 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   return { price, trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range', adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0, rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr, scenarioDominant: dominantKey, hasVolume: (body.hasVolume as boolean) ?? false };
 }
 
+// --- Build Market Context for MSL System ---
+function buildMarketContext(body: Record<string, unknown>): MarketContext {
+  const price = (body.currentPrice as number) || 0;
+  const trendDir = (body.trendDirection as string) || 'range';
+  const trend: MarketContext['trend'] = trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range';
+
+  // Derive volatility from ATR/price ratio
+  const atr = (body.atr as number) || 0;
+  const atrRatio = price > 0 ? atr / price : 0;
+  const volatility: MarketContext['volatility'] = atrRatio > 0.03 ? 'high' : atrRatio > 0.01 ? 'medium' : 'low';
+
+  // Dominant scenario from v11 or legacy scenarios
+  const v11Probs = body.v11Probabilities as {
+    scenarios: Array<{ key: string; name: string; rawProbability: number }>;
+  } | undefined;
+  let dominantScenario = '';
+  if (v11Probs?.scenarios) {
+    const sorted = [...v11Probs.scenarios].sort((a, b) => b.rawProbability - a.rawProbability);
+    dominantScenario = sorted[0]?.name ?? '';
+  } else {
+    const scenarios = body.scenarios as Record<string, { name?: string; probability: number }> | undefined;
+    let maxProb = 0;
+    for (const k of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9']) {
+      const p = scenarios?.[k]?.probability ?? 0;
+      if (p > maxProb) { maxProb = p; dominantScenario = scenarios?.[k]?.name ?? k; }
+    }
+  }
+
+  // Instrument type from symbol name or explicit field
+  const instrumentType = (body.instrumentType as string) ||
+    (body.symbolName as string) || 'stock';
+
+  // Volume trend from OBV
+  const obv = (body.obv as number) || 0;
+  const volumeTrend: MarketContext['volumeTrend'] = obv > 0 ? 'increasing' : obv < 0 ? 'decreasing' : 'stable';
+
+  return { trend, volatility, dominantScenario, instrumentType, volumeTrend };
+}
+
 // --- Build Prompt ---
-function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
+function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[], mslConfig?: MSLConfig): string {
   const {
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
     stochK, stochD, macdLine, macdSignal, macdHist,
@@ -301,7 +348,10 @@ ${v11Lines}
 ${scenarioBlock}
 ${v11Block}
 **روش‌های تحلیلی مورد استفاده:**
-${methodsStr}
+${methodsStr}${mslConfig ? `
+${getSchoolPrompt(mslConfig)}
+${getStylePrompt(mslConfig)}
+${getTonePrompt(mslConfig)}` : ""}
 
 
 ---
@@ -348,19 +398,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
     }
 
-    // ML selection
+    // ML selection (base)
     const mlInput = buildMLInput(body);
     const mlSelection = selectMLCombination(mlInput);
     const methods = selectMethods(mlInput);
-    console.log(`[AI v5] ${body.symbolName}: school=${mlSelection.school}, style=${mlSelection.style}, tone=${mlSelection.tone}`);
+
+    // MSL system selection — overrides school/style/tone from ML selector
+    const marketCtx = buildMarketContext(body);
+    const mslConfig = selectMSLSystem(marketCtx);
+    mlSelection.school = mslConfig.school as typeof mlSelection.school;
+    mlSelection.style = mslConfig.style as typeof mlSelection.style;
+    mlSelection.tone = mslConfig.tone as typeof mlSelection.tone;
+    mlSelection.reasoning = `MSL: ${mslConfig.school}/${mslConfig.style}/${mslConfig.tone}`;
+    console.log(`[AI v5] ${body.symbolName}: MSL school=${mslConfig.school}, style=${mslConfig.style}, tone=${mslConfig.tone}`);
     console.log(`[AI v5] Methods: ${methods.join(', ')}`);
 
-    // Build prompt
-    const userMessage = buildPrompt(body, mlSelection, methods);
+    // Build system prompt with MSL instructions
+    const mslSystemPrompt = `${getSchoolPrompt(mslConfig)}
+${getStylePrompt(mslConfig)}
+${getTonePrompt(mslConfig)}`;
+
+    // Build prompt (with MSL system context)
+    const userMessage = buildPrompt(body, mlSelection, methods, mslConfig);
 
     // Call AI via SDK (v3 approach with queue + retry)
+    const dynamicSystemPrompt = `${SYSTEM_PROMPT}
+
+${mslSystemPrompt}`;
     const content = await queueAI([
-      { role: 'assistant', content: SYSTEM_PROMPT },
+      { role: 'assistant', content: dynamicSystemPrompt },
       { role: 'user', content: userMessage },
     ], 90_000);
 

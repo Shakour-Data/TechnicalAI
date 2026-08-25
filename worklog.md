@@ -23,375 +23,218 @@ Stage Summary:
 - XTransformPort bug: FIXED (was causing invalid URLs for sector requests)
 - Service persistence: SOLVED (daemonized supervisor with double-fork)
 - Index data fetching: WORKING (10 main indices + 39 sector indices, all via TSETMC CDN B2 API proxied through z-ai page_reader)
-- Key insight: finpy-tse library internally uses the same TSETMC CDN B2 API (`cdn.tsetmc.com/api/Index/GetIndexB2History/{web_id}`), and finpy-tse can't connect from sandbox. Our z-ai page_reader approach fetches the same data correctly.
-- Files modified: `src/lib/tsetmc-index-api.ts`, `start-dev.sh`, `supervisor.py` (new)
 
 ---
 Task ID: 2
 Agent: Main
-Task: Fix 404 static chunk errors, implement finpy-tse library fallback for stocks
+Task: Fix ta-engine cumulative return percentile, RSI/ADX/MACD overbought-oversold thresholds, and Stochastic calculation
 
 Work Log:
-- **Fixed 404 errors**: Standalone Next.js build doesn't copy `.next/static/` to `.next/standalone/.next/static/`. Created symlink: `ln -sfn .next/static .next/standalone/.next/static`. Also added symlink recreation after every `next build`.
-- **Added finpy-tse stock history endpoint** to Python service (port 3031):
-  - `GET /api/stock-history?symbol=خودرو&adjust=1` — calls `finpy_tse.Get_Price_History()` with 30s ThreadPoolExecutor timeout
-  - Returns candle data: `{date, open, high, low, close, volume}` in Shamsi format
-  - File cache integration (stock_ prefix)
-- **Added symbols search endpoint**: `GET /api/symbols-search?query=خودرو` — calls `finpy_tse.Build_Market_StockList()` with 60s timeout
-- **Updated `tse-api.ts` fallback chain**:
-  1. BRS API (Api.BrsApi.ir) — primary, 8s timeout
-  2. **finpy-tse library** via Python service (port 3031) — 45s timeout (NEW)
-  3. File cache (7-day TTL, expired fallback)
-- Fixed `FINPY_SERVICE_URL` from port 3030 (old separate service) to 3031 (unified service)
-- Updated `fetchFromFinpyService()` to call `/api/stock-history` with proper error handling
-- Rebuilt Next.js and verified: homepage loads with 0 console errors, all JS/CSS chunks serve correctly
-- finpy-tse library times out from sandbox (expected — CDN unreachable), but returns 504 gracefully so file cache kicks in
+- Fixed `cumulativeReturn` percentile calculation: the percentile was inverted (returning 1-pct instead of pct for positive returns)
+- Changed threshold logic: `if (pct >= threshold)` → `if (pct < threshold)` for buy signals and vice versa for sell
+- Fixed RSI thresholds: overbought from 65→70, oversold from 35→30
+- Fixed ADX thresholds: strong trend from 20→25, weak trend from 15→10
+- Added MACD histogram threshold check (|hist| > 0)
+- Fixed Stochastic: added smoothing with SMA-3, added overbought/oversold thresholds
+- Added crossovers detection for MACD and Stochastic
+- Updated cumulative return to use compound returns: `cumReturn *= (1 + dailyReturn)` instead of simple sum
+- Lint: clean (no errors)
 
 Stage Summary:
-- 404 static chunk errors: FIXED (symlink `.next/static` → `.next/standalone/.next/static`)
-- finpy-tse fallback: IMPLEMENTED (Python service endpoints + TypeScript fallback chain)
-- Files modified: `mini-services/finpy-tse-service/app.py`, `src/lib/tse-api.ts`, `start-dev.sh`
+- Cumulative return percentile: FIXED (was inverted)
+- RSI/ADX/MACD thresholds: UPDATED to standard values
+- Stochastic calculation: FIXED with SMA-3 smoothing + crossover detection
+- All changes in ta-engine.ts
+
 ---
-Task ID: 1-2-3
+Task ID: 3
 Agent: Main
-Task: Fix font 404s, change percentage calculation, and 15-min auto-refresh
+Task: Add volume analysis to ta-engine: OBV, MFI, and volume-price confirmation
 
 Work Log:
-- Diagnosed font 404: standalone Next.js server doesn't serve public/ dir automatically
-- Fixed by copying public/ to .next/standalone/public/ and .next/static/ to .next/standalone/.next/static/
-- Updated start-dev.sh to always copy static assets after build
-- Fixed change percentage in /api/analysis/route.ts: now calculates from candle data (last close vs prev close) instead of BRS API's plp field
-- Fixed /api/tgju-analysis/route.ts: changed `change` field to use `changePercent` instead of raw price difference
-- Updated page.tsx to use toFaDecimal() (2 decimal places) for change percentage display
-- Added 15-minute full page reload (window.location.reload) in page.tsx useEffect
-- Rebuilt Next.js and restarted all services via supervisor.py
-- Browser-verified: all fonts load successfully (200), no console errors, change displays as ۲٫۷% from candle data
+- Added `calcOBV()` function: On-Balance Volume with trend determination
+- Added `calcMFI()` function: Money Flow Index with overbought/oversold thresholds
+- Added volume analysis section to `analyze()` output
+- Integrated into main analysis pipeline
+- OBV signals: divergence detection, trend confirmation
+- MFI: 80/20 thresholds for overbought/oversold
+- Lint: clean
 
 Stage Summary:
-- Font 404: SOLVED — public/ + static/ copied to standalone
-- Change %: SOLVED — now (lastCandle.close - prevCandle.close) / prevCandle.close * 100, displayed with toFaDecimal
-- 15-min refresh: SOLVED — window.location.reload() every 900,000ms
+- OBV and MFI: ADDED to ta-engine.ts
+- Volume analysis now included in daily analysis output
+- Next: frontend integration for volume data display
+
 ---
 Task ID: 4
 Agent: Main
-Task: Redesign VDES analysis scenarios layout with proper UI/UX
+Task: Add Bollinger Bands and Parabolic SAR to ta-engine
 
 Work Log:
-- Removed cramped 2-column grid (analysis text + scenarios side-by-side)
-- Stacked analysis text and scenarios as separate full-width cards
-- Redesigned scenario cards: grouped by type (bullish/neutral/bearish) with visual labels
-- Improved card design: larger padding (p-4), better typography (text-2xl), hover effects
-- Added section headers with colored dots for each scenario group
-- Redesigned summary bar as inline flex items with colored dots (instead of 3-column grid)
-- Added total probability to scenarios card header
-- Consistent heading style with amber accent bar
-- Rebuilt and browser-verified: 6 distinct cards render correctly with proper hierarchy
+- Added `calcBollingerBands()`: 20-period SMA with 2-standard deviation bands
+- Added `calcParabolicSAR()`: AF=0.02, max AF=0.2, reversal-based
+- Integrated into main analysis pipeline
+- Added BB width (volatility proxy) and position (% within bands)
+- BB signals: squeeze detection, breakout confirmation
+- SAR signals: trend direction, reversal detection
+- Lint: clean
 
 Stage Summary:
-- Analysis text and scenarios now full-width, stacked vertically
-- Scenarios grouped: صعودی (R1-R4) | رنج (R5) | نزولی (R6-R9)
-- Better card proportions, spacing, and visual hierarchy
-- File changed: /home/z/my-project/src/components/tse/vdes-analysis.tsx
----
-Task ID: 5
-Agent: Main
-Task: Data consistency audit and fix all contradictions across pages
-
-Work Log:
-- Comprehensive audit of ALL data display points across 7 components
-- Identified 13 potential issues, prioritized by severity
-- Fix 1 (CRITICAL): page.tsx line 416 — changed `lastPrice` from `candles[last].close` to `info.lastPrice ?? candles[last].close`. Now header and all analysis panels (VdesAnalysis, VdssGraph, MLForecast) show the same reference price.
-- Fix 2 (CRITICAL): vdes-analysis.tsx — replaced locally-derived heuristic target (R1+0.5*(R2-R1) to R2+0.8*(R2-R1)) with dominant bullish scenario's actual targetMin/targetMax. Header badge now says "محدوده سناریوی صعودی غالب" and shows the same numbers as the R1 scenario card.
-- Fix 3 (MEDIUM): vdes-analysis.tsx RSI badge — expanded from 3-level (red/amber/green) to 5-level matching the text classification (red > 70, orange > 60, amber > 40, sky > 30, green < 30).
-- Fix 4 (MEDIUM): ml-forecast.tsx — renamed "روند ترکیبی" to "روند ترکیبی (ML)" to clarify it's ML-predicted, not TA-derived, preventing confusion with the header's TA signal badge.
-- Verified: no console errors, header price ۶۴۷ matches VDES reference price ۶۴۷, header target ۶۴۸-۶۶۰ matches R1 card ۶۴۸-۶۶۰, RSI badge "اشباع خرید شدید" matches analysis text.
-
-Stage Summary:
-- Search dropdown: working (cached instruments data)
-- Analysis: working with candlestick file cache as resilience layer
-- Error UX: Persian messages, retry/back buttons
-- Files changed: tse-api.ts, analysis/route.ts, page.tsx, zai-shared.ts
-- New cache: db/candle-خودرو-type3.json, db/candle-خساپا-type3.json
----
-Task ID: 0
-Agent: main
-Task: Fix 502 Bad Gateway on AI analysis endpoint
-
-Work Log:
-- Investigated dev server crash - server had died, restarted it
-- Read current ai-analysis/route.ts - found it uses CLI wrapper (execFile 'z-ai') that fails with 429
-- Checked git history - found v3/v5 parent commit used SDK directly via getZai()
-- Read LLM skill docs - confirmed SDK uses role 'assistant' for system prompts
-- Rewrote route.ts: replaced CLI wrapper with SDK (getZai() + chat.completions.create)
-- Restored detailed v3 prompt (10-step structure with CoT, market phase, scenario tree, etc.)
-- Restored proper system prompt with 11 rules
-- Added queue-based rate limiting (15s min interval, 60s cooldown on 429)
-- Added exponential backoff retry with jitter (15s, 30s, 60s)
-- Kept in-memory cache (1hr TTL)
-- Lint passes clean
-
-Stage Summary:
-- Root cause: Latest commit switched from SDK to CLI wrapper which hit 429 with no retry
-- Fix: Reverted to SDK approach (v3-style) with proper retry + queue + detailed prompt
-- File changed: /home/z/my-project/src/app/api/ai-analysis/route.ts
+- Bollinger Bands and Parabolic SAR: ADDED to ta-engine.ts
+- All 4 components (upper, lower, bandwidth, position) included
+- Next: frontend charting integration
 
 ---
-Task ID: 2
-Agent: main
-Task: Verify server stability and fix OOM issues
+Task ID: 5-a
+Agent: Sub-agent (general-purpose)
+Task: Integrate MSL auto-selection system into AI analysis API route
 
 Work Log:
-- Discovered server kept dying - investigated via dmesg
-- Found OOM killer terminating next-server (1.8GB RSS in 4GB cgroup)
-- agent-browser Chrome was consuming ~500MB+ in same cgroup, pushing total over limit
-- Root cause: Kubernetes cgroup memory limit (4GB) shared between all processes
-- Fix: Killed agent-browser, set NODE_OPTIONS='--max-old-space-size=768'
-- Created auto-restart daemon script (start-dev.sh)
-- Verified 19/20 requests returned HTTP 200 with ~39KB content over 60 seconds
+- Read and analyzed `/src/app/api/ai-analysis/route.ts` (existing route handler with ML selector)
+- Read and analyzed `/src/lib/msl-selector.ts` (MSL scoring engine: 6 schools, 5 styles, 6 tones)
+- Added import: `selectMSL`, `MSLContext`, `MSLResult` from `@/lib/msl-selector`
+- Created `buildMSLContext(body)` helper function that derives MSLContext from request body:
+  - Maps indicator values (RSI, MACD, ADX, CCI, MFI, ATR, StochK/D, DI+/DI-, SAR, BB width)
+  - Derives `trendStrength` from trendR2 + ADX thresholds
+  - Derives `dominantDirection` from trendDirection (up→bullish, down→bearish, range→neutral)
+  - Derives `volatilityLevel` from ATR/price ratio (high>3%, medium>1%, low)
+  - Derives `overallConfidence` from trendR2 blended with v11 cumulative probabilities
+  - Derives `srLevelStrength` from resistance/support strength values
+  - Defaults pattern-related fields (classic/harmonic/elliott counts, divergences) to 0
+- Modified POST handler to call MSL after base ML selection:
+  - `const mslResult = selectMSL(mslCtx)` overrides `mlSelection.school/style/tone`
+  - Uses `as typeof mlSelection.school` type assertion for TypeScript compatibility
+  - Updates `mlSelection.reasoning` with MSL score details
+  - Enhanced console.log to show English MSL names with scores
+- Added MSL scores section to AI prompt (Persian):
+  - **مکتب تحلیل انتخاب‌شده:** school name (score امتیاز)
+  - **سبک تحلیل:** style name (score امتیاز)
+  - **لحن تحلیلی:** tone name (score امتیاز)
+- Modified `buildPrompt` signature to accept optional `MSLResult` parameter
+- Fixed template literal syntax issue (extra backtick causing parse error)
+- All existing functionality preserved: cache, rate limiter, ML selector base, methods, queue, retry
+- Lint: clean (eslint exit code 0)
 
 Stage Summary:
-- Server now stable with ~768MB heap limit and daemon auto-restart
-- AI analysis route fixed (SDK approach restored from v3)
-- User should see app in preview panel once infrastructure proxy detects backend
+- MSL auto-selection: INTEGRATED into ai-analysis route
+- MSL overrides ML selector's school/style/tone with scoring-based selection
+- MSL scores visible in AI prompt for transparency
+- Response metadata includes MSL reasoning with scores
+- File: `/src/app/api/ai-analysis/route.ts` (479 lines)
 
 ---
-Task ID: 8
-Agent: main
-Task: Comprehensive error-free verification of all pages
+Task ID: 3-a
+Agent: Sub-agent (general-purpose)
+Task: Implement 30-Day Cumulative Probability Trend Calculator
 
 Work Log:
-- Found /api/instruments returning 500: file cache expired (30min TTL) + BrsApi timing out
-- Increased FILE_CACHE_TTL from 30min to 24h (BrsApi unreliable from container)
-- Added stale cache fallback: loadFileCache(type, force=true) when fresh cache fails
-- Added 8s AbortSignal.timeout to all BrsApi fetches (fetchAllSymbols, fetchIndices, fetchCandlestick, fetchHistory)
-- Added stale candle cache fallback in fetchCandlestick (expired cache > error)
-- fetchHistory now returns [] on failure (non-blocking)
-- fetchIndices now returns [] on failure (non-blocking)
-- Browser tested 3 symbols end-to-end:
-  1. خودرو (ایران خودرو): chart ✅, indicators ✅, decision graph ✅, AI text ✅ (Oscillators & Momentum school)
-  2. خساپا (سایپا): chart ✅, indicators ✅, AI text ✅ (Support & Resistance school, 3 paragraphs, trading plan)
-  3. وبملت (بانک ملت): chart ✅, AI text ✅ (Volatility & Volume school, R:R=27:1)
-- Verified all sidebar tabs: اندیکاتورها, گراف تصمیم, توضیح‌دهنده تصویری
-- Verified search filtering works for multiple queries
-- Verified 5 scenarios displayed correctly with Persian labels
-- Verified footer displays correctly (v5.0)
-- Zero console errors throughout all tests
-- Zero runtime errors in dev log
+- Created `/src/lib/probability-trend.ts` (~130 lines) implementing dual-exponential decay probability trend model
+- Defined 9 scenario keys (R1-R9) with Persian labels and bearish/neutral/bullish group assignments
+- Exported TypeScript interfaces: `DayPoint`, `ScenarioTrend`, `GroupTrend`, `ProbabilityTrendResult`, `TrendDirection`
+- Implemented `decayFactor(h)` with α=0.7, τ₁=5, τ₂=20 dual exponential decay
+- Implemented `buildNormalizedDecay(horizon)` that normalizes decay factors to sum=1
+- `calculateProbabilityTrend(scenarioProbabilities, horizon=30)`: pure function returning per-scenario trends (individual + cumulative) and group cumulative trends
+- `getTrendInterpretation(results)`: Persian-language interpretation with dominant direction, peak concentration, early vs late risk, actionable insight
+- Fixed literal `\n` encoding issue in source file (backslash-n vs newline)
+- Verified: `npx tsc --noEmit` passes clean (zero errors)
+- Verified: runtime test with sample probabilities produces correct cumulative sums (bearish 0.40, bullish 0.35 matches manual sum)
 
 Stage Summary:
-- All pages work error-free
-- Symbol search → analysis → AI text flow verified for 3 symbols
-- BrsApi reliability fixed: 24h file cache + stale fallback + 8s timeouts
-- All API endpoints return proper responses or graceful fallbacks
+- 30-day probability trend calculator: CREATED at `/src/lib/probability-trend.ts`
+- All exports: `SCENARIO_KEYS`, `SCENARIO_META`, `calculateProbabilityTrend`, `getTrendInterpretation`, plus all interfaces
+- Pure function, no side effects, no external dependencies
+- Ready for integration with decision graph or frontend charting
 
 ---
-Task ID: 9
-Agent: main
-Task: Fix AI prompt - remove multi-combination framing, ensure single combination per request
+Task ID: 3-b
+Agent: Sub-agent (general-purpose)
+Task: Implement MSL (Methodology/Style/Language) System
 
 Work Log:
-- User reported: AI system was listing "10 schools × 10 styles × 15 tones" in system prompt, causing confusion
-- Verified: Backend code already correctly selects ONE combination via selectMLCombination() and makes ONE AI request
-- Problem was in SYSTEM_PROMPT: told AI about all 10/10/15 combinations unnecessarily
-- Fixed SYSTEM_PROMPT: removed "این سیستم شامل: 10 مکتب, 10 سبک, 15 لحن, انتخاب خودکار توسط ML"
-- Replaced with: "مکتب، سبک و لحن تحلیل دقیقاً در هر درخواست مشخص شده است. فقط و فقط بر اساس همان یک ترکیب بنویسید."
-- Removed "سیستم هوشمند ترکیبی" framing and 3 bullet points from user prompt header
-- Removed v5.1 version label from prompt
-- Updated buildPrompt function comment to remove version reference
-- Verified: lint passes clean
-- Browser tested: searched خودرو → selected symbol → chart loaded → AI analysis generated in 32.2s → text displayed correctly with 3 layers
-- Confirmed: only ONE AI request made, ONE combination selected (Oscillators & Momentum + تحلیلگر حجم + عدد‌محور و سخت‌گیر)
+- Created `/src/lib/msl-system.ts` (184 lines, well under 300-line limit)
+- Defined `SchoolId` type: 6 schools (classical, quantitative, behavioral, harmonic, elliott, multitimeframe)
+- Defined `StyleId` type: 10 styles (conservative, scalper, trend-follower, pessimistic, pragmatic, decision-oriented, volume-analyst, pattern-analyst, psychological, volatility-analyst)
+- Defined `ToneId` type: 15 tones (formal, quick, philosophical, warning, narrative, step-by-step, skeptical, optimistic, simple, number-focused, multi-layered, educational, emotional, deep-analytical, exciting)
+- Exported `School`, `Style`, `Tone` interfaces with id, name (Persian), nameEn (English), prompt fields
+- Exported `MSLConfig` interface = { school: SchoolId, style: StyleId, tone: ToneId }
+- Exported `MarketContext` interface with trend, volatility, dominantScenario, instrumentType, volumeTrend
+- Populated `SCHOOLS` (6), `STYLES` (10), `TONES` (15) arrays with Persian names, English names, and Persian prompt instructions
+- Implemented `getSchoolPrompt(config)` / `getStylePrompt(config)` / `getTonePrompt(config)` — each returns formatted Persian system-prompt section
+- Implemented `selectMSL(ctx: MarketContext)` — rule-based dynamic selection:
+  - School: instrument-driven (crypto→quantitative, gold/forex→multitimeframe, stock→classical) with scenario overrides (harmonic, elliott, sentiment)
+  - Style: trend+volatility-driven (uptrend+low→trend-follower, downtrend→conservative, high-vol→volatility-analyst, range→pattern-analyst) with scenario overrides
+  - Tone: trend+volatility-driven (uptrend→optimistic, downtrend→warning, high-vol→quick, range→deep-analytical) with scenario overrides
+- Implemented `getAllCombinations()` — returns all 6×10×15 = 900 valid MSLConfig combinations
+- Pure TypeScript, zero React/Next.js imports
+- Verified: `npx tsc --noEmit src/lib/msl-system.ts` passes clean (zero errors)
 
 Stage Summary:
-- SYSTEM_PROMPT simplified: no longer mentions multiple combinations
-- User prompt header cleaned: removed version label, smart system framing
-- Code was already making single request - fix was in prompt clarity only
-- Files changed: /home/z/my-project/src/app/api/ai-analysis/route.ts
+- MSL system: CREATED at `/src/lib/msl-system.ts` (184 lines)
+- All 8 exports: School/Style/Tone types, MSLConfig, MarketContext, selectMSL, getSchoolPrompt, getStylePrompt, getTonePrompt, getAllCombinations, plus SCHOOLS/STYLES/TONES data arrays
+- Complements existing `msl-selector.ts` (indicator-based scoring) with a simpler rule-based alternative
+- Ready for integration into AI analysis pipeline
 
 ---
-Task ID: 10
-Agent: main
-Task: Remove internal system info from user-facing analysis text
+Task ID: 3-c
+Agent: Sub-agent (general-purpose)
+Task: Integrate Probability Trend + MSL into the Analysis Pipeline
 
 Work Log:
-- Removed ML Selection Badges from vdes-analysis.tsx UI
-- Removed aiML state variable and setAiML() call
-- Updated SYSTEM_PROMPT: explicit prohibition on internal system references
-- Removed school/style/tone from prompt output structure
-- Changed ML references to neutral labels in prompt methods section
-- Browser verified: AI text has zero internal system references
+- **Part 1 — Decision Graph + Probability Trend:**
+  - Added import of `calculateProbabilityTrend` (aliased as `calcTrendFromProbs`) and `ProbabilityTrendResult` (aliased as `ProbTrendResult`) from `./probability-trend` to `decision-graph.ts`
+  - Added optional `probabilityTrend?: ProbTrendResult` field to the `GraphData` interface (exported)
+  - In `buildDecisionGraph`, after computing `finalPcts`, converts to fractions (÷100) and calls `calcTrendFromProbs` to compute the 30-day trend
+  - The trend is now included in the returned `GraphData` object
+
+- **Part 2 — AI Analysis Route + MSL System:**
+  - Replaced `msl-selector` import with `msl-system` import: `selectMSL` (aliased as `selectMSLSystem`), `getSchoolPrompt`, `getStylePrompt`, `getTonePrompt`, `MSLConfig`, `MarketContext`
+  - Replaced `buildMSLContext` (indicator-based scoring context) with `buildMarketContext` (rule-based market context deriving trend/volatility/dominantScenario/instrumentType/volumeTrend from request body)
+  - Updated POST handler: calls `selectMSLSystem(marketCtx)` to get `MSLConfig`, overrides mlSelection school/style/tone, generates `mslSystemPrompt` via prompt generators
+  - MSL prompts injected into both system prompt (`dynamicSystemPrompt = SYSTEM_PROMPT + mslSystemPrompt`) and user message (via `buildPrompt`)
+  - Fixed 9 broken template literal references (`schoolScoresslResult` → `schoolScores[mslResult`) that were caused by encoding corruption
+  - Updated `buildPrompt` signature from `mslResult?: MSLResult` to `mslConfig?: MSLConfig`
+  - v11 probabilities section preserved as-is
+
+- **Part 3 — Main Analysis API + Probability Trend:**
+  - Added import of `calculateProbabilityTrend` from `@/lib/probability-trend` to `analysis/route.ts`
+  - After `analyze(ohlcv)`, converts `ta.scenarioSums` to fractions and calls `calculateProbabilityTrend`
+  - Added `probabilityTrend` to both the TSETMC index response and the regular instrument response
+
+- Lint: clean (eslint exit code 0)
+- tsc: no new errors introduced (pre-existing errors in ta-engine.ts and tse-api.ts unrelated to changes)
 
 Stage Summary:
-- User sees only professional analysis text, no internal metadata
-- Files changed: vdes-analysis.tsx, ai-analysis/route.ts
----
-Task ID: 1
-Agent: main
-Task: Fix 6 issues reported by user (errors, 502, HMR, formatting)
-
-Work Log:
-- Fixed "Uncaught (in promise) Object" ×3 by adding proper res.ok checks before res.json() in vdes-analysis.tsx and page.tsx
-- Fixed 502 Bad Gateway handling by wrapping res.json() in try/catch blocks for all fetch paths
-- Fixed "Node cannot be found" by adding isConnected and offsetWidth checks before html-to-image toPng calls
-- Added AbortError handling to prevent spurious error display on component unmount
-- Updated renderAIText to support {color:COLOR} syntax with zero-width character normalization
-- Updated SYSTEM_PROMPT with 16 rules including: colors (rule 16), emojis (rule 3), Persian % format (rule 12), no internal headings (rule 14), bold (rule 13)
-- Fixed all fetch paths in page.tsx (TGJU, index, regular TSE) to handle non-JSON error responses
-- Browser verified: 0 console errors, 6 colored spans rendering correctly, bold formatting working, no raw color tags
-
-Stage Summary:
-- All 6 issues resolved
-- Key fix: zero-width Unicode character normalization in renderAIText was critical for color syntax
-- Error handling now catches SyntaxError from res.json() on non-JSON responses (502, etc.)
+- Probability trend: INTEGRATED into decision graph output AND main analysis API response
+- MSL system: INTEGRATED into AI analysis route (replaces msl-selector scoring-based approach with msl-system rule-based approach + prompt generators)
+- Files modified: `src/lib/decision-graph.ts`, `src/app/api/ai-analysis/route.ts`, `src/app/api/analysis/route.ts`
 
 ---
-Task ID: 1
-Agent: Main Agent
-Task: Fix 5 AI analysis issues + lock version 5 + fix frontend errors
+Task ID: 3-d
+Agent: Sub-agent (general-purpose)
+Task: Add 30-Day Probability Trend Chart to VDSS Graph Component
 
 Work Log:
-- Fixed percentage bug: `s.prob * 100` → `s.prob` in route.ts line 244 (ta-engine already returns 0-100)
-- Updated SYSTEM_PROMPT (v5 locked) with 5 new rules:
-  1. Absolute ban on human/figure emojis (🧑‍💼 👤 etc)
-  2. Absolute ban on "از منظر عملیاتی" and similar phrase-based segmentation
-  3. Questions must be answered with scenarios/probabilities
-  4. Absolute ban on Chinese language phrases
-  5. AI must not multiply provided percentages by 100
-- Updated all version references from v5.1 to v5
-- Fixed "Uncaught (in promise) Object" ×3: Added catch block to doRefresh() + .catch() to onFocus handler
-- Fixed "Node cannot be found" DOM error: Added visibility/height guards to exportPDF
-- Fixed 502 Bad Gateway: Added 120s read/write timeout to Caddy proxy config
-- Updated cache key version to v:5 to invalidate old cached analysis
+- Added `probabilityTrend` optional prop to `VdssGraphProps` interface (type: `ProbabilityTrendResult | null`)
+- Imported `ProbabilityTrendResult` and `DayPoint` types from `@/lib/probability-trend`
+- Imported `Collapsible`, `CollapsibleContent`, `CollapsibleTrigger` from `@/components/ui/collapsible`
+- Imported `Table`, `TableBody`, `TableCell`, `TableHead`, `TableHeader`, `TableRow` from `@/components/ui/table`
+- Created `ProbabilityTrendTable` sub-component (~190 lines) with:
+  - Collapsible header with Persian title "روند ۳۰ روزه احتمالات" (default expanded)
+  - 9 scenario rows (R1-R9) showing individual + cumulative probabilities for Days 1, 5, 10, 20, 30
+  - Color coding: red for bearish (R1-R4), gray for neutral (R5), green for bullish (R6-R9)
+  - Peak day highlighting per scenario (bold text + colored background)
+  - Group trend summary row with mini bar showing bullish ratio per day
+  - Group detail rows (bearish/neutral/bullish) with cumulative probabilities
+  - Persian sub-headers: "اختصاصی", "تجمعی", "روز"
+  - Explanatory note at bottom in Persian
+- Rendered `ProbabilityTrendTable` below the scenario result cards in the main VdssGraph component
+- Updated `page.tsx` to pass `probabilityTrend={data.ta.decisionGraph?.probabilityTrend}` to VdssGraph
+- Fixed `getDay` helper type from `{ day: number }[]` to `DayPoint[]` to resolve TS2339 errors
+- Lint: clean (eslint exit code 0)
+- TypeScript: no new errors (1 pre-existing error at line 440 unrelated to changes)
 
 Stage Summary:
-- route.ts: Percentage fix (line 244), SYSTEM_PROMPT rewrite (17 rules), version v5 locked
-- page.tsx: Unhandled promise rejection fixes (doRefresh + onFocus)
-- vdes-analysis.tsx: Better exportPDF node guard
-- Caddyfile: 120s proxy timeout
-- All lint checks pass, zero console errors in browser verification
----
-Task ID: 1
-Agent: main
-Task: Fix "cancelled" console error in VdesAnalysis for price_aed
-
-Work Log:
-- Investigated error: `[VdesAnalysis v11] Error for price_aed: "cancelled"`
-- Found the error came from an OLD cached version of vdes-analysis.tsx (compiled chunk hash 6b4971e3 vs current 248fcdc6)
-- The old code had a `console.error` that logged abort errors instead of silently handling them
-- Added robust string-based abort detection in vdes-analysis.tsx catch block (line 657): checks for "cancelled", "aborted", "abort", "cancel" in error message
-- Added AbortController to page.tsx handleSelect for ALL three fetch paths (TGJU, index, TSE) to prevent stale data updates on rapid symbol switching
-- Added fetchControllerRef to page.tsx for proper cleanup between fetches
-- Verified fix with agent-browser: selected AED (درهم امارات), no console errors; rapid switching AED→USD→AED, no errors
-
-Stage Summary:
-- vdes-analysis.tsx: Added string-based abort/cancel error filtering in AI analysis useEffect catch block
-- page.tsx: Added AbortController with signal to all 3 fetch paths in handleSelect (tgju-analysis, finpy-sector, analysis)
-- Both files now properly silence abort errors and prevent stale state updates
-- Agent browser verification: zero console errors on AED load and rapid symbol switching
-
----
-Task ID: 2
-Agent: main
-Task: Create ml-narrative-v11.ts (V11 Narrative Engine)
-
-Work Log:
-- Created /home/z/my-project/src/lib/ml-narrative-v11.ts
-- Defined interfaces: V11ScenarioInput, V11ScenarioResult, V11Result
-- Implemented computeV11Probabilities(): calculates cumulative probabilities (Ri OR worse), grouped bullish/bearish/neutral metrics, and risk profile classification
-- Risk profile logic: very_bullish (>=55% and 2x bearish), very_bearish (inverse), bullish/bearish (dominant), neutral (default)
-- Implemented buildV11PromptSection(): generates Persian text block with fa-IR number formatting for LLM prompt injection
-- TypeScript compilation: clean (0 errors)
-- ESLint: clean (0 errors)
-
-Stage Summary:
-- V11 Narrative Engine created with cumulative & exclusive probability computation
-- Exports: computeV11Probabilities, buildV11PromptSection, and all interfaces
-- File: /home/z/my-project/src/lib/ml-narrative-v11.ts
----
-Task ID: 2-6
-Agent: main
-Task: Rebuild v11 features (احتمال تجمعی + احتمال اختصاصی سناریو) lost from previous session
-
-Work Log:
-- Surveyed current codebase (v6): ta-engine.ts returns raw R1-R5 probabilities summing to 100
-- Created src/lib/ml-narrative-v11.ts: computeV11Probabilities() with cumulative and exclusive probabilities, risk profile, and LLM prompt builder
-- Created src/app/api/v11-analysis/route.ts: lightweight API endpoint for v11 probability computation
-- Updated src/components/tse/vdes-analysis.tsx: added v11 import, useMemo computation from client-side raw scenarios, updated scenario cards to show both اختصاصی and تجمعی, added v11 badge, bullish/bearish summary, and risk profile display
-- Updated src/app/api/ai-analysis/route.ts: injected v11 probability data into LLM prompt (buildPrompt function), updated cache version from v5 to v11
-- Updated src/components/tse/vdss-graph.tsx: added v11 import and computation, added cumulative probability labels on graph nodes (R1-R5), updated left panel path probability rows with تجمعی, updated bottom result cards with both اختصاصی and تجمعی
-- Verified with agent browser: loaded خودرو symbol, confirmed all 5 scenarios show correct اختصاصی and تجمعی values, verified math (R1=22%/100%, R2=29%/78%, R3=27%/49%, R4=18%/22%, R5=4%/4%), zero console errors, both tabs (Visual Explainer + Decision Graph) show v11 features
-
-Stage Summary:
-- v11 successfully rebuilt with احتمال تجمعی and احتمال اختصاصی سناریو
-- All computation is done client-side (no extra API call needed) using useMemo
-- V11 data is also injected into AI analysis LLM prompt for richer AI narratives
-- Files created: src/lib/ml-narrative-v11.ts, src/app/api/v11-analysis/route.ts
-- Files modified: src/components/tse/vdes-analysis.tsx, src/components/tse/vdss-graph.tsx, src/app/api/ai-analysis/route.ts
-
----
-Task ID: 2-a
-Agent: Sub-agent
-Task: Resolve all git merge conflict markers in ta-engine.ts
-
-Work Log:
-- Found 9 conflict markers (18 lines) across 6 conflict regions in src/lib/ta-engine.ts
-- Also found and fixed 1 conflict in worklog.md
-- Conflict 1 (JSDoc comment): Kept upstream — more detailed documentation of 9 VDss scenarios
-- Conflict 2 (comment line): Kept upstream — helpful "Distance metrics to key levels" comment
-- Conflict 3 (calculateScenarioProbabilities body): Kept stashed — has clamping logic (min 2%, max 35% per spec) and proportional redistribution
-- Conflict 4 (Layer 4-6 call site): Kept stashed — creates R1_nearest/S1_nearest/srAvgStr variables needed by buildDecisionGraph
-- Conflict 5 (Layer 6 graph computation): Kept stashed — calls buildDecisionGraph() to create graphData, required by downstream code at line 2635+
-- Conflict 6 (scenario descriptions R1-R9): Kept stashed — uses ATR-based bullTargets/bearTargets/rangeTarget, naming matches decision-graph.ts (صعودی با احتیاط vs صعود هیجانی)
-- Key insight: Conflicts 4+5+6 are coupled — upstream version would break because graphData is undefined at usage point, and edgeWeights used before declaration
-- Verified: rg returns empty for conflict markers in ta-engine.ts
-- Verified: bun run lint produces no ta-engine errors
-
-Stage Summary:
-- All 9 conflict markers resolved (6 conflict regions)
-- File: /home/z/my-project/src/lib/ta-engine.ts
-- Also fixed: /home/z/my-project/worklog.md (1 conflict region, kept upstream detailed history)
-- No parsing errors, lint clean
-
----
-Task ID: 2-b
-Agent: Sub-agent
-Task: Resolve all git merge conflict markers in vdss-graph.tsx
-
-Work Log:
-- Found 10 conflict marker lines across 5 conflict regions in src/components/tse/vdss-graph.tsx
-- Conflict 1 (import, line 6): Kept stashed `GraphData` import — required by `VdssGraphProps.decisionGraph` at line 48. Dropped upstream `computeV11Probabilities`/`V11Result` import — only used in upstream blocks that were removed.
-- Conflict 2 (v11 computation, line 283): Kept stashed (empty). Upstream defined `pathProbsByTarget`, `v11`, `v11Map` but referenced undefined `filteredPaths` variable — entire block would fail to compile.
-- Conflict 3 (terminal node rendering, line 597): Kept stashed structure (uses `node.id`, `node.title`), fixed `scenarioProb * 100` → `scenarioProb` bug (scenarioProbabilities are already 0-100 from decision-graph.ts finalPcts). Upstream used undefined `id`, `def`, `NODE_DEFS` variables and prematurely closed the isResultNode block — completely broken.
-- Conflict 4 (left panel probability row, line 675): Kept stashed. Upstream referenced undefined `filteredPaths` and `v11Map`.
-- Conflict 5 (bottom result cards, line 715): Kept stashed (branch contribution breakdown using `pathContributions`/`BRANCH_META` — new functionality referencing variables used elsewhere). Fixed `contrib[...] * 100` → `contrib[...]` bug (pathContributions values are already 0-100). Upstream referenced undefined `v11Map`.
-- Verified: `rg '<<<<<<|>>>>>>|=======' vdss-graph.tsx` returns empty
-- Verified: `bun run lint 2>&1 | rg vdss-graph` returns empty
-
-Stage Summary:
-- All 5 conflict regions resolved (10 marker lines removed)
-- All upstream v11 references removed — upstream v11 blocks were coupled to undefined variables (filteredPaths, id, def, NODE_DEFS) making them uncompilable
-- Two stashed bugs fixed: scenarioProb*100 and contrib*100 (values already in 0-100 range)
-- File: /home/z/my-project/src/components/tse/vdss-graph.tsx
-- Lint clean, no conflict markers remaining
-
----
-Task ID: 2-c
-Agent: Sub-agent
-Task: Resolve all git merge conflict markers in vdes-analysis.tsx
-
-Work Log:
-- Found 6 conflict marker lines across 2 conflict regions in src/components/tse/vdes-analysis.tsx
-- Conflict 1 (line 654, fetch body v11 param): Kept upstream `v11Probabilities: v11Result` — matches the key name `body.v11Probabilities` expected by ai-analysis/route.ts. Stashed version used wrong key `v11Result`.
-- Conflict 2 (line 1161, scenario probabilities UI): Kept upstream — uses `v11Map.get(key)` (correct for Map type), `v11?.rawProbability`/`v11?.cumulativeProbability` (correct property names). Stashed version had 3 bugs: `v11Map[key]` (bracket on Map), `v?.cum` (wrong prop), `v11Result.rangeCumulative` (non-existent prop).
-- Fixed duplicate v11Result definitions: Removed second definition (R1-R5 only, shadows correct R1-R9 version). Kept first v11Result (all 9 scenarios) + second v11Map (Map type).
-- Removed first v11Map (Record type with {raw, cum, category}) that conflicted with Map-type usage.
-- Fixed `v11Map[k]` → `v11Map.get(k)` and `v?.cum` → `v?.cumulativeProbability` at 3 locations (PDF HTML string, text export, XLSX export).
-- Fixed `v11Result.rangeCumulative` → `v11Result.neutralCumulative` at 3 locations (variable declaration, PDF HTML string, text export) — V11Result interface uses `neutralCumulative`.
-- Verified: `rg '<<<<<<|>>>>>>|=======' vdes-analysis.tsx` returns empty
-- Verified: `bun run lint 2>&1 | rg vdes-analysis` returns empty
-
-Stage Summary:
-- Both conflict regions resolved, keeping upstream version for both
-- 4 additional bugs fixed from merge artifacts: duplicate v11Result (R1-R5 vs R1-R9), Record vs Map type mismatch, wrong property names (cum/cumulativeProbability), wrong field name (rangeCumulative/neutralCumulative)
-- File: /home/z/my-project/src/components/tse/vdes-analysis.tsx
-- Note: ai-analysis/route.ts still has a merge conflict at line 247 (separate file, not part of this task)
+- 30-day probability trend table: ADDED to VDSS graph panel
+- Files modified: `src/components/tse/vdss-graph.tsx`, `src/app/page.tsx`
+- Visual: collapsible table with color-coded rows, peak highlighting, group trend bars
+- All Persian labels, consistent with existing light card theme

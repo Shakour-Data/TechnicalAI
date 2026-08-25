@@ -7,6 +7,11 @@
 // this directed acyclic graph (DAG).
 // =============================================================================
 
+import {
+  calculateProbabilityTrend as calcTrendFromProbs,
+  type ProbabilityTrendResult as ProbTrendResult,
+} from './probability-trend';
+
 // === Helper Functions =========================================================
 
 function clamp(v: number, min: number, max: number): number {
@@ -98,6 +103,8 @@ export interface GraphData {
     string,
     { trend: number; breakout: number; reversal: number }
   >;
+  /** 30-day probability trend computed from scenarioProbabilities */
+  probabilityTrend?: ProbTrendResult;
 }
 
 // === Internal Types ===========================================================
@@ -1557,7 +1564,14 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
     }
   }
 
-  // 10. Return complete GraphData
+  // 10. Compute 30-day probability trend
+  const probFractions: Record<string, number> = {};
+  for (const [k, v] of Object.entries(finalPcts)) {
+    probFractions[k] = v / 100;
+  }
+  const probabilityTrend = calcTrendFromProbs(probFractions, 30);
+
+  // 11. Return complete GraphData
   return {
     nodes,
     edges,
@@ -1567,5 +1581,122 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
     branchProbabilities,
     scenarioProbabilities: finalPcts,
     pathContributions,
+    probabilityTrend,
   };
+}
+
+// === 30-Day Probability Trend Calculation ======================================
+
+// Dual exponential decay for forecast weighting
+// W_forecast_h = α * exp(-h/τ₁) + (1-α) * exp(-h/τ₂)
+export function dualDecay(h: number, alpha = 0.7, tauShort = 5, tauLong = 20): number {
+  return alpha * Math.exp(-h / tauShort) + (1 - alpha) * Math.exp(-h / tauLong);
+}
+
+// Normalize decay factors so they sum to 1
+export function normalizedDecayFactors(horizon: number): number[] {
+  const factors: number[] = [];
+  for (let h = 1; h <= horizon; h++) {
+    factors.push(dualDecay(h));
+  }
+  const total = factors.reduce((a, b) => a + b, 0);
+  return factors.map(f => f / total);
+}
+
+export interface DayProbability {
+  day: number;
+  individualProb: number;
+  cumulativeProb: number;
+}
+
+export interface ScenarioTrend {
+  name: string;
+  nameEn: string;
+  key: string;
+  currentProbability: number;
+  trend: DayProbability[];
+  trendDirection: 'صعودی' | 'نزولی' | 'پایدار';
+  peakDay: number;
+  peakProbability: number;
+  interpretation: string;
+}
+
+export interface CumulativeGroupTrend {
+  bullish: DayProbability[];
+  bearish: DayProbability[];
+  neutral: DayProbability[];
+}
+
+export interface ProbabilityTrendResult {
+  scenarios: ScenarioTrend[];
+  groupTrends: CumulativeGroupTrend;
+  keyObservations: string[];
+  actionableInsights: string[];
+}
+
+export function calculateProbabilityTrend(
+  scenarioProbabilities: Array<{key: string; name: string; nameEn: string; probability: number; isBullish?: boolean; isBearish?: boolean; isNeutral?: boolean}>,
+  horizon: number = 30
+): ProbabilityTrendResult {
+  const decay = normalizedDecayFactors(horizon);
+  
+  const scenarios: ScenarioTrend[] = scenarioProbabilities.map(sp => {
+    const trend: DayProbability[] = [];
+    let cumProb = 0;
+    let peakDay = 1;
+    let peakProb = 0;
+    
+    for (let h = 1; h <= horizon; h++) {
+      const individualProb = sp.probability * decay[h - 1];
+      cumProb += individualProb;
+      trend.push({ day: h, individualProb: Math.round(individualProb * 10000) / 10000, cumulativeProb: Math.round(cumProb * 10000) / 10000 });
+      if (individualProb > peakProb) { peakProb = individualProb; peakDay = h; }
+    }
+    
+    // Determine trend direction
+    const firstThird = trend.slice(0, Math.floor(horizon / 3));
+    const lastThird = trend.slice(Math.floor(horizon * 2 / 3));
+    const avgFirst = firstThird.reduce((a, d) => a + d.individualProb, 0) / firstThird.length;
+    const avgLast = lastThird.reduce((a, d) => a + d.individualProb, 0) / lastThird.length;
+    const direction: ScenarioTrend['trendDirection'] = avgLast > avgFirst * 1.05 ? 'صعودی' : avgLast < avgFirst * 0.95 ? 'نزولی' : 'پایدار';
+    
+    return { name: sp.name, nameEn: sp.nameEn, key: sp.key, currentProbability: sp.probability, trend, trendDirection: direction, peakDay, peakProbability: Math.round(peakProb * 10000) / 10000, interpretation: '' };
+  });
+  
+  // Group trends (bullish, bearish, neutral)
+  const groupTrends: CumulativeGroupTrend = { bullish: [], bearish: [], neutral: [] };
+  for (let h = 0; h < horizon; h++) {
+    const bullDay = { day: h + 1, individualProb: 0, cumulativeProb: 0 };
+    const bearDay = { day: h + 1, individualProb: 0, cumulativeProb: 0 };
+    const neutralDay = { day: h + 1, individualProb: 0, cumulativeProb: 0 };
+    
+    scenarioProbabilities.forEach(sp => {
+      const dayData = scenarios.find(s => s.key === sp.key)?.trend[h];
+      if (!dayData) return;
+      if (sp.isBullish) { bullDay.individualProb += dayData.individualProb; }
+      else if (sp.isBearish) { bearDay.individualProb += dayData.individualProb; }
+      else { neutralDay.individualProb += dayData.individualProb; }
+    });
+    
+    bullDay.cumulativeProb = Math.round(bullDay.individualProb * 10000) / 10000;
+    bearDay.cumulativeProb = Math.round(bearDay.individualProb * 10000) / 10000;
+    neutralDay.cumulativeProb = Math.round(neutralDay.individualProb * 10000) / 10000;
+    
+    groupTrends.bullish.push({ ...bullDay, individualProb: Math.round(bullDay.individualProb * 10000) / 10000 });
+    groupTrends.bearish.push({ ...bearDay, individualProb: Math.round(bearDay.individualProb * 10000) / 10000 });
+    groupTrends.neutral.push({ ...neutralDay, individualProb: Math.round(neutralDay.individualProb * 10000) / 10000 });
+  }
+  
+  // Generate key observations and actionable insights
+  const topScenario = [...scenarios].sort((a, b) => b.currentProbability - a.currentProbability)[0];
+  const keyObservations = [
+    `سناریوی غالب: ${topScenario?.name || 'N/A'} (${topScenario ? Math.round(topScenario.currentProbability * 100) : 0}%)`,
+    `اوج احتمال ${topScenario?.name || ''} در روز ${topScenario?.peakDay || 'N/A'}`,
+  ];
+  
+  const actionableInsights = [
+    topScenario?.isBullish ? 'روند صعودی غالب - بررسی نقاط ورود' : topScenario?.isBearish ? 'روند نزولی غالب - احتیاط در معاملات' : 'بازار در حالت رنج - انتظار برای شکست',
+  ];
+  
+  return { scenarios, groupTrends, keyObservations, actionableInsights };
 }
