@@ -257,3 +257,87 @@ Stage Summary:
 - ml-narrative-v11.ts: FIXED all 9 scenario names and group assignments
 - vdss-graph.tsx: Updated subtitle text
 - All 3 sources now consistent: decision-graph.ts = probability-trend.ts = ml-narrative-v11.ts
+
+## MSL v4 Engine Implementation — Worklog
+
+### Date: $(date -u +"%Y-%m-%d %H:%M UTC")
+
+### Task: Create MSL v4 system at `/src/lib/msl-v4.ts` and update AI analysis route
+
+### What was done:
+
+1. **Read full MSL v4 spec document** (1673 lines) covering:
+   - 6 analysis schools with base weights, core principles, primary tools, detection signals
+   - 5 analysis styles with characteristics, target audiences, structures
+   - 6 analysis tones with conditions, intensity levels, keywords
+   - All 3 compatibility matrices (School×Style, School×Tone, Style×Tone) with exact values
+   - All multipliers (Asset×School, Timeframe×School, Regime×School) with exact values
+   - Weight formula: School_Weight = Base_Weight × Asset_Mult × Timeframe_Mult × Regime_Mult, then normalize
+   - Selection formulas for style (4-component weighted) and tone (4-component weighted)
+   - Output format specification and prompt generation requirements
+
+2. **Created `/src/lib/msl-v4.ts`** (512 lines, under 800-line limit):
+   - `MSLV4Context` interface with all context fields (asset, timeframe, regime, confidence, volatility, trend_strength, pattern_counts, divergence_present, etc.)
+   - `MSLV4Result` interface matching spec output format
+   - `selectMSLV4(ctx)` — main engine function implementing:
+     - School selection with multiplier-based weight calculation + normalization + status determination
+     - Style selection using compatibility matrix × audience match × market context × school-style match
+     - Tone selection using condition matching × school compatibility × style compatibility × intensity calibration
+   - `buildMSLV4PromptSection(result)` — Persian prompt generator for LLM injection
+   - All 3 compatibility matrices with exact values from spec
+   - All multiplier tables (4 asset types × 6 schools, 4 timeframes × 6 schools, 5 regimes × 6 schools)
+   - Asset/timeframe/regime resolution helpers
+   - Pure TypeScript, no React/Next.js imports
+
+3. **Updated `/src/app/api/ai-analysis/route.ts`**:
+   - Replaced `msl-system` import with `msl-v4` imports (selectMSLV4, buildMSLV4PromptSection, MSLV4Context)
+   - Replaced `buildMarketContext` with `buildMSLV4Context` that maps request body fields to MSLV4Context
+   - MSL v4 context builder derives: asset type, regime (from trend+ADX strength), volatility (ATR/price), pattern counts from technicalAnalysis, divergence presence, confidence
+   - Uses `selectMSLV4()` and `buildMSLV4PromptSection()` for system prompt
+   - Preserved all existing functionality: cache, rate limiter, queue, retry, ML selector integration
+   - Removed unused variables (dominantScenario, school/style/tone destructuring)
+
+4. **Lint**: `bun run lint` passes with 0 errors.
+
+### Files modified:
+- `src/lib/msl-v4.ts` — NEW (512 lines)
+- `src/app/api/ai-analysis/route.ts` — UPDATED (replaced msl-system with msl-v4)
+
+### Key design decisions:
+- Volume school gets 0.2× penalty when `hasVolume === false`
+- Hybrid school auto-activates when no school exceeds 0.35 weight
+- Regime derived from trendDirection + ADX: Strong=ADX>25, Weak=ADX≤25
+- Asset type detected from symbol name patterns (crypto/forex/commodities/stocks)
+- Tone intensity calibrated per tone type (warning=high for high vol, etc.)
+
+---
+Task ID: 7
+Agent: Main
+Task: Gap analysis and implementation of CumProbTrend and MSL v4 documents
+
+Work Log:
+- Read and analyzed both specification documents
+- **CumProbTrend gaps found and fixed:**
+  - Added `ScenarioDominance` interface and `computeDominance()` function (per-period dominance for days 1-5, 6-15, 16-30)
+  - Added dominance data to `ProbabilityTrendResult` interface
+  - Integrated dominance into `getTrendInterpretation()` output
+- **MSL v4 created from scratch** (`msl-v4.ts`, 513 lines):
+  - 6 Schools: classical, oscillator, volume, harmonic, hybrid, elliott (with base weights matching spec)
+  - 5 Styles: executive, analytical, forecasting, trading, educational
+  - 6 Tones: conservative, aggressive, balanced, warning, optimistic, realistic
+  - 3 Compatibility matrices (School×Style 6×5, School×Tone 6×6, Style×Tone 5×6)
+  - Asset multipliers (4 types × 6 schools)
+  - Timeframe multipliers (4 types × 6 schools)
+  - Regime multipliers (5 types × 6 schools)
+  - Selection formulas with exact weights from spec
+  - Full output format with reasoning and interpretability
+  - Persian prompt generation for LLM injection
+  - Fixed `toPersianNum` bug (charCode addition not wrapped in String.fromCharCode)
+- **Updated ai-analysis route** to use msl-v4 instead of msl-system
+- Verified: lint clean, dev server running without errors, MSL v4 produces correct output
+
+Stage Summary:
+- NEW: `/src/lib/msl-v4.ts` (513 lines) — complete MSL v4 engine
+- MODIFIED: `/src/lib/probability-trend.ts` — added ScenarioDominance
+- MODIFIED: `/src/app/api/ai-analysis/route.ts` — uses msl-v4
+- Remaining gaps (noted but not critical): line chart (only table exists), feedback/learning system, YAML output format

@@ -7,13 +7,10 @@ import {
   type MLSelectorInput,
 } from '@/lib/analysis-ml-selector';
 import {
-  selectMSL as selectMSLSystem,
-  getSchoolPrompt,
-  getStylePrompt,
-  getTonePrompt,
-  type MSLConfig,
-  type MarketContext,
-} from '@/lib/msl-system';
+  selectMSLV4,
+  buildMSLV4PromptSection,
+  type MSLV4Context,
+} from '@/lib/msl-v4';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,7 +120,7 @@ async function callZaiSDK(messages: { role: string; content: string }[], maxRetr
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('429') && attempt < maxRetries) {
-        const waitMs = Math.round(jitter(20_000 * Math.pow(2, attempt - 1))); // 20s, 40s, 80s, 160s + jitter
+        const waitMs = Math.round(jitter(20_000 * Math.pow(2, attempt - 1)));
         console.warn(`[AI v5] 429 retry ${attempt}/${maxRetries}, waiting ${Math.round(waitMs / 1000)}s...`);
         await sleep(waitMs);
         continue;
@@ -174,16 +171,11 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   return { price, trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range', adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0, rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr, scenarioDominant: dominantKey, hasVolume: (body.hasVolume as boolean) ?? false };
 }
 
-// --- Build Market Context for MSL System ---
-function buildMarketContext(body: Record<string, unknown>): MarketContext {
+// --- Build MSL v4 Context ---
+function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
   const price = (body.currentPrice as number) || 0;
-  const trendDir = (body.trendDirection as string) || 'range';
-  const trend: MarketContext['trend'] = trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range';
-
-  // Derive volatility from ATR/price ratio
   const atr = (body.atr as number) || 0;
   const atrRatio = price > 0 ? atr / price : 0;
-  const volatility: MarketContext['volatility'] = atrRatio > 0.03 ? 'high' : atrRatio > 0.01 ? 'medium' : 'low';
 
   // Dominant scenario from v11 or legacy scenarios
   const v11Probs = body.v11Probabilities as {
@@ -202,19 +194,54 @@ function buildMarketContext(body: Record<string, unknown>): MarketContext {
     }
   }
 
-  // Instrument type from symbol name or explicit field
+  const trendDir = (body.trendDirection as string) || 'range';
+  const isBull = trendDir === 'up';
+  const isBear = trendDir === 'down';
+  const adx = (body.adx as number) || 0;
+  const trendStrength = adx > 40 ? 0.9 : adx > 25 ? 0.7 : adx > 15 ? 0.4 : 0.15;
+
+  let regime: MSLV4Context['regime'] = 'Range';
+  if (isBull && trendStrength > 0.6) regime = 'Strong Bull';
+  else if (isBull) regime = 'Weak Bull';
+  else if (isBear && trendStrength > 0.6) regime = 'Strong Bear';
+  else if (isBear) regime = 'Weak Bear';
+
   const instrumentType = (body.instrumentType as string) ||
     (body.symbolName as string) || 'stock';
 
-  // Volume trend from OBV
-  const obv = (body.obv as number) || 0;
-  const volumeTrend: MarketContext['volumeTrend'] = obv > 0 ? 'increasing' : obv < 0 ? 'decreasing' : 'stable';
+  const ta = body.technicalAnalysis as {
+    classicPatternCount?: number;
+    harmonicPatternCount?: number;
+    elliottWaveCount?: number;
+    divergenceCount?: number;
+  } | undefined;
 
-  return { trend, volatility, dominantScenario, instrumentType, volumeTrend };
+  const overallConfidence = (body.overallConfidence as number) ??
+    (body.confidence as number) ?? 0.6;
+
+  return {
+    asset: instrumentType,
+    timeframe: (body.timeframe as string) || 'daily',
+    regime,
+    confidence: Math.max(0, Math.min(1, overallConfidence)),
+    volatility: atrRatio,
+    trend_strength: trendStrength,
+    dominantScenario,
+    pattern_counts: {
+      classical: ta?.classicPatternCount ?? 0,
+      harmonic: ta?.harmonicPatternCount ?? 0,
+      elliott: ta?.elliottWaveCount ?? 0,
+    },
+    divergence_present: (ta?.divergenceCount ?? 0) > 0,
+    hasVolume: (body.hasVolume as boolean) ?? false,
+    rsi: (body.rsi as number) || 50,
+    adx,
+    audience_level: (body.audienceLevel as string) || 'pro',
+  };
 }
 
 // --- Build Prompt ---
-function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[], mslConfig?: MSLConfig): string {
+function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
   const {
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
     stochK, stochD, macdLine, macdSignal, macdHist,
@@ -235,7 +262,6 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     supportStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
   };
 
-  const { school, style, tone } = mlSelection;
   const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
   const r2Pct = (trendR2 * 100).toFixed(1);
   const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
@@ -286,7 +312,6 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     }))
     .sort((a, b) => b.prob - a.prob);
 
-  const dominantScenario = scenarioList[0];
   const scenarioBlock = scenarioList
     .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
     .join('\n');
@@ -347,15 +372,12 @@ ${v11Lines}
 **\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
 ${scenarioBlock}
 ${v11Block}
-**روش‌های تحلیلی مورد استفاده:**
-${methodsStr}${mslConfig ? `
-${getSchoolPrompt(mslConfig)}
-${getStylePrompt(mslConfig)}
-${getTonePrompt(mslConfig)}` : ""}
+**\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0645\u0648\u0631\u062f \u0627\u0633\u062a\u0641\u0627\u062f\u0647:**
+${methodsStr}
 
 
 ---
-\u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 \u062c\u0627\u0645\u0639 \u0648 \u062d\u0631\u0641\u0647\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f \u0645\u0633\u062a\u0642\u06cc\u0645 \u0634\u0631\u0648\u0639 \u0634\u0648\u062f \u0628\u062f\u0648\u0646 \u0647\u06cc\u0686 \u0633\u0631\u0641\u0635\u0644 \u06cc\u0627 \u0639\u0646\u0648\u0627\u0646 \u062f\u0627\u062e\u0644\u06cc. \u0641\u0642\u0637 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f.
+\u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 \u062c\u0627\u0645\u0639 \u0648 \u062d\u0631\u0641\u0647\u0627\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f \u0645\u0633\u062a\u0642\u06cc\u0645 \u0634\u0631\u0648\u0639 \u0634\u0648\u062f \u0628\u062f\u0648\u0646 \u0647\u06cc\u0686 \u0633\u0631\u0641\u0635\u0644 \u06cc\u0627 \u0639\u0646\u0648\u0627\u0646 \u062f\u0627\u062e\u0644\u06cc. \u0641\u0642\u0637 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f.
 `;
 }
 
@@ -403,23 +425,21 @@ export async function POST(req: NextRequest) {
     const mlSelection = selectMLCombination(mlInput);
     const methods = selectMethods(mlInput);
 
-    // MSL system selection — overrides school/style/tone from ML selector
-    const marketCtx = buildMarketContext(body);
-    const mslConfig = selectMSLSystem(marketCtx);
-    mlSelection.school = mslConfig.school as typeof mlSelection.school;
-    mlSelection.style = mslConfig.style as typeof mlSelection.style;
-    mlSelection.tone = mslConfig.tone as typeof mlSelection.tone;
-    mlSelection.reasoning = `MSL: ${mslConfig.school}/${mslConfig.style}/${mslConfig.tone}`;
-    console.log(`[AI v5] ${body.symbolName}: MSL school=${mslConfig.school}, style=${mslConfig.style}, tone=${mslConfig.tone}`);
+    // MSL v4 selection
+    const mslCtx = buildMSLV4Context(body);
+    const mslResult = selectMSLV4(mslCtx);
+    mlSelection.school = mslResult.school_of_analysis.primary.id as typeof mlSelection.school;
+    mlSelection.style = mslResult.analysis_style.primary.id as typeof mlSelection.style;
+    mlSelection.tone = mslResult.analysis_tone.primary.id as typeof mlSelection.tone;
+    mlSelection.reasoning = `MSLv4: ${mslResult.school_of_analysis.primary.id}/${mslResult.analysis_style.primary.id}/${mslResult.analysis_tone.primary.id}`;
+    console.log(`[AI v5] ${body.symbolName}: MSLv4 school=${mslResult.school_of_analysis.primary.id} w=${mslResult.school_of_analysis.primary.weight}, style=${mslResult.analysis_style.primary.id}, tone=${mslResult.analysis_tone.primary.id}`);
     console.log(`[AI v5] Methods: ${methods.join(', ')}`);
 
-    // Build system prompt with MSL instructions
-    const mslSystemPrompt = `${getSchoolPrompt(mslConfig)}
-${getStylePrompt(mslConfig)}
-${getTonePrompt(mslConfig)}`;
+    // Build system prompt with MSL v4 instructions
+    const mslSystemPrompt = buildMSLV4PromptSection(mslResult);
 
-    // Build prompt (with MSL system context)
-    const userMessage = buildPrompt(body, mlSelection, methods, mslConfig);
+    // Build prompt (with MSL v4 context)
+    const userMessage = buildPrompt(body, mlSelection, methods);
 
     // Call AI via SDK (v3 approach with queue + retry)
     const dynamicSystemPrompt = `${SYSTEM_PROMPT}

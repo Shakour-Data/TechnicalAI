@@ -46,10 +46,20 @@ export interface GroupTrend {
   trend: DayPoint[];
 }
 
+export interface ScenarioDominance {
+  period: string;
+  periodLabel: string;
+  dominantScenario: string;
+  dominantLabel: string;
+  probability: number;
+  action: string;
+}
+
 export interface ProbabilityTrendResult {
   horizon: number;
   scenarios: ScenarioTrend[];
   groups: GroupTrend[];
+  dominance: ScenarioDominance[];
 }
 type ScenarioProbabilities = Record<string, number>;
 
@@ -166,7 +176,44 @@ export function calculateProbabilityTrend(
     const weights = buildScenarioWeights(horizon, group, prob);
     return scenarioTrend(k, prob, weights);
   });
-  return { horizon, scenarios, groups: groupTrends(scenarios) };
+  return { horizon, scenarios, groups: groupTrends(scenarios), dominance: computeDominance(scenarios) };
+}
+
+// ── Scenario dominance per time period ────────────────────────────────────
+const DOMINANCE_PERIODS = [
+  { key: 'day_1_5', label: 'روز ۱-۵', start: 1, end: 5 },
+  { key: 'day_6_15', label: 'روز ۶-۱۵', start: 6, end: 15 },
+  { key: 'day_16_30', label: 'روز ۱۶-۳۰', start: 16, end: 30 },
+] as const;
+
+const DOMINANCE_ACTIONS: Record<string, string> = {
+  bullish: 'ورود تدریجی به موقعیت خرید با مدیریت ریسک',
+  neutral: 'انتظار برای سیگنال تأیید جهت قبل از ورود',
+  bearish: 'کاهش مواجهه یا خروج تدریجی از موقعیت‌ها',
+};
+
+function computeDominance(scenarios: ScenarioTrend[]): ScenarioDominance[] {
+  const horizon = scenarios[0]?.trend.length ?? 30;
+  return DOMINANCE_PERIODS.map(p => {
+    const end = Math.min(p.end, horizon);
+    let bestKey = 'R1';
+    let bestSum = 0;
+    for (const s of scenarios) {
+      const periodSum = s.trend
+        .filter(d => d.day >= p.start && d.day <= end)
+        .reduce((acc, d) => acc + d.individualProb, 0);
+      if (periodSum > bestSum) { bestSum = periodSum; bestKey = s.scenarioKey; }
+    }
+    const best = scenarios.find(s => s.scenarioKey === bestKey)!;
+    return {
+      period: p.key,
+      periodLabel: p.label,
+      dominantScenario: bestKey,
+      dominantLabel: best.label,
+      probability: bestSum,
+      action: DOMINANCE_ACTIONS[best.group],
+    };
+  });
 }
 
 // ── Persian interpretation helper ───────────────────────────────────────────
@@ -202,8 +249,13 @@ export function getTrendInterpretation(results: ProbabilityTrendResult): string 
 
   // Actionable insight
   if (buCum > bCum) lines.push('💡 پیشنهاد: موقعیت‌گیری تدریجی صعودی با مدیریت ریسک در ۵ روز اول');
-  else if (bCum > buCum) lines.push('💡 پیشنهاد: کاهش exposición یا پوشش ریسک (hedging) تا عبور از فاز نزولی اولیه');
+  else if (bCum > buCum) lines.push('💡 پیشنهاد: کاهش مواجهه یا پوشش ریسک (hedging) تا عبور از فاز نزولی اولیه');
   else lines.push('💡 پیشنهاد: انتظار برای سیگنال تأیید جهت قبل از ورود به بازار');
+
+  // Scenario dominance per period (from spec)
+  for (const d of results.dominance) {
+    lines.push(`📌 ${d.periodLabel}: سناریوی غالب «${d.dominantLabel}» با احتمال تجمعی ${(d.probability * 100).toFixed(1)}٪ — ${d.action}`);
+  }
 
   return lines.join('\n');
 }
