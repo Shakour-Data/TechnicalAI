@@ -1,0 +1,200 @@
+داده هی تاریخی شاخص های بورس را باید از 
+https://github.com/ARahimiQuant/finpy-tse
+بگیری
+دریافت سابقه روزانه شاخص‌های بازار بورس
+: دریافت سابقه شاخص کل
+fpy.Get_CWI_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص کل هم‌وزن
+fpy.Get_EWI_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=True,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص قیمت وزنی-ارزشی
+fpy.Get_CWPI_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص قیمت هم‌وزن
+fpy.Get_EWPI_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص سهام آزاد شناور
+fpy.Get_FFI_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص بازار اول
+fpy.Get_MKT1I_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص بازار دوم
+fpy.Get_MKT2I_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص صنعت
+fpy.Get_INDI_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص 50 شرکت فعال‌تر
+fpy.Get_ACT50_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص 30 شرکت بزرگ
+fpy.Get_LCI30_History(
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+: دریافت سابقه شاخص صنایع بورسی
+fpy.Get_SectorIndex_History(
+    sector='خودرو',
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+
+مطمئن شو که شاخص ها درست و کامل داده های تاریخی آنها در پروژه بالا می آید. شاخص گروه دارویی که اشتباه بالا می آید. از 
+https://github.com/ARahimiQuant/finpy-tse
+استفاده کن برای شاخص ها و داده های تاریخی آن:
+fpy.Get_SectorIndex_History(
+    sector='خودرو',
+    start_date='1395-01-01',
+    end_date='1400-12-29',
+    ignore_date=False,
+    just_adj_close=False,
+    show_weekday=False,
+    double_date=False)
+
+_______________________________________
+01- زراعت
+
+10- ذغال سنگ
+
+13- کانیه فلزی
+
+14- سایر معدن
+
+17- منسوجات
+
+19- محصولات چرمی
+
+20- محصولات چوبی
+
+21- محصولات کاغذ
+
+22- انتشار و چاپ
+
+23- فراورده نفتی
+
+25- لاستیک
+
+26- محصولات کامپیوتری الکترونیکی
+
+27- فلزات اساسی
+
+28- محصولات فلزی
+
+29- ماشین آلات
+
+31- دستگاه‌های برقی
+
+32- وسایل ارتباطی
+
+33- ابزار پزشکی
+
+34- خودرو
+
+35- حمل و نقل
+
+36- میلمان (احتمالاً اشتباه تایپی در تصویر است و منظور «مبلمان» می‌باشد)
+
+38- قند و شکر
+
+39- چند رشته ای ص (در تصویر کوتاه شده است)
+
+40- تامین آب، برق، گاز
+
+42- غذایی بجز قند
+
+43- مواد دارویی
+
+44- شیمیایی
+
+45- پیمانکاری
+
+47- خرده فروشی به جز وسایل نقلیه
+
+49- کاشی و سرامیک
+
+53- سیمان
+
+54- کانی غیرفلزی
+
+55- هتل و رستوران
+
+56- سرمایه گذاریها
+
+57- بانکها
+
+58- سایر مالی
+
+60- حمل و نقل
+
+64- رادیویی
+
+65- مالی
+
+67- اداره بازارهای مالی
+
+70- انبوه سازی
+
+72- رایانه
+
+73- اطلاعات و ارتباطات
+
+74- فنی مهندسی
+
+11- استخراج نفت جzkش (در تصویر به صورت ناقص/غیرخوانا نوشته شده است)
+
+66- بیمه و بازنشستگی
+
+

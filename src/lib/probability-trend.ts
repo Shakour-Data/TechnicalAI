@@ -7,16 +7,16 @@ export const SCENARIO_KEYS = [
 ] as const;
 
 // Scenario mapping MUST match decision-graph.ts terminal node definitions exactly.
-// decision-graph.ts: R1-R4 = bullish, R5 = neutral, R6-R9 = bearish
+// VDES spec: R1=شوک صعودی(strongest bull) → R9=شوک نزولی(strongest bear), descending
 export const SCENARIO_META: Record<string, { label: string; group: 'bearish' | 'neutral' | 'bullish' }> = {
-  R1: { label: 'صعودی با احتیاط', group: 'bullish' },
-  R2: { label: 'صعودی قوی', group: 'bullish' },
-  R3: { label: 'صعودی شتابدار', group: 'bullish' },
-  R4: { label: 'شوک صعودی', group: 'bullish' },
+  R1: { label: 'شوک صعودی', group: 'bullish' },
+  R2: { label: 'صعودی شتاب‌دار', group: 'bullish' },
+  R3: { label: 'صعودی قوی', group: 'bullish' },
+  R4: { label: 'صعودی خفیف', group: 'bullish' },
   R5: { label: 'رنج', group: 'neutral' },
-  R6: { label: 'نزولی با احتیاط', group: 'bearish' },
+  R6: { label: 'نزولی خفیف', group: 'bearish' },
   R7: { label: 'نزولی قوی', group: 'bearish' },
-  R8: { label: 'نزولی شتابدار', group: 'bearish' },
+  R8: { label: 'نزولی شتاب‌دار', group: 'bearish' },
   R9: { label: 'شوک نزولی', group: 'bearish' },
 };
 

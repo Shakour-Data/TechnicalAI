@@ -2285,9 +2285,9 @@ function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1
  * Uses bull/bear consensus, key indicator values, S/R levels, and
  * ML-derived adaptive factors for fine-tuning.
  *
- * R1=صعود هیجانی, R2=صعود قوی, R3=صعود تدریجی,
- * R4=پولبک سالم, R5=رنج خنثی,
- * R6=اصلاح خفیف, R7=اصلاح متوسط, R8=اصلاح عمیق, R9=تضعیف ساختار
+ * R1=شوک صعودی, R2=صعودی شتاب‌دار, R3=صعودی قوی, R4=صعودی خفیف,
+ * R5=رنج,
+ * R6=نزولی خفیف, R7=نزولی قوی, R8=نزولی شتاب‌دار, R9=شوک نزولی
 
  */
 function calculateScenarioProbabilities(
@@ -2324,22 +2324,22 @@ function calculateScenarioProbabilities(
 
   // ── Raw probabilities ───────────────────────────────────────────────
 
-  // R1: صعودی با احتیاط — mild bull, needs confirmation
-  const raw_R1 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
+  // R1: شوک صعودی — explosive breakout (was old R4)
+  const raw_R1 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
 
-  // R2: صعودی قوی — solid uptrend
-  const raw_R2 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
+  // R2: صعودی شتاب‌دار — strong momentum (was old R3)
+  const raw_R2 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
 
-  // R3: صعودی شتابدار — strong momentum
-  const raw_R3 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
+  // R3: صعودی قوی — solid uptrend (was old R2)
+  const raw_R3 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
 
-  // R4: شوک صعودی — explosive breakout
-  const raw_R4 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
+  // R4: صعودی خفیف — mild bull, needs confirmation (was old R1)
+  const raw_R4 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
 
-  // R5: رنج کم‌نوسان — neutral
+  // R5: رنج — neutral
   const raw_R5 = (1 - Math.abs(bullConsensus - 0.5) * 2) * 0.45 * (1 + (1 - volatility) * 0.4);
 
-  // R6: نزولی با احتیاط — mild bear
+  // R6: نزولی خفیف — mild bear (was old R6)
   const raw_R6 = bearish * 0.4 * trend * (1 - oversoldBounce * 0.3);
 
   // R7: نزولی قوی — solid downtrend
@@ -2651,51 +2651,52 @@ export function analyze(data: OHLCV[]): TAResult {
 
   const scenarios = {
     R1: {
-      name: 'صعودی با احتیاط',
-      nameEn: 'Cautious Bullish',
-      probability: pR1,
-      targetMin: bullTargets[0].min,
-      targetMax: bullTargets[0].max,
-      description: `حرکت صعودی محتاطانه با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ریال.`, },
-    R2: {
-      name: 'صعودی قوی',
-      nameEn: 'Strong Bullish',
-      probability: pR2,
-      targetMin: bullTargets[1].min,
-      targetMax: bullTargets[1].max,
-      description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ریال.`,
-    },
-    R3: {
-      name: 'صعودی شتابدار',
-      nameEn: 'Accelerating Bullish',
-      probability: pR3,
-      targetMin: bullTargets[2].min,
-      targetMax: bullTargets[2].max,
-      description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ریال.`,
-    },
-    R4: {
       name: 'شوک صعودی',
       nameEn: 'Bullish Shock',
-      probability: pR4,
+      probability: pR1,
       targetMin: bullTargets[3].min,
       targetMax: bullTargets[3].max,
       description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ریال.`,
     },
+    R2: {
+      name: 'صعودی شتاب‌دار',
+      nameEn: 'Accelerating Bullish',
+      probability: pR2,
+      targetMin: bullTargets[2].min,
+      targetMax: bullTargets[2].max,
+      description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ریال.`,
+    },
+    R3: {
+      name: 'صعودی قوی',
+      nameEn: 'Strong Bullish',
+      probability: pR3,
+      targetMin: bullTargets[1].min,
+      targetMax: bullTargets[1].max,
+      description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ریال.`,
+    },
+    R4: {
+      name: 'صعودی خفیف',
+      nameEn: 'Weak Bullish',
+      probability: pR4,
+      targetMin: bullTargets[0].min,
+      targetMax: bullTargets[0].max,
+      description: `حرکت صعودی خفیف با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ریال.`,
+    },
     R5: {
-      name: 'رنج کم‌نوسان',
-      nameEn: 'Low Volatility Range',
+      name: 'رنج',
+      nameEn: 'Range-bound',
       probability: pR5,
       targetMin: rangeTarget.min,
       targetMax: rangeTarget.max,
       description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ریال.`,
     },
     R6: {
-      name: 'نزولی با احتیاط',
-      nameEn: 'Cautious Bearish',
+      name: 'نزولی خفیف',
+      nameEn: 'Weak Bearish',
       probability: pR6,
       targetMin: bearTargets[0].min,
       targetMax: bearTargets[0].max,
-      description: `نزول محتاطانه تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ریال.`,
+      description: `نزول خفیف تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ریال.`,
     },
     R7: {
       name: 'نزولی قوی',

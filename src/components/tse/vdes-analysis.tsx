@@ -161,12 +161,12 @@ function GradeBadge({ grade }: { grade: string }) {
 }
 
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
-  R1: { text: 'سناریوی ۱: صعودی با احتیاط — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
-  R2: { text: 'سناریوی ۲: صعودی قوی — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
-  R3: { text: 'سناریوی ۳: صعودی شتابدار — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
-  R4: { text: 'سناریوی ۴: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
-  R5: { text: 'سناریوی ۵: رنج کم‌نوسان — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
-  R6: { text: 'سناریوی ۶: نزولی با احتیاط — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+  R1: { text: 'سناریوی ۱: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
+  R2: { text: 'سناریوی ۲: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
+  R3: { text: 'سناریوی ۳: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
+  R4: { text: 'سناریوی ۴: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+  R5: { text: 'سناریوی ۵: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
+  R6: { text: 'سناریوی ۶: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
   R7: { text: 'سناریوی ۷: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
   R8: { text: 'سناریوی ۸: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
   R9: { text: 'سناریوی ۹: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },

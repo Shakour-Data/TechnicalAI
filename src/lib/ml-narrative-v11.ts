@@ -38,12 +38,12 @@ const SCENARIO_META: {
   nameEn: string;
   group: 'bullish' | 'neutral' | 'bearish';
 }[] = [
-  { key: 'R1', name: 'صعودی با احتیاط', nameEn: 'Cautious Bullish', group: 'bullish' },
-  { key: 'R2', name: 'صعودی قوی', nameEn: 'Strong Bullish', group: 'bullish' },
-  { key: 'R3', name: 'صعودی شتابدار', nameEn: 'Accelerating Bullish', group: 'bullish' },
-  { key: 'R4', name: 'شوک صعودی', nameEn: 'Bullish Shock', group: 'bullish' },
+  { key: 'R1', name: 'شوک صعودی', nameEn: 'Bullish Shock', group: 'bullish' },
+  { key: 'R2', name: 'صعودی شتابدار', nameEn: 'Accelerating Bullish', group: 'bullish' },
+  { key: 'R3', name: 'صعودی قوی', nameEn: 'Strong Bullish', group: 'bullish' },
+  { key: 'R4', name: 'صعودی خفیف', nameEn: 'Weak Bullish', group: 'bullish' },
   { key: 'R5', name: 'رنج', nameEn: 'Range-bound', group: 'neutral' },
-  { key: 'R6', name: 'نزولی با احتیاط', nameEn: 'Cautious Bearish', group: 'bearish' },
+  { key: 'R6', name: 'نزولی خفیف', nameEn: 'Weak Bearish', group: 'bearish' },
   { key: 'R7', name: 'نزولی قوی', nameEn: 'Strong Bearish', group: 'bearish' },
   { key: 'R8', name: 'نزولی شتابدار', nameEn: 'Accelerating Bearish', group: 'bearish' },
   { key: 'R9', name: 'شوک نزولی', nameEn: 'Bearish Shock', group: 'bearish' },

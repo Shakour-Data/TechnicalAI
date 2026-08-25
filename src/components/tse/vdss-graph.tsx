@@ -77,12 +77,12 @@ const EDGE_COLORS: Record<string, string> = {
 const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
 
 const SCENARIO_META: Record<string, { label: string; color: string }> = {
-  R1: { label: 'صعودی با احتیاط', color: '#047857' },
-  R2: { label: 'صعودی قوی', color: '#059669' },
-  R3: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
-  R4: { label: 'شوک صعودی', color: '#0891b2' },
-  R5: { label: 'رنج کم‌نوسان', color: '#b45309' },
-  R6: { label: 'نزولی با احتیاط', color: '#c2410c' },
+  R1: { label: 'شوک صعودی', color: '#0891b2' },
+  R2: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
+  R3: { label: 'صعودی قوی', color: '#059669' },
+  R4: { label: 'صعودی خفیف', color: '#047857' },
+  R5: { label: 'رنج', color: '#b45309' },
+  R6: { label: 'نزولی خفیف', color: '#c2410c' },
   R7: { label: 'نزولی قوی', color: '#ea580c' },
   R8: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
   R9: { label: 'شوک نزولی', color: '#b91c1c' },

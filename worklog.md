@@ -341,3 +341,79 @@ Stage Summary:
 - MODIFIED: `/src/lib/probability-trend.ts` — added ScenarioDominance
 - MODIFIED: `/src/app/api/ai-analysis/route.ts` — uses msl-v4
 - Remaining gaps (noted but not critical): line chart (only table exists), feedback/learning system, YAML output format
+
+---
+Task ID: 8
+Agent: Sub-agent
+Task: Reorder R1-R9 in decision-graph.ts to match VDES spec
+
+Work Log:
+- Read full decision-graph.ts (1703 lines) to understand current structure
+- Updated TERMINAL_COLORS: swapped R1↔R4, R2↔R3 color assignments
+- Updated terminal nodes in createNodes():
+  - R1: شوک صعودی (Bullish Shock) — was old R4
+  - R2: صعودی شتاب‌دار (Accelerating Bullish) — was old R3
+  - R3: صعودی قوی (Strong Bullish) — was old R2
+  - R4: صعودی خفیف (Weak Bullish) — was old R1
+  - R6: نزولی خفیف (Weak Bearish) — name change from نزولی با احتیاط
+  - R5, R7-R9: unchanged
+- Updated 21 edges in createEdges() with new terminal targets:
+  - N_T_B_MOM_HIGH: [R3,R4,R2] → [R2,R1,R3]
+  - N_T_B_MOM_MOD: [R2,R1,R5] → [R3,R4,R5]
+  - N_T_B_OVERBOUGHT: [R6,R9,R4] → [R6,R9,R1]
+  - N_T_BE_OVERSOLD: [R1,R4,R6] → [R4,R1,R6]
+  - N_T_F_VOL_HIGH: [R4,R9,R5] → [R1,R9,R5]
+  - N_T_F_VOL_MOD: [R1,R6,R5] → [R4,R6,R5]
+  - N_B_U_VOL_C: [R2,R3,R4] → [R3,R2,R1]
+  - N_B_U_VOL_W: [R1,R6,R5] → [R4,R6,R5]
+  - N_B_D_VOL_W: [R6,R1,R5] → [R6,R4,R5]
+  - N_R_B_DIV: [R1,R3,R5] → [R4,R2,R5]
+  - N_R_B_CANDLE: [R2,R1,R5] → [R3,R4,R5]
+  - N_R_B_SR: [R1,R5,R6] → [R4,R5,R6]
+  - N_R_BE_SR: [R6,R5,R1] → [R6,R5,R4]
+  - 5 more edges with label-only changes (نزولی با احتیاط → نزولی خفیف)
+- Updated 13 case statements in computeNodeProbabilities() — variable names and return array order match new edge order
+- Updated all edge labels: 'صعودی با احتیاط' → 'صعودی خفیف', 'نزولی با احتیاط' → 'نزولی خفیف'
+- Removed dead code (lines 1588-1703): dualDecay, normalizedDecayFactors, DayProbability, ScenarioTrend, CumulativeGroupTrend, ProbabilityTrendResult, calculateProbabilityTrend — all unused (real implementation is in probability-trend.ts)
+- Verified: `bun run lint` passes clean (0 errors)
+- Verified: no other files import the removed exports from decision-graph.ts
+
+Stage Summary:
+- R1-R9 reordered to VDES spec: R1=شوک صعودی, R2=صعودی شتاب‌دار, R3=صعودی قوی, R4=صعودی خفیف, R5=رنج, R6=نزولی خفیف, R7-R9 unchanged
+- File reduced from 1703 → 1588 lines (removed 115 lines of dead code)
+- All math/formulas unchanged — only R-id references, labels, and comments updated
+- Edge order in createEdges() exactly matches return array order in computeNodeProbabilities()
+- NOTE: Other files (vdss-graph.tsx, vdes-analysis.tsx, ta-engine.ts, probability-trend.ts, ml-narrative-v11.ts, analysis-ml-selector.ts) still reference old names — need separate update tasks
+
+---
+Task ID: ta-engine-vdes-rename
+Agent: Sub-agent (general-purpose)
+Task: Update scenario names in ta-engine.ts to match VDES specification ordering
+
+Work Log:
+- Updated JSDoc comment (lines 2288-2290): old 9-name list → new VDES spec names (R1=شوک صعودی … R9=شوک نزولی)
+- Swapped raw probability variable assignments in computeRawProbabilities():
+  - raw_R1 now holds the explosive breakout formula (was old raw_R4)
+  - raw_R2 now holds the accelerating bullish formula (was old raw_R3)
+  - raw_R3 now holds the strong bullish formula (was old raw_R2)
+  - raw_R4 now holds the weak/mild bullish formula (was old raw_R1)
+  - raw_R5 comment updated: رنج کم‌نوسان → رنج
+  - raw_R6 comment updated: نزولی با احتیاط → نزولی خفیف
+  - raw_R7-R9 unchanged
+- Updated scenario objects (R1-R6):
+  - R1: 'صعودی با احتیاط'/'Cautious Bullish' → 'شوک صعودی'/'Bullish Shock', bullTargets[0] → bullTargets[3]
+  - R2: 'صعودی قوی'/'Strong Bullish' → 'صعودی شتاب‌دار'/'Accelerating Bullish', bullTargets[1] → bullTargets[2]
+  - R3: 'صعودی شتابدار'/'Accelerating Bullish' → 'صعودی قوی'/'Strong Bullish', bullTargets[2] → bullTargets[1]
+  - R4: 'شوک صعودی'/'Bullish Shock' → 'صعودی خفیف'/'Weak Bullish', bullTargets[3] → bullTargets[0]
+  - R5: 'رنج کم‌نوسان'/'Low Volatility Range' → 'رنج'/'Range-bound'
+  - R6: 'نزولی با احتیاط'/'Cautious Bearish' → 'نزولی خفیف'/'Weak Bearish'
+  - R7-R9 unchanged
+- All mathematical formulas preserved exactly — only labels, variable positions, and target indices changed
+- Verified: no stale old-name references remain in ta-engine.ts
+- Verified: `bun run lint` passes clean (0 errors)
+
+Stage Summary:
+- ta-engine.ts fully aligned with VDES spec ordering: R1=strongest bull → R9=strongest bear
+- 3 edit operations: JSDoc comment, raw probability block, scenario objects block
+- Descriptions updated to match new names (e.g. 'نزول محتاطانه' → 'نزول خفیف')
+- Remaining files with old names: vdss-graph.tsx, vdes-analysis.tsx, probability-trend.ts, ml-narrative-v11.ts, analysis-ml-selector.ts (separate tasks)
