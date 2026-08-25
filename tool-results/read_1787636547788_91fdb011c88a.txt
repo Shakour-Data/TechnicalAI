@@ -1,0 +1,707 @@
+   997→function buildContext(input: GraphInput): ProbContext {
+   998→  const adxNorm = clamp(input.adx / 60, 0, 1);
+   999→  const srProximity = clamp(
+  1000→    1 - Math.min(input.distToR1, input.distToS1) * 10,
+  1001→    0,
+  1002→    1
+  1003→  );
+  1004→  const oscillatorExtreme = clamp(
+  1005→    (Math.abs(input.rsi - 50) / 50 + Math.abs(input.cci) / 200) / 2,
+  1006→    0,
+  1007→    1
+  1008→  );
+  1009→  const divergenceProxy = oscillatorExtreme * (1 - adxNorm);
+  1010→
+  1011→  // Pre-compute for reuse across N_T_BULL and N_REVERSAL
+  1012→  const overboughtRisk =
+  1013→    clamp((input.rsi - 60) / 30, 0, 1) * 0.3 +
+  1014→    clamp((input.mfi - 70) / 30, 0, 1) * 0.2 +
+  1015→    clamp((input.stochK - 75) / 25, 0, 1) * 0.2;
+  1016→
+  1017→  // Pre-compute for reuse across N_T_BEAR and N_REVERSAL
+  1018→  const oversoldBounce =
+  1019→    clamp((30 - input.rsi) / 30, 0, 1) * 0.3 +
+  1020→    clamp((20 - input.mfi) / 20, 0, 1) * 0.2 +
+  1021→    clamp((20 - input.stochK) / 20, 0, 1) * 0.2;
+  1022→
+  1023→  return {
+  1024→    input,
+  1025→    adxNorm,
+  1026→    srProximity,
+  1027→    oscillatorExtreme,
+  1028→    divergenceProxy,
+  1029→    overboughtRisk,
+  1030→    oversoldBounce,
+  1031→  };
+  1032→}
+  1033→
+  1034→// === Node Probability Computation =============================================
+  1035→// For each non-terminal node, returns an array of probabilities for its
+  1036→// outgoing edges. The order MUST match the order of edges in createEdges().
+  1037→// =============================================================================
+  1038→
+  1039→function computeNodeProbabilities(
+  1040→  nodeId: string,
+  1041→  ctx: ProbContext,
+  1042→  _numChildren: number
+  1043→): number[] {
+  1044→  const { input, adxNorm, srProximity, overboughtRisk, oversoldBounce } = ctx;
+  1045→  const atrSafe = input.atr > 0 ? input.atr : 0.0001;
+  1046→
+  1047→  switch (nodeId) {
+  1048→    // ── ROOT → [N_TREND, N_BREAK, N_REVERSAL] ─────────────────────────────
+  1049→    case 'ROOT': {
+  1050→      const trendW = adxNorm * 0.45 + input.mlTrend * 0.15 + 0.12;
+  1051→      const breakW = srProximity * 0.35 + (1 - adxNorm) * 0.1 + 0.1;
+  1052→      const revW = ctx.divergenceProxy * 0.3 + (1 - adxNorm) * 0.15 + 0.08;
+  1053→      return normalize([trendW, breakW, revW]);
+  1054→    }
+  1055→
+  1056→    // ── N_TREND → [N_T_BULL, N_T_BEAR, N_T_FLAT] ──────────────────────────
+  1057→    case 'N_TREND': {
+  1058→      const bull = input.bullConsensus * (adxNorm * 0.4 + 0.6);
+  1059→      const bear = (1 - input.bullConsensus) * (adxNorm * 0.4 + 0.6);
+  1060→      const flat =
+  1061→        (1 - Math.abs(input.bullConsensus - 0.5) * 2) * (1 - adxNorm * 0.7);
+  1062→      return normalize([bull, bear, flat]);
+  1063→    }
+  1064→
+  1065→    // ── N_T_BULL → [N_T_B_MOM_HIGH, N_T_B_MOM_MOD, N_T_B_OVERBOUGHT] ─────
+  1066→    case 'N_T_BULL': {
+  1067→      const momHigh =
+  1068→        clamp(
+  1069→          (input.momentum > 0 ? input.momentum / 50 : 0) +
+  1070→            (input.macdHist > 0
+  1071→              ? (input.macdHist / (atrSafe * 0.5)) * 0.3
+  1072→              : 0),
+  1073→          0,
+  1074→          1
+  1075→        ) * input.mlMomentum;
+  1076→      const momMod = (1 - momHigh) * 0.6 * input.mlMomentum;
+  1077→      return normalize([momHigh, momMod, overboughtRisk]);
+  1078→    }
+  1079→
+  1080→    // ── N_T_B_MOM_HIGH → [R3, R4, R2] ────────────────────────────────────
+  1081→    // Strong bullish momentum — all three outcomes are bullish (no range)
+  1082→    case 'N_T_B_MOM_HIGH': {
+  1083→      const pR3 = 0.45 * input.mlTrend + input.confidenceIndex * 0.2;
+  1084→      const pR4 = 0.15 + input.strengthIndex * 0.2;
+  1085→      const pR2 = 0.35 * input.confidenceIndex + 0.15;
+  1086→      return normalize([pR3, pR4, pR2]);
+  1087→    }
+  1088→
+  1089→    // ── N_T_B_MOM_MOD → [R2, R1, R5] ─────────────────────────────────────
+  1090→    // Moderate bullish — small explicit R5 based on uncertainty
+  1091→    case 'N_T_B_MOM_MOD': {
+  1092→      const pR2 = 0.5 * input.confidenceIndex + 0.2;
+  1093→      const pR1 = 0.5 * (1 - input.confidenceIndex) + 0.15;
+  1094→      const pR5 = clamp((1 - adxNorm) * 0.35, 0.05, 0.25);
+  1095→      return normalize([pR2, pR1, pR5]);
+  1096→    }
+  1097→
+  1098→    // ── N_T_B_OVERBOUGHT → [R6, R9, R4] ──────────────────────────────────
+  1099→    // Overbought in uptrend — correction or last-gasp surge (no range)
+  1100→    case 'N_T_B_OVERBOUGHT': {
+  1101→      const pR6 = 0.5 + (1 - input.mlMomentum) * 0.2;
+  1102→      const pR9 = 0.15 + input.strengthIndex * 0.15;
+  1103→      const pR4 = 0.1 + input.mlMomentum * 0.2;
+  1104→      return normalize([pR6, pR9, pR4]);
+  1105→    }
+  1106→
+  1107→    // ── N_T_BEAR → [N_T_BE_MOM_LOW, N_T_BE_MOM_MOD, N_T_BE_OVERSOLD] ────
+  1108→    case 'N_T_BEAR': {
+  1109→      const momLow =
+  1110→        clamp(
+  1111→          (input.momentum < 0 ? Math.abs(input.momentum) / 50 : 0) +
+  1112→            (input.macdHist < 0
+  1113→              ? (Math.abs(input.macdHist) / (atrSafe * 0.5)) * 0.3
+  1114→              : 0),
+  1115→          0,
+  1116→          1
+  1117→        ) * input.mlMomentum;
+  1118→      const momMod = (1 - momLow) * 0.6 * input.mlMomentum;
+  1119→      return normalize([momLow, momMod, oversoldBounce]);
+  1120→    }
+  1121→
+  1122→    // ── N_T_BE_MOM_LOW → [R8, R9, R7] ────────────────────────────────────
+  1123→    // Strong bearish momentum — all three outcomes are bearish (no range)
+  1124→    case 'N_T_BE_MOM_LOW': {
+  1125→      const pR8 = 0.45 * input.mlTrend + input.confidenceIndex * 0.2;
+  1126→      const pR9 = 0.15 + input.strengthIndex * 0.2;
+  1127→      const pR7 = 0.35 * input.confidenceIndex + 0.15;
+  1128→      return normalize([pR8, pR9, pR7]);
+  1129→    }
+  1130→
+  1131→    // ── N_T_BE_MOM_MOD → [R7, R6, R5] ────────────────────────────────────
+  1132→    // Moderate bearish — small explicit R5 based on uncertainty
+  1133→    case 'N_T_BE_MOM_MOD': {
+  1134→      const pR7 = 0.5 * input.confidenceIndex + 0.2;
+  1135→      const pR6 = 0.5 * (1 - input.confidenceIndex) + 0.15;
+  1136→      const pR5 = clamp((1 - adxNorm) * 0.35, 0.05, 0.25);
+  1137→      return normalize([pR7, pR6, pR5]);
+  1138→    }
+  1139→
+  1140→    // ── N_T_BE_OVERSOLD → [R1, R4, R6] ───────────────────────────────────
+  1141→    // Oversold in downtrend — bounce or mild continuation (no range)
+  1142→    case 'N_T_BE_OVERSOLD': {
+  1143→      const pR1 = 0.55 + (1 - input.mlMomentum) * 0.2;
+  1144→      const pR4 = 0.15 + input.strengthIndex * 0.15;
+  1145→      const pR6 = 0.1 + input.mlMomentum * 0.2;
+  1146→      return normalize([pR1, pR4, pR6]);
+  1147→    }
+  1148→
+  1149→    // ── N_T_FLAT → [N_T_F_VOL_LOW, N_T_F_VOL_HIGH, N_T_F_VOL_MOD] ────────
+  1150→    case 'N_T_FLAT': {
+  1151→      const volLow =
+  1152→        clamp(1 - (input.atr / input.price) * 20, 0, 1) *
+  1153→        (1 - input.mlVolatility) *
+  1154→        0.7;
+  1155→      const volHigh =
+  1156→        clamp((input.atr / input.price) * 20, 0, 1) * input.mlVolatility * 0.7;
+  1157→      const volMod = (1 - volLow - volHigh) * 0.5 + 0.1;
+  1158→      return normalize([volLow, volHigh, volMod]);
+  1159→    }
+  1160→
+  1161→    // ── N_T_F_VOL_LOW → [R5] ─────────────────────────────────────────────
+  1162→    case 'N_T_F_VOL_LOW': {
+  1163→      return [1.0];
+  1164→    }
+  1165→
+  1166→    // ── N_T_F_VOL_HIGH → [R4, R9, R5] ────────────────────────────────────
+  1167→    // High volatility shock — directional shock more likely than range
+  1168→    case 'N_T_F_VOL_HIGH': {
+  1169→      const pR4 = 0.35 * input.bullConsensus + 0.15;
+  1170→      const pR9 = 0.35 * (1 - input.bullConsensus) + 0.15;
+  1171→      const pR5 = clamp((1 - input.mlVolatility) * 0.2, 0.05, 0.2);
+  1172→      return normalize([pR4, pR9, pR5]);
+  1173→    }
+  1174→
+  1175→    // ── N_T_F_VOL_MOD → [R1, R6, R5] ─────────────────────────────────────
+  1176→    // Moderate volatility — range is plausible but capped
+  1177→    case 'N_T_F_VOL_MOD': {
+  1178→      const pR1 = 0.35 * input.bullConsensus + 0.12;
+  1179→      const pR6 = 0.35 * (1 - input.bullConsensus) + 0.12;
+  1180→      const pR5 = clamp((1 - adxNorm) * 0.3, 0.08, 0.25);
+  1181→      return normalize([pR1, pR6, pR5]);
+  1182→    }
+  1183→
+  1184→    // ── N_BREAK → [N_B_UP, N_B_DOWN, N_B_NONE] ────────────────────────────
+  1185→    case 'N_BREAK': {
+  1186→      const upProb = input.bullConsensus * srProximity * 0.7 + 0.05;
+  1187→      const downProb = (1 - input.bullConsensus) * srProximity * 0.7 + 0.05;
+  1188→      const noneProb = (1 - srProximity) * 0.5 + 0.1;
+  1189→      return normalize([upProb, downProb, noneProb]);
+  1190→    }
+  1191→
+  1192→    // ── N_B_UP → [N_B_U_VOL_C, N_B_U_VOL_W] ─────────────────────────────
+  1193→    case 'N_B_UP': {
+  1194→      let volConfirm: number;
+  1195→      let volWeak: number;
+  1196→      if (input.hasVolume) {
+  1197→        volConfirm = clamp(input.mfi / 60, 0, 1) * 0.6 + 0.2;
+  1198→        volWeak = 1 - volConfirm;
+  1199→      } else {
+  1200→        volConfirm = 0.4;
+  1201→        volWeak = 0.6;
+  1202→      }
+  1203→      return normalize([volConfirm, volWeak]);
+  1204→    }
+  1205→
+  1206→    // ── N_B_U_VOL_C → [R2, R3, R4] ──────────────────────────────────────
+  1207→    // Confirmed bullish breakout — all bullish, no range
+  1208→    case 'N_B_U_VOL_C': {
+  1209→      const pR2 = 0.45 + input.confidenceIndex * 0.15;
+  1210→      const pR3 = 0.2 + input.strengthIndex * 0.15;
+  1211→      const pR4 = 0.15 + input.strengthIndex * 0.1;
+  1212→      return normalize([pR2, pR3, pR4]);
+  1213→    }
+  1214→
+  1215→    // ── N_B_U_VOL_W → [R1, R6, R5] ──────────────────────────────────────
+  1216→    // Weak volume breakout — fake breakout risk, capped R5
+  1217→    case 'N_B_U_VOL_W': {
+  1218→      const pR1 = 0.4 + input.bullConsensus * 0.15;
+  1219→      const pR6 = 0.3 + (1 - input.bullConsensus) * 0.15;
+  1220→      const pR5 = clamp((1 - input.confidenceIndex) * 0.25, 0.05, 0.2);
+  1221→      return normalize([pR1, pR6, pR5]);
+  1222→    }
+  1223→
+  1224→    // ── N_B_DOWN → [N_B_D_VOL_C, N_B_D_VOL_W] ────────────────────────────
+  1225→    case 'N_B_DOWN': {
+  1226→      let volConfirm: number;
+  1227→      if (input.hasVolume) {
+  1228→        volConfirm = clamp((100 - input.mfi) / 60, 0, 1) * 0.6 + 0.2;
+  1229→      } else {
+  1230→        volConfirm = 0.4;
+  1231→      }
+  1232→      const volWeak = 1 - volConfirm;
+  1233→      return normalize([volConfirm, volWeak]);
+  1234→    }
+  1235→
+  1236→    // ── N_B_D_VOL_C → [R7, R8, R9] ──────────────────────────────────────
+  1237→    // Confirmed bearish breakout — all bearish, no range
+  1238→    case 'N_B_D_VOL_C': {
+  1239→      const pR7 = 0.45 + input.confidenceIndex * 0.15;
+  1240→      const pR8 = 0.2 + input.strengthIndex * 0.15;
+  1241→      const pR9 = 0.15 + input.strengthIndex * 0.1;
+  1242→      return normalize([pR7, pR8, pR9]);
+  1243→    }
+  1244→
+  1245→    // ── N_B_D_VOL_W → [R6, R1, R5] ──────────────────────────────────────
+  1246→    // Weak volume bearish breakout — fake breakout risk, capped R5
+  1247→    case 'N_B_D_VOL_W': {
+  1248→      const pR6 = 0.4 + (1 - input.bullConsensus) * 0.15;
+  1249→      const pR1 = 0.3 + input.bullConsensus * 0.15;
+  1250→      const pR5 = clamp((1 - input.confidenceIndex) * 0.25, 0.05, 0.2);
+  1251→      return normalize([pR6, pR1, pR5]);
+  1252→    }
+  1253→
+  1254→    // ── N_B_NONE → [R5] ──────────────────────────────────────────────────
+  1255→    case 'N_B_NONE': {
+  1256→      return [1.0];
+  1257→    }
+  1258→
+  1259→    // ── N_REVERSAL → [N_R_BULL, N_R_BEAR, N_R_NONE] ──────────────────────
+  1260→    case 'N_REVERSAL': {
+  1261→      const bullRev = overboughtRisk;
+  1262→      const bearRev = oversoldBounce;
+  1263→      const noneRev =
+  1264→        1 - Math.max(overboughtRisk, oversoldBounce) * 0.7;
+  1265→      return normalize([bullRev, bearRev, noneRev]);
+  1266→    }
+  1267→
+  1268→    // ── N_R_BULL → [N_R_B_DIV, N_R_B_CANDLE, N_R_B_SR] ──────────────────
+  1269→    case 'N_R_BULL': {
+  1270→      const divProb = clamp(Math.abs(input.cci) / 150, 0, 1) * 0.5;
+  1271→      const candleProb =
+  1272→        clamp(Math.abs(input.fisherTransform) / 2, 0, 1) * 0.3;
+  1273→      const srProb = clamp(input.srAvgStrength, 0, 1) * 0.3;
+  1274→      return normalize([divProb, candleProb, srProb]);
+  1275→    }
+  1276→
+  1277→    // ── N_R_B_DIV → [R1, R3, R5] ────────────────────────────────────────
+  1278→    // Bullish divergence — explicit small R5
+  1279→    case 'N_R_B_DIV': {
+  1280→      const pR1 = 0.5 + (1 - input.mlMomentum) * 0.2;
+  1281→      const pR3 = 0.2 + input.mlMomentum * 0.15;
+  1282→      const pR5 = clamp((1 - adxNorm) * 0.25, 0.05, 0.2);
+  1283→      return normalize([pR1, pR3, pR5]);
+  1284→    }
+  1285→
+  1286→    // ── N_R_B_CANDLE → [R2, R1, R5] ─────────────────────────────────────
+  1287→    // Bullish candle pattern — explicit small R5
+  1288→    case 'N_R_B_CANDLE': {
+  1289→      const pR2 = 0.5 * input.confidenceIndex + 0.2;
+  1290→      const pR1 = 0.5 * (1 - input.confidenceIndex) + 0.15;
+  1291→      const pR5 = clamp((1 - input.confidenceIndex) * 0.2, 0.05, 0.18);
+  1292→      return normalize([pR2, pR1, pR5]);
+  1293→    }
+  1294→
+  1295→    // ── N_R_B_SR → [R1, R5, R6] ─────────────────────────────────────────
+  1296→    // Support bounce — explicit small R5
+  1297→    // Edge order: R1, R5, R6 — probabilities computed then reordered
+  1298→    case 'N_R_B_SR': {
+  1299→      const pR1 = 0.5 + input.srAvgStrength * 0.2;
+  1300→      const pR6 = 0.15 + (1 - input.srAvgStrength) * 0.1;
+  1301→      const pR5 = clamp((1 - input.srAvgStrength) * 0.2, 0.05, 0.18);
+  1302→      // Return in edge order: [R1, R5, R6]
+  1303→      return normalize([pR1, pR5, pR6]);
+  1304→    }
+  1305→
+  1306→    // ── N_R_BEAR → [N_R_BE_DIV, N_R_BE_CANDLE, N_R_BE_SR] ───────────────
+  1307→    // Mirror of N_R_BULL
+  1308→    case 'N_R_BEAR': {
+  1309→      const divProb = clamp(Math.abs(input.cci) / 150, 0, 1) * 0.5;
+  1310→      const candleProb =
+  1311→        clamp(Math.abs(input.fisherTransform) / 2, 0, 1) * 0.3;
+  1312→      const srProb = clamp(input.srAvgStrength, 0, 1) * 0.3;
+  1313→      return normalize([divProb, candleProb, srProb]);
+  1314→    }
+  1315→
+  1316→    // ── N_R_BE_DIV → [R6, R8, R5] ───────────────────────────────────────
+  1317→    // Bearish divergence — explicit small R5
+  1318→    case 'N_R_BE_DIV': {
+  1319→      const pR6 = 0.5 + (1 - input.mlMomentum) * 0.2;
+  1320→      const pR8 = 0.2 + input.mlMomentum * 0.15;
+  1321→      const pR5 = clamp((1 - adxNorm) * 0.25, 0.05, 0.2);
+  1322→      return normalize([pR6, pR8, pR5]);
+  1323→    }
+  1324→
+  1325→    // ── N_R_BE_CANDLE → [R7, R6, R5] ────────────────────────────────────
+  1326→    // Bearish candle pattern — explicit small R5
+  1327→    case 'N_R_BE_CANDLE': {
+  1328→      const pR7 = 0.5 * input.confidenceIndex + 0.2;
+  1329→      const pR6 = 0.5 * (1 - input.confidenceIndex) + 0.15;
+  1330→      const pR5 = clamp((1 - input.confidenceIndex) * 0.2, 0.05, 0.18);
+  1331→      return normalize([pR7, pR6, pR5]);
+  1332→    }
+  1333→
+  1334→    // ── N_R_BE_SR → [R6, R5, R1] ─────────────────────────────────────────
+  1335→    // Resistance rejection — explicit small R5
+  1336→    // Edge order: R6, R5, R1 — probabilities computed then reordered
+  1337→    case 'N_R_BE_SR': {
+  1338→      const pR6 = 0.5 + input.srAvgStrength * 0.2;
+  1339→      const pR1 = 0.15 + (1 - input.srAvgStrength) * 0.1;
+  1340→      const pR5 = clamp((1 - input.srAvgStrength) * 0.2, 0.05, 0.18);
+  1341→      // Return in edge order: [R6, R5, R1]
+  1342→      return normalize([pR6, pR5, pR1]);
+  1343→    }
+  1344→
+  1345→    // ── N_R_NONE → [R5] ──────────────────────────────────────────────────
+  1346→    case 'N_R_NONE': {
+  1347→      return [1.0];
+  1348→    }
+  1349→
+  1350→    // ── Terminal nodes (R1–R9) have no outgoing edges ─────────────────────
+  1351→    default:
+  1352→      return [];
+  1353→  }
+  1354→}
+  1355→
+  1356→// === Graph Traversal ==========================================================
+  1357→// Recursive DFS from ROOT, accumulating path probabilities at terminal nodes.
+  1358→// =============================================================================
+  1359→
+  1360→function traverseGraph(
+  1361→  nodeId: string,
+  1362→  pathProb: number,
+  1363→  currentBranch: 'trend' | 'breakout' | 'reversal' | null,
+  1364→  ctx: ProbContext,
+  1365→  adj: Map<string, number[]>,
+  1366→  edges: GraphEdge[],
+  1367→  edgeProbabilities: Record<number, number>,
+  1368→  nodeAccum: Record<string, number>,
+  1369→  scenarios: Record<string, number>,
+  1370→  contributions: Record<string, { trend: number; breakout: number; reversal: number }>
+  1371→): void {
+  1372→  // Accumulate path probability at this node
+  1373→  nodeAccum[nodeId] = (nodeAccum[nodeId] || 0) + pathProb;
+  1374→
+  1375→  const outEdgeIndices = adj.get(nodeId);
+  1376→  if (!outEdgeIndices || outEdgeIndices.length === 0) return;
+  1377→
+  1378→  // Compute outgoing edge probabilities for this node
+  1379→  const probs = computeNodeProbabilities(
+  1380→    nodeId,
+  1381→    ctx,
+  1382→    outEdgeIndices.length
+  1383→  );
+  1384→
+  1385→  for (let i = 0; i < outEdgeIndices.length; i++) {
+  1386→    const edgeIdx = outEdgeIndices[i];
+  1387→    const edge = edges[edgeIdx];
+  1388→    const prob = probs[i] || 0;
+  1389→
+  1390→    // Store edge probability
+  1391→    edgeProbabilities[edgeIdx] = prob;
+  1392→
+  1393→    // Determine branch for child nodes
+  1394→    let childBranch = currentBranch;
+  1395→    if (nodeId === 'ROOT') {
+  1396→      if (edge.to === 'N_TREND') childBranch = 'trend';
+  1397→      else if (edge.to === 'N_BREAK') childBranch = 'breakout';
+  1398→      else if (edge.to === 'N_REVERSAL') childBranch = 'reversal';
+  1399→    }
+  1400→
+  1401→    const childPathProb = pathProb * prob;
+  1402→
+  1403→    // Check if target is a terminal node
+  1404→    const isTerminal =
+  1405→      edge.to.length === 2 &&
+  1406→      edge.to[0] === 'R' &&
+  1407→      edge.to[1] >= '1' &&
+  1408→      edge.to[1] <= '9';
+  1409→
+  1410→    if (isTerminal) {
+  1411→      // Accumulate scenario probability
+  1412→      scenarios[edge.to] = (scenarios[edge.to] || 0) + childPathProb;
+  1413→      // Accumulate branch contribution
+  1414→      if (childBranch) {
+  1415→        contributions[edge.to][childBranch] += childPathProb;
+  1416→      }
+  1417→    }
+  1418→
+  1419→    // Recurse into child
+  1420→    traverseGraph(
+  1421→      edge.to,
+  1422→      childPathProb,
+  1423→      childBranch,
+  1424→      ctx,
+  1425→      adj,
+  1426→      edges,
+  1427→      edgeProbabilities,
+  1428→      nodeAccum,
+  1429→      scenarios,
+  1430→      contributions
+  1431→    );
+  1432→  }
+  1433→}
+  1434→
+  1435→// === Main Export: buildDecisionGraph ===========================================
+  1436→
+  1437→export function buildDecisionGraph(input: GraphInput): GraphData {
+  1438→  // 1. Build static graph structure
+  1439→  const nodes = createNodes();
+  1440→  const edges = createEdges();
+  1441→  const nodePositions = createPositions();
+  1442→
+  1443→  // 2. Build adjacency map: nodeId → array of edge indices
+  1444→  const adj = new Map<string, number[]>();
+  1445→  for (let i = 0; i < edges.length; i++) {
+  1446→    const from = edges[i].from;
+  1447→    if (!adj.has(from)) adj.set(from, []);
+  1448→    adj.get(from)!.push(i);
+  1449→  }
+  1450→
+  1451→  // 3. Build probability context
+  1452→  const ctx = buildContext(input);
+  1453→
+  1454→  // 4. Initialize accumulation structures
+  1455→  const edgeProbabilities: Record<number, number> = {};
+  1456→  const nodeAccum: Record<string, number> = {};
+  1457→  const scenarios: Record<string, number> = {};
+  1458→  const contributions: Record<
+  1459→    string,
+  1460→    { trend: number; breakout: number; reversal: number }
+  1461→  > = {};
+  1462→
+  1463→  for (let i = 1; i <= 9; i++) {
+  1464→    const key = `R${i}`;
+  1465→    scenarios[key] = 0;
+  1466→    contributions[key] = { trend: 0, breakout: 0, reversal: 0 };
+  1467→  }
+  1468→
+  1469→  // 5. Traverse graph from ROOT
+  1470→  traverseGraph(
+  1471→    'ROOT',
+  1472→    1.0,
+  1473→    null,
+  1474→    ctx,
+  1475→    adj,
+  1476→    edges,
+  1477→    edgeProbabilities,
+  1478→    nodeAccum,
+  1479→    scenarios,
+  1480→    contributions
+  1481→  );
+  1482→
+  1483→  // 6. Post-process scenario probabilities
+  1484→  // Convert to percentage, clamp [2, 35], re-normalize to sum=100
+  1485→  const rawPcts: Record<string, number> = {};
+  1486→  for (let i = 1; i <= 9; i++) {
+  1487→    const key = `R${i}`;
+  1488→    rawPcts[key] = Math.round((scenarios[key] || 0) * 100);
+  1489→  }
+  1490→
+  1491→  // Clamp each to [2, 35]
+  1492→  const clamped = Object.entries(rawPcts).map(([k, v]) => ({
+  1493→    key: k,
+  1494→    value: clamp(v, 2, 35),
+  1495→  }));
+  1496→
+  1497→  // Re-normalize to sum=100
+  1498→  const clampedSum = clamped.reduce((s, c) => s + c.value, 0);
+  1499→  const finalPcts: Record<string, number> = {};
+  1500→  if (clampedSum > 0) {
+  1501→    // Distribute proportionally and round, then fix rounding errors
+  1502→    let runningTotal = 0;
+  1503→    const entries = clamped
+  1504→      .map((c) => {
+  1505→        const raw = (c.value / clampedSum) * 100;
+  1506→        return { key: c.key, raw };
+  1507→      })
+  1508→      .sort((a, b) => b.raw - a.raw);
+  1509→
+  1510→    for (let i = 0; i < entries.length; i++) {
+  1511→      const isLast = i === entries.length - 1;
+  1512→      if (isLast) {
+  1513→        finalPcts[entries[i].key] = Math.round(100 - runningTotal);
+  1514→      } else {
+  1515→        const rounded = Math.round(entries[i].raw);
+  1516→        finalPcts[entries[i].key] = rounded;
+  1517→        runningTotal += rounded;
+  1518→      }
+  1519→    }
+  1520→  }
+  1521→
+  1522→  // Ensure no negative values due to rounding
+  1523→  for (const key of Object.keys(finalPcts)) {
+  1524→    if (finalPcts[key] < 0) finalPcts[key] = 0;
+  1525→  }
+  1526→
+  1527→  // 7. Compute branch probabilities (from ROOT outgoing edges)
+  1528→  const rootEdgeIndices = adj.get('ROOT') || [];
+  1529→  const rootProbs = computeNodeProbabilities('ROOT', ctx, rootEdgeIndices.length);
+  1530→  const branchProbabilities = {
+  1531→    trend: rootProbs[0] || 0,
+  1532→    breakout: rootProbs[1] || 0,
+  1533→    reversal: rootProbs[2] || 0,
+  1534→  };
+  1535→
+  1536→  // 8. Build node display values (path probability as percentage)
+  1537→  const nodeValues: Record<string, string> = {};
+  1538→  for (const [nodeId, accum] of Object.entries(nodeAccum)) {
+  1539→    nodeValues[nodeId] = `${Math.round(accum * 100)}%`;
+  1540→  }
+  1541→
+  1542→  // Override terminal node values with final post-processed percentages
+  1543→  for (const [key, pct] of Object.entries(finalPcts)) {
+  1544→    nodeValues[key] = `${pct}%`;
+  1545→  }
+  1546→
+  1547→  // 9. Build path contributions (as percentages)
+  1548→  const pathContributions: Record<
+  1549→    string,
+  1550→    { trend: number; breakout: number; reversal: number }
+  1551→  > = {};
+  1552→  for (let i = 1; i <= 9; i++) {
+  1553→    const key = `R${i}`;
+  1554→    const c = contributions[key];
+  1555→    const total = c.trend + c.breakout + c.reversal;
+  1556→    if (total > 0) {
+  1557→      pathContributions[key] = {
+  1558→        trend: Math.round((c.trend / total) * 100),
+  1559→        breakout: Math.round((c.breakout / total) * 100),
+  1560→        reversal: Math.round((c.reversal / total) * 100),
+  1561→      };
+  1562→    } else {
+  1563→      pathContributions[key] = { trend: 33, breakout: 34, reversal: 33 };
+  1564→    }
+  1565→  }
+  1566→
+  1567→  // 10. Compute 30-day probability trend
+  1568→  const probFractions: Record<string, number> = {};
+  1569→  for (const [k, v] of Object.entries(finalPcts)) {
+  1570→    probFractions[k] = v / 100;
+  1571→  }
+  1572→  const probabilityTrend = calcTrendFromProbs(probFractions, 30);
+  1573→
+  1574→  // 11. Return complete GraphData
+  1575→  return {
+  1576→    nodes,
+  1577→    edges,
+  1578→    nodePositions,
+  1579→    edgeProbabilities,
+  1580→    nodeValues,
+  1581→    branchProbabilities,
+  1582→    scenarioProbabilities: finalPcts,
+  1583→    pathContributions,
+  1584→    probabilityTrend,
+  1585→  };
+  1586→}
+  1587→
+  1588→// === 30-Day Probability Trend Calculation ======================================
+  1589→
+  1590→// Dual exponential decay for forecast weighting
+  1591→// W_forecast_h = α * exp(-h/τ₁) + (1-α) * exp(-h/τ₂)
+  1592→export function dualDecay(h: number, alpha = 0.7, tauShort = 5, tauLong = 20): number {
+  1593→  return alpha * Math.exp(-h / tauShort) + (1 - alpha) * Math.exp(-h / tauLong);
+  1594→}
+  1595→
+  1596→// Normalize decay factors so they sum to 1
+  1597→export function normalizedDecayFactors(horizon: number): number[] {
+  1598→  const factors: number[] = [];
+  1599→  for (let h = 1; h <= horizon; h++) {
+  1600→    factors.push(dualDecay(h));
+  1601→  }
+  1602→  const total = factors.reduce((a, b) => a + b, 0);
+  1603→  return factors.map(f => f / total);
+  1604→}
+  1605→
+  1606→export interface DayProbability {
+  1607→  day: number;
+  1608→  individualProb: number;
+  1609→  cumulativeProb: number;
+  1610→}
+  1611→
+  1612→export interface ScenarioTrend {
+  1613→  name: string;
+  1614→  nameEn: string;
+  1615→  key: string;
+  1616→  currentProbability: number;
+  1617→  trend: DayProbability[];
+  1618→  trendDirection: 'صعودی' | 'نزولی' | 'پایدار';
+  1619→  peakDay: number;
+  1620→  peakProbability: number;
+  1621→  interpretation: string;
+  1622→}
+  1623→
+  1624→export interface CumulativeGroupTrend {
+  1625→  bullish: DayProbability[];
+  1626→  bearish: DayProbability[];
+  1627→  neutral: DayProbability[];
+  1628→}
+  1629→
+  1630→export interface ProbabilityTrendResult {
+  1631→  scenarios: ScenarioTrend[];
+  1632→  groupTrends: CumulativeGroupTrend;
+  1633→  keyObservations: string[];
+  1634→  actionableInsights: string[];
+  1635→}
+  1636→
+  1637→export function calculateProbabilityTrend(
+  1638→  scenarioProbabilities: Array<{key: string; name: string; nameEn: string; probability: number; isBullish?: boolean; isBearish?: boolean; isNeutral?: boolean}>,
+  1639→  horizon: number = 30
+  1640→): ProbabilityTrendResult {
+  1641→  const decay = normalizedDecayFactors(horizon);
+  1642→  
+  1643→  const scenarios: ScenarioTrend[] = scenarioProbabilities.map(sp => {
+  1644→    const trend: DayProbability[] = [];
+  1645→    let cumProb = 0;
+  1646→    let peakDay = 1;
+  1647→    let peakProb = 0;
+  1648→    
+  1649→    for (let h = 1; h <= horizon; h++) {
+  1650→      const individualProb = sp.probability * decay[h - 1];
+  1651→      cumProb += individualProb;
+  1652→      trend.push({ day: h, individualProb: Math.round(individualProb * 10000) / 10000, cumulativeProb: Math.round(cumProb * 10000) / 10000 });
+  1653→      if (individualProb > peakProb) { peakProb = individualProb; peakDay = h; }
+  1654→    }
+  1655→    
+  1656→    // Determine trend direction
+  1657→    const firstThird = trend.slice(0, Math.floor(horizon / 3));
+  1658→    const lastThird = trend.slice(Math.floor(horizon * 2 / 3));
+  1659→    const avgFirst = firstThird.reduce((a, d) => a + d.individualProb, 0) / firstThird.length;
+  1660→    const avgLast = lastThird.reduce((a, d) => a + d.individualProb, 0) / lastThird.length;
+  1661→    const direction: ScenarioTrend['trendDirection'] = avgLast > avgFirst * 1.05 ? 'صعودی' : avgLast < avgFirst * 0.95 ? 'نزولی' : 'پایدار';
+  1662→    
+  1663→    return { name: sp.name, nameEn: sp.nameEn, key: sp.key, currentProbability: sp.probability, trend, trendDirection: direction, peakDay, peakProbability: Math.round(peakProb * 10000) / 10000, interpretation: '' };
+  1664→  });
+  1665→  
+  1666→  // Group trends (bullish, bearish, neutral)
+  1667→  const groupTrends: CumulativeGroupTrend = { bullish: [], bearish: [], neutral: [] };
+  1668→  for (let h = 0; h < horizon; h++) {
+  1669→    const bullDay = { day: h + 1, individualProb: 0, cumulativeProb: 0 };
+  1670→    const bearDay = { day: h + 1, individualProb: 0, cumulativeProb: 0 };
+  1671→    const neutralDay = { day: h + 1, individualProb: 0, cumulativeProb: 0 };
+  1672→    
+  1673→    scenarioProbabilities.forEach(sp => {
+  1674→      const dayData = scenarios.find(s => s.key === sp.key)?.trend[h];
+  1675→      if (!dayData) return;
+  1676→      if (sp.isBullish) { bullDay.individualProb += dayData.individualProb; }
+  1677→      else if (sp.isBearish) { bearDay.individualProb += dayData.individualProb; }
+  1678→      else { neutralDay.individualProb += dayData.individualProb; }
+  1679→    });
+  1680→    
+  1681→    bullDay.cumulativeProb = Math.round(bullDay.individualProb * 10000) / 10000;
+  1682→    bearDay.cumulativeProb = Math.round(bearDay.individualProb * 10000) / 10000;
+  1683→    neutralDay.cumulativeProb = Math.round(neutralDay.individualProb * 10000) / 10000;
+  1684→    
+  1685→    groupTrends.bullish.push({ ...bullDay, individualProb: Math.round(bullDay.individualProb * 10000) / 10000 });
+  1686→    groupTrends.bearish.push({ ...bearDay, individualProb: Math.round(bearDay.individualProb * 10000) / 10000 });
+  1687→    groupTrends.neutral.push({ ...neutralDay, individualProb: Math.round(neutralDay.individualProb * 10000) / 10000 });
+  1688→  }
+  1689→  
+  1690→  // Generate key observations and actionable insights
+  1691→  const topScenario = [...scenarios].sort((a, b) => b.currentProbability - a.currentProbability)[0];
+  1692→  const keyObservations = [
+  1693→    `سناریوی غالب: ${topScenario?.name || 'N/A'} (${topScenario ? Math.round(topScenario.currentProbability * 100) : 0}%)`,
+  1694→    `اوج احتمال ${topScenario?.name || ''} در روز ${topScenario?.peakDay || 'N/A'}`,
+  1695→  ];
+  1696→  
+  1697→  const actionableInsights = [
+  1698→    topScenario?.isBullish ? 'روند صعودی غالب - بررسی نقاط ورود' : topScenario?.isBearish ? 'روند نزولی غالب - احتیاط در معاملات' : 'بازار در حالت رنج - انتظار برای شکست',
+  1699→  ];
+  1700→  
+  1701→  return { scenarios, groupTrends, keyObservations, actionableInsights };
+  1702→}
+  1703→

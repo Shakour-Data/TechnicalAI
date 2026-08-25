@@ -1,3 +1,148 @@
+   525→  const targetMin = scenarios[dominantBullKey as keyof typeof scenarios]?.targetMin ?? Math.round(currentPrice * 1.02);
+   526→  const targetMax = scenarios[dominantBullKey as keyof typeof scenarios]?.targetMax ?? Math.round(currentPrice * 1.08);
+   527→
+   528→  // ── V11 Computation ──────────────────────────────────────────
+   529→  const v11Result: V11Result = useMemo(() => {
+   530→    const input = {
+   531→      R1: scenarios.R1.probability,
+   532→      R2: scenarios.R2.probability,
+   533→      R3: scenarios.R3.probability,
+   534→      R4: scenarios.R4.probability,
+   535→      R5: scenarios.R5.probability,
+   536→      R6: scenarios.R6.probability,
+   537→      R7: scenarios.R7.probability,
+   538→      R8: scenarios.R8.probability,
+   539→      R9: scenarios.R9.probability,
+   540→    };
+   541→    return computeV11Probabilities(input);
+   542→  }, [scenarios]);
+   543→
+   544→  // ── Dominant scenario ──────────────────────────────────────────
+   545→  let highestKey = 'R5';
+   546→  let highestProb = 0;
+   547→  for (const key of SCENARIO_KEYS) {
+   548→    const prob = scenarios[key]?.probability ?? 0;
+   549→    if (prob > highestProb) {
+   550→      highestProb = prob;
+   551→      highestKey = key;
+   552→    }
+   553→  }
+   554→  const strategy = STRATEGY_MAP[highestKey];
+   555→  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + (scenarios[k]?.probability ?? 0), 0);
+   556→
+   557→  // ── RSI signal ─────────────────────────────────────────────────
+   558→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   559→
+   560→  // ── Trend text ─────────────────────────────────────────────────
+   561→  const trendText = trendDirection === 'up'
+   562→    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+   563→    : trendDirection === 'down'
+   564→    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+   565→    : 'خنثی و بدون جهت مشخص';
+   566→
+   567→  // ── Shamsi dates ───────────────────────────────────────────────
+   568→  const lastCandleDate = candles.length > 0 ? candles[candles.length - 1].date : '';
+   569→  const lastCandleJalali = lastCandleDate ? fullPersianDate(lastCandleDate) : '';
+   570→
+   571→  // ── Dynamic analysis text ──────────────────────────────────────
+   572→  const analysisParagraphs = useMemo(() => {
+   573→    return generateAnalysisText({
+   574→      symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   575→      stochK, stochD, macdLine, macdSignal, macdHist,
+   576→      diPlus, diMinus, sar, atr, obv,
+   577→      bollingerUpper, bollingerMiddle, bollingerLower,
+   578→      trendDirection, trendAngle, trendR2, overallSignal,
+   579→      highestKey, highestProb, scenarios,
+   580→      S1: S1_level, R1: R1_level, R2: R2_level,
+   581→      hasVolume: hasVolume ?? false,
+   582→      resistanceStrengths, supportStrengths,
+   583→      v11Result,
+   584→    });
+   585→  }, [
+   586→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   587→    stochK, stochD, macdLine, macdSignal, macdHist,
+   588→    diPlus, diMinus, sar, atr, obv,
+   589→    bollingerUpper, bollingerMiddle, bollingerLower,
+   590→    trendDirection, trendAngle, trendR2, overallSignal,
+   591→    highestKey, highestProb, scenarios,
+   592→    S1_level, R1_level, R2_level, hasVolume,
+   593→    resistanceStrengths, supportStrengths, v11Result,
+   594→  ]);
+   595→
+   596→  // ── Strategy recommendation text ────────────────────────────────
+   597→  const mfiOverbought = hasVolume && mfi > 80;
+   598→  const mfiOversold = hasVolume && mfi < 20;
+   599→  const mfiNote = hasVolume ? `, MFI: ${toFa(mfi)}` : '';
+   600→  const strategyText = rsi > 70 || mfiOverbought
+   601→    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}${mfiNote}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
+   602→    : rsi < 30 || mfiOversold
+   603→    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
+   604→    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
+   605→
+   606→  const v11Map = useMemo(() => {
+   607→    const m = new Map<string, V11Result['scenarios'][number]>();
+   608→    for (const s of v11Result.scenarios) m.set(s.key, s);
+   609→    return m;
+   610→  }, [v11Result]);
+   611→
+   612→  // ── AI Analysis Text ───────────────────────────────────────
+   613→  const [aiText, setAiText] = useState<string | null>(null);
+   614→  const [aiLoading, setAiLoading] = useState(true);
+   615→  const [aiError, setAiError] = useState<string | null>(null);
+   616→
+   617→  useEffect(() => {
+   618→    if (!currentPrice) return;
+   619→    let cancelled = false;
+   620→    const controller = new AbortController();
+   621→
+   622→    (async () => {
+   623→      try {
+   624→        const res = await fetch('/api/ai-analysis', {
+   625→          method: 'POST',
+   626→          headers: { 'Content-Type': 'application/json' },
+   627→          body: JSON.stringify({
+   628→            symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   629→            stochK, stochD, macdLine, macdSignal, macdHist,
+   630→            diPlus, diMinus, sar, atr, obv,
+   631→            bollingerUpper, bollingerMiddle, bollingerLower,
+   632→            trendDirection, trendAngle, trendR2,
+   633→            scenarios, hasVolume: hasVolume ?? false,
+   634→            resistanceStrengths, supportStrengths,
+   635→            v11Probabilities: v11Result,
+   636→          }),
+   637→          signal: controller.signal,
+   638→        });
+   639→        if (cancelled) return;
+   640→        if (!res.ok) {
+   641→          let errMsg = `خطای سرور (${res.status})`;
+   642→          try {
+   643→            const errBody = await res.json();
+   644→            if (errBody.error) errMsg = errBody.error;
+   645→          } catch { /* non-JSON response (e.g. 502 HTML) */ }
+   646→          setAiError(errMsg);
+   647→          return;
+   648→        }
+   649→        const data = await res.json();
+   650→        if (cancelled) return;
+   651→        if (data.text) {
+   652→          setAiText(data.text);
+   653→        }
+   654→        else if (data.error) setAiError(data.error);
+   655→      } catch (err: unknown) {
+   656→        if (cancelled) return;
+   657→        if (err instanceof DOMException && err.name === 'AbortError') return;
+   658→        const msg = err instanceof Error ? err.message : String(err);
+   659→        if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
+   660→        setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
+   661→      } finally {
+   662→        if (!cancelled) setAiLoading(false);
+   663→      }
+   664→    })();
+   665→
+   666→    return () => { cancelled = true; controller.abort(); };
+   667→  }, [symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist, diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower, trendDirection, trendAngle, trendR2, scenarios, hasVolume, resistanceStrengths, supportStrengths, v11Result]);
+   668→
+   669→  // ── File name helper ───────────────────────────────────────────
    670→  const today = new Date().toISOString().slice(0, 10);
    671→  const fileBase = `${symbolName}_تحلیل_${today}`;
    672→

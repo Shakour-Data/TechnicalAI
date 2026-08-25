@@ -238,3 +238,22 @@ Stage Summary:
 - Files modified: `src/components/tse/vdss-graph.tsx`, `src/app/page.tsx`
 - Visual: collapsible table with color-coded rows, peak highlighting, group trend bars
 - All Persian labels, consistent with existing light card theme
+---
+Task ID: 6
+Agent: Main
+Task: Fix 3 critical bugs in 30-day probability trend calculation
+
+Work Log:
+- **Bug 1 — Reversed scenario labels in probability-trend.ts**: SCENARIO_META had R1=شوک نزولی (bearish) but decision-graph.ts defines R1=صعودی با احتیاط (bullish). All 8 non-neutral scenarios were swapped. Fixed SCENARIO_META to match decision-graph.ts exactly.
+- **Bug 2 — Monotonic decay model**: Old dual-exponential decay `0.7*exp(-h/5)+0.3*exp(-h/20)` was always decreasing, making every scenario peak at Day 1 with trendDirection=always 'falling'. Replaced with logistic-sigmoid bell curve model where each scenario gets a unique peak day based on group (bullish: day 2-8, neutral: day 5-15, bearish: day 8-22) and probability strength.
+- **Bug 3 — Mismatched names in ml-narrative-v11.ts**: Had completely different scenario names (R1=صعود هیجانی, R9=تضعیف ساختار) that didn't match decision-graph.ts. Fixed all 9 names to match. Also fixed group assignments: bullish=R1-R4, neutral=R5, bearish=R6-R9.
+- Updated vdss-graph.tsx subtitle to reflect new model name
+- Verified: all cumulative sums equal original probabilities (9/9 ✅)
+- Verified: peak days vary by group (bullish D5-6, neutral D11, bearish D14-18)
+- Verified: lint clean, dev server running without errors
+
+Stage Summary:
+- probability-trend.ts: FIXED labels, groups, and decay model (now logistic bell curve)
+- ml-narrative-v11.ts: FIXED all 9 scenario names and group assignments
+- vdss-graph.tsx: Updated subtitle text
+- All 3 sources now consistent: decision-graph.ts = probability-trend.ts = ml-narrative-v11.ts

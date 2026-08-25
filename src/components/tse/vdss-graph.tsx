@@ -797,7 +797,7 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
             style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
           <div className="text-right">
             <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
-            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها بر اساس مدل افت دوگانه</p>
+            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — مدل لجستیک با اوج متغیر</p>
           </div>
         </div>
         <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>

@@ -6,16 +6,18 @@ export const SCENARIO_KEYS = [
   'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9',
 ] as const;
 
+// Scenario mapping MUST match decision-graph.ts terminal node definitions exactly.
+// decision-graph.ts: R1-R4 = bullish, R5 = neutral, R6-R9 = bearish
 export const SCENARIO_META: Record<string, { label: string; group: 'bearish' | 'neutral' | 'bullish' }> = {
-  R1: { label: 'شوک نزولی', group: 'bearish' },
-  R2: { label: 'نزولی شتاب‌دار', group: 'bearish' },
-  R3: { label: 'نزولی قوی', group: 'bearish' },
-  R4: { label: 'نزولی با احتیاط', group: 'bearish' },
-  R5: { label: 'رنج کم‌نوسان', group: 'neutral' },
-  R6: { label: 'صعودی با احتیاط', group: 'bullish' },
-  R7: { label: 'صعودی قوی', group: 'bullish' },
-  R8: { label: 'صعودی شتاب‌دار', group: 'bullish' },
-  R9: { label: 'شوک صعودی', group: 'bullish' },
+  R1: { label: 'صعودی با احتیاط', group: 'bullish' },
+  R2: { label: 'صعودی قوی', group: 'bullish' },
+  R3: { label: 'صعودی شتابدار', group: 'bullish' },
+  R4: { label: 'شوک صعودی', group: 'bullish' },
+  R5: { label: 'رنج', group: 'neutral' },
+  R6: { label: 'نزولی با احتیاط', group: 'bearish' },
+  R7: { label: 'نزولی قوی', group: 'bearish' },
+  R8: { label: 'نزولی شتابدار', group: 'bearish' },
+  R9: { label: 'شوک نزولی', group: 'bearish' },
 };
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
@@ -52,18 +54,58 @@ export interface ProbabilityTrendResult {
 type ScenarioProbabilities = Record<string, number>;
 
 // ── Decay math ──────────────────────────────────────────────────────────────
-const ALPHA = 0.7;
-const TAU1 = 5;
-const TAU2 = 20;
+// Uses a logistic-sigmoid CDF model instead of pure exponential decay.
+// This produces a realistic S-curve: slow start → acceleration → saturation.
+// The shape parameter (skew) controls whether the curve leans early or late,
+// allowing different scenarios to peak on different days.
+//
+// For bullish scenarios (high confidence): peak earlier (days 3-8)
+// For neutral scenarios: peak in the middle (days 10-15)  
+// For bearish scenarios: peak later (days 15-25) — risk accumulates over time
 
-function decayFactor(h: number): number {
-  return ALPHA * Math.exp(-h / TAU1) + (1 - ALPHA) * Math.exp(-h / TAU2);
-}
+const STEEPNESS = 0.25; // logistic steepness (higher = more concentrated)
 
-function buildNormalizedDecay(horizon: number): number[] {
+/**
+ * Build a per-scenario normalized weight distribution over `horizon` days.
+ * Uses logistic CDF to create a bell-like distribution that can peak at
+ * different days depending on the scenario's nature.
+ */
+function buildScenarioWeights(
+  horizon: number,
+  group: 'bullish' | 'neutral' | 'bearish',
+  prob: number,
+): number[] {
+  // Peak day depends on group and probability strength
+  // Higher probability → earlier peak (scenario materializes sooner)
+  const probFactor = Math.min(prob / 0.25, 1); // normalize, cap at 1
+  
+  let peakDay: number;
+  if (group === 'bullish') {
+    // Bullish: peak between day 2 and day 8 (earlier for high prob)
+    peakDay = 2 + Math.round((1 - probFactor) * 6);
+  } else if (group === 'bearish') {
+    // Bearish: peak between day 8 and day 22 (later for low prob)
+    peakDay = 8 + Math.round((1 - probFactor) * 14);
+  } else {
+    // Neutral: peak between day 5 and day 15
+    peakDay = 5 + Math.round((1 - probFactor) * 10);
+  }
+
+  // Build asymmetric bell curve using difference of two logistic CDFs
+  const width = group === 'neutral' ? 8 : 6;
   const raw: number[] = [];
-  for (let h = 1; h <= horizon; h++) raw.push(decayFactor(h));
+  for (let h = 1; h <= horizon; h++) {
+    const leftEdge  = 1 / (1 + Math.exp(-STEEPNESS * (h - (peakDay - width / 2))));
+    const rightEdge = 1 / (1 + Math.exp(-STEEPNESS * (h - (peakDay + width / 2))));
+    raw.push(leftEdge - rightEdge);
+  }
+
+  // Normalize so weights sum to 1
   const sum = raw.reduce((a, b) => a + b, 0);
+  if (sum === 0) {
+    // Fallback: uniform distribution
+    return Array(horizon).fill(1 / horizon);
+  }
   return raw.map(v => v / sum);
 }
 
@@ -71,7 +113,7 @@ function buildNormalizedDecay(horizon: number): number[] {
 function scenarioTrend(
   key: string,
   prob: number,
-  normalizedDecay: number[],
+  weights: number[],
 ): ScenarioTrend {
   const meta = SCENARIO_META[key];
   const trend: DayPoint[] = [];
@@ -79,15 +121,16 @@ function scenarioTrend(
   let peakDay = 1;
   let peakProb = 0;
 
-  for (let i = 0; i < normalizedDecay.length; i++) {
+  for (let i = 0; i < weights.length; i++) {
     const day = i + 1;
-    const individual = prob * normalizedDecay[i];
+    const individual = prob * weights[i];
     cum += individual;
     trend.push({ day, individualProb: individual, cumulativeProb: cum });
     if (individual > peakProb) { peakProb = individual; peakDay = day; }
   }
 
-  const dir: TrendDirection = peakDay <= 2 ? 'falling' : peakDay >= normalizedDecay.length - 1 ? 'rising' : 'stable';
+  const horizon = weights.length;
+  const dir: TrendDirection = peakDay <= 2 ? 'falling' : peakDay >= horizon - 1 ? 'rising' : 'stable';
 
   return { scenarioKey: key, label: meta.label, group: meta.group, currentProbability: prob, trend, trendDirection: dir, peakDay, peakProbability: peakProb };
 }
@@ -117,10 +160,11 @@ export function calculateProbabilityTrend(
   scenarioProbabilities: ScenarioProbabilities,
   horizon: number = 30,
 ): ProbabilityTrendResult {
-  const nd = buildNormalizedDecay(horizon);
   const scenarios = SCENARIO_KEYS.map(k => {
     const prob = scenarioProbabilities[k] ?? 0;
-    return scenarioTrend(k, prob, nd);
+    const group = SCENARIO_META[k].group;
+    const weights = buildScenarioWeights(horizon, group, prob);
+    return scenarioTrend(k, prob, weights);
   });
   return { horizon, scenarios, groups: groupTrends(scenarios) };
 }

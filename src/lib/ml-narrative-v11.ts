@@ -24,26 +24,29 @@ export interface V11ScenarioResult {
 
 export interface V11Result {
   scenarios: V11ScenarioResult[];
-  bullishCumulative: number; // P(R1) + P(R2) + P(R3)
-  bearishCumulative: number; // P(R7) + P(R8) + P(R9)
-  neutralCumulative: number; // P(R4) + P(R5) + P(R6)
+  bullishCumulative: number; // P(R1) + P(R2) + P(R3) + P(R4)
+  bearishCumulative: number; // P(R6) + P(R7) + P(R8) + P(R9)
+  neutralCumulative: number; // P(R5)
   riskProfile: 'very_bullish' | 'bullish' | 'neutral' | 'bearish' | 'very_bearish';
 }
 
+// Scenario names MUST match decision-graph.ts terminal node definitions exactly.
+// decision-graph.ts: R1-R4 = bullish, R5 = neutral, R6-R9 = bearish
 const SCENARIO_META: {
   key: string;
   name: string;
   nameEn: string;
+  group: 'bullish' | 'neutral' | 'bearish';
 }[] = [
-  { key: 'R1', name: 'صعود هیجانی', nameEn: 'Explosive Bullish' },
-  { key: 'R2', name: 'صعود قوی', nameEn: 'Strong Bullish' },
-  { key: 'R3', name: 'صعود تدریجی', nameEn: 'Gradual Bullish' },
-  { key: 'R4', name: 'پولبک سالم', nameEn: 'Healthy Pullback' },
-  { key: 'R5', name: 'رنج خنثی', nameEn: 'Range-bound Neutral' },
-  { key: 'R6', name: 'اصلاح خفیف', nameEn: 'Mild Correction' },
-  { key: 'R7', name: 'اصلاح متوسط', nameEn: 'Moderate Correction' },
-  { key: 'R8', name: 'اصلاح عمیق', nameEn: 'Deep Correction' },
-  { key: 'R9', name: 'تضعیف ساختار', nameEn: 'Structure Breakdown' },
+  { key: 'R1', name: 'صعودی با احتیاط', nameEn: 'Cautious Bullish', group: 'bullish' },
+  { key: 'R2', name: 'صعودی قوی', nameEn: 'Strong Bullish', group: 'bullish' },
+  { key: 'R3', name: 'صعودی شتابدار', nameEn: 'Accelerating Bullish', group: 'bullish' },
+  { key: 'R4', name: 'شوک صعودی', nameEn: 'Bullish Shock', group: 'bullish' },
+  { key: 'R5', name: 'رنج', nameEn: 'Range-bound', group: 'neutral' },
+  { key: 'R6', name: 'نزولی با احتیاط', nameEn: 'Cautious Bearish', group: 'bearish' },
+  { key: 'R7', name: 'نزولی قوی', nameEn: 'Strong Bearish', group: 'bearish' },
+  { key: 'R8', name: 'نزولی شتابدار', nameEn: 'Accelerating Bearish', group: 'bearish' },
+  { key: 'R9', name: 'شوک نزولی', nameEn: 'Bearish Shock', group: 'bearish' },
 ];
 
 /**
@@ -69,10 +72,10 @@ export function computeV11Probabilities(input: V11ScenarioInput): V11Result {
     cumulativeProbability: cumulative[i],
   }));
 
-  // Grouped cumulative metrics
-  const bullishCumulative = raw[0] + raw[1] + raw[2]; // R1 + R2 + R3
-  const bearishCumulative = raw[6] + raw[7] + raw[8]; // R7 + R8 + R9
-  const neutralCumulative = raw[3] + raw[4] + raw[5]; // R4 + R5 + R6
+  // Grouped cumulative metrics (R1-R4=bullish, R5=neutral, R6-R9=bearish)
+  const bullishCumulative = raw[0] + raw[1] + raw[2] + raw[3]; // R1 + R2 + R3 + R4
+  const bearishCumulative = raw[5] + raw[6] + raw[7] + raw[8]; // R6 + R7 + R8 + R9
+  const neutralCumulative = raw[4]; // R5
 
   // Determine dominant risk profile
   const riskProfile = determineRiskProfile(
@@ -133,9 +136,9 @@ export function buildV11PromptSection(v11: V11Result): string {
     );
   }
 
-  lines.push(`- مجموع احتمال صعودی (R1-R3): ${toFa(v11.bullishCumulative)}٪`);
-  lines.push(`- مجموع احتمال خنثی (R4-R6): ${toFa(v11.neutralCumulative)}٪`);
-  lines.push(`- مجموع احتمال نزولی (R7-R9): ${toFa(v11.bearishCumulative)}٪`);
+  lines.push(`- مجموع احتمال صعودی (R1-R4): ${toFa(v11.bullishCumulative)}٪`);
+  lines.push(`- مجموع احتمال خنثی (R5): ${toFa(v11.neutralCumulative)}٪`);
+  lines.push(`- مجموع احتمال نزولی (R6-R9): ${toFa(v11.bearishCumulative)}٪`);
   lines.push(`- پروفایل ریسک: ${RISK_PROFILE_LABELS[v11.riskProfile]}`);
 
   return lines.join('\n');
