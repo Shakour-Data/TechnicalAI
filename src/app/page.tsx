@@ -95,7 +95,9 @@ const MARKETS = [
   { label: 'بورس جهانی', cls: 'bg-sky-50 text-sky-700 border border-sky-100' },
   { label: 'نفت و انرژی', cls: 'bg-red-50 text-red-700 border border-red-100' },
   { label: 'فلزات جهانی', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-100' },
+  { label: 'کالاهای جهانی', cls: 'bg-lime-50 text-lime-700 border border-lime-100' },
   { label: 'سهام جهانی', cls: 'bg-indigo-50 text-indigo-700 border border-indigo-100' },
+  { label: 'ETF جهانی', cls: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100' },
   { label: 'شاخص‌ها', cls: 'bg-rose-50 text-rose-700 border border-rose-100' },
   { label: 'صندوق‌ها', cls: 'bg-purple-50 text-purple-700 border border-purple-100' },
 ];
@@ -268,8 +270,9 @@ export default function Home() {
     const controller = new AbortController();
     fetchControllerRef.current = controller;
 
-    // Yahoo Finance stock: fetch historical data via Yahoo Finance API
-    if (category === 'yahoo_stock' && yahooSymbol) {
+    // Yahoo Finance instrument: fetch historical data via Yahoo Finance API
+    // This handles ALL Yahoo instruments (stocks, indices, energy, metals, forex, crypto, ETFs, etc.)
+    if (yahooSymbol) {
       setLoading(true);
       setLoadingMessage('در حال دریافت داده‌های تاریخی از یاهو فایننس ...');
       setError(null);

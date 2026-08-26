@@ -25,7 +25,7 @@ interface InstrumentItem {
   category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index'
     | 'currency' | 'gold' | 'silver' | 'gold_etf'
     | 'crypto' | 'world_index' | 'foreign_stock' | 'forex' | 'energy' | 'metal' | 'commodity'
-    | 'yahoo_stock';
+    | 'yahoo_stock' | 'yahoo_etf';
   insCode?: string;
   tgjuKey?: string;
   finpySector?: string;  // finpy-tse sector name for industry indices
@@ -37,6 +37,10 @@ interface InstrumentItem {
   indexChangePercent?: number;
   indexMin?: number;
   indexMax?: number;
+  yahooSymbol?: string;  // Yahoo Finance symbol for international instruments
+  yahooCategory?: string;  // Original Yahoo category (yahoo_stock, yahoo_index, etc.)
+  currency?: string;  // Currency unit from Yahoo Finance (USD, EUR, etc.)
+  unit?: string;  // Same as currency for convenience
 }
 
 interface InstrumentsData {
@@ -65,6 +69,25 @@ interface TgjuData {
   items: InstrumentItem[];
 }
 
+interface YahooData {
+  yahooStocks: InstrumentItem[];
+  yahooIndices: InstrumentItem[];
+  yahooEnergy: InstrumentItem[];
+  yahooMetals: InstrumentItem[];
+  yahooCommodities: InstrumentItem[];
+  yahooForex: InstrumentItem[];
+  yahooCrypto: InstrumentItem[];
+  yahooEtfs: InstrumentItem[];
+  items: InstrumentItem[];
+  // Merged categories (same names as TGJU for unified display)
+  worldIndices: InstrumentItem[];
+  energy: InstrumentItem[];
+  metals: InstrumentItem[];
+  commodities: InstrumentItem[];
+  forex: InstrumentItem[];
+  crypto: InstrumentItem[];
+}
+
 interface SymbolSearchProps {
   onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: string | number, yahooSymbol?: string) => void;
   placeholder?: string;
@@ -91,6 +114,7 @@ const CATEGORIES = [
   { key: 'commodity',   label: 'کالاهای جهانی', icon: Package },
   { key: 'bond',        label: 'اوراق بدهی',    icon: FileText },
   { key: 'yahoo_stock', label: 'سهام جهانی',    icon: Earth },
+  { key: 'yahoo_etf',   label: 'ETF جهانی',     icon: Landmark },
   { key: 'derivative',  label: 'مشتقه',         icon: ArrowUpDown },
 ] as const;
 
@@ -118,7 +142,9 @@ const CATEGORY_COLORS: Record<string, string> = {
   forex: 'bg-violet-50 text-violet-700 border border-violet-100',
   energy: 'bg-red-50 text-red-700 border border-red-100',
   metal: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  commodity: 'bg-lime-50 text-lime-700 border border-lime-100',
   yahoo_stock: 'bg-indigo-50 text-indigo-700 border border-indigo-100',
+  yahoo_etf: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -138,7 +164,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   forex: 'فارکس',
   energy: 'انرژی',
   metal: 'فلز',
+  commodity: 'کالا',
   yahoo_stock: 'سهام جهانی',
+  yahoo_etf: 'ETF جهانی',
 };
 
 /* --─ Helpers -------------------------------------------- */
@@ -181,10 +209,10 @@ export default function SymbolSearch({
 
   const cacheRef = React.useRef<InstrumentsData | null>(null);
   const tgjuCacheRef = React.useRef<TgjuData | null>(null);
-  const yahooCacheRef = React.useRef<InstrumentItem[] | null>(null);
+  const yahooCacheRef = React.useRef<YahooData | null>(null);
   const fetchRef = React.useRef<Promise<InstrumentsData> | null>(null);
   const tgjuFetchRef = React.useRef<Promise<TgjuData | null> | null>(null);
-  const yahooFetchRef = React.useRef<Promise<InstrumentItem[] | null> | null>(null);
+  const yahooFetchRef = React.useRef<Promise<YahooData | null> | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
@@ -229,16 +257,16 @@ export default function SymbolSearch({
     return p();
   }, []);
 
-  const fetchYahooData = React.useCallback(async (): Promise<InstrumentItem[] | null> => {
+  const fetchYahooData = React.useCallback(async (): Promise<YahooData | null> => {
     if (yahooCacheRef.current) return yahooCacheRef.current;
     if (yahooFetchRef.current) return yahooFetchRef.current;
     const p = async () => {
       try {
         const r = await fetch('/api/yahoo-instruments');
         if (!r.ok) return null;
-        const d = await r.json() as { items: InstrumentItem[] };
-        yahooCacheRef.current = d.items || [];
-        return yahooCacheRef.current;
+        const d = await r.json() as YahooData;
+        yahooCacheRef.current = d;
+        return d;
       } catch {
         return null;
       } finally {
@@ -251,31 +279,36 @@ export default function SymbolSearch({
 
   /* -- Check if category is TGJU-based -- */
   const isTgjuCategory = (cat: CategoryKey) => TGJU_CATEGORIES.has(cat);
-  const isYahooCategory = (cat: CategoryKey) => cat === 'yahoo_stock';
+  const isYahooCategory = (cat: CategoryKey) => cat === 'yahoo_stock' || cat === 'yahoo_etf';
 
   /* -- Get all items for current category -- */
   const getItemsForCategory = React.useCallback(async (cat: CategoryKey): Promise<InstrumentItem[]> => {
-    // Yahoo Finance stocks
-    if (isYahooCategory(cat)) {
+    // Yahoo Finance stocks and ETFs
+    if (cat === 'yahoo_stock') {
       const yahoo = yahooCacheRef.current || await fetchYahooData();
-      return yahoo || [];
+      return yahoo?.yahooStocks || [];
+    }
+    if (cat === 'yahoo_etf') {
+      const yahoo = yahooCacheRef.current || await fetchYahooData();
+      return yahoo?.yahooEtfs || [];
     }
 
     if (isTgjuCategory(cat)) {
       const tgju = tgjuCacheRef.current || await fetchTgjuData();
-      if (!tgju) return [];
+      const yahoo = yahooCacheRef.current || await fetchYahooData();
+      if (!tgju && !yahoo) return [];
       switch (cat) {
-        case 'currency': return tgju.currencies;
-        case 'gold': return [...tgju.gold, ...tgju.silver];
-        case 'gold_etf': return tgju.goldEtfs;
-        case 'silver': return tgju.silver;
-        case 'crypto': return tgju.crypto;
-        case 'world_index': return [...tgju.worldIndices, ...tgju.foreignStocks];
-        case 'foreign_stock': return tgju.foreignStocks;
-        case 'forex': return tgju.forex;
-        case 'energy': return tgju.energy;
-        case 'metal': return tgju.metals;
-        case 'commodity': return tgju.commodities;
+        case 'currency': return tgju?.currencies || [];
+        case 'gold': return [...(tgju?.gold || []), ...(tgju?.silver || [])];
+        case 'gold_etf': return tgju?.goldEtfs || [];
+        case 'silver': return tgju?.silver || [];
+        case 'crypto': return [...(tgju?.crypto || []), ...(yahoo?.yahooCrypto || [])];
+        case 'world_index': return [...(tgju?.worldIndices || []), ...(tgju?.foreignStocks || []), ...(yahoo?.yahooIndices || [])];
+        case 'foreign_stock': return tgju?.foreignStocks || [];
+        case 'forex': return [...(tgju?.forex || []), ...(yahoo?.yahooForex || [])];
+        case 'energy': return [...(tgju?.energy || []), ...(yahoo?.yahooEnergy || [])];
+        case 'metal': return [...(tgju?.metals || []), ...(yahoo?.yahooMetals || [])];
+        case 'commodity': return [...(tgju?.commodities || []), ...(yahoo?.yahooCommodities || [])];
         default: return [];
       }
     }
@@ -301,15 +334,22 @@ export default function SymbolSearch({
           ...data.etfs,
           ...(tgju?.currencies || []),
           ...(tgju?.forex || []),
+          ...(yahoo?.yahooForex || []),
           ...(tgju?.crypto || []),
+          ...(yahoo?.yahooCrypto || []),
           ...(tgju?.gold || []),
           ...(tgju?.silver || []),
           ...(tgju?.goldEtfs || []),
           ...(tgju?.worldIndices || []),
+          ...(yahoo?.yahooIndices || []),
           ...(tgju?.energy || []),
+          ...(yahoo?.yahooEnergy || []),
           ...(tgju?.metals || []),
+          ...(yahoo?.yahooMetals || []),
           ...(tgju?.commodities || []),
-          ...(yahoo || []),
+          ...(yahoo?.yahooCommodities || []),
+          ...(yahoo?.yahooStocks || []),
+          ...(yahoo?.yahooEtfs || []),
           ...data.bonds,
           ...data.futures,
           ...data.salaf,
@@ -427,7 +467,16 @@ export default function SymbolSearch({
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18);
     setOpen(false);
-    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex, s.webId, (s as Record<string, unknown>).yahooSymbol as string | undefined);
+    onSelect?.(
+      s.l18,
+      s.category,
+      s.insCode,
+      s.tgjuKey,
+      s.finpySector,
+      s.finpyIndex,
+      s.webId,
+      s.yahooSymbol || (s as Record<string, unknown>).yahooSymbol as string | undefined,
+    );
     inputRef.current?.blur();
   }, [onSelect]);
 
@@ -466,6 +515,7 @@ export default function SymbolSearch({
   /* -- Render instrument price -- */
   const renderPrice = (item: InstrumentItem) => {
     const isTgju = isTgjuCategory(item.category as CategoryKey);
+    const hasYahooSymbol = !!(item as Record<string, unknown>).yahooSymbol;
     if (item.category === 'index') {
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
@@ -480,9 +530,9 @@ export default function SymbolSearch({
         </div>
       );
     }
-    // For static TGJU items with no live price, show dash
-    // Yahoo stock: show dollar-formatted price
-    if (item.category === 'yahoo_stock') {
+    // Yahoo instruments: show price with currency unit
+    if (item.category === 'yahoo_stock' || item.category === 'yahoo_etf' || hasYahooSymbol) {
+      const cur = (item as Record<string, unknown>).currency as string || (item as Record<string, unknown>).unit as string || 'USD';
       if (item.pl === 0) {
         return (
           <div className='flex shrink-0 flex-col items-end gap-0.5'>
@@ -492,7 +542,10 @@ export default function SymbolSearch({
       }
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
-          <span className='text-xs font-semibold text-[#111827]'>{formatIdx(item.pl)}</span>
+          <div className='flex items-center gap-1'>
+            <span className='text-xs font-semibold text-[#111827]'>{formatIdx(item.pl)}</span>
+            <span className='text-[9px] text-[#9ca3af]'>{cur}</span>
+          </div>
           <span className={cn(
             'text-[11px] font-bold px-1.5 py-0.5 rounded',
             item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' :
@@ -709,9 +762,10 @@ export default function SymbolSearch({
                 {results.map((item, index) => {
                   const isActive = index === activeIndex;
                   const isTgjuItem = isTgjuCategory(item.category as CategoryKey);
+                  const isYahooItem = item.yahooSymbol != null || item.category === 'yahoo_stock' || item.category === 'yahoo_etf';
                   return (
                     <div
-                      key={`${item.category}-${item.l18}-${item.tgjuKey || ''}-${(item as Record<string, unknown>).yahooSymbol || ''}`}
+                      key={`${item.category}-${item.l18}-${item.tgjuKey || ''}-${item.yahooSymbol || ''}`}
                       ref={(el) => { itemRefs.current[index] = el; }}
                       role='option'
                       aria-selected={isActive}
@@ -721,7 +775,7 @@ export default function SymbolSearch({
                         'flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm transition-all',
                         'border-b border-[#e5e7eb]/50 last:border-b-0',
                         isActive
-                          ? item.category === 'yahoo_stock'
+                          ? isYahooItem
                             ? 'bg-indigo-50 text-[#111827]'
                             : isTgjuItem
                               ? 'bg-teal-50 text-[#111827]'
@@ -736,10 +790,15 @@ export default function SymbolSearch({
                           {item.pcp < 0 && <TrendingDown className='w-3 h-3 text-red-600 shrink-0' />}
                           <span className={cn(
                             'text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium',
-                            CATEGORY_COLORS[item.category],
+                            CATEGORY_COLORS[item.category] || 'bg-gray-50 text-gray-600',
                           )}>
-                            {CATEGORY_LABELS[item.category]}
+                            {CATEGORY_LABELS[item.category] || item.category}
                           </span>
+                          {isYahooItem && item.currency && (
+                            <span className='text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium bg-gray-50 text-gray-500 border border-gray-200'>
+                              {item.currency}
+                            </span>
+                          )}
                         </div>
                         {item.l30 && item.l30 !== item.l18 && (
                           <span className='truncate text-[11px] text-[#6b7280] leading-tight'>{item.l30}</span>
@@ -747,7 +806,7 @@ export default function SymbolSearch({
                         {item.cs && item.category === 'stock' && (
                           <span className='truncate text-[10px] text-[#9ca3af] leading-tight'>{item.cs}</span>
                         )}
-                        {item.cs && item.category === 'yahoo_stock' && (
+                        {(item.cs && (item.category === 'yahoo_stock' || item.category === 'yahoo_etf' || isYahooItem)) && (
                           <span className='truncate text-[10px] text-[#9ca3af] leading-tight'>{item.cs}</span>
                         )}
                       </div>

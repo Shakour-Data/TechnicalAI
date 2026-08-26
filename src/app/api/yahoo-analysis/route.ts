@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchYahooHistory, getYahooStockDef, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
+import { fetchYahooHistory, getYahooInstrumentDef, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
 import { analyze } from '@/lib/ta-engine';
 
 export const dynamic = 'force-dynamic';
@@ -11,11 +11,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Get stock definition
-    const stockDef = getYahooStockDef(symbol);
-    if (!stockDef) {
-      return NextResponse.json({ error: 'نماد یافت نشد' }, { status: 404 });
-    }
+    // 1. Get instrument definition (works for ALL Yahoo instrument types)
+    const instDef = getYahooInstrumentDef(symbol);
+    const name = instDef?.name || symbol;
+    const nameEn = instDef?.nameEn || symbol;
+    const category = instDef?.category || 'yahoo_stock';
+    const groupTitle = instDef?.groupTitle || '';
 
     // 2. Fetch historical OHLC data
     const history = await fetchYahooHistory(symbol, 365);
@@ -41,9 +42,10 @@ export async function GET(req: NextRequest) {
     // 4. Run TA analysis
     const ta = analyze(ohlcvData);
 
-    // 5. Get live quote for info
+    // 5. Get live quote for info and currency unit
     const quotes = await fetchYahooQuotes();
     const quote = quotes.find((q) => q.symbol === symbol);
+    const currency = quote?.unit || quote?.currency || 'USD';
 
     const lastCandle = history[history.length - 1];
     const prevCandle = history.length > 1 ? history[history.length - 2] : lastCandle;
@@ -64,8 +66,9 @@ export async function GET(req: NextRequest) {
       symbol,
       candles,
       info: {
-        name: stockDef.name,
-        symbol: stockDef.symbol,
+        name,
+        symbol,
+        nameEn,
         lastPrice: quote?.price || lastCandle.close,
         change: changePercent,
         closePrice: lastCandle.close,
@@ -79,6 +82,9 @@ export async function GET(req: NextRequest) {
         trades: 0,
         eps: 0,
         pe: 0,
+        currency,
+        category,
+        groupTitle,
       },
       ta,
     });

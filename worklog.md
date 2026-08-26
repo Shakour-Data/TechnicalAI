@@ -1065,3 +1065,34 @@ Stage Summary:
 - AI prompt now enforces proper word spacing, perfect Persian writing, and correct currency unit usage
 - Indices/commodities use "واحد" instead of "ریال"
 - Cache cleared for fresh analysis generation
+---\nTask ID: 1\nAgent: Sub-agent (fullstack-developer)\nTask: Expand yahoo-finance-api.ts with all financial instrument types (commodities, energy, metals, forex, crypto, indices, ETFs)\nWork Log:\n- Added YahooCategory type with 8 categories\n- Renamed YahooStock to YahooInstrument with category field\n- Added 36 market indices across 30+ countries\n- Added 6 energy instruments (oil, gas, heating oil, gasoline)\n- Added 10 metals (precious, base, spot)\n- Added 14 agricultural commodities\n- Added 23 forex pairs (major, cross, exotic)\n- Added 27 cryptocurrencies\n- Added 30 ETFs (index, commodity, sector, volatility)\n- Updated fetchYahooQuotes to use ALL_YAHOO_INSTRUMENTS\n- Added currency unit tracking via Yahoo Finance API response\n- Total: 230+ financial instruments across 8 categories\n- All type checks pass (npx tsc --noEmit)\nStage Summary:\n- Complete Yahoo Finance instrument library: 230+ instruments across 8 categories\n- All instruments have proper Persian names and categorization\n- Currency unit tracking via Yahoo Finance API response\n- Backward compatibility maintained for existing code (YahooStock alias, getYahooStockDef)\n
+---
+Task ID: 2
+Agent: Main
+Task: Add comprehensive Yahoo Finance instruments to the system
+
+Work Log:
+- Expanded yahoo-finance-api.ts: Added 241 instruments across 8 categories
+  - 95 international stocks (existing, with category field added)
+  - 38 market indices (US, Europe, Asia, Middle East, Americas, SE Asia)
+  - 6 energy instruments (WTI, Brent, Natural Gas, Gasoline, Heating Oil, Mini WTI)
+  - 10 metals (Gold, Silver, Platinum, Palladium, Copper, Zinc, Aluminum, Nickel, Gold Spot, Silver Spot)
+  - 14 agricultural commodities (Wheat, Corn, Soy, Coffee, Sugar, Cocoa, Cotton, Cattle, Hogs, OJ, Lumber, etc.)
+  - 23 forex pairs (7 major, 6 cross, 10 exotic)
+  - 27 cryptocurrencies (BTC, ETH, XRP, SOL, etc.)
+  - 28 ETFs (index, commodity, sector, volatility)
+- Added YahooCategory type and currency unit tracking from Yahoo Finance API
+- Updated yahoo-instruments API route to return all categories with proper grouping
+- Updated symbol-search.tsx: Merged Yahoo instruments into existing TGJU category tabs, added yahoo_etf tab
+- Added currency labels to Yahoo instrument search results (USD, EUR, etc.)
+- Updated page.tsx: Changed handleSelect to route ALL yahooSymbol instruments to yahoo-analysis API
+- Updated yahoo-analysis route to include currency, category, nameEn in response
+- Added ALL_YAHOO_INSTRUMENTS export that was missing
+
+Stage Summary:
+- 241 Yahoo Finance instruments available across 8 categories
+- All instrument types work end-to-end: search → API → chart → TA analysis
+- Currency units tracked from Yahoo Finance API (USD, EUR, etc.)
+- Search UI shows currency badges for Yahoo instruments
+- Both Iranian (TGJU) and international (Yahoo) instruments coexist in the same category tabs
+- Verified via API: EUR/USD (forex), BTC-USD (crypto), GC=F (gold), CL=F (oil) all return correct data
