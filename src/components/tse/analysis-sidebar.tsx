@@ -361,14 +361,14 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bull }}>خرید</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toPersianDigits(String(ta.bullScore))}</span>
+                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toPersianDigits(ta.bullScore.toFixed(2))}</span>
               </div>
               <ProgressBar value={ta.bullScore} max={100} color={C.bull} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bear }}>فروش</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toPersianDigits(String(ta.bearScore))}</span>
+                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toPersianDigits(ta.bearScore.toFixed(2))}</span>
               </div>
               <ProgressBar value={ta.bearScore} max={100} color={C.bear} />
             </div>
