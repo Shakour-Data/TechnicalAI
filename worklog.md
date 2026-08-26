@@ -1096,3 +1096,41 @@ Stage Summary:
 - Search UI shows currency badges for Yahoo instruments
 - Both Iranian (TGJU) and international (Yahoo) instruments coexist in the same category tabs
 - Verified via API: EUR/USD (forex), BTC-USD (crypto), GC=F (gold), CL=F (oil) all return correct data
+
+---
+Task ID: search-improve-v2
+Agent: Main
+Task: Improve search dropdown — larger size, prominent country selection, better bilingual UX
+
+Work Log:
+- Increased dropdown dimensions from 920px×700px to 1100px×820px (min(1100px, 98vw) × min(88vh, 820px))
+- Made country filter visible for 'all', 'yahoo_stock', 'yahoo_etf', and 'world_index' categories (was only yahoo_stock/yahoo_etf)
+- Added `showCountryFilter` computed memo based on activeCategory
+- Added `countrySearch` state for filtering the country chips themselves
+- Added `filteredCountries` memo that filters country list by search text
+- Added `countryCounts` memo showing instrument count per country
+- Redesigned country filter section with:
+  - Prominent header with MapPin icon in indigo badge
+  - Active country display with flag, name, and instrument count
+  - Country search mini-input with clear button
+  - Larger country chips (rounded-xl, text-xs, py-2, px-3) with flag, name, and count
+  - Selected state with ring-2, shadow, and white background
+  - Gradient background for the entire filter section
+- Added sector filter for yahoo_stock with separator border and proper header
+- Updated `handleCountryChange` to handle 'all' and 'world_index' categories by filtering the combined list
+- Added fallback to getPopular() when clearing country in 'all' with no query
+- Updated `handleCategoryChange` to not reset country when switching to country-supporting categories
+- Updated `handleChange` and `showDropdown` to apply country filter on top of category items
+- Fixed `isPopular` to account for activeCountry
+- Updated results header to show country info in all contexts (including 'all' with country)
+- Updated search hint to be more prominent with "دو زبانه" (bilingual) label
+- Updated recent searches to not show when country is selected
+- Fixed async state bug: handleCategoryChange computes newShowCountry inline from `cat` parameter instead of using stale `showCountryFilter`
+
+Stage Summary:
+- Dropdown is now significantly larger (1100px × 820px max)
+- Country selection is always visible in 'all', yahoo_stock, yahoo_etf, world_index tabs
+- Country chips are bigger, show instrument counts, and have a search filter
+- Bilingual search hint is more prominent
+- All country filter logic properly handles 'all' category
+- No lint errors, compiles successfully
