@@ -1,0 +1,622 @@
+   475→
+   476→  forecast: [
+   477→    'بر اساس سناریوی غالب ({dominant_scenario})، انتظار می‌رود',
+   478→    'سناریوی R1 با احتمال {r1_prob}٪ پیش‌بینی صعودی قوی دارد.',
+   479→    'سناریوی R5 با احتمال {r5_prob}٪ هشدار نزولی شدید صادر می‌کند.',
+   480→    'پیش‌بینی مدل ML برای ۳۰ جلسه آینده:',
+   481→    'احتمال ادامه روند فعلی: {trend_continuation_prob}٪',
+   482→    'هدف قیمتی اول: {target1} و هدف دوم: {target2}',
+   483→    'حد ضرر پیشنهادی: {stop_loss}',
+   484→    'نسبت ریسک به ریوارد: {risk_reward}',
+   485→    'چشم‌انداز میان‌مدت {instrument} مثبت ارزیابی می‌شود.',
+   486→    'در صورت شکست سطح کلیدی، سناریوی بدبینانه فعال می‌شود.',
+   487→    'وزن بیزی سناریوها نشان می‌دهد {bayesian_conclusion}.',
+   488→    'با احتمال {confidence}٪ انتظار داریم {forecast_direction}.',
+   489→    'مدل پیش‌بینی قیمت هدف {ml_target} را برای ۳۰ جلسه آینده پیشنهاد می‌دهد.',
+   490→    'تحلیل سناریوها: سناریوی غالب {dominant_scenario} با احتمال {dominant_prob}٪.',
+   491→    'اگر قیمت سطح {key_level} را بشکند، مسیر {new_direction} فعال می‌شود.',
+   492→    'پیش‌بینی کوتاه‌مدت: {short_term_forecast}',
+   493→    'پیش‌بینی میان‌مدت: {medium_term_forecast}',
+   494→    'احتمال رسیدن به هدف اول: {target1_prob}٪',
+   495→    'رنگ‌بندی سناریوها: {scenario_summary}',
+   496→  ],
+   497→
+   498→  entry_exit: [
+   499→    'نقطه ورود پیشنهادی: {entry_price} با حد ضرر {stop_loss}.',
+   500→    'بهترین نقطه ورود در صورت {entry_condition}.',
+   501→    'حد سود اول در {target1} و حد سود دوم در {target2} تنظیم شود.',
+   502→    'حد ضرر زیر {support_level} با فاصله {atr_multiplier}×ATR توصیه می‌شود.',
+   503→    'سطح ورود بهینه با ترکیب حمایت و اندیکاتور مشخص شده.',
+   504→    'در صورت تایید نشانه ورود، حجم معامله {position_size}٪ سرمایه باشد.',
+   505→    'نقطه خروج بخش اول: {exit1} و نقطه خروج بخش دوم: {exit2}.',
+   506→    'مدیریت ریسک: حداکثر ۲٪ سرمایه در هر معامله.',
+   507→    'فاصله تا مقاومت نزدیک: {distance_to_resistance} — فضای کافی برای رشد وجود دارد.',
+   508→    'نقطه ورود ریسک‌پذیر: {aggressive_entry} با حد ضرر تight.',
+   509→    'نقطه ورود محافظه‌کارانه: {conservative_entry} بعد از تایید.',
+   510→    'استراتژی خروج مرحله‌ای توصیه می‌شود.',
+   511→    'میانگین ورود در سه مرحله پیشنهاد می‌شود.',
+   512→    'ت-trailing stop در فاصله ۲×ATR از قیمت فعلی.',
+   513→  ],
+   514→
+   515→  conclusion: [
+   516→    'در مجموع، وضعیت فنی {instrument} {overall_assessment} ارزیابی می‌شود.',
+   517→    'توصیه نهایی: {final_recommendation}.',
+   518→    'با توجه به تمام شاخص‌ها، {summary_statement}.',
+   519→    'تحلیل نهایی نشان می‌دهد که {final_conclusion}.',
+   520→    'خلاصه: {instrument} در وضعیت {market_state} قرار دارد.',
+   521→    'نتیجه‌گیری: {conclusion_text}.',
+   522→    'توصیه می‌شود {action_recommendation}.',
+   523→    'با احتیاط و مدیریت ریسک مناسب عمل کنید.',
+   524→    'این تحلیل صرفاً جنبه آموزشی دارد و توصیه مالی نیست.',
+   525→    'در هر حالت، مدیریت سرمایه اولویت اول است.',
+   526→    'منتظر تایید نهایی سیگنال‌ها بمانید.',
+   527→    'وضعیت فعلی نیازمند صبر و نظم است.',
+   528→    'تحلیل بعدی پس از {next_review} به‌روزرسانی خواهد شد.',
+   529→    'توجه: بازار سرمایه ریسک‌های ذاتی دارد.',
+   530→    'موفقیت در بازار نیازمند دانش، صبر و نظم است.',
+   531→  ],
+   532→} as const;
+   533→
+   534→// ═══════════════════════════════════════════════════════════════════════════════
+   535→// 5 Template Formats
+   536→// ═══════════════════════════════════════════════════════════════════════════════
+   537→
+   538→export const TEMPLATE_FORMATS: V9TemplateFormat[] = [
+   539→  {
+   540→    id: 'executive',
+   541→    name: 'خلاصه اجرایی',
+   542→    nameEn: 'Executive Summary',
+   543→    sections: ['introduction', 'trend_analysis', 'forecast', 'conclusion'],
+   544→    lengthPreference: 'short',
+   545→    focusArea: 'تصمیم‌گیری سریع',
+   546→  },
+   547→  {
+   548→    id: 'technical',
+   549→    name: 'تحلیل فنی کامل',
+   550→    nameEn: 'Full Technical Analysis',
+   551→    sections: ['introduction', 'trend_analysis', 'indicators_analysis', 'patterns_analysis', 'forecast', 'entry_exit', 'conclusion'],
+   552→    lengthPreference: 'long',
+   553→    focusArea: 'تحلیل جامع و دقیق',
+   554→  },
+   555→  {
+   556→    id: 'trading',
+   557→    name: 'برنامه معاملاتی',
+   558→    nameEn: 'Trading Plan',
+   559→    sections: ['introduction', 'indicators_analysis', 'entry_exit', 'conclusion'],
+   560→    lengthPreference: 'short',
+   561→    focusArea: 'نقاط ورود و خروج',
+   562→  },
+   563→  {
+   564→    id: 'forecast',
+   565→    name: 'پیش‌بینی و سناریو',
+   566→    nameEn: 'Forecast & Scenarios',
+   567→    sections: ['introduction', 'trend_analysis', 'patterns_analysis', 'forecast', 'conclusion'],
+   568→    lengthPreference: 'medium',
+   569→    focusArea: 'چشم‌انداز آینده بازار',
+   570→  },
+   571→  {
+   572→    id: 'educational',
+   573→    name: 'تحلیل آموزشی',
+   574→    nameEn: 'Educational Analysis',
+   575→    sections: ['introduction', 'trend_analysis', 'indicators_analysis', 'patterns_analysis', 'forecast', 'entry_exit', 'conclusion'],
+   576→    lengthPreference: 'long',
+   577→    focusArea: 'آموزش و توضیح مفاهیم',
+   578→  },
+   579→];
+   580→
+   581→// ═══════════════════════════════════════════════════════════════════════════════
+   582→// Hash-Based Rotation Algorithm
+   583→// ═══════════════════════════════════════════════════════════════════════════════
+   584→
+   585→/** Simple deterministic hash from string to number */
+   586→function djb2Hash(str: string): number {
+   587→  let hash = 5381;
+   588→  for (let i = 0; i < str.length; i++) {
+   589→    hash = ((hash << 5) + hash + str.charCodeAt(i)) & 0x7fffffff;
+   590→  }
+   591→  return hash;
+   592→}
+   593→
+   594→/**
+   595→ * Select a V9 persona and template based on deterministic hash rotation.
+   596→ * Uses hash of (date + instrument) to pick persona matching the school,
+   597→ * then applies day_hash % 3/5/7 logic for style and tone variation.
+   598→ *
+   599→ * @param instrument - Symbol name (e.g. "خودرو")
+   600→ * @param date - Date string in YYYY-MM-DD format
+   601→ * @param schoolId - The analysis school (e.g. "classical", "oscillator")
+   602→ * @returns Selected persona, template, and variation seed
+   603→ */
+   604→export function selectV9Persona(
+   605→  instrument: string,
+   606→  date: string,
+   607→  schoolId: string,
+   608→): { persona: V9Persona; template: V9TemplateFormat; variationSeed: number } {
+   609→  const compositeKey = `${date}:${instrument}`;
+   610→  const dayHash = djb2Hash(compositeKey);
+   611→
+   612→  // Filter personas matching the school affinity (fall back to all if none match)
+   613→  const matching = PERSONAS.filter(p => p.schoolAffinity === schoolId);
+   614→  const pool = matching.length > 0 ? matching : PERSONAS;
+   615→
+   616→  // Select persona deterministically from pool
+   617→  const personaIndex = dayHash % pool.length;
+   618→  let persona = pool[personaIndex];
+   619→
+   620→  // Apply day_hash % 3/5/7 for subtle variation
+   621→  const styleVariation = dayHash % 3;   // 0=normal, 1=more formal, 2=more casual
+   622→  const toneVariation = dayHash % 5;    // 0-4 tone modifiers
+   623→  const phraseOffset = dayHash % 7;     // phrase bank rotation offset
+   624→
+   625→  // Adjust persona based on variation (rotate within same school group)
+   626→  if (styleVariation === 1 && pool.length > 1) {
+   627→    persona = pool[(personaIndex + 1) % pool.length];
+   628→  } else if (styleVariation === 2 && pool.length > 2) {
+   629→    persona = pool[(personaIndex + 2) % pool.length];
+   630→  }
+   631→
+   632→  // Select template based on tone variation
+   633→  const templateIndex = toneVariation % TEMPLATE_FORMATS.length;
+   634→  const template = TEMPLATE_FORMATS[templateIndex];
+   635→
+   636→  // Variation seed for phrase selection
+   637→  const variationSeed = dayHash % 1000;
+   638→
+   639→  return { persona, template, variationSeed };
+   640→}
+   641→
+   642→// ═══════════════════════════════════════════════════════════════════════════════
+   643→// V9 Prompt Builder
+   644→// ═══════════════════════════════════════════════════════════════════════════════
+   645→
+   646→/**
+   647→ * Select phrases from the phrase bank, rotated by variationSeed.
+   648→ * Returns 2-4 phrases per requested section.
+   649→ */
+   650→function selectPhrases(sections: string[], variationSeed: number): Record<string, string[]> {
+   651→  const result: Record<string, string[]> = {};
+   652→  for (const section of sections) {
+   653→    const bank = (PHRASE_BANK as Record<string, readonly string[]>)[section];
+   654→    if (!bank) continue;
+   655→    const offset = variationSeed % bank.length;
+   656→    const count = Math.min(2 + (variationSeed % 3), bank.length);
+   657→    const selected: string[] = [];
+   658→    for (let i = 0; i < count; i++) {
+   659→      selected.push(bank[(offset + i) % bank.length]);
+   660→    }
+   661→    result[section] = selected;
+   662→  }
+   663→  return result;
+   664→}
+   665→
+   666→/** Build length guidance based on template preference */
+   667→function lengthGuidance(pref: 'short' | 'medium' | 'long'): string {
+   668→  switch (pref) {
+   669→    case 'short': return 'تحلیل را کوتاه و مستقیم بنویس (حداکثر ۳ پاراگراف). از جملات کوتاه استفاده کن و فقط نکات کلیدی را بگنجان.';
+   670→    case 'medium': return 'تحلیل را متوسط بنویس (۴ تا ۶ پاراگراف). توضیحات متعادل و نکات کلیدی را با جزئیات مناسب ارائه بده.';
+   671→    case 'long': return 'تحلیل را جامع و طولانی بنویس (۷ تا ۱۰ پاراگراف). هر بخش را با جزئیات کامل توضیح بده و مثال بزن.';
+   672→  }
+   673→}
+   674→
+   675→/**
+   676→ * Build the V9 narrative prompt for LLM consumption.
+   677→ * Incorporates persona personality, rotated phrases, template structure, and data.
+   678→ *
+   679→ * @param params - All parameters needed for prompt construction
+   680→ * @returns Complete prompt string for LLM
+   681→ */
+   682→export function buildV9NarrativePrompt(params: {
+   683→  instrument: string;
+   684→  date: string;
+   685→  persona: V9Persona;
+   686→  template: V9TemplateFormat;
+   687→  dataSection: string;
+   688→  variationSeed: number;
+   689→}): string {
+   690→  const { instrument, date, persona, template, dataSection, variationSeed } = params;
+   691→
+   692→  // Select rotated phrases for the template sections
+   693→  const phrases = selectPhrases(template.sections, variationSeed);
+   694→
+   695→  // Build phrase suggestions string
+   696→  let phraseSuggestions = '';
+   697→  for (const [section, phraseList] of Object.entries(phrases)) {
+   698→    const sectionName: Record<string, string> = {
+   699→      introduction: 'مقدمه',
+   700→      trend_analysis: 'تحلیل روند',
+   701→      indicators_analysis: 'تحلیل اندیکاتورها',
+   702→      patterns_analysis: 'تحلیل الگوها',
+   703→      forecast: 'پیش‌بینی',
+   704→      entry_exit: 'نقاط ورود و خروج',
+   705→      conclusion: 'نتیجه‌گیری',
+   706→    };
+   707→    phraseSuggestions += `\n  [${sectionName[section] || section}]: ${phraseList.join(' | ')}`;
+   708→  }
+   709→
+   710→  // Build section structure
+   711→  const sectionNames: Record<string, string> = {
+   712→    introduction: '۱. مقدمه و خلاصه وضعیت',
+   713→    trend_analysis: '۲. تحلیل روند و میانگین‌های متحرک',
+   714→    indicators_analysis: '۳. بررسی اندیکاتورهای تکنیکال',
+   715→    patterns_analysis: '۴. شناسایی الگوهای قیمتی',
+   716→    forecast: '۵. پیش‌بینی و سناریوها',
+   717→    entry_exit: '۶. نقاط ورود، خروج و مدیریت ریسک',
+   718→    conclusion: '۷. جمع‌بندی و توصیه نهایی',
+   719→  };
+   720→
+   721→  let structureGuide = '';
+   722→  for (const section of template.sections) {
+   723→    structureGuide += `\n  ${sectionNames[section] || section}`;
+   724→  }
+   725→
+   726→  // Template-specific rules
+   727→  let templateRules = '';
+   728→  switch (template.id) {
+   729→    case 'executive':
+   730→      templateRules = 'قوانین قالب خلاصه اجرایی: فقط نتایج کلیدی را بگو. از توضیح اضافی پرهیز کن. تصمیم‌گیری‌ها را واضح بیان کن.';
+   731→      break;
+   732→    case 'technical':
+   733→      templateRules = 'قوانین قالب تحلیل فنی: هر اندیکاتور را جداگانه تحلیل کن. اعداد دقیق را ذکر کن. ارتباط بین اندیکاتورها را نشان بده.';
+   734→      break;
+   735→    case 'trading':
+   736→      templateRules = 'قوانین قالب برنامه معاملاتی: تمرکز اصلی بر نقاط ورود و خروج باشد. اعداد مشخص برای حد سود و حد ضرر بده. نسبت ریسک به ریوارد محاسبه کن.';
+   737→      break;
+   738→    case 'forecast':
+   739→      templateRules = 'قوانین قالب پیش‌بینی: روی سناریوهای مختلف تمرکز کن. احتمال هر سناریو را ذکر کن. چشم‌انداز کوتاه‌مدت و میان‌مدت ارائه بده.';
+   740→      break;
+   741→    case 'educational':
+   742→      templateRules = 'قوانین قالب آموزشی: هر مفهوم را توضیح بده. دلیل هر نتیجه‌گیری را بگو. برای مبتدیان قابل فهم باشد.';
+   743→      break;
+   744→  }
+   745→
+   746→  // Style instructions based on persona
+   747→  const sentenceGuide = {
+   748→    short: 'جملات کوتاه و مستقیم بنویس (حداکثر ۱۵ کلمه).',
+   749→    medium: 'جملات متوسط بنویس (۱۵ تا ۲۵ کلمه).',
+   750→    long: 'جملات بلند و توصیفی بنویس (۲۵ تا ۴۰ کلمه).',
+   751→  }[persona.style.sentences];
+   752→
+   753→  const vocabGuide = {
+   754→    simple: 'از کلمات ساده و روزمره استفاده کن. از اصطلاحات پیچیده پرهیز کن.',
+   755→    technical: 'از اصطلاحات فنی مناسب استفاده کن (EMA, RSI, MACD و غیره).',
+   756→    academic: 'از زبان رسمی و آکادمیک استفاده کن. ارجاعات تحلیلی بده.',
+   757→    colloquial: 'از لحن محاوره‌ای و صمیمی استفاده کن. گویی با یک دوست صحبت می‌کنی.',
+   758→  }[persona.style.vocabulary];
+   759→
+   760→  const emphasisGuide = {
+   761→    data: 'تاکید اصلی بر اعداد و داده‌ها باشد. هر ادعا را با عدد تایید کن.',
+   762→    intuition: 'تاکید بر درک شهودی بازار و الگوهای رفتاری باشد.',
+   763→    balanced: 'بین داده و شهود تعادل برقرار کن. هر دو جنبه را پوشش بده.',
+   764→  }[persona.style.emphasis];
+   765→
+   766→  const prompt = `تو یک تحلیلگر تکنیکال حرفه‌ای بازار سرمایه ایران هستی به نام «${persona.name}».
+   767→${persona.experience}. تخصص اصلی تو در ${persona.schoolAffinity} است.
+   768→
+   769→─── شخصیت نوشتاری ───
+   770→${sentenceGuide}
+   771→${vocabGuide}
+   772→${emphasisGuide}
+   773→
+   774→جملات امضای تو: ${persona.signaturePhrases.join('، ')}
+   775→عادات نوشتاری تو: ${persona.writingHabits.join('، ')}
+   776→
+   777→─── قالب خروجی: ${template.name} (${template.nameEn}) ───
+   778→تمرکز: ${template.focusArea}
+   779→${lengthGuidance(template.lengthPreference)}
+   780→${templateRules}
+   781→
+   782→ساختار تحلیل باید شامل این بخش‌ها باشد:${structureGuide}
+   783→
+   784→─── عبارات پیشنهادی (می‌توانی از اینها الهام بگیری) ───${phraseSuggestions}
+   785→
+   786→─── داده‌های تحلیلی ───
+   787→نماد: ${instrument}
+   788→تاریخ: ${date}
+   789→${dataSection}
+   790→
+   791→─── دستورالعمل نهایی ───
+   792→1. تحلیل را کامل به زبان فارسی بنویس.
+   793→2. از شخصیت «${persona.name}» استفاده کن و لحن تحلیل باید منحصربه‌فرد باشد.
+   794→3. هر بار از عبارات مختلف استفاده کن تا متن تکراری نشود.
+   795→4. از عبارات بازگشتی و بستن تو استفاده کن: بازگشتی‌ها: ${persona.openingPhrases.join(' | ')}
+   796→5. عبارات پایانی: ${persona.closingPhrases.join(' | ')}
+   797→6. اعداد و مقادیر واقعی از داده‌ها را در متن بگنجان.
+   798→7. تحلیل باید طبیعی، جذاب و حرفه‌ای به نظر برسد — نه مانند یک قالب.`;
+   799→
+   800→  return prompt;
+   801→}
+   802→
+   803→// ═══════════════════════════════════════════════════════════════════════════════
+   804→// BACKWARD COMPATIBILITY — Schools, Styles, Tones & Scoring (v8-compatible)
+   805→// ═══════════════════════════════════════════════════════════════════════════════
+   806→
+   807→const SCHOOLS: SchoolDef[] = [
+   808→  { id: 'trend', name: 'تحلیل روند', nameEn: 'Trend Following', description: 'تمرکز بر شدت روند، زاویه روند، تثبیت کانال و معایره متحرک با استفاده از EMA، MACD و ADX.', methodology: 'EMA 20/50/100، MACD، ADX، DI+/DI-، خطوط روند، تثبیت کانال', focusQuestion: 'آیا روند قابل اعتماد است و کجا ی نقاط تایید؟' },
+   809→  { id: 'classical', name: 'الگوهای کلاسیک', nameEn: 'Classical Patterns', description: 'شناسایی الگوهای قیمتی کلاسیک مثل سر و شانه، دول بالا، مثلث و لاغنا.', methodology: 'الگوهای بازگشتی (Head & Shoulders، Double Top/Bottom)، الگوهای ادامه (Flags، Triangles)، واگرایی', focusQuestion: 'آیا الگوی قیمتی در حال شکلی‌گیری است و هدف قیمتی آن چیست؟' },
+   810→  { id: 'candlestick', name: 'الگوهای کندلی', nameEn: 'Candlestick Patterns', description: 'تحلیل الگوهای شعاعی ژاپنی در سطوح کلیدی برای تشخیص عکس روند.', methodology: 'دوجی، Hammer، Engulfing، Morning/Evening Star، Harami، Doji، Spinng Top، تعداد بار کندل', focusQuestion: 'آیا اکنون کندلی در سطوح کلیدی عکس روند را تایید می‌کند؟' },
+   811→  { id: 'fibonacci', name: 'فیبوناچی و هندسه', nameEn: 'Fibonacci & Geometric', description: 'استفاده از سطوح فیبوناچی برای تعیین نسبت‌های اصلاح و اهداف قیمتی.', methodology: 'فیبوناچی اصلاحی (23.6%، 38.2%، 50%، 61.8%)، افزایشی (127.2%، 161.8%)، انبساط هندسی', focusQuestion: 'نسبت اصلاح فیبوناچی در کجا قرار دارد و اهداف افزایشی چیست؟' },
+   812→  { id: 'volatility', name: 'تحلیل نوسان و حجم', nameEn: 'Volatility & Volume', description: 'بررسی شدت نوسان با ATR و Bollinger، تحلیل حجم معاملات و OBV برای تشخیص جریان پول هوشمند.', methodology: 'ATR، Bollinger Bands، OBV، حجم نسبی، نوسان فشرده (Squeeze)، واگرایی حجم', focusQuestion: 'آیا بازار در حال فشردگی است و جریان پول چه سیگنالی دارد؟' },
+   813→  { id: 'oscillator', name: 'اسیلاتورها و مومنتوم', nameEn: 'Oscillators & Momentum', description: 'تحلیل عددی شاخصه‌های تکنیکال برای تشخیص اشباع خرید/فروش و واگرایی.', methodology: 'RSI، Stochastic، CCI، MFI، MACD، Williams %R، واگرایی مومنتوم', focusQuestion: 'کدام اسیلاتور در نزدیک اشباع خرید/فروش قرار دارد و آیا واگرایی مومنتوم وجود دارد؟' },
+   814→  { id: 'sr', name: 'حمایت و مقاومت', nameEn: 'Support & Resistance', description: 'شناسایی سطوح کلیدی، تعیین قدرت آنها و تحلیل واکنش قیمت در کاناله‌ای افقی.', methodology: 'سطوح افقی، کاناله‌ای قیمت، تعداد برخورد، حجم در سطوح، شکست معتبر', focusQuestion: 'آیا قیمت در نزدیکی یک سطح کلیدی قرار دارد و شکست آن چه احتمالی است؟' },
+   815→  { id: 'harmonic', name: 'الگوهای هارمونیک', nameEn: 'Harmonic Patterns', description: 'شناسایی الگوهای هندسی Gartley، Butterfly، Bat، Crab و Shark با استفاده از نسبت‌های فیبوناچی.', methodology: 'Gartley (AB=CD)، Butterfly، Bat، Crab، Shark، نسبت 0.618/0.786/1.272/1.618، PRZ (Potential Reversal Zone)', focusQuestion: 'آیا ساختار فیبوناچی یک الگوی هارمونیک را تشکیل می‌دهد و D کجا قرار دارد؟' },
+   816→  { id: 'elliott', name: 'نظریه موج الیوت', nameEn: 'Elliott Wave Theory', description: 'شماره‌سازی موج‌های تکمیلی (5 موج صعودی/نزولی) و اصلاحی (3 موج) برای تشخیص جایگاه روند در چرخه بازار.', methodology: 'موج‌های اول تا پنجم، اصلاحی ABC، فیبوناچی موجی، توسعه موجی، ترکیب موجی', focusQuestion: 'بازار در کدام موج از چرخه الیوت قرار دارد و موج بعدی چه جهتی دارد؟' },
+   817→  { id: 'psychology', name: 'روانشناسی بازار', nameEn: 'Market Psychology & Sentiment', description: 'تحلیل رفتار معامله‌گران، طمع و رهبت، سرخوردگی و اعتماد کور بر اساس حجم، نوسان و رفتار قیمت.', methodology: 'رفتار حجم ی (OBV)، ناحیه مثبت فروش، اشباع خرید، شکاف قیمتی، انتظار و سرخوردگی', focusQuestion: 'روانشناسی غالب بازار چیست و آیا این رفتار به تداوم یا سرورف خواهد کرد؟' },
+   818→];
+   819→
+   820→const STYLES: StyleDef[] = [
+   821→  { id: 'conservative', name: 'محافظه‌کار', nameEn: 'Conservative', voice: 'سنجیده و با احتیاط، بدون شتاب‌زدگی.', structure: 'ابتدا ریسک‌ها، سپس فرصت‌ها.', endingStyle: 'با تأکید بر مدیریت ریسک و صبر.' },
+   822→  { id: 'scalper', name: 'اسکالپر', nameEn: 'Scalper', voice: 'سریع و دقیق، مانند یک تک‌تیرانداز.', structure: 'نقطه ورود، هدف، خروج — بدون حاشیه.', endingStyle: 'تعیین دقیق نقطه خروج.' },
+   823→  { id: 'trendFollower', name: 'روند‌نو', nameEn: 'Trend Follower', voice: 'با اعتماد و تداوم‌محور.', structure: 'شناسایی روند → تأیید → هدف.', endingStyle: 'تأکید بر ادامه روند.' },
+   824→  { id: 'bearish', name: 'خرس‌نگر', nameEn: 'Bearish', voice: 'هشداردهنده و محتاط.', structure: 'ریسک‌ها → نشانه‌های ضعف → پیشنهاد.', endingStyle: 'توصیه به خروج یا کاهش حجم.' },
+   825→  { id: 'narrative', name: 'روایتی', nameEn: 'Narrative', voice: 'داستان‌گونه و تصویرساز.', structure: 'شروع طبیعی → اوج داستان → پایان.', endingStyle: 'جمع‌بندی تصویری وضعیت.' },
+   826→  { id: 'decision', name: 'تصمیم‌گیر', nameEn: 'Decision-Maker', voice: 'قطعی و اکشن‌محور.', structure: 'جمع‌بندی → تصمیم → دلیل.', endingStyle: 'جمله نهایی تصمیم‌محور.' },
+   827→  { id: 'volumeAnalyst', name: 'تحلیل‌گر حجم', nameEn: 'Volume Analyst', voice: 'تحلیل‌گر جریان پول.', structure: 'حجم → واگرایی حجم → نتیجه.', endingStyle: 'خلاصه مبتنی بر حجم.' },
+   828→  { id: 'patternAnalyst', name: 'تحلیل‌گر الگو', nameEn: 'Pattern Analyst', voice: 'شناسای الگوهای قیمتی.', structure: 'شناسایی الگو → تایید → هدف.', endingStyle: 'هدف الگو.' },
+   829→  { id: 'psychological', name: 'روانشناختی', nameEn: 'Psychological', voice: 'تحلیل‌گر رفتار بازار.', structure: 'رفتار → احساسات → نتیجه.', endingStyle: 'نکته روانشناختی.' },
+   830→  { id: 'volatilityAnalyst', name: 'تحلیل‌گر نوسان', nameEn: 'Volatility Analyst', voice: 'تخصص در نوسان و ATR.', structure: 'نوسان → فشردگی → پیش‌بینی حرکت.', endingStyle: 'ارزیابی ریسک نوسان.' },
+   831→];
+   832→
+   833→const TONES: ToneDef[] = [
+   834→  { id: 'formal', name: 'رسمی و آکادمیک', nameEn: 'Formal Academic', characteristics: 'جملات بلند، استدلال‌محور، با ارجاع به مبانی تحلیلی.', vocabulary: 'بیانکنی، گزارشاختص، مشخصات، ارزیابی', sentenceStyle: 'جملات پیچیده با واصله‌های منطقی' },
+   835→  { id: 'fast', name: 'سریع و عملیاتی', nameEn: 'Fast Operational', characteristics: 'جملات کوتاه، سریع، بدون حاشیه.', vocabulary: 'اکنون، فوری، الان، بلافاصله', sentenceStyle: 'جملات کوتاه و اندازه‌گیر' },
+   836→  { id: 'philosophical', name: 'فلسفی و زمانی', nameEn: 'Philosophical Temporal', characteristics: 'آرام، توصیفی، با ارجاع به زمان و ساختار بازار.', vocabulary: 'چرخه، فاز، تثبیت، زمان، تکامل', sentenceStyle: 'جملات بلند توصیفی با استعاره' },
+   837→  { id: 'warning', name: 'هشداردهنده و ریسک‌محور', nameEn: 'Warning Risk-Focused', characteristics: 'تلخ، هشداردهنده، با تأکید بر خطور.', vocabulary: 'خطر، ریسک، شکست، احتیاطی، هشدار', sentenceStyle: 'جملات هشدار با افعال فریبنده' },
+   838→  { id: 'storytelling', name: 'داستانی و توصیفی', nameEn: 'Storytelling Descriptive', characteristics: 'تصویرساز، استعاری، با الهام بصری.', vocabulary: 'جاده، مسیر، فنر، سایه، سگار', sentenceStyle: 'جملات تصویری با استعاره و تشبیه' },
+   839→  { id: 'stepByStep', name: 'گام‌به‌گام و عملی', nameEn: 'Step-by-Step Practical', characteristics: 'شرطی، مرحله‌ای، شفاف.', vocabulary: 'اگر، آنگاه، اقدام، مرحله، شرط', sentenceStyle: 'جملات شرطی با ارزیابی اندازه‌ای' },
+   840→  { id: 'skeptical', name: 'شکاک و پرسشگر', nameEn: 'Skeptical Questioning', characteristics: 'پرسشگر، تردیدی، با تأکید بر سیگنال‌های متضاد.', vocabulary: 'آیا؟، چرا؟، تضاد، ابهام، شکاف', sentenceStyle: 'جملات پرسشی و تردیدی' },
+   841→  { id: 'optimistic', name: 'خوش‌بین و روند‌پذیر', nameEn: 'Optimistic Trend-Following', characteristics: 'ارزشدهه، مثبت، با تمرکز بر فرصت‌ها.', vocabulary: 'فرصت، تقویت، تداوم، صعود، تایید', sentenceStyle: 'جملات مثبت با افعال انرژی' },
+   842→  { id: 'simple', name: 'ساده و شفاف', nameEn: 'Simple Clear', characteristics: 'شفاف، مستقیم، بدون پیچیدگی.', vocabulary: 'است، نیست، بالا، پایین، میانه', sentenceStyle: 'جملات کوتاه و روان' },
+   843→  { id: 'quantitative', name: 'عددمحور و سختی‌گیر', nameEn: 'Quantitative Rigorous', characteristics: 'با ارجاع عددی مشخص، سختی‌گیر، بدون احساس.', vocabulary: 'نسبت، انحراف، انحراف معیار، احتمال، آمار', sentenceStyle: 'جملات عددی با ارجاع به ارقام' },
+   844→  { id: 'mysterious', name: 'چندلایه و مرموز', nameEn: 'Multi-Layer Mysterious', characteristics: 'پیچیده، ارجاع‌محور، با لایه‌های پنهان.', vocabulary: 'تنتانیج، بازنشی، رازنشی، درون، پترنهای', sentenceStyle: 'جملات طولانی با ارجاع استعاری' },
+   845→  { id: 'educational', name: 'آموزشی و راهنمایانه', nameEn: 'Educational Guiding', characteristics: 'آموزشی، راهنمایانه، با توضیح دلیل.', vocabulary: 'توجه کنید، در نظر بگیرید، مهم است، به این دلیل', sentenceStyle: 'جملات توضیحی با ارجاع به منطق' },
+   846→  { id: 'comparative', name: 'مقایسه‌ای و چندسناریویی', nameEn: 'Comparative Multi-Scenario', characteristics: 'تطبیقی، با بررسی چند زاویه.', vocabulary: 'در مقابل، از یک سو، به اتفاق، نسبتها', sentenceStyle: 'جملات مقایسه‌ای با ارجاع به سناریوها' },
+   847→  { id: 'balanced', name: 'متوازن و بی‌طرف', nameEn: 'Balanced Neutral', characteristics: 'متوازن، بی‌طرف، بدون تحیز.', vocabulary: 'در مجموع، با توجه به، منطقه‌ای، بالاتر', sentenceStyle: 'جملات متوازن با ارائه مستقیم' },
+   848→  { id: 'conclusive', name: 'جمع‌بندی‌محور و نتیجه‌گرا', nameEn: 'Conclusive Result-Oriented', characteristics: 'نتیجه‌گرا، جمع‌بنده، با نقطه نهایی مشخص.', vocabulary: 'نتیجتاً، بنابراین، مسلّم، خلاصه، بازگشت', sentenceStyle: 'جملات جمع‌بندی با افعال نهایی' },
+   849→];
+   850→
+   851→// ─── Scoring Engine (v8-compatible) ──────────────────────────────────────────
+   852→
+   853→type ScoreFn<T> = (item: T, input: NarrativeInput) => number;
+   854→interface ScoredCandidate<T> { item: T; score: number; }
+   855→
+   856→function scoreAll<T>(items: T[], input: NarrativeInput, scoreFn: ScoreFn<T>): ScoredCandidate<T>[] {
+   857→  return items.map(item => ({ item, score: scoreFn(item, input) })).sort((a, b) => b.score - a.score);
+   858→}
+   859→
+   860→function scoreSchool(item: SchoolDef, input: NarrativeInput): number {
+   861→  let s = 0;
+   862→  const id = item.id;
+   863→  const { adx, rsi, stochK, macdHist, obv, hasVolume, cci, bbPosition, trendDirection, nearResistance, nearSupport, trendR2, diPlus, diMinus } = input;
+   864→  if (id === 'trend') {
+   865→    if (adx > 25 && trendR2 > 0.7) s += (trendDirection === 'up' ? 8 : 6);
+   866→    if (adx > 35) s += 3;
+   867→    if (diPlus > diMinus && macdHist > 0) s += 2;
+   868→    if (trendDirection !== 'neutral') s += 2;
+   869→  }
+   870→  if (id === 'classical') {
+   871→    if (nearResistance || nearSupport) s += 4;
+   872→    if ((rsi > 60 && trendDirection === 'down') || (rsi < 40 && trendDirection === 'up')) s += 5;
+   873→    if (cci > 100 || cci < -100) s += 3;
+   874→    if (bbPosition > 85 || bbPosition < 15) s += 2;
+   875→  }
+   876→  if (id === 'candlestick') {
+   877→    if (nearResistance && stochK > 75) s += 5;
+   878→    if (nearSupport && stochK < 25) s += 5;
+   879→    if (nearResistance || nearSupport) s += 2;
+   880→    if (rsi > 70 || rsi < 30) s += 2;
+   881→  }
+   882→  if (id === 'fibonacci') {
+   883→    if (input.priceVsMa21 !== input.priceVsMa100) s += 4;
+   884→    if (bbPosition > 80 || bbPosition < 20) s += 3;
+   885→    if (nearResistance || nearSupport) s += 2;
+   886→  }
+   887→  if (id === 'volatility') {
+   888→    if (bbPosition > 20 && bbPosition < 80 && adx < 20) s += 6;
+   889→    if (bbPosition > 90 || bbPosition < 10) s += 4;
+   890→    if (hasVolume) s += 2;
+   891→  }
+   892→  if (id === 'oscillator') {
+   893→    if (rsi > 70 || rsi < 30) s += 5;
+   894→    if (stochK > 80 || stochK < 20) s += 4;
+   895→    if (cci > 100 || cci < -100) s += 3;
+   896→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 5;
+   897→  }
+   898→  if (id === 'sr') {
+   899→    if (adx < 20) s += 5;
+   900→    if (nearResistance) s += 4;
+   901→    if (nearSupport) s += 4;
+   902→  }
+   903→  if (id === 'harmonic') {
+   904→    if ((bbPosition > 80 || bbPosition < 20) && (nearResistance || nearSupport)) s += 5;
+   905→    if (input.priceVsMa21 !== input.priceVsMa100) s += 3;
+   906→    if (nearResistance || nearSupport) s += 2;
+   907→  }
+   908→  if (id === 'elliott') {
+   909→    if (adx > 30 && trendR2 > 0.8) s += 5;
+   910→    if (trendDirection === 'up' && bbPosition > 75) s += 3;
+   911→    if (trendDirection === 'down' && bbPosition < 25) s += 3;
+   912→  }
+   913→  if (id === 'psychology') {
+   914→    if (adx < 15 || (rsi > 70 && trendDirection === 'down') || (rsi < 30 && trendDirection === 'up')) s += 5;
+   915→    if (hasVolume && obv !== 0 && Math.sign(obv) !== (trendDirection === 'up' ? 1 : -1)) s += 4;
+   916→    if (rsi > 75 || rsi < 25) s += 2;
+   917→  }
+   918→  return s + 1;
+   919→}
+   920→
+   921→function scoreStyle(item: StyleDef, input: NarrativeInput): number {
+   922→  let s = 0;
+   923→  const id = item.id;
+   924→  const { adx, rsi, stochK, macdHist, obv, hasVolume, cci, bbPosition, trendDirection, nearResistance, nearSupport } = input;
+   925→  if (id === 'conservative') {
+   926→    if (adx < 20) s += 6;
+   927→    if (rsi > 40 && rsi < 60) s += 3;
+   928→    if (bbPosition > 30 && bbPosition < 70) s += 2;
+   929→  }
+   930→  if (id === 'scalper') {
+   931→    if (adx > 25 && trendDirection === 'up' && macdHist > 0) s += 6;
+   932→    if (stochK > 50 && stochK < 80) s += 2;
+   933→    if (bbPosition > 50) s += 2;
+   934→  }
+   935→  if (id === 'trendFollower') {
+   936→    if (adx > 25) s += 5;
+   937→    if (trendDirection === 'up' && macdHist > 0) s += 3;
+   938→    if (trendDirection === 'down' && macdHist < 0) s += 3;
+   939→  }
+   940→  if (id === 'bearish') {
+   941→    if ((rsi > 70 || stochK > 80) && nearResistance) s += 7;
+   942→    if (macdHist < 0 && rsi > 60) s += 4;
+   943→    if (cci > 100) s += 2;
+   944→  }
+   945→  if (id === 'narrative') {
+   946→    if (adx < 20) s += 5;
+   947→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 3;
+   948→  }
+   949→  if (id === 'decision') {
+   950→    if (nearResistance || nearSupport) s += 5;
+   951→    if (adx > 25) s += 3;
+   952→  }
+   953→  if (id === 'volumeAnalyst') {
+   954→    if (hasVolume && obv !== 0) s += 5;
+   955→    if (hasVolume && Math.sign(obv) !== (trendDirection === 'up' ? 1 : -1)) s += 3;
+   956→  }
+   957→  if (id === 'patternAnalyst') {
+   958→    if (nearResistance || nearSupport) s += 5;
+   959→    if (bbPosition > 85 || bbPosition < 15) s += 3;
+   960→  }
+   961→  if (id === 'psychological') {
+   962→    if (rsi > 75 || rsi < 25) s += 5;
+   963→    if (stochK > 85 || stochK < 15) s += 3;
+   964→    if (hasVolume && obv !== 0 && Math.sign(obv) !== (trendDirection === 'up' ? 1 : -1)) s += 2;
+   965→  }
+   966→  if (id === 'volatilityAnalyst') {
+   967→    if (bbPosition > 20 && bbPosition < 80 && adx < 20) s += 6;
+   968→    if (bbPosition > 90 || bbPosition < 10) s += 4;
+   969→  }
+   970→  return s + 1;
+   971→}
+   972→
+   973→function scoreTone(item: ToneDef, input: NarrativeInput): number {
+   974→  let s = 0;
+   975→  const id = item.id;
+   976→  const { adx, rsi, stochK, macdHist, obv, hasVolume, bbPosition, trendDirection, nearResistance, nearSupport, dominantScenarioKey, trendR2 } = input;
+   977→  if (id === 'formal') { if (adx > 25) s += 3; if (trendR2 > 0.7) s += 2; }
+   978→  if (id === 'fast') { if (adx > 30 && macdHist > 0 && trendDirection === 'up') s += 5; if (stochK > 60) s += 2; }
+   979→  if (id === 'philosophical') { if (adx > 15 && adx < 35) s += 4; if (rsi > 40 && rsi < 60) s += 2; }
+   980→  if (id === 'warning') {
+   981→    if ((rsi > 70 || stochK > 80) && nearResistance) s += 7;
+   982→    if (macdHist > 0 && rsi < 50) s += 3;
+   983→    if ((rsi < 30 || stochK < 20) && nearSupport && trendDirection === 'down') s += 4;
+   984→  }
+   985→  if (id === 'storytelling') { if (adx < 25) s += 4; if (bbPosition > 30 && bbPosition < 70) s += 2; }
+   986→  if (id === 'stepByStep') { if (nearResistance || nearSupport) s += 4; if (adx > 25) s += 2; }
+   987→  if (id === 'skeptical') {
+   988→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 6;
+   989→    if (rsi > 60 && trendDirection === 'down') s += 3;
+   990→    if (rsi < 40 && trendDirection === 'up') s += 3;
+   991→  }
+   992→  if (id === 'optimistic') { if (trendDirection === 'up' && adx > 25 && rsi > 50 && rsi < 70) s += 6; if (macdHist > 0 && obv > 0) s += 2; }
+   993→  if (id === 'simple') { if (adx > 20 && adx < 40 && rsi > 40 && rsi < 60) s += 4; if (!nearResistance && !nearSupport) s += 2; }
+   994→  if (id === 'quantitative') { if (hasVolume && adx > 25) s += 3; if (rsi > 70 || rsi < 30) s += 2; }
+   995→  if (id === 'mysterious') { if (adx < 20) s += 4; if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 3; if (dominantScenarioKey === 'R3') s += 2; }
+   996→  if (id === 'educational') { if (nearResistance || nearSupport) s += 3; if (rsi > 65 || rsi < 35) s += 2; }
+   997→  if (id === 'comparative') {
+   998→    const probs = Object.values(input.scenarioProbabilities);
+   999→    const maxProb = Math.max(...probs);
+  1000→    if (maxProb < 35) s += 5;
+  1001→    if (probs.filter(p => p > 20).length >= 3) s += 3;
+  1002→  }
+  1003→  if (id === 'balanced') { if (adx < 20) s += 5; if (rsi > 40 && rsi < 60) s += 3; }
+  1004→  if (id === 'conclusive') { if (adx > 25 && (rsi > 60 || rsi < 40)) s += 4; if (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') s += 2; }
+  1005→  return s + 1;
+  1006→}
+  1007→
+  1008→// ─── Backward-Compatible Selector ───────────────────────────────────────────
+  1009→
+  1010→/**
+  1011→ * Select exactly ONE school+style+tone combination per request (v8-compatible).
+  1012→ * Uses deterministic scoring based on market conditions.
+  1013→ */
+  1014→export function selectNarrativeCombination(input: NarrativeInput): NarrativeCombination {
+  1015→  const schoolResults = scoreAll(SCHOOLS, input, scoreSchool);
+  1016→  const styleResults = scoreAll(STYLES, input, scoreStyle);
+  1017→  const toneResults = scoreAll(TONES, input, scoreTone);
+  1018→  return {
+  1019→    school: schoolResults[0].item,
+  1020→    style: styleResults[0].item,
+  1021→    tone: toneResults[0].item,
+  1022→    schoolScore: schoolResults[0].score,
+  1023→    styleScore: styleResults[0].score,
+  1024→    toneScore: toneResults[0].score,
+  1025→  };
+  1026→}
+  1027→
+  1028→/**
+  1029→ * Build NarrativeInput from VdesRequest data (v8-compatible helper).
+  1030→ */
+  1031→export function buildNarrativeInput(body: {
+  1032→  currentPrice: number;
+  1033→  trendDirection: string;
+  1034→  rsi: number;
+  1035→  adx: number;
+  1036→  stochK: number;
+  1037→  stochD: number;
+  1038→  macdLine: number;
+  1039→  macdSignal: number;
+  1040→  macdHist: number;
+  1041→  diPlus: number;
+  1042→  diMinus: number;
+  1043→  obv: number;
+  1044→  hasVolume: boolean;
+  1045→  cci: number;
+  1046→  mfi: number;
+  1047→  atr: number;
+  1048→  bollingerUpper: number;
+  1049→  bollingerMiddle: number;
+  1050→  bollingerLower: number;
+  1051→  trendAngle: number;
+  1052→  trendR2: number;
+  1053→  overallSignal: string;
+  1054→  scenarios: Record<string, { probability: number }>;
+  1055→  resistances: number[];
+  1056→  supports: number[];
+  1057→  ma21: number;
+  1058→  ma100: number;
+  1059→}): NarrativeInput {
+  1060→  const bbRange = body.bollingerUpper - body.bollingerLower;
+  1061→  const bbPosition = bbRange > 0
+  1062→    ? Math.max(0, Math.min(100, ((body.currentPrice - body.bollingerLower) / bbRange) * 100))
+  1063→    : 50;
+  1064→  const R1 = body.resistances[0] || body.currentPrice * 1.05;
+  1065→  const S1 = body.supports[0] || body.currentPrice * 0.95;
+  1066→  let dominantKey = 'R3';
+  1067→  let dominantProb = 0;
+  1068→  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5'] as const) {
+  1069→    const p = body.scenarios[k]?.probability ?? 0;
+  1070→    if (p > dominantProb) { dominantProb = p; dominantKey = k; }
+  1071→  }
+  1072→  return {
+  1073→    price: body.currentPrice,
+  1074→    trendDirection: body.trendDirection,
+  1075→    rsi: body.rsi, adx: body.adx,
+  1076→    stochK: body.stochK, stochD: body.stochD,
+  1077→    macdLine: body.macdLine, macdSignal: body.macdSignal, macdHist: body.macdHist,
+  1078→    diPlus: body.diPlus, diMinus: body.diMinus,
+  1079→    obv: body.obv, hasVolume: body.hasVolume,
+  1080→    cci: body.cci, mfi: body.mfi, atr: body.atr,
+  1081→    bbPosition, bbUpper: body.bollingerUpper, bbLower: body.bollingerLower,
+  1082→    dominantScenarioKey: dominantKey,
+  1083→    scenarioProbabilities: {
+  1084→      R1: body.scenarios.R1?.probability ?? 0,
+  1085→      R2: body.scenarios.R2?.probability ?? 0,
+  1086→      R3: body.scenarios.R3?.probability ?? 0,
+  1087→      R4: body.scenarios.R4?.probability ?? 0,
+  1088→      R5: body.scenarios.R5?.probability ?? 0,
+  1089→    },
+  1090→    nearResistance: R1 > 0 ? Math.abs(body.currentPrice - R1) / R1 < 0.03 : false,
+  1091→    nearSupport: S1 > 0 ? Math.abs(body.currentPrice - S1) / S1 < 0.03 : false,
+  1092→    priceVsMa21: body.currentPrice > body.ma21 ? 'above' : 'below',
+  1093→    priceVsMa100: body.currentPrice > body.ma100 ? 'above' : 'below',
+  1094→    trendR2: body.trendR2,
+  1095→  };
+  1096→}

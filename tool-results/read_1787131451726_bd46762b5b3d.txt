@@ -1,0 +1,598 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useRef, useEffect } from 'react';
+     4→import { toPersianDigits } from '@/lib/jalali';
+     5→import { Skeleton } from '@/components/ui/skeleton';
+     6→import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, BarChart2, Info, Coins, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+     7→import { getCurrencyUnit } from '@/lib/currency';
+     8→import SymbolSearch from '@/components/tse/symbol-search';
+     9→// CandlestickChart removed — merged into VDes TradingView Widget
+    10→import IndicatorsPanel from '@/components/tse/indicators-panel';
+    11→import VdssGraph from '@/components/tse/vdss-graph';
+    12→import VdesAnalysis from '@/components/tse/vdes-analysis';
+    13→import TVWidgetInner, { TVWidgetSkeleton } from '@/components/tse/tv-widget';
+    14→
+    15→interface AnalysisData {
+    16→  symbol: string;
+    17→  candles: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>;
+    18→  info: {
+    19→    name: string;
+    20→    symbol: string;
+    21→    lastPrice: number;
+    22→    change: number;
+    23→    closePrice: number;
+    24→    closeChange: number;
+    25→    openPrice: number;
+    26→    minPrice: number;
+    27→    maxPrice: number;
+    28→    yesterdayClose: number;
+    29→    volume: number;
+    30→    value: number;
+    31→    trades: number;
+    32→    eps: number;
+    33→    pe: number;
+    34→  } | null;
+    35→  ta: import('@/lib/ta-engine').TAResult;
+    36→  isTgju?: boolean;
+    37→  isIndex?: boolean;
+    38→  category?: string;
+    39→}
+    40→
+    41→const toFa = (n: number) => {
+    42→  const rounded = Math.round(n);
+    43→  if (!isFinite(rounded) || isNaN(rounded)) return '۰';
+    44→  return rounded.toLocaleString('fa-IR');
+    45→};
+    46→const toFaDecimal = (n: number) => toPersianDigits(n.toFixed(2));
+    47→
+    48→// All TGJU-based categories that use the tgju.org chart API
+    49→const TGJU_CATEGORIES = new Set([
+    50→  'currency', 'gold', 'silver', 'gold_etf',
+    51→  'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity',
+    52→]);
+    53→
+    54→const SIDEBAR_ITEMS = [
+    55→  { id: 'indicators', label: 'اندیکاتورها', icon: Activity, color: 'text-cyan-700', activeBg: 'bg-cyan-50 border-cyan-200', hoverBg: 'hover:bg-cyan-50/50' },
+    56→  { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-800', activeBg: 'bg-amber-50 border-amber-200', hoverBg: 'hover:bg-amber-50/50' },
+    57→  { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-700', activeBg: 'bg-purple-50 border-purple-200', hoverBg: 'hover:bg-purple-50/50' },
+    58→] as const;
+    59→
+    60→type PanelId = typeof SIDEBAR_ITEMS[number]['id'];
+    61→
+    62→interface FetchParams {
+    63→  symbol: string;
+    64→  category?: string;
+    65→  insCode?: string;
+    66→  tgjuKey?: string;
+    67→  webId?: string;
+    68→  finpySector?: string;
+    69→  finpyIndex?: string;
+    70→}
+    71→
+    72→export default function Home() {
+    73→  const [data, setData] = useState<AnalysisData | null>(null);
+    74→  const [loading, setLoading] = useState(false);
+    75→  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
+    76→  const [error, setError] = useState<string | null>(null);
+    77→  const [activePanel, setActivePanel] = useState<PanelId>('visual');
+    78→  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    79→  const [refreshing, setRefreshing] = useState(false);
+    80→
+    81→  const lastFetchRef = useRef<FetchParams | null>(null);
+    82→  const refreshingRef = useRef(false);
+    83→
+    84→  // ── doRefresh callback ──
+    85→  const doRefresh = useCallback(async () => {
+    86→    if (refreshingRef.current || !lastFetchRef.current) return;
+    87→    const params = lastFetchRef.current;
+    88→    refreshingRef.current = true;
+    89→    setRefreshing(true);
+    90→    try {
+    91→      // TGJU
+    92→      if (params.category && TGJU_CATEGORIES.has(params.category) && params.tgjuKey) {
+    93→        const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(params.tgjuKey)}`);
+    94→        if (res.ok) {
+    95→          const json = await res.json();
+    96→          if (json.candles && json.candles.length > 0 && json.ta) {
+    97→            setData({ ...json, isTgju: true, category: params.category });
+    98→          }
+    99→        }
+   100→        return;
+   101→      }
+   102→      // TSE Index (finpy-tse)
+   103→      if (params.category === 'tse_index' && params.insCode) {
+   104→        const res = await fetch(`/api/index-analysis?webId=${encodeURIComponent(params.insCode)}`);
+   105→        if (res.ok) {
+   106→          const json = await res.json();
+   107→          if (json.candles && json.candles.length > 0 && json.ta) {
+   108→            setData({ ...json, isIndex: true, category: params.category });
+   109→          }
+   110→        }
+   111→        return;
+   112→      }
+   113→      // Index via finpy-sector
+   114→      if (params.category === 'index') {
+   115→        if (params.webId) {
+   116→          const r = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(params.webId)}`);
+   117→          if (r.ok) {
+   118→            const json = await r.json();
+   119→            if (json.candles && json.candles.length > 0 && json.ta) {
+   120→              setData(json);
+   121→              return;
+   122→            }
+   123→          }
+   124→        }
+   125→        if (params.finpySector) {
+   126→          const r = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(params.finpySector)}`);
+   127→          if (r.ok) {
+   128→            const json = await r.json();
+   129→            if (json.candles && json.candles.length > 0 && json.ta) {
+   130→              setData(json);
+   131→              return;
+   132→            }
+   133→          }
+   134→        }
+   135→        return;
+   136→      }
+   137→      // Regular TSE
+   138→      const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(params.symbol)}`);
+   139→      if (res.ok) {
+   140→        const json = await res.json();
+   141→        setData(json);
+   142→      }
+   143→    } finally {
+   144→      refreshingRef.current = false;
+   145→      setRefreshing(false);
+   146→    }
+   147→  }, []);
+   148→
+   149→  // ── Auto-refresh every 60s ──
+   150→  useEffect(() => {
+   151→    if (!lastFetchRef.current) return;
+   152→    const id = setInterval(() => { doRefresh(); }, 60_000);
+   153→    return () => clearInterval(id);
+   154→  }, [doRefresh]);
+   155→
+   156→  // ── Refresh on tab focus ──
+   157→  useEffect(() => {
+   158→    const onFocus = () => { doRefresh(); };
+   159→    window.addEventListener('focus', onFocus);
+   160→    return () => window.removeEventListener('focus', onFocus);
+   161→  }, [doRefresh]);
+   162→
+   163→  const handleSelect = useCallback(async (symbol: string, category?: string, insCode?: string, tgjuKey?: string, webId?: string, finpySector?: string, finpyIndex?: string) => {
+   164→    const fetchParams: FetchParams = { symbol, category, insCode, tgjuKey, webId, finpySector, finpyIndex };
+   165→    lastFetchRef.current = fetchParams;
+   166→
+   167→    // TGJU instrument
+   168→    if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
+   169→      setLoading(true);
+   170→      setLoadingMessage('در حال دریافت داده‌های تاریخی ... (حدود ۱۵ ثانیه)');
+   171→      setError(null);
+   172→      setData(null);
+   173→      try {
+   174→        const res = await fetch(`/api/tgju-analysis?key=${encodeURIComponent(tgjuKey)}`);
+   175→        if (!res.ok) {
+   176→          const err = await res.json();
+   177→          throw new Error(err.error || 'خطا در دریافت داده‌های تاریخی');
+   178→        }
+   179→        const json = await res.json();
+   180→        if (!json.candles || json.candles.length === 0 || !json.ta) {
+   181→          throw new Error(json.error || 'داده‌های تاریخی کافی برای تحلیل وجود ندارد');
+   182→        }
+   183→        setData({ ...json, isTgju: true, category });
+   184→        setActivePanel('visual');
+   185→      } catch (err) {
+   186→        setError(String(err));
+   187→      } finally {
+   188→        setLoading(false);
+   189→        setLoadingMessage(null);
+   190→      }
+   191→      return;
+   192→    }
+   193→
+   194→    // TSE Index (finpy-tse)
+   195→    if (category === 'tse_index' && insCode) {
+   196→      setLoading(true);
+   197→      setLoadingMessage('در حال دریافت تاریخچه شاخص از TSETMC ...');
+   198→      setError(null);
+   199→      setData(null);
+   200→      try {
+   201→        const res = await fetch(`/api/index-analysis?webId=${encodeURIComponent(insCode)}`);
+   202→        if (!res.ok) {
+   203→          const err = await res.json();
+   204→          throw new Error(err.error || 'خطا در دریافت داده‌های شاخص');
+   205→        }
+   206→        const json = await res.json();
+   207→        if (!json.candles || json.candles.length === 0 || !json.ta) {
+   208→          throw new Error(json.error || 'داده‌های تاریخی کافی برای تحلیل وجود ندارد');
+   209→        }
+   210→        setData({ ...json, isIndex: true, category });
+   211→        setActivePanel('visual');
+   212→      } catch (err) {
+   213→        setError(String(err));
+   214→      } finally {
+   215→        setLoading(false);
+   216→        setLoadingMessage(null);
+   217→      }
+   218→      return;
+   219→    }
+   220→
+   221→    // Index: try finpy-sector first (with indexKey), then with sector
+   222→    if (category === 'index') {
+   223→      setLoading(true);
+   224→      setError(null);
+   225→      setData(null);
+   226→      try {
+   227→        if (webId) {
+   228→          const r = await fetch(`/api/finpy-sector?indexKey=${encodeURIComponent(webId)}`);
+   229→          if (r.ok) {
+   230→            const json = await r.json();
+   231→            if (json.candles && json.candles.length > 0 && json.ta) {
+   232→              setData(json);
+   233→              setActivePanel('visual');
+   234→              setLoading(false);
+   235→              return;
+   236→            }
+   237→          }
+   238→        }
+   239→        if (finpySector) {
+   240→          const r = await fetch(`/api/finpy-sector?sector=${encodeURIComponent(finpySector)}`);
+   241→          if (r.ok) {
+   242→            const json = await r.json();
+   243→            if (json.candles && json.candles.length > 0 && json.ta) {
+   244→              setData(json);
+   245→              setActivePanel('visual');
+   246→              setLoading(false);
+   247→              return;
+   248→            }
+   249→          }
+   250→        }
+   251→        setError('داده‌های تاریخی کافی برای تحلیل وجود ندارد');
+   252→      } catch {
+   253→        setError('خطا در دریافت داده‌های شاخص');
+   254→      }
+   255→      setLoading(false);
+   256→      return;
+   257→    }
+   258→
+   259→    // Regular TSE instrument
+   260→    setLoading(true);
+   261→    setError(null);
+   262→    setData(null);
+   263→    try {
+   264→      const res = await fetch(`/api/analysis?symbol=${encodeURIComponent(symbol)}`);
+   265→      if (!res.ok) {
+   266→        const err = await res.json();
+   267→        throw new Error(err.error || 'خطا در دریافت داده‌ها');
+   268→      }
+   269→      const json = await res.json();
+   270→      setData(json);
+   271→      setActivePanel('visual');
+   272→    } catch (err) {
+   273→      setError(String(err));
+   274→    } finally {
+   275→      setLoading(false);
+   276→    }
+   277→  }, []);
+   278→
+   279→  const lastPrice = data?.ta ? data.candles[data.candles.length - 1]?.close ?? 0 : 0;
+   280→  const signalColor = data?.ta?.overallSignal === 'bullish' ? 'text-emerald-600' : data?.ta?.overallSignal === 'bearish' ? 'text-red-600' : 'text-amber-600';
+   281→  const signalBg = data?.ta?.overallSignal === 'bullish' ? 'bg-emerald-50 border-emerald-200' : data?.ta?.overallSignal === 'bearish' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200';
+   282→  const SignalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
+   283→
+   284→  const isTgjuData = data?.isTgju;
+   285→  const isIndexData = data?.isIndex;
+   286→
+   287→  return (
+   288→    <div dir="rtl" className="min-h-screen bg-white text-gray-900 flex flex-col">
+   289→      {/* ── HEADER ────────────────────────────────────────────── */}
+   290→      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur-xl">
+   291→        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-4 flex-wrap">
+   292→          <div className="flex items-center gap-3 shrink-0">
+   293→            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20 border border-amber-300/50 flex items-center justify-center">
+   294→              <BarChart3 className="w-5 h-5 text-amber-600" />
+   295→            </div>
+   296→            <div>
+   297→              <h1 className="text-base font-bold text-amber-700 leading-tight">تحلیل تکنیکال بازار</h1>
+   298→              <p className="text-[10px] text-gray-400">بورس + ارز + طلا + کریپتو + فارکس + بورس جهانی (TSETMC &amp; TGJU)</p>
+   299→            </div>
+   300→          </div>
+   301→
+   302→          <div className="flex-1 min-w-[240px] max-w-xl">
+   303→            <SymbolSearch onSelect={handleSelect} placeholder='جستجوی نماد، ارز، طلا، کریپتو، شاخص ...' />
+   304→          </div>
+   305→
+   306→          {data?.info && (
+   307→            <div className="flex items-center gap-4 text-sm shrink-0">
+   308→              <div className="text-left">
+   309→                <div className="text-gray-500 text-xs">{data.info.name}</div>
+   310→                <div className="font-bold text-lg">
+   311→                  {toFa(data.info.lastPrice)}
+   312→                  <span className={`text-xs mr-2 ${data.info.change >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+   313→                    {data.info.change >= 0 ? '▲' : '▼'} {toFa(Math.abs(data.info.change))}%
+   314→                  </span>
+   315→                </div>
+   316→              </div>
+   317→              {isTgjuData && (
+   318→                <span className="px-2 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold flex items-center gap-1">
+   319→                  <Coins className="w-3 h-3" /> TGJU
+   320→                </span>
+   321→              )}
+   322→              {isIndexData && (
+   323→                <span className="px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1">
+   324→                  <BarChart3 className="w-3 h-3" /> شاخص (finpy-tse)
+   325→                </span>
+   326→              )}
+   327→              <div className={`px-3 py-1.5 rounded-lg border ${signalBg}`}>
+   328→                <div className={`flex items-center gap-1.5 text-xs font-bold ${signalColor}`}>
+   329→                  <SignalIcon className="w-3.5 h-3.5" />
+   330→                  {data.ta.overallSignal === 'bullish' ? 'صعودی' : data.ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
+   331→                </div>
+   332→              </div>
+   333→              <button
+   334→                onClick={doRefresh}
+   335→                disabled={refreshing}
+   336→                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+   337→                title="بازخوانی"
+   338→              >
+   339→                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+   340→              </button>
+   341→            </div>
+   342→          )}
+   343→        </div>
+   344→      </header>
+   345→
+   346→      {/* ── MAIN CONTENT ──────────────────────────────────────── */}
+   347→      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4">
+   348→        {!data && !loading && !error && (
+   349→          <div className="flex flex-col items-center justify-center py-32 text-center">
+   350→            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-50 border border-amber-200/50 flex items-center justify-center mb-6">
+   351→              <BarChart3 className="w-12 h-12 text-amber-400/60" />
+   352→            </div>
+   353→            <h2 className="text-xl font-bold text-gray-800 mb-2">تحلیل تکنیکال بازار ایران</h2>
+   354→            <p className="text-gray-500 max-w-md mb-6">
+   355→              نماد بورسی، ارز، طلا، کریپتو، شاخص جهانی یا جفت ارز مورد نظر خود را جستجو کنید
+   356→              تا تحلیل کامل تکنیکال نمایش داده شود.
+   357→            </p>
+   358→            <div className="flex flex-wrap justify-center gap-2 text-xs">
+   359→              <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">سهام</span>
+   360→              <span className="px-3 py-1.5 rounded-full bg-teal-50 text-teal-600">ارزها</span>
+   361→              <span className="px-3 py-1.5 rounded-full bg-violet-50 text-violet-600">جفت ارز</span>
+   362→              <span className="px-3 py-1.5 rounded-full bg-orange-50 text-orange-600">کریپتو</span>
+   363→              <span className="px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-700">طلا و نقره</span>
+   364→              <span className="px-3 py-1.5 rounded-full bg-sky-50 text-sky-600">بورس جهانی</span>
+   365→              <span className="px-3 py-1.5 rounded-full bg-red-50 text-red-600">نفت و انرژی</span>
+   366→              <span className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-600">فلزات</span>
+   367→              <span className="px-3 py-1.5 rounded-full bg-rose-50 text-rose-600">شاخص‌ها</span>
+   368→              <span className="px-3 py-1.5 rounded-full bg-purple-50 text-purple-600">صندوق‌ها</span>
+   369→              <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">اندیکاتورها، گراف تصمیم، توضیح‌دهنده تصویری</span>
+   370→            </div>
+   371→          </div>
+   372→        )}
+   373→
+   374→        {loading && (
+   375→          <div className="space-y-4 py-8">
+   376→            {loadingMessage && (
+   377→              <div className="flex items-center justify-center gap-3 py-6">
+   378→                <div className="w-5 h-5 border-2 border-teal-300 border-t-teal-600 rounded-full animate-spin" />
+   379→                <span className="text-sm text-teal-600">{loadingMessage}</span>
+   380→              </div>
+   381→            )}
+   382→            <Skeleton className="h-8 w-48 bg-gray-200" />
+   383→            <Skeleton className="h-[500px] w-full bg-gray-200 rounded-xl" />
+   384→            <div className="grid grid-cols-3 gap-4">
+   385→              <Skeleton className="h-32 bg-gray-200 rounded-xl" />
+   386→              <Skeleton className="h-32 bg-gray-200 rounded-xl" />
+   387→              <Skeleton className="h-32 bg-gray-200 rounded-xl" />
+   388→            </div>
+   389→          </div>
+   390→        )}
+   391→
+   392→        {error && (
+   393→          <div className="flex flex-col items-center justify-center py-20 text-center">
+   394→            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
+   395→              <TrendingDown className="w-8 h-8 text-red-500" />
+   396→            </div>
+   397→            <h3 className="text-lg font-bold text-red-600 mb-2">خطا</h3>
+   398→            <p className="text-gray-500 text-sm max-w-md">{error}</p>
+   399→          </div>
+   400→        )}
+   401→
+   402→        {data && !loading && (
+   403→          <div className="flex gap-4">
+   404→            {/* ── RIGHT SIDEBAR (Desktop) — first in DOM so RTL places it on the right ── */}
+   405→            {!sidebarCollapsed ? (
+   406→              <aside className="hidden lg:flex flex-col w-60 shrink-0 sticky top-[76px] self-start">
+   407→                <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-3">
+   408→                  <div className="flex items-center justify-between mb-3">
+   409→                    <span className="text-xs font-bold text-gray-500 tracking-wide">پنل‌های تحلیلی</span>
+   410→                    <button
+   411→                      onClick={() => setSidebarCollapsed(true)}
+   412→                      className="p-1 rounded-md hover:bg-white text-gray-400 hover:text-gray-600 transition-colors border border-transparent hover:border-gray-200"
+   413→                      title="بستن سایدبار"
+   414→                    >
+   415→                      <ChevronRight className="w-4 h-4" />
+   416→                    </button>
+   417→                  </div>
+   418→                  <nav className="space-y-1.5">
+   419→                    {SIDEBAR_ITEMS.map((item) => {
+   420→                      const Icon = item.icon;
+   421→                      const isActive = activePanel === item.id;
+   422→                      return (
+   423→                        <button
+   424→                          key={item.id}
+   425→                          onClick={() => setActivePanel(item.id)}
+   426→                          className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+   427→                            isActive
+   428→                              ? `${item.activeBg} border shadow-sm scale-[1.02]`
+   429→                              : `border border-transparent ${item.hoverBg} text-gray-500 hover:text-gray-800 hover:border-gray-200`
+   430→                          }`}
+   431→                        >
+   432→                          <div className={`p-1.5 rounded-lg ${isActive ? item.activeBg : 'bg-gray-100/80'}`}>
+   433→                            <Icon className={`w-4 h-4 ${isActive ? item.color : 'text-gray-400'}`} />
+   434→                          </div>
+   435→                          <span className={isActive ? item.color : ''}>{item.label}</span>
+   436→                        </button>
+   437→                      );
+   438→                    })}
+   439→                  </nav>
+   440→                </div>
+   441→              </aside>
+   442→            ) : (
+   443→              <button
+   444→                onClick={() => setSidebarCollapsed(false)}
+   445→                className="hidden lg:flex self-start sticky top-[76px] p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white text-gray-400 hover:text-gray-600 transition-colors mt-6 shadow-sm"
+   446→                title="نمایش پنل‌ها"
+   447→              >
+   448→                <ChevronLeft className="w-4 h-4" />
+   449→              </button>
+   450→            )}
+   451→
+   452→            {/* ── MAIN CONTENT ── */}
+   453→            <div className="flex-1 min-w-0 space-y-4">
+   454→              {data.info && (
+   455→                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+   456→                  {[
+   457→                    { label: 'اولین', value: toFa(data.info.openPrice) },
+   458→                    { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-600' },
+   459→                    { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-600' },
+   460→                    ...(isTgjuData || isIndexData ? [] : [
+   461→                      { label: 'حجم معاملات', value: toPersianDigits((data.info.volume / 1e6).toFixed(1)) + 'M' },
+   462→                      { label: 'ارزش معاملات', value: toPersianDigits((data.info.value / 1e9).toFixed(1)) + 'B' },
+   463→                      { label: 'تعداد معاملات', value: toFa(data.info.trades) },
+   464→                      { label: 'P/E', value: data.info.pe > 0 ? toFa(data.info.pe) : '—' },
+   465→                    ]),
+   466→                  ].map((s) => (
+   467→                    <div key={s.label} className="bg-white border border-gray-200 rounded-lg px-3 py-2">
+   468→                      <div className="text-[10px] text-gray-400 mb-0.5">{s.label}</div>
+   469→                      <div className={`text-sm font-bold ${(s as { cls?: string }).cls || 'text-gray-800'}`}>{s.value}</div>
+   470→                    </div>
+   471→                  ))}
+   472→                  {isTgjuData && (
+   473→                    <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+   474→                      <div className="text-[10px] text-teal-500 mb-0.5">منبع داده</div>
+   475→                      <div className="text-sm font-bold text-teal-700">TGJU (تارا)</div>
+   476→                    </div>
+   477→                  )}
+   478→                  {isIndexData && (
+   479→                    <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+   480→                      <div className="text-[10px] text-rose-500 mb-0.5">منبع داده</div>
+   481→                      <div className="text-sm font-bold text-rose-700">finpy-tse / TSETMC</div>
+   482→                    </div>
+   483→                  )}
+   484→                </div>
+   485→              )}
+   486→
+   487→              {/* ── Active Panel Content ── */}
+   488→              {activePanel === 'indicators' && (
+   489→                <div className="max-h-[800px] overflow-y-auto">
+   490→                  <IndicatorsPanel ta={data.ta} />
+   491→                </div>
+   492→              )}
+   493→
+   494→              {activePanel === 'graph' && (
+   495→                <VdssGraph
+   496→                  symbolName={data.info?.name ?? data.symbol}
+   497→                  currentPrice={lastPrice}
+   498→                  resistances={data.ta.resistances}
+   499→                  supports={data.ta.supports}
+   500→                  ma100={data.ta.sma.sma100 || 0}
+   501→                  rsi={data.ta.rsi}
+   502→                  mfi={data.ta.mfi}
+   503→                  hasVolume={data.ta.hasVolume}
+   504→                  cci={data.ta.cci}
+   505→                  adx={data.ta.adx}
+   506→                  trendDirection={data.ta.trend.medium.direction}
+   507→                  bullScore={data.ta.bullScore}
+   508→                  edgeWeights={data.ta.edgeWeights}
+   509→                  scenarios={data.ta.scenarios}
+   510→                  currencyUnit={getCurrencyUnit(data.category, data.isIndex, data.isTgju)}
+   511→                  overallSignal={data.ta.overallSignal}
+   512→                />
+   513→              )}
+   514→
+   515→              {activePanel === 'visual' && (
+   516→                <div className="space-y-4">
+   517→                  <VdesAnalysis
+   518→                    symbolName={data.info?.name ?? data.symbol}
+   519→                    candles={data.candles}
+   520→                    currentPrice={lastPrice}
+   521→                    resistances={data.ta.resistances}
+   522→                    supports={data.ta.supports}
+   523→                    ma21={data.ta.sma.sma21 || 0}
+   524→                    ma100={data.ta.sma.sma100 || 0}
+   525→                    isIndex={data.isIndex}
+   526→                    isTgju={data.isTgju}
+   527→                    rsi={data.ta.rsi}
+   528→                    mfi={data.ta.mfi}
+   529→                    hasVolume={data.ta.hasVolume}
+   530→                    cci={data.ta.cci}
+   531→                    adx={data.ta.adx}
+   532→                    stochK={data.ta.stochK}
+   533→                    stochD={data.ta.stochD}
+   534→                    macdLine={data.ta.macd.line}
+   535→                    macdSignal={data.ta.macd.signal}
+   536→                    macdHist={data.ta.macd.histogram}
+   537→                    diPlus={data.ta.diPlus}
+   538→                    diMinus={data.ta.diMinus}
+   539→                    sar={data.ta.sar}
+   540→                    atr={data.ta.atr}
+   541→                    obv={data.ta.obv}
+   542→                    bollingerUpper={data.ta.bollingerBands.upper}
+   543→                    bollingerMiddle={data.ta.bollingerBands.middle}
+   544→                    bollingerLower={data.ta.bollingerBands.lower}
+   545→                    trendDirection={data.ta.trend.medium.direction}
+   546→                    trendAngle={data.ta.trend.medium.angle}
+   547→                    trendR2={data.ta.trend.medium.r2}
+   548→                    overallSignal={data.ta.overallSignal}
+   549→                    scenarios={data.ta.scenarios}
+   550→                    supportStrengths={data.ta.supportStrengths}
+   551→                    resistanceStrengths={data.ta.resistanceStrengths}
+   552→                    priceTargets={data.ta.priceTargets}
+   553→                    srMlWeights={data.ta.srMlWeights}
+   554→                    upwardTargets={data.ta.upwardTargets}
+   555→                    downwardTargets={data.ta.downwardTargets}
+   556→                    currencyUnit={getCurrencyUnit(data.category, data.isIndex, data.isTgju)}
+   557→                    edgeWeights={data.ta.edgeWeights}
+   558→                    bullScore={data.ta.bullScore}
+   559→                  />
+   560→                </div>
+   561→              )}
+   562→            </div>
+   563→
+   564→          </div>
+   565→        )}
+   566→      </main>
+   567→
+   568→      {/* ── MOBILE BOTTOM NAV ── */}
+   569→      {data && !loading && (
+   570→        <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-gray-200 bg-white/95 backdrop-blur-xl">
+   571→          <div className="flex">
+   572→            {SIDEBAR_ITEMS.map((item) => {
+   573→              const Icon = item.icon;
+   574→              const isActive = activePanel === item.id;
+   575→              return (
+   576→                <button
+   577→                  key={item.id}
+   578→                  onClick={() => setActivePanel(item.id)}
+   579→                  className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
+   580→                    isActive ? item.color : 'text-gray-400'
+   581→                  }`}
+   582→                >
+   583→                  <Icon className={`w-5 h-5 ${isActive ? '' : 'text-gray-300'}`} />
+   584→                  <span>{item.label}</span>
+   585→                </button>
+   586→              );
+   587→            })}
+   588→          </div>
+   589→        </nav>
+   590→      )}
+   591→
+   592→      <footer className={`mt-auto border-t border-gray-200 py-3 text-center text-[10px] text-gray-400 ${data && !loading ? 'lg:mb-14' : ''}`}>
+   593→        داده‌های بورس از TSETMC (تعدیل شده) | شاخص‌ها از finpy-tse / TSETMC | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. — v4.0
+   594→      </footer>
+   595→    </div>
+   596→  );
+   597→}
+   598→

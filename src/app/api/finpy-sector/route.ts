@@ -79,6 +79,13 @@ export async function GET(req: NextRequest) {
 
     // ── Sector/industry index by webId (string to preserve precision) ──
     if (webIdParam) {
+      // Check if this webId belongs to a main index (has finpyIndex) → use fetchMainIndexHistory
+      const mainIndexMatch = SECTOR_INDICES.find(s => s.webId === webIdParam && s.finpyIndex);
+      if (mainIndexMatch?.finpyIndex) {
+        const candles = await fetchMainIndexHistory(mainIndexMatch.finpyIndex);
+        return buildResponse(candles, mainIndexMatch.symbol);
+      }
+
       const candles = await fetchSectorIndexHistory(webIdParam);
       const label = SECTOR_INDICES.find(s => s.webId === webIdParam)?.symbol || `شاخص ${webIdParam}`;
       return buildResponse(candles, label);

@@ -375,7 +375,7 @@ export async function fetchHistory(symbol: string): Promise<HistoryData[]> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TSETMC_SOAP_URL = 'http://service.tsetmc.com/WebService/TseClient.asmx';
-const TSETMC_TIMEOUT = 2000;
+const TSETMC_TIMEOUT = 15000;
 
 export interface TsetmcInstrument {
   insCode: string;

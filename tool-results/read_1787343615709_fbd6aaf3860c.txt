@@ -1,0 +1,609 @@
+     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→// VDES Analysis API v9 — ML-Enhanced Version
+     3→// ═══════════════════════════════════════════════════════════════════════════════
+     4→// V9 New Features:
+     5→//   1. XGBoost/Ensemble ML 30-session price prediction (via Python service)
+     6→//   2. 10 main candlestick pattern recognition
+     7→//   3. AI-powered harmonic & Elliott wave pattern detection (via ZAI LLM)
+     8→//   4. Dynamic Bayesian weighting system
+     9→//   5. Auto-training trigger when sufficient data available
+    10→// ═══════════════════════════════════════════════════════════════════════════════
+    11→
+    12→import { NextRequest, NextResponse } from 'next/server';
+    13→import ZAI from 'z-ai-web-dev-sdk';
+    14→import { selectNarrativeCombination, buildNarrativeInput } from '@/lib/ml-narrative-v8';
+    15→import type { NarrativeCombination } from '@/lib/ml-narrative-v8';
+    16→import { scanCandlestickPatterns, buildAIPatternPrompt, type PatternScanResult } from '@/lib/candlestick-patterns';
+    17→import { applyBayesianAdjustment, getNormalizedWeights, generateBayesianSummary } from '@/lib/bayesian-weights';
+    18→import { predict30Sessions, trainModel, checkMLHealth, convertToMLOHLCV, generateMLPredictionSummary } from '@/lib/ml-predictor';
+    19→
+    20→export const dynamic = 'force-dynamic';
+    21→
+    22→// ─── Version & Cache ────────────────────────────────────────────────
+    23→const ANALYSIS_VERSION = 9;
+    24→const cache = new Map<string, { v: number; text: string; ts: number; debug: any }>();
+    25→const CACHE_TTL_MS = 10 * 60 * 1000;
+    26→
+    27→function cacheKey(body: VdesRequest): string {
+    28→  return `${ANALYSIS_VERSION}:${body.symbolName}:${body.currentPrice}:${body.trendDirection}:${body.rsi}:${body.adx}`;
+    29→}
+    30→
+    31→// ─── Shared ZAI instance (lazy init) ─────────────────────────────────
+    32→let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+    33→async function getZAI() {
+    34→  if (!_zai) _zai = await ZAI.create();
+    35→  return _zai;
+    36→}
+    37→
+    38→// ─── 429 Retry ──────────────────────────────────────────────────────
+    39→async function withRetry<T>(fn: () => Promise<T>, label: string = 'V9'): Promise<T> {
+    40→  const delays = [20000, 40000, 80000, 160000];
+    41→  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    42→    try {
+    43→      return await fn();
+    44→    } catch (err: any) {
+    45→      const status = err?.status || err?.statusCode;
+    46→      if (status === 429 && attempt < delays.length) {
+    47→        const jitter = Math.random() * 500;
+    48→        const wait = delays[attempt] + jitter;
+    49→        console.warn(`[VDES v9 429] ${label} Retry ${attempt + 1}/${delays.length} after ${Math.round(wait / 1000)}s`);
+    50→        await new Promise(r => setTimeout(r, wait));
+    51→        continue;
+    52→      }
+    53→      throw err;
+    54→    }
+    55→  }
+    56→  throw new Error('unreachable');
+    57→}
+    58→
+    59→// ─── Helpers ────────────────────────────────────────────────────────
+    60→function fmt(n: number, d = 0): string {
+    61→  if (!isFinite(n) || isNaN(n)) return '0';
+    62→  return n.toFixed(d);
+    63→}
+    64→
+    65→function fmtGrouped(n: number): string {
+    66→  if (!isFinite(n) || isNaN(n)) return '0';
+    67→  return Math.round(n).toLocaleString('fa-IR');
+    68→}
+    69→
+    70→function srGrade(strength: number): string {
+    71→  if (strength >= 8.5) return 'بسیار قوی';
+    72→  if (strength >= 7) return 'قوی';
+    73→  if (strength >= 5) return 'متوسط';
+    74→  if (strength >= 3) return 'ضعیف';
+    75→  return 'بسیار ضعیف';
+    76→}
+    77→
+    78→// ─── Types ────────────────────────────────────────────────────────────
+    79→interface Scenario {
+    80→  name: string;
+    81→  nameEn: string;
+    82→  probability: number;
+    83→  targetMin: number;
+    84→  targetMax: number;
+    85→  description: string;
+    86→}
+    87→
+    88→interface VdesRequest {
+    89→  symbolName: string;
+    90→  currentPrice: number;
+    91→  ma21: number;
+    92→  ma100: number;
+    93→  rsi: number;
+    94→  mfi: number;
+    95→  cci: number;
+    96→  adx: number;
+    97→  stochK: number;
+    98→  stochD: number;
+    99→  macdLine: number;
+   100→  macdSignal: number;
+   101→  macdHist: number;
+   102→  diPlus: number;
+   103→  diMinus: number;
+   104→  sar: number;
+   105→  atr: number;
+   106→  obv: number;
+   107→  hasVolume: boolean;
+   108→  bollingerUpper: number;
+   109→  bollingerMiddle: number;
+   110→  bollingerLower: number;
+   111→  trendDirection: string;
+   112→  trendAngle: number;
+   113→  trendR2: number;
+   114→  overallSignal: string;
+   115→  scenarios: Record<string, Scenario>;
+   116→  resistances: number[];
+   117→  supports: number[];
+   118→  resistanceStrengths?: { strength: number; overlapCount?: number; grade?: string; touchCount?: number; volumeRatio?: number }[];
+   119→  supportStrengths?: { strength: number; overlapCount?: number; grade?: string; touchCount?: number; volumeRatio?: number }[];
+   120→  priceTargets?: { price: number; strength: number; isTarget: boolean; grade?: string }[];
+   121→  isIndex?: boolean;
+   122→  isTgju?: boolean;
+   123→  currencyUnit?: string;
+   124→  // V9 new fields
+   125→  ohlcvHistory?: { date: string; open: number; high: number; low: number; close: number; volume: number }[];
+   126→}
+   127→
+   128→// ─── Build data section (extended from v8 with V9 additions) ────────
+   129→function buildDataSection(body: VdesRequest, v9Extra: V9ExtraData): string {
+   130→  const {
+   131→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   132→    stochK, stochD, macdLine, macdSignal, macdHist,
+   133→    diPlus, diMinus, sar, atr, obv, hasVolume,
+   134→    bollingerUpper, bollingerMiddle, bollingerLower,
+   135→    trendDirection, trendAngle, trendR2, overallSignal,
+   136→    scenarios, resistances, supports,
+   137→    resistanceStrengths, supportStrengths,
+   138→    isIndex, isTgju, currencyUnit,
+   139→  } = body;
+   140→
+   141→  const unit = currencyUnit || 'ریال';
+   142→  const label = isIndex ? `\u0634\u0627\u062E\u0635 ${symbolName}` : isTgju ? symbolName : `\u0633\u0647\u0645 ${symbolName}`;
+   143→  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+   144→  const r2Pct = (trendR2 * 100).toFixed(1);
+   145→  const adxStrength = adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف';
+   146→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   147→  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+   148→
+   149→  const bbRange = bollingerUpper - bollingerLower;
+   150→  const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
+   151→  const bbSignal = currentPrice > bollingerUpper
+   152→    ? 'بالای باند بالایی'
+   153→    : currentPrice < bollingerLower
+   154→    ? 'زیر باند پایینی'
+   155→    : `داخل باندها (${bbPos}٪)`;
+   156→
+   157→  const R1 = resistances[0] ?? Math.round(currentPrice * 1.05);
+   158→  const R2 = resistances[1] ?? Math.round(currentPrice * 1.10);
+   159→  const R3 = resistances[2] ?? Math.round(currentPrice * 1.15);
+   160→  const S1 = supports[0] ?? Math.round(currentPrice * 0.95);
+   161→  const S2 = supports[1] ?? Math.round(currentPrice * 0.90);
+   162→  const S3 = supports[2] ?? Math.round(currentPrice * 0.85);
+   163→
+   164→  const r1Grade = resistanceStrengths?.[0]?.grade || (resistanceStrengths?.[0]?.strength ? srGrade(resistanceStrengths[0].strength) : 'نامشخص');
+   165→  const s1Grade = supportStrengths?.[0]?.grade || (supportStrengths?.[0]?.strength ? srGrade(supportStrengths[0].strength) : 'نامشخص');
+   166→  const r1Confirm = resistanceStrengths?.[0]?.overlapCount ? `(${resistanceStrengths[0].overlapCount} روش تأیید)` : '';
+   167→  const s1Confirm = supportStrengths?.[0]?.overlapCount ? `(${supportStrengths[0].overlapCount} روش تأیید)` : '';
+   168→
+   169→  const overallLabel = overallSignal === 'bullish' ? 'صعودی' : overallSignal === 'bearish' ? 'نزولی' : 'خنثی';
+   170→  const posVsMa21 = currentPrice > ma21 ? 'بالاتر' : 'پایین‌تر';
+   171→  const posVsMa100 = currentPrice > ma100 ? 'بالاتر' : 'پایین‌تر';
+   172→
+   173→  const obvDesc = hasVolume
+   174→    ? (obv > 0
+   175→      ? `مثبت (OBV بالاست و نشان‌دهنده ورود پول هوشمند است)`
+   176→      : `منفی (OBV رو به پایین و نشانه خروج پول هوشمند)`)
+   177→    : 'بدون داده حجم';
+   178→
+   179→  const macdDesc = macdHist > 0 && macdLine > macdSignal
+   180→    ? 'صعودی با تأیید تقاطع مثبت'
+   181→    : macdHist > 0
+   182→    ? 'صعودی اما هیستوگرام در حال تضعیف'
+   183→    : 'نزولی';
+   184→
+   185→  const cciDesc = cci > 100 ? 'بالاتر از +۱۰۰ (اشباع خرید)' : cci < -100 ? 'پایین‌تر از -۱۰۰ (اشباع فروش)' : 'در محدوده نرمال';
+   186→
+   187→  const mfiDesc = hasVolume
+   188→    ? (mfi > 80 ? 'اشباع خرید (بیش از ۸۰)' : mfi < 20 ? 'اشباع فروش (کمتر از ۲۰)' : `${fmt(mfi, 1)} (محدوده نرمال)`)
+   189→    : 'بدون داده حجم';
+   190→
+   191→  // V9: Candlestick pattern section
+   192→  const candleSection = v9Extra.candlePatterns.patterns.length > 0
+   193→    ? `
+   194→**الگوهای کندل‌استیک شناسایی‌شده (v9):**
+   195→${v9Extra.candlePatterns.patterns.map(p => `- ${p.name} (${p.nameEn}): ${p.description} — اطمینان ${Math.round(p.reliabilityScore * 100)}٪`).join('\n')}
+   196→جهت غالب الگوها: ${v9Extra.candlePatterns.dominantDirection === 'bullish' ? 'صعودی' : v9Extra.candlePatterns.dominantDirection === 'bearish' ? 'نزولی' : 'خنثی'}
+   197→`
+   198→    : '\n**الگوهای کندل‌استیک:** الگوی قابل اعتمادی در کندل‌های اخیر شناسایی نشد.\n';
+   199→
+   200→  // V9: ML prediction section
+   201→  const mlSection = v9Extra.mlPrediction
+   202→    ? `
+   203→**پیش‌بینی مدل ML (v9 — ۳۰ جلسه آینده):**
+   204→- جهت غالب: ${v9Extra.mlPrediction.overall_direction === 'up' ? 'صعودی' : v9Extra.mlPrediction.overall_direction === 'down' ? 'نزولی' : 'خنثی'}
+   205→- اطمینان: ${Math.round(v9Extra.mlPrediction.overall_confidence * 100)}٪
+   206→- محدوده هدف: ${fmtGrouped(v9Extra.mlPrediction.target_price_min)} تا ${fmtGrouped(v9Extra.mlPrediction.target_price_max)} ${unit}
+   207→- سطح ریسک: ${v9Extra.mlPrediction.risk_level === 'low' ? 'پایین' : v9Extra.mlPrediction.risk_level === 'high' ? 'بالا' : 'متوسط'}
+   208→- پیش‌بینی ۵ جلسه اول: ${v9Extra.mlPrediction.sessions.slice(0, 5).map(s => `جلسه ${s.session}: ${fmtGrouped(s.predicted_close)} (${s.direction === 'up' ? '+' : ''}${s.change_pct.toFixed(1)}٪)`).join(' | ')}
+   209→`
+   210→    : '\n**پیش‌بینی ML:** هنوز مدلی برای این نماد آموزش ندیده شده است. حداقل ۱۲۰ کندل داده برای آموزش لازم است.\n';
+   211→
+   212→  // V9: Bayesian weighting section
+   213→  const bayesianSection = `
+   214→**سیستم وزن‌دهی بیزی (v9):**
+   215→${v9Extra.bayesianSummary}
+   216→`;
+   217→
+   218→  // V9: AI Harmonic/Elliott section
+   219→  const aiPatternSection = v9Extra.aiPatterns
+   220→    ? `
+   221→**الگوهای پیشرفته (تشخیص هوش مصنوعی — v9):**
+   222→${v9Extra.aiPatterns.harmonicPatterns.length > 0
+   223→    ? v9Extra.aiPatterns.harmonicPatterns.map(p => `- الگوی هارمونیک ${p.name} (${p.type}): ${p.description} — قابلیت اطمینان: ${p.reliability}`).join('\n')
+   224→    : '- الگوی هارمونیک قابل اعتمادی شناسایی نشد.'}
+   225→${v9Extra.aiPatterns.elliottWave
+   226→    ? `- موج الیوت: ${v9Extra.aiPatterns.elliottWave.description} (موج ${v9Extra.aiPatterns.elliottWave.currentWave})`
+   227→    : '- موج‌گذاری الیوت: داده ناکافی برای تحلیل.'}
+   228→`
+   229→    : '';
+   230→
+   231→  return `
+   232→**داده‌های پایه (واقعی و غیرقابل تغییر):**
+   233→- نام ابزار: **${label}**
+   234→- قیمت مرجع: **${fmtGrouped(currentPrice)} ${unit}**
+   235→- روند میان‌مدت: **${trendLabel}** (زاویه ${fmt(trendAngle, 1)}°, R²=${r2Pct}٪)
+   236→- موقعیت نسبت به میانگین‌ها: ${posVsMa21} از **MA21 (${fmtGrouped(ma21)} ${unit})** و ${posVsMa100} از **MA100 (${fmtGrouped(ma100)} ${unit})**
+   237→- **ADX=${fmt(adx, 1)}** (${adxStrength})، **DI+ (${fmt(diPlus, 1)}) ${diPlus > diMinus ? '>' : '<'} DI- (${fmt(diMinus, 1)})** ← ${diPlus > diMinus ? 'فشار خرید غالب' : 'فشار فروش غالب'}
+   238→- **RSI=${fmt(rsi, 1)}** (${rsiSignal})
+   239→- **استوکاستیک K=${fmt(stochK, 0)} / D=${fmt(stochD, 0)}** (${stochSignal})
+   240→- **CCI=${fmt(cci, 1)}** (${cciDesc})
+   241→- **MFI=${mfiDesc}**
+   242→- **MACD** ${macdDesc} (خط=${fmt(macdLine, 2)}، سیگنال=${fmt(macdSignal, 2)}، هیستوگرام=${fmt(macdHist, 2)})
+   243→- **OBV** ${obvDesc}
+   244→- **SAR (پارابولیک)**: ${fmtGrouped(sar)} ${unit}
+   245→- قیمت **${bbSignal}** (باند بالایی ${fmtGrouped(bollingerUpper)}، باند میانی ${fmtGrouped(bollingerMiddle)}، باند پایینی ${fmtGrouped(bollingerLower)})
+   246→- مقاومت **R1** در ${fmtGrouped(R1)} ${unit} (${r1Grade} ${r1Confirm})
+   247→${R2 ? `- مقاومت **R2** در ${fmtGrouped(R2)} ${unit}${resistanceStrengths?.[1]?.grade ? ` (${resistanceStrengths[1].grade})` : ''}  \n` : ''}${R3 ? `- مقاومت **R3** در ${fmtGrouped(R3)} ${unit}${resistanceStrengths?.[2]?.grade ? ` (${resistanceStrengths[2].grade})` : ''}  \n` : ''}- حمایت **S1** در ${fmtGrouped(S1)} ${unit} (${s1Grade} ${s1Confirm})
+   248→${S2 ? `- حمایت **S2** در ${fmtGrouped(S2)} ${unit}${supportStrengths?.[1]?.grade ? ` (${supportStrengths[1].grade})` : ''}  \n` : ''}${S3 ? `- حمایت **S3** در ${fmtGrouped(S3)} ${unit}${supportStrengths?.[2]?.grade ? ` (${supportStrengths[2].grade})` : ''}  \n` : ''}- سیگنال کلی: **${overallLabel}**
+   249→- میانگین نوسان روزانه (ATR): ${fmtGrouped(atr)} ${unit}
+   250→
+   251→**سناریوهای محتمل (با احتمالات):**
+   252→- **سناریوی ۱ – ${scenarios.R1?.name || '—'}:** ${fmt(scenarios.R1?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R1?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R1?.targetMax ?? 0)} ${unit})
+   253→- **سناریوی ۲ – ${scenarios.R2?.name || '—'}:** ${fmt(scenarios.R2?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R2?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R2?.targetMax ?? 0)} ${unit})
+   254→- **سناریوی ۳ – ${scenarios.R3?.name || '—'}:** ${fmt(scenarios.R3?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R3?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R3?.targetMax ?? 0)} ${unit})
+   255→- **سناریوی ۴ – ${scenarios.R4?.name || '—'}:** ${fmt(scenarios.R4?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R4?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R4?.targetMax ?? 0)} ${unit})
+   256→- **سناریوی ۵ – ${scenarios.R5?.name || '—'}:** ${fmt(scenarios.R5?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R5?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R5?.targetMax ?? 0)} ${unit})
+   257→- **سناریوی ۶ – ${scenarios.R6?.name || '—'}:** ${fmt(scenarios.R6?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R6?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R6?.targetMax ?? 0)} ${unit})
+   258→- **سناریوی ۷ – ${scenarios.R7?.name || '—'}:** ${fmt(scenarios.R7?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R7?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R7?.targetMax ?? 0)} ${unit})
+   259→- **سناریوی ۸ – ${scenarios.R8?.name || '—'}:** ${fmt(scenarios.R8?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R8?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R8?.targetMax ?? 0)} ${unit})
+   260→- **سناریوی ۹ – ${scenarios.R9?.name || '—'}:** ${fmt(scenarios.R9?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R9?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R9?.targetMax ?? 0)} ${unit})
+   261→${candleSection}
+   262→${mlSection}
+   263→${bayesianSection}
+   264→${aiPatternSection}
+   265→`;
+   266→}
+   267→
+   268→// ─── Build V9 prompt (extends v8 with ML/candlestick/bayesian context) ─
+   269→function buildV9Prompt(body: VdesRequest, combo: NarrativeCombination, v9Extra: V9ExtraData): string {
+   270→  const dataSection = buildDataSection(body, v9Extra);
+   271→  const { school, style, tone } = combo;
+   272→
+   273→  return `
+   274→**دستورالعمل تحلیل v9 (نسخه هوشمند با ML):**
+   275→شما یک **تحلیلگر ارشد بازارهای مالی** هستید. یک تحلیل **عمیق، جامع و منحصربه‌فرد** بر اساس داده‌های تکنیکال، **الگوهای کندل‌استیک**، **پیش‌بینی مدل ML** و **سیستم وزن‌دهی بیزی** ارائه‌شده بنویسید.
+   276→
+   277→---
+   278→${dataSection}
+   279→---
+   280→
+   281→**سبک تحلیلی انتخاب‌شده (الزامی):**
+   282→
+   283→**مکتب تحلیلی (School):** ${school.name} (${school.nameEn})
+   284→- توضیح: ${school.description}
+   285→- ابزارها و شاخص‌های کلیدی: ${school.methodology}
+   286→- پرسش محوری: ${school.focusQuestion}
+   287→
+   288→**سبک روایت (Style):** ${style.name} (${style.nameEn})
+   289→- صدا و لحن: ${style.voice}
+   290→- ساختار تحلیل: ${style.structure}
+   291→- سبک پایان‌بندی: ${style.endingStyle}
+   292→
+   293→**لحن تحلیلی (Tone):** ${tone.name} (${tone.nameEn})
+   294→- ویژگی‌ها: ${tone.characteristics}
+   295→- واژگان کلیدی: ${tone.vocabulary}
+   296→- سبک جملات: ${tone.sentenceStyle}
+   297→
+   298→---
+   299→**فرآیند تولید تحلیل v9:**
+   300→1. داده‌های تکنیکال بالا را **از نگاه مکتب تحلیلی انتخاب‌شده** (${school.name}) موشکافانه ارزیابی کنید.
+   301→2. **الگوهای کندل‌استیک شناسایی‌شده** را در تحلیل لحاظ کنید و تأثیر آنها بر سناریوها را تحلیل کنید.
+   302→3. **پیش‌بینی ۳۰ جلسه‌ای مدل ML** را بررسی کنید. آیا با تحلیل تکنیکال همخوانی دارد یا تضاد؟
+   303→4. **وزن‌دهی بیزی** را در نظر بگیرید — شاخص‌هایی که دقت بالاتری دارند باید وزن بیشتری در تصمیم‌گیری داشته باشند.
+   304→5. **الگوهای هارمونیک و الیوت** (اگر شناسایی شده) را تحلیل کنید.
+   305→6. روابط بین همه این داده‌ها و سناریوها را استنباط کنید.
+   306→7. تحلیل را با **لحن و ساختار روایت** (${style.name}) بنویسید.
+   307→
+   308→---
+   309→**قوانین الزامی خروجی:**
+   310→1. زبان خروجی فقط و فقط فارسی باشد.
+   311→2. هیچ‌گونه ایموجی، شکلک یا کاراکتر غیرحروفی استفاده نشود.
+   312→3. از ایجاد عناوین داخلی خودداری کنید. متن یکپارچه و بدون تیتربندی داخلی باشد.
+   313→4. عبارت «از منظر عملیاتی» و عبارات ربات‌گونه ممنوع است.
+   314→5. تحلیل باید یکپارچه، منسجم و پیوسته باشد.
+   315→6. درصد‌ها به فارسی نوشته شوند (مثلاً ۲۸٪ نه 28%).
+   316→7. برای تأکید فقط از **پررنگ** استفاده کنید.
+   317→8. **طول تحلیل:** بین ۸۰۰ تا ۱۸۰۰ کلمه (v9 طولانی‌تر به دلیل داده‌های بیشتر).
+   318→9. **تعداد پاراگراف:** حداقل ۳ و حداکثر ۵ پاراگراف.
+   319→10. حداقل ۳ سوال یا جمله تعجبی در کل متن وجود داشته باشد.
+   320→11. در انتهای تحلیل یک **خلاصه عملی** (حداکثر ۳۰ کلمه) با پیشوند «خلاصه عملی:» قرار گیرد.
+   321→12. حداقل ۳ ارجاع به داده‌های v9 (الگوی کندل‌استیک، پیش‌بینی ML، یا وزن بیزی) در متن وجود داشته باشد.
+   322→13. در پایان هر پاراگراف یک جمع‌بندی جزئی وجود داشته باشد.
+   323→14. پاراگراف‌ها نباید کوتاه باشند. هر پاراگراف شامل چند جمله کامل و یک ایده اصلی باشد.
+   324→15. از تکرار اطلاعات پرهیز شود.
+   325→16. **در ابتدای تحلیل، نام سبک روایت، مکتب تحلیلی، لحن و نسخه v9** ذکر شود.
+   326→
+   327→---
+   328→**خروجی نهایی:**
+   329→- **سطر اول:** نام سبک روایت، مکتب تحلیلی، لحن و نسخه v9 (یک سطر کوتاه)
+   330→- **متن اصلی:** تحلیل عمیق (۳ تا ۵ پاراگراف، ۸۰۰ تا ۱۸۰۰ کلمه)
+   331→- **خلاصه عملی:** (حداکثر ۳۰ کلمه)
+   332→
+   333→شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.`;
+   334→}
+   335→
+   336→// ─── SYSTEM_PROMPT (v9) ────────────────────────────────────────────
+   337→const SYSTEM_PROMPT = `
+   338→شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.
+   339→
+   340→قوانین خروجی:
+   341→- زبان فقط فارسی. ممنوعیت کامل هر زبان دیگری.
+   342→- ممنوعیت کامل ایموجی، شکلک و کاراکتر غیرحروفی.
+   343→- فقط علائم نگارشی استاندارد فارسی مجاز است (نقطه، ویرگول، ؟، !، —، «»).
+   344→- ممنوعیت عناوین داخلی و تیتربندی. متن یکپارچه.
+   345→- ممنوعیت عبارات ربات‌گونه.
+   346→- پاراگراف‌های بلند و عمیق. هر پاراگراف ۲۰۰ تا ۵۰۰ کلمه.
+   347→- حداقل ۳ پرسش یا جمله تعجبی.
+   348→- خلاصه عملی در انتها (حداکثر ۳۰ کلمه).
+   349→- حداقل ۲ ارجاع عددی به شاخص‌ها.
+   350→- ارجاع به داده‌های v9 (کندل‌استیک، ML، بیزی).
+   351→- جمع‌بندی جزئی در پایان هر پاراگراف.
+   352→- از پررنگ ** فقط برای تأکید.`;
+   353→
+   354→// ─── V9 Extra Data Types ────────────────────────────────────────────
+   355→interface V9ExtraData {
+   356→  candlePatterns: PatternScanResult;
+   357→  mlPrediction: import('@/lib/ml-predictor').PredictionResult | null;
+   358→  mlTrainingStatus: 'trained' | 'untrained' | 'training' | 'error';
+   359→  bayesianSummary: string;
+   360→  aiPatterns: import('@/lib/candlestick-patterns').AIPatternResult | null;
+   361→  mlServiceAvailable: boolean;
+   362→}
+   363→
+   364→// ─── V9 Parallel Data Gathering ─────────────────────────────────────
+   365→async function gatherV9Data(body: VdesRequest): Promise<V9ExtraData> {
+   366→  const result: V9ExtraData = {
+   367→    candlePatterns: { patterns: [], dominantDirection: 'neutral', dominantScore: 0, summary: '' },
+   368→    mlPrediction: null,
+   369→    mlTrainingStatus: 'untrained',
+   370→    bayesianSummary: '',
+   371→    aiPatterns: null,
+   372→    mlServiceAvailable: false,
+   373→  };
+   374→
+   375→  // 1. Candlestick pattern detection (always available, local computation)
+   376→  if (body.ohlcvHistory && body.ohlcvHistory.length >= 3) {
+   377→    result.candlePatterns = scanCandlestickPatterns(body.ohlcvHistory as any, 20);
+   378→  }
+   379→
+   380→  // 2. Bayesian weighting (always available, local computation)
+   381→  result.bayesianSummary = generateBayesianSummary(body.symbolName);
+   382→
+   383→  // 3. ML prediction & AI patterns (requires ML service)
+   384→  try {
+   385→    const health = await checkMLHealth();
+   386→    result.mlServiceAvailable = health.status === 'ok';
+   387→  } catch {
+   388→    result.mlServiceAvailable = false;
+   389→  }
+   390→
+   391→  if (result.mlServiceAvailable && body.ohlcvHistory && body.ohlcvHistory.length >= 120) {
+   392→    const symbol = body.symbolName;
+   393→
+   394→    // 3a. ML Prediction (with timeout fallback)
+   395→    try {
+   396→      const mlOHLCV = convertToMLOHLCV(body.ohlcvHistory);
+   397→      const predResp = await Promise.race([
+   398→        predict30Sessions(symbol, mlOHLCV, 30),
+   399→        new Promise<import('@/lib/ml-predictor').MLPredictionResponse>((_, reject) =>
+   400→          setTimeout(() => reject(new Error('ML prediction timeout')), 15000)
+   401→        ),
+   402→      ]);
+   403→
+   404→      if (predResp.status === 'ok' && predResp.prediction) {
+   405→        result.mlPrediction = predResp.prediction;
+   406→        result.mlTrainingStatus = 'trained';
+   407→      } else {
+   408→        // No model trained yet — try to train in background
+   409→        console.log(`[V9 ML] No model for ${symbol}, attempting background training...`);
+   410→        trainModelInBackground(symbol, convertToMLOHLCV(body.ohlcvHistory));
+   411→      }
+   412→    } catch (err) {
+   413→      console.warn(`[V9 ML] Prediction failed for ${symbol}:`, err);
+   414→    }
+   415→
+   416→    // 3b. AI Harmonic/Elliott patterns (via ZAI LLM, with timeout)
+   417→    if (body.ohlcvHistory.length >= 50) {
+   418→      try {
+   419→        result.aiPatterns = await detectAIPatterns(body);
+   420→      } catch (err) {
+   421→        console.warn(`[V9 AI] Pattern detection failed:`, err);
+   422→      }
+   423→    }
+   424→  } else if (body.ohlcvHistory && body.ohlcvHistory.length >= 60 && body.ohlcvHistory.length < 120) {
+   425→    result.bayesianSummary += ' (برای فعال‌سازی پیش‌بینی ML به حداقل ۱۲۰ کندل داده نیاز است.)';
+   426→  }
+   427→
+   428→  return result;
+   429→}
+   430→
+   431→/** Background training (fire-and-forget) */
+   432→function trainModelInBackground(symbol: string, ohlcv: import('@/lib/ml-predictor').OHLCVRow[]) {
+   433→  // Fire in background, don't block the response
+   434→  trainModel(symbol, ohlcv).then(resp => {
+   435→    if (resp.status === 'ok') {
+   436→      console.log(`[V9 ML] Background training complete for ${symbol}: ${resp.models_trained?.join(', ')}`);
+   437→    } else {
+   438→      console.warn(`[V9 ML] Background training failed for ${symbol}: ${resp.message}`);
+   439→    }
+   440→  }).catch(err => {
+   441→    console.warn(`[V9 ML] Background training error for ${symbol}:`, err);
+   442→  });
+   443→}
+   444→
+   445→/** Detect AI patterns (harmonic + Elliott) via ZAI LLM */
+   446→async function detectAIPatterns(
+   447→  body: VdesRequest
+   448→): Promise<import('@/lib/candlestick-patterns').AIPatternResult | null> {
+   449→  if (!body.ohlcvHistory || body.ohlcvHistory.length < 50) return null;
+   450→
+   451→  const prompt = buildAIPatternPrompt({
+   452→    ohlcv: body.ohlcvHistory as any,
+   453→    currentPrice: body.currentPrice,
+   454→    symbolName: body.symbolName,
+   455→  });
+   456→
+   457→  try {
+   458→    const zai = await getZAI();
+   459→    const completion = await withRetry(() =>
+   460→      zai.chat.completions.create({
+   461→        messages: [
+   462→          {
+   463→            role: 'assistant',
+   464→            content: 'شما یک تحلیلگر الگوهای هارمونیک و موج الیوت هستید. فقط JSON خالص پاسخ دهید. هیچ متن اضافی ننویسید.',
+   465→          },
+   466→          { role: 'user', content: prompt },
+   467→        ],
+   468→        thinking: { type: 'disabled' },
+   469→      }),
+   470→      'AI-Patterns'
+   471→    );
+   472→
+   473→    const text = completion.choices[0]?.message?.content;
+   474→    if (!text) return null;
+   475→
+   476→    // Extract JSON from response
+   477→    const jsonMatch = text.match(/\{[\s\S]*\}/);
+   478→    if (!jsonMatch) return null;
+   479→
+   480→    const parsed = JSON.parse(jsonMatch[0]);
+   481→    return parsed as import('@/lib/candlestick-patterns').AIPatternResult;
+   482→  } catch (err) {
+   483→    console.warn('[V9 AI-Patterns] Parse/LLM error:', err);
+   484→    return null;
+   485→  }
+   486→}
+   487→
+   488→// ─── POST Handler ─────────────────────────────────────────────────────
+   489→export async function POST(req: NextRequest) {
+   490→  const t0 = Date.now();
+   491→
+   492→  try {
+   493→    const body: VdesRequest = await req.json();
+   494→
+   495→    // Validate required fields
+   496→    if (!body.symbolName || body.currentPrice == null) {
+   497→      return NextResponse.json({ error: 'symbolName و currentPrice الزامی است.' }, { status: 400 });
+   498→    }
+   499→    if (!body.scenarios || !Array.isArray(body.resistances) || !Array.isArray(body.supports)) {
+   500→      return NextResponse.json({ error: 'scenarios، resistances و supports الزامی است.' }, { status: 400 });
+   501→    }
+   502→
+   503→    // ── Step 1: Narrative selection (v8 engine, reused) ──
+   504→    const narrativeInput = buildNarrativeInput(body);
+   505→    const combo = selectNarrativeCombination(narrativeInput);
+   506→
+   507→    console.log(`[VDES v9] ${body.symbolName} | School: ${combo.school.nameEn} (${combo.schoolScore.toFixed(1)}) | Style: ${combo.style.nameEn} (${combo.styleScore.toFixed(1)}) | Tone: ${combo.tone.nameEn} (${combo.toneScore.toFixed(1)})`);
+   508→
+   509→    // ── Step 2: Gather V9 data (parallel: candlestick, ML, Bayesian, AI patterns) ──
+   510→    const v9Extra = await gatherV9Data(body);
+   511→
+   512→    console.log(`[VDES v9] ${body.symbolName} | Candlestick: ${v9Extra.candlePatterns.patterns.length} patterns | ML: ${v9Extra.mlTrainingStatus} | AI-Patterns: ${v9Extra.aiPatterns ? 'detected' : 'skipped'} | (${Math.round(Date.now() - t0)}ms gathered)`);
+   513→
+   514→    // ── Step 3: Build prompt ──
+   515→    const prompt = buildV9Prompt(body, combo, v9Extra);
+   516→
+   517→    // ── Step 4: Check cache ──
+   518→    const key = cacheKey(body);
+   519→    const cached = cache.get(key);
+   520→    if (cached && cached.v === ANALYSIS_VERSION && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+   521→      console.log(`[VDES v9] Cache hit for ${body.symbolName} (${Math.round(Date.now() - t0)}ms)`);
+   522→      return NextResponse.json({
+   523→        analysis: cached.text,
+   524→        _debug: {
+   525→          ...cached.debug,
+   526→          v9: {
+   527→            candlePatterns: v9Extra.candlePatterns,
+   528→            mlTrainingStatus: v9Extra.mlTrainingStatus,
+   529→            mlServiceAvailable: v9Extra.mlServiceAvailable,
+   530→            mlPrediction: v9Extra.mlPrediction ? {
+   531→              overall_direction: v9Extra.mlPrediction.overall_direction,
+   532→              overall_confidence: v9Extra.mlPrediction.overall_confidence,
+   533→              target_price_min: v9Extra.mlPrediction.target_price_min,
+   534→              target_price_max: v9Extra.mlPrediction.target_price_max,
+   535→              risk_level: v9Extra.mlPrediction.risk_level,
+   536→            } : null,
+   537→            aiPatterns: v9Extra.aiPatterns,
+   538→            bayesianSummary: v9Extra.bayesianSummary,
+   539→          },
+   540→          cached: true,
+   541→          latencyMs: Date.now() - t0,
+   542→        },
+   543→      });
+   544→    }
+   545→
+   546→    // ── Step 5: Call ZAI LLM ──
+   547→    const zai = await getZAI();
+   548→    const completion = await withRetry(() =>
+   549→      zai.chat.completions.create({
+   550→        messages: [
+   551→          { role: 'assistant', content: SYSTEM_PROMPT },
+   552→          { role: 'user', content: prompt },
+   553→        ],
+   554→        thinking: { type: 'disabled' },
+   555→      })
+   556→    );
+   557→
+   558→    const analysis = completion.choices[0]?.message?.content;
+   559→
+   560→    if (!analysis || analysis.trim().length === 0) {
+   561→      return NextResponse.json({ error: 'مدل پاسخی تولید نکرد.' }, { status: 500 });
+   562→    }
+   563→
+   564→    // ── Step 6: Cache & respond ──
+   565→    const debugData = {
+   566→      school: combo.school.name,
+   567→      style: combo.style.name,
+   568→      tone: combo.tone.name,
+   569→      schoolScore: combo.schoolScore,
+   570→      styleScore: combo.styleScore,
+   571→      toneScore: combo.toneScore,
+   572→      v9: {
+   573→        candlePatterns: v9Extra.candlePatterns,
+   574→        mlTrainingStatus: v9Extra.mlTrainingStatus,
+   575→        mlServiceAvailable: v9Extra.mlServiceAvailable,
+   576→        mlPrediction: v9Extra.mlPrediction ? {
+   577→          overall_direction: v9Extra.mlPrediction.overall_direction,
+   578→          overall_confidence: v9Extra.mlPrediction.overall_confidence,
+   579→          target_price_min: v9Extra.mlPrediction.target_price_min,
+   580→          target_price_max: v9Extra.mlPrediction.target_price_max,
+   581→          risk_level: v9Extra.mlPrediction.risk_level,
+   582→        } : null,
+   583→        aiPatterns: v9Extra.aiPatterns,
+   584→        bayesianSummary: v9Extra.bayesianSummary,
+   585→      },
+   586→    };
+   587→
+   588→    cache.set(key, { v: ANALYSIS_VERSION, text: analysis, ts: Date.now(), debug: debugData });
+   589→
+   590→    // Evict stale entries
+   591→    for (const [k, v] of cache) {
+   592→      if ((Date.now() - v.ts) > CACHE_TTL_MS) cache.delete(k);
+   593→    }
+   594→
+   595→    console.log(`[VDES v9] Generated for ${body.symbolName} (${analysis.length} chars, ${Math.round(Date.now() - t0)}ms)`);
+   596→
+   597→    return NextResponse.json({
+   598→      analysis,
+   599→      _debug: debugData,
+   600→    });
+   601→  } catch (err) {
+   602→    console.error('[VDES v9 Error]:', err);
+   603→    return NextResponse.json(
+   604→      { error: 'خطا در تولید تحلیل هوشمند v9. لطفاً دوباره تلاش کنید.' },
+   605→      { status: 500 },
+   606→    );
+   607→  }
+   608→}
+   609→

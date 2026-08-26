@@ -1,0 +1,688 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+     4→     4→import { Skeleton } from '@/components/ui/skeleton';
+     5→     5→import { toPersianDigits } from '@/lib/jalali';
+     6→     6→import { EDGES, SCENARIO_KEYS, SCENARIO_META, calcEdgeProbabilities, findAllPaths, getDynamicScenarioMeta } from '@/lib/vdss-algorithms';
+     7→     7→
+     8→     8→// ═══════════════════════════════════════════════════════════════════════════════
+     9→     9→// Types
+    10→    10→// ═══════════════════════════════════════════════════════════════════════════════
+    11→    11→
+    12→    12→interface Scenario {
+    13→    13→  name: string;
+    14→    14→  nameEn: string;
+    15→    15→  probability: number;
+    16→    16→  targetMin: number;
+    17→    17→  targetMax: number;
+    18→    18→  description: string;
+    19→    19→}
+    20→    20→
+    21→    21→export interface VdssGraphProps {
+    22→    22→  symbolName: string;
+    23→    23→  currentPrice: number;
+    24→    24→  resistances: number[];
+    25→    25→  supports: number[];
+    26→    26→  ma100: number;
+    27→    27→  rsi: number;
+    28→    28→  mfi: number;
+    29→    29→  hasVolume: boolean;
+    30→    30→  cci: number;
+    31→    31→  adx: number;
+    32→    32→  trendDirection: string;
+    33→    33→  bullScore: number;
+    34→    34→  edgeWeights: { up: number; down: number; pullback: number; risk: number };
+    35→    35→  scenarios: {
+    36→    36→    R1: Scenario;
+    37→    37→    R2: Scenario;
+    38→    38→    R3: Scenario;
+    39→    39→    R4: Scenario;
+    40→    40→    R5: Scenario;
+    41→    41→  };
+    42→    42→  /** Dynamic currency unit (ریال, تومان, تتر, دلار, واحد) */
+    43→    43→  currencyUnit?: string;
+    44→    44→  /** Overall market signal for context-aware scenario labels */
+    45→    45→  overallSignal?: string;
+    46→    46→}
+    47→    47→
+    48→    48→// ═══════════════════════════════════════════════════════════════════════════════
+    49→    49→// Constants
+    50→    50→// ═══════════════════════════════════════════════════════════════════════════════
+    51→    51→
+    52→    52→const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+    53→    53→
+    54→    54→const COLORS = {
+    55→    55→  up: '#34c98b',
+    56→    56→  pullback: '#4186ff',
+    57→    57→  down: '#ff7b32',
+    58→    58→  risk: '#ef4d62',
+    59→    59→  cyan: '#3ad5db',
+    60→    60→  blue: '#4186ff',
+    61→    61→  purple: '#a04ac5',
+    62→    62→  gold: '#ffb11b',
+    63→    63→  green: '#34c98b',
+    64→    64→  red: '#ef4d62',
+    65→    65→  orange: '#ff7b32',
+    66→    66→};
+    67→    67→
+    68→    68→const EDGE_COLORS: Record<string, string> = {
+    69→    69→  up: COLORS.up,
+    70→    70→  pullback: COLORS.pullback,
+    71→    71→  down: COLORS.down,
+    72→    72→  risk: COLORS.risk,
+    73→    73→};
+    74→    74→
+    75→    75→// EDGES, SCENARIO_KEYS, SCENARIO_META, calcEdgeProbabilities, findAllPaths, PathInfo, EdgeInfo are imported from @/lib/vdss-algorithms
+    76→    76→
+    77→    77→// Node positions (absolute, right/top within 1500x780 container)
+    78→    78→const NODE_POSITIONS: Record<string, { right: number; top: number }> = {
+    79→    79→  A:  { right: 670, top: 336 },
+    80→    80→  B:  { right: 930, top: 230 },
+    81→    81→  C:  { right: 1170, top: 115 },
+    82→    82→  D:  { right: 935, top: 42 },
+    83→    83→  E:  { right: 625, top: 42 },
+    84→    84→  F:  { right: 312, top: 42 },
+    85→    85→  G:  { right: 930, top: 450 },
+    86→    86→  H:  { right: 1170, top: 565 },
+    87→    87→  I:  { right: 680, top: 590 },
+    88→    88→  J:  { right: 375, top: 590 },
+    89→    89→  K:  { right: 72, top: 590 },
+    90→    90→  L:  { right: 348, top: 337 },
+    91→    91→  R1: { right: 75, top: 136 },
+    92→    92→  R2: { right: 1110, top: 350 },
+    93→    93→  R3: { right: 925, top: 665 },
+    94→    94→  R4: { right: 275, top: 665 },
+    95→    95→  R5: { right: 15, top: 345 },
+    96→    96→};
+    97→    97→
+    98→    98→const NODE_DEFS: Record<string, { title: string; type: string; desc: string; color: string; isTerminal?: boolean }> = {
+    99→    99→  A:  { title: 'گره تصمیم (ریشه)', type: 'گره تصمیم‌گیری', desc: 'نقطه صفر تصمیم — قیمت فعلی سهم.', color: COLORS.cyan },
+   100→   100→  B:  { title: 'آزمون مقاومت R1', type: 'گره رویداد شانسی', desc: 'واکنش بازار به مقاومت اول. تثبیت بالای آن شرط ادامه صعود است.', color: COLORS.gold },
+   101→   101→  C:  { title: 'تثبیت بالای R1', type: 'گره تأیید روند', desc: 'تثبیت بالای R1، احتمال حرکت به سمت R2 را افزایش می‌دهد.', color: COLORS.green },
+   102→   102→  D:  { title: 'آزمون مقاومت R2', type: 'گره سنجش تقاضا', desc: 'کیفیت تقاضا در این سطح تعیین‌کننده ادامه مسیر است.', color: COLORS.gold },
+   103→   103→  E:  { title: 'کریدور صعودی', type: 'گره نتیجه', desc: 'هدف میانی صعود. تثبیت در این کریدور تأیید روند است.', color: COLORS.green, isTerminal: true },
+   104→   104→  F:  { title: 'هدف توسعه‌ای', type: 'گره نتیجه', desc: 'هدف نهایی در صورت تداوم شتاب بالا.', color: COLORS.green, isTerminal: true },
+   105→   105→  G:  { title: 'پولبک به حمایت S1', type: 'گره حمایت', desc: 'مرز تفکیک پولبک سالم از اصلاح ساختاری.', color: COLORS.blue },
+   106→   106→  H:  { title: 'حمایت S2', type: 'گره حمایت', desc: 'سطح دومین ایستگاه بازسازی ساختار کوتاه‌مدت.', color: COLORS.blue },
+   107→   107→  I:  { title: 'حمایت S3', type: 'گره حمایت', desc: 'سطح ارزیابی قدرت تقاضا در اصلاح‌های عمیق‌تر.', color: COLORS.orange },
+   108→   108→  J:  { title: 'حمایت S4', type: 'گره حمایت', desc: 'آخرین سطح قبل از ناحیه بحرانی MA100.', color: COLORS.orange },
+   109→   109→  K:  { title: 'MA100 — گره بحرانی', type: 'گره ریسک', desc: 'شکست معتبر این ناحیه به منزله ابطال روند صعودی است.', color: COLORS.red },
+   110→   110→  L:  { title: 'خطوط روند', type: 'گره کنترل', desc: 'حفظ قیمت بالای این خطوط برای تداوم روند صعودی حیاتی است.', color: COLORS.purple },
+   111→   111→  R1: { title: 'تداوم صعود', type: 'گره نتیجه', desc: 'رسیدن یا تثبیت در کریدور صعودی.', color: COLORS.green, isTerminal: true },
+   112→   112→  R2: { title: 'پولبک سالم', type: 'گره نتیجه', desc: 'حفظ S1 و بازپس‌گیری مقاومت R1.', color: COLORS.cyan, isTerminal: true },
+   113→   113→  R3: { title: 'اصلاح کنترل‌شده', type: 'گره نتیجه', desc: 'حرکت به حمایت‌های میانی.', color: COLORS.orange, isTerminal: true },
+   114→   114→  R4: { title: 'اصلاح عمیق', type: 'گره نتیجه', desc: 'آزمون ناحیه نزدیک به MA100.', color: COLORS.gold, isTerminal: true },
+   115→   115→  R5: { title: 'تضعیف ساختار', type: 'گره نتیجه', desc: 'شکست معتبر MA100.', color: COLORS.red, isTerminal: true },
+   116→   116→};
+   117→   117→
+   118→   118→// SCENARIO_KEYS and SCENARIO_META are imported from @/lib/vdss-algorithms
+   119→   119→
+   120→   120→const TYPE_FILTERS = [
+   121→   121→  { key: 'all', label: 'همه مسیرها' },
+   122→   122→  { key: 'up', label: 'صعودی' },
+   123→   123→  { key: 'pullback', label: 'پولبک و بازگشت' },
+   124→   124→  { key: 'down', label: 'اصلاحی' },
+   125→   125→  { key: 'risk', label: 'ابطال و ریسک' },
+   126→   126→];
+   127→   127→
+   128→   128→// calcEdgeProbabilities, findAllPaths, PathInfo, EdgeInfo are imported from @/lib/vdss-algorithms
+   129→   129→
+   130→   130→// ═══════════════════════════════════════════════════════════════════════════════
+   131→   131→// Component
+   132→   132→// ═══════════════════════════════════════════════════════════════════════════════
+   133→   133→
+   134→   134→export default function VdssGraph(props: VdssGraphProps) {
+   135→   135→  const { symbolName, currentPrice, resistances, supports, ma100, scenarios, rsi, adx, bullScore, edgeWeights, currencyUnit, overallSignal } = props;
+   136→   136→
+   137→   137→  // ── Dynamic scenario labels (context-aware) ──────────────────
+   138→   138→  const dynamicMeta = useMemo(() => getDynamicScenarioMeta(overallSignal || 'neutral'), [overallSignal]);
+   139→   139→
+   140→   140→  // ── Dynamic NODE_DEFS: R1-R5 titles/descriptions adapt to signal ──
+   141→   141→  const nodeDefs = useMemo(() => ({
+   142→   142→    ...NODE_DEFS,
+   143→   143→    R1: { ...NODE_DEFS.R1, title: dynamicMeta.R1.nodeTitle, desc: dynamicMeta.R1.nodeDesc },
+   144→   144→    R2: { ...NODE_DEFS.R2, title: dynamicMeta.R2.nodeTitle, desc: dynamicMeta.R2.nodeDesc },
+   145→   145→    R3: { ...NODE_DEFS.R3, title: dynamicMeta.R3.nodeTitle, desc: dynamicMeta.R3.nodeDesc },
+   146→   146→    R4: { ...NODE_DEFS.R4, title: dynamicMeta.R4.nodeTitle, desc: dynamicMeta.R4.nodeDesc },
+   147→   147→    R5: { ...NODE_DEFS.R5, title: dynamicMeta.R5.nodeTitle, desc: dynamicMeta.R5.nodeDesc },
+   148→   148→  }), [dynamicMeta]);
+   149→   149→  const unit = currencyUnit || 'ریال';
+   150→   150→  const R1_level = resistances[0] ?? currentPrice * 1.05;
+   151→   151→  const S1_level = supports[0] ?? currentPrice * 0.95;
+   152→   152→
+   153→   153→  const [activeFilter, setActiveFilter] = useState('all');
+   154→   154→  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+   155→   155→  const graphRef = useRef<HTMLDivElement>(null);
+   156→   156→  const svgRef = useRef<SVGSVGElement>(null);
+   157→   157→  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+   158→   158→  const shellRef = useRef<HTMLDivElement>(null);
+   159→   159→
+   160→   160→  // ── Edge probabilities (using TA engine's bullScore) ──────────────
+   161→   161→  const edgeProbs = useMemo(() =>
+   162→   162→    calcEdgeProbabilities(edgeWeights),
+   163→   163→  [edgeWeights]
+   164→   164→  );
+   165→   165→
+   166→   166→  // ── All paths with raw probabilities ─────────────────────────────
+   167→   167→  const allPathsRaw = useMemo(() => findAllPaths(edgeProbs), [edgeProbs]);
+   168→   168→
+   169→   169→  // ── Calibrate path probabilities to match TA engine scenario probabilities ──
+   170→   170→  const allPaths = useMemo(() => {
+   171→   171→    // Compute raw sum per target
+   172→   172→    const rawSums: Record<string, number> = {};
+   173→   173→    for (const key of SCENARIO_KEYS) rawSums[key] = 0;
+   174→   174→    for (const p of allPathsRaw) rawSums[p.target] += p.prob;
+   175→   175→
+   176→   176→    // Scale each path so the sum per target matches scenario probability
+   177→   177→    return allPathsRaw.map(p => {
+   178→   178→      const rawSum = rawSums[p.target] || 0.0001;
+   179→   179→      const targetProb = scenarios[p.target as keyof typeof scenarios].probability / 100;
+   180→   180→      const scale = targetProb / rawSum;
+   181→   181→      return { ...p, prob: p.prob * scale };
+   182→   182→    });
+   183→   183→  }, [allPathsRaw, scenarios]);
+   184→   184→
+   185→   185→  // ── Filtered paths ────────────────────────────────────────────────
+   186→   186→  const filteredPaths = useMemo(() => {
+   187→   187→    if (activeFilter === 'all') return allPaths;
+   188→   188→    // Check if filter is a scenario key
+   189→   189→    if (SCENARIO_KEYS.includes(activeFilter as any)) {
+   190→   190→      return allPaths.filter(p => p.target === activeFilter);
+   191→   191→    }
+   192→   192→    // Type filter: paths must use only edges of this type
+   193→   193→    return allPaths.filter(p =>
+   194→   194→      p.edges.every(ei => EDGES[ei][3] === activeFilter)
+   195→   195→    );
+   196→   196→  }, [allPaths, activeFilter]);
+   197→   197→
+   198→   198→  // ── Visible edges/nodes based on filter ────────────────────────────
+   199→   199→  const { visibleEdgeIndices, visibleNodes } = useMemo(() => {
+   200→   200→    if (activeFilter === 'all') {
+   201→   201→      const allEdgeIdx = EDGES.map((_, i) => i);
+   202→   202→      const allNodes = new Set(Object.keys(NODE_POSITIONS));
+   203→   203→      return { visibleEdgeIndices: allEdgeIdx, visibleNodes: allNodes };
+   204→   204→    }
+   205→   205→    if (SCENARIO_KEYS.includes(activeFilter as any)) {
+   206→   206→      // Show all edges/nodes on paths to this scenario
+   207→   207→      const edgeSet = new Set<number>();
+   208→   208→      const nodeSet = new Set<string>();
+   209→   209→      for (const p of filteredPaths) {
+   210→   210→        p.edges.forEach(ei => edgeSet.add(ei));
+   211→   211→        p.nodes.forEach(n => nodeSet.add(n));
+   212→   212→      }
+   213→   213→      return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
+   214→   214→    }
+   215→   215→    // Type filter
+   216→   216→    const edgeSet = new Set<number>();
+   217→   217→    const nodeSet = new Set<string>();
+   218→   218→    EDGES.forEach((e, i) => {
+   219→   219→      if (e[3] === activeFilter) {
+   220→   220→        edgeSet.add(i);
+   221→   221→        nodeSet.add(e[0]);
+   222→   222→        nodeSet.add(e[1]);
+   223→   223→      }
+   224→   224→    });
+   225→   225→    return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
+   226→   226→  }, [activeFilter, filteredPaths]);
+   227→   227→
+   228→   228→  // ── Node values ──────────────────────────────────────────────────
+   229→   229→  const nodeValues: Record<string, string> = {
+   230→   230→    A: toFa(currentPrice),
+   231→   231→    B: toFa(R1_level),
+   232→   232→    D: toFa(resistances[1] ?? currentPrice * 1.10),
+   233→   233→    E: `${toFa(Math.round(R1_level + (resistances[1] ?? R1_level * 1.05 - R1_level) * 0.5))} — ${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 0.8))}`,
+   234→   234→    F: `${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 1.2))} — ${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 2.0))}`,
+   235→   235→    G: toFa(S1_level),
+   236→   236→    H: toFa(supports[1] ?? currentPrice * 0.90),
+   237→   237→    I: toFa(supports[2] ?? currentPrice * 0.85),
+   238→   238→    J: toFa(supports[3] ?? currentPrice * 0.80),
+   239→   239→    K: toFa(ma100),
+   240→   240→    L: props.trendDirection === 'up' ? 'صعودی' : props.trendDirection === 'down' ? 'نزولی' : 'خنثی',
+   241→   241→  };
+   242→   242→  for (const key of SCENARIO_KEYS) {
+   243→   243→    const s = scenarios[key];
+   244→   244→    nodeValues[key] = `${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}`;
+   245→   245→  }
+   246→   246→
+   247→   247→  // ── Draw SVG edges ───────────────────────────────────────────────
+   248→   248→  const drawEdges = useCallback(() => {
+   249→   249→    const svg = svgRef.current;
+   250→   250→    const graph = graphRef.current;
+   251→   251→    if (!svg || !graph) return;
+   252→   252→
+   253→   253→    let markersSvg = '';
+   254→   254→    for (const [k, c] of Object.entries(EDGE_COLORS)) {
+   255→   255→      markersSvg += `<marker id="arrow-${k}" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="${c}"/></marker>`;
+   256→   256→    }
+   257→   257→
+   258→   258→    let pathsSvg = '';
+   259→   259→    const graphRect = graph.getBoundingClientRect();
+   260→   260→
+   261→   261→    for (let ei = 0; ei < EDGES.length; ei++) {
+   262→   262→      const [fromId, toId, label, type] = EDGES[ei];
+   263→   263→      const isVisible = visibleEdgeIndices.includes(ei);
+   264→   264→      const fromEl = nodeRefs.current[fromId];
+   265→   265→      const toEl = nodeRefs.current[toId];
+   266→   266→      if (!fromEl || !toEl) continue;
+   267→   267→
+   268→   268→      const fRect = fromEl.getBoundingClientRect();
+   269→   269→      const tRect = toEl.getBoundingClientRect();
+   270→   270→      const ax = fRect.left - graphRect.left + fRect.width / 2;
+   271→   271→      const ay = fRect.top - graphRect.top + fRect.height / 2;
+   272→   272→      const bx = tRect.left - graphRect.left + tRect.width / 2;
+   273→   273→      const by = tRect.top - graphRect.top + tRect.height / 2;
+   274→   274→      const dx = bx - ax;
+   275→   275→      const dy = by - ay;
+   276→   276→      const dist = Math.sqrt(dx * dx + dy * dy);
+   277→   277→      if (dist === 0) continue;
+   278→   278→
+   279→   279→      const bend = Math.min(52, Math.max(18, dist * 0.11));
+   280→   280→      const mx = (ax + bx) / 2;
+   281→   281→      const my = (ay + by) / 2;
+   282→   282→      const nx = -dy / dist;
+   283→   283→      const ny = dx / dist;
+   284→   284→      const cx = mx + nx * bend;
+   285→   285→      const cy = my + ny * bend;
+   286→   286→
+   287→   287→      const d = `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`;
+   288→   288→      const prob = edgeProbs[String(ei)] ?? 0;
+   289→   289→      const probLabel = toPersianDigits((prob * 100).toFixed(0)) + '٪';
+   290→   290→
+   291→   291→      pathsSvg += `<path d="${d}" stroke="${EDGE_COLORS[type]}" stroke-width="${isVisible ? 2 : 1}" opacity="${isVisible ? 0.72 : 0.06}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
+   292→   292→
+   293→   293→      // Edge probability label (only for visible edges)
+   294→   294→      if (isVisible) {
+   295→   295→        pathsSvg += `<text x="${cx}" y="${cy - 6}" fill="#cde4ef" font-size="9" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3.5" stroke-linejoin="round" opacity="0.85" data-type="${type}" class="edge-label">${label}</text>`;
+   296→   296→        pathsSvg += `<text x="${cx}" y="${cy + 8}" fill="${EDGE_COLORS[type]}" font-size="10" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">${probLabel}</text>`;
+   297→   297→      }
+   298→   298→    }
+   299→   299→
+   300→   300→    svg.innerHTML = `<defs>${markersSvg}</defs>${pathsSvg}`;
+   301→   301→  }, [visibleEdgeIndices, edgeProbs]);
+   302→   302→
+   303→   303→  useEffect(() => { drawEdges(); }, [drawEdges]);
+   304→   304→  useEffect(() => {
+   305→   305→    const el = shellRef.current;
+   306→   306→    if (!el) return;
+   307→   307→    const observer = new ResizeObserver(() => drawEdges());
+   308→   308→    observer.observe(el);
+   309→   309→    return () => observer.disconnect();
+   310→   310→  }, [drawEdges]);
+   311→   311→
+   312→   312→  // ── Aggregated path probabilities per target (calibrated = matches scenario prob) ──
+   313→   313→  const pathProbsByTarget = useMemo(() => {
+   314→   314→    const result: Record<string, number> = {};
+   315→   315→    for (const key of SCENARIO_KEYS) result[key] = 0;
+   316→   316→    for (const p of filteredPaths) {
+   317→   317→      result[p.target] = (result[p.target] ?? 0) + p.prob;
+   318→   318→    }
+   319→   319→    // After calibration, these should match scenario probabilities
+   320→   320→    return result;
+   321→   321→  }, [filteredPaths]);
+   322→   322→
+   323→   323→  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + scenarios[k].probability, 0);
+   324→   324→
+   325→   325→  // ── Detail panel content ─────────────────────────────────────────
+   326→   326→  const detailContent = useMemo(() => {
+   327→   327→    if (!selectedNode) return null;
+   328→   328→    const def = nodeDefs[selectedNode];
+   329→   329→    if (!def) return null;
+   330→   330→    const relations = EDGES.filter(e => e[0] === selectedNode || e[1] === selectedNode);
+   331→   331→    const inputs = relations.filter(e => e[1] === selectedNode);
+   332→   332→    const outputs = relations.filter(e => e[0] === selectedNode);
+   333→   333→
+   334→   334→    return (
+   335→   335→      <div className="space-y-3">
+   336→   336→        <h3 className="text-sm font-bold text-gray-100">{def.title}</h3>
+   337→   337→        <p className="text-xs text-gray-300"><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+   338→   338→        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-white/10 bg-white/5 text-gray-300">{def.type}</span>
+   339→   339→        <p className="text-xs text-gray-400 leading-relaxed">{def.desc}</p>
+   340→   340→        {inputs.length > 0 && (
+   341→   341→          <div>
+   342→   342→            <p className="text-xs font-medium text-gray-300 mb-1">مسیرهای ورودی ({inputs.length}):</p>
+   343→   343→            <ul className="space-y-1">
+   344→   344→              {inputs.map((e, i) => {
+   345→   345→                const ei = EDGES.indexOf(e);
+   346→   346→                const ep = edgeProbs[String(ei)] ?? 0;
+   347→   347→                return (
+   348→   348→                  <li key={i} className="text-[11px] text-gray-500 leading-relaxed border-t border-dashed border-white/10 pt-1.5">
+   349→   349→                    <b className="text-gray-400">{e[0]} ← {e[1]}</b>
+   350→   350→                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+   351→   351→                    <br />{e[2]}
+   352→   352→                  </li>
+   353→   353→                );
+   354→   354→              })}
+   355→   355→            </ul>
+   356→   356→          </div>
+   357→   357→        )}
+   358→   358→        {outputs.length > 0 && (
+   359→   359→          <div>
+   360→   360→            <p className="text-xs font-medium text-gray-300 mb-1">مسیرهای خروجی ({outputs.length}):</p>
+   361→   361→            <ul className="space-y-1">
+   362→   362→              {outputs.map((e, i) => {
+   363→   363→                const ei = EDGES.indexOf(e);
+   364→   364→                const ep = edgeProbs[String(ei)] ?? 0;
+   365→   365→                return (
+   366→   366→                  <li key={i} className="text-[11px] text-gray-500 leading-relaxed border-t border-dashed border-white/10 pt-1.5">
+   367→   367→                    <b className="text-gray-400">{e[0]} → {e[1]}</b>
+   368→   368→                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+   369→   369→                    <br />{e[2]}
+   370→   370→                  </li>
+   371→   371→                );
+   372→   372→              })}
+   373→   373→            </ul>
+   374→   374→          </div>
+   375→   375→        )}
+   376→   376→      </div>
+   377→   377→    );
+   378→   378→  }, [selectedNode, nodeValues, edgeProbs]);
+   379→   379→
+   380→   380→  // ── All filter buttons ────────────────────────────────────────────
+   381→   381→  const allFilters = [
+   382→   382→    ...TYPE_FILTERS,
+   383→   383→    { key: 'sep1', label: '│', isSep: true as const },
+   384→   384→    ...SCENARIO_KEYS.map(k => ({ key: k, label: `${k} | ${dynamicMeta[k].label}`, scenarioKey: k })),
+   385→   385→  ];
+   386→   386→
+   387→   387→  return (
+   388→   388→    <div className="space-y-3" dir="rtl">
+   389→   389→      {/* ═══ HEADER ═══ */}
+   390→   390→      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl border border-cyan-500/20"
+   391→   391→        style={{ background: 'linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77))', boxShadow: '0 18px 55px rgba(0,0,0,.35)' }}>
+   392→   392→        <div className="flex items-center gap-3">
+   393→   393→          <div className="w-10 h-10 rounded-xl border border-amber-500/60 flex items-center justify-center text-amber-400 text-xl font-bold"
+   394→   394→            style={{ boxShadow: 'inset 0 0 22px rgba(255,177,27,.12), 0 0 22px rgba(255,177,27,.08)' }}>◈</div>
+   395→   395→          <div>
+   396→   396→            <h2 className="text-base font-bold text-gray-100">گراف تصمیم {symbolName}</h2>
+   397→   397→            <p className="text-[11px] text-gray-500">مدل ۱۲پایه گره‌ـ‌مسیر | مبتنی بر EMV و مسیرهای بحرانی</p>
+   398→   398→          </div>
+   399→   399→        </div>
+   400→   400→        <div className="text-left text-xs text-gray-400 leading-relaxed pr-4 border-r border-cyan-500/20">
+   401→   401→          نقطه مرجع: <b className="text-cyan-400">{toFa(currentPrice)}</b><br />
+   402→   402→          افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
+   403→   403→        </div>
+   404→   404→      </div>
+   405→   405→
+   406→   406→      {/* ═══ Metric Cards ═══ */}
+   407→   407→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   408→   408→        <MetricCard label="مقدار مرجع" value={toFa(currentPrice) + ` ${unit}`} color="text-cyan-400" />
+   409→   409→        <MetricCard label="مقاومت آنی (R1)" value={toFa(R1_level) + ` ${unit}`} color="text-amber-400" />
+   410→   410→        <MetricCard label="حمایت تفکیک‌کننده (S1)" value={toFa(S1_level) + ` ${unit}`} color="text-blue-400" />
+   411→   411→        <MetricCard label="میانگین متحرک ۱۰۰" value={toFa(ma100) + ` ${unit}`} color="text-gray-200" />
+   412→   412→      </div>
+   413→   413→
+   414→   414→      {/* ═══ Toolbar ═══ */}
+   415→   415→      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl border border-white/10 bg-[#091825]/90">
+   416→   416→        <span className="text-xs text-gray-500 ml-1">فیلتر:</span>
+   417→   417→        {allFilters.map((btn, i) => {
+   418→   418→          if ('isSep' in btn && btn.isSep) {
+   419→   419→            return <span key={`sep-${i}`} className="text-gray-700 mx-1">│</span>;
+   420→   420→          }
+   421→   421→          const isScenario = 'scenarioKey' in btn;
+   422→   422→          const isActive = activeFilter === btn.key;
+   423→   423→          const meta = isScenario ? dynamicMeta[btn.scenarioKey] : null;
+   424→   424→          return (
+   425→   425→            <button
+   426→   426→              key={btn.key}
+   427→   427→              onClick={() => setActiveFilter(btn.key)}
+   428→   428→              className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
+   429→   429→                isActive
+   430→   430→                  ? isScenario
+   431→   431→                    ? 'text-white border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.2)]'
+   432→   432→                    : 'text-white border-cyan-500/60 bg-cyan-500/14 shadow-[0_0_18px_rgba(58,213,219,.10)]'
+   433→   433→                  : 'text-gray-400 border-white/10 bg-white/4 hover:bg-white/8'
+   434→   434→              }`}
+   435→   435→              style={isActive && isScenario && meta ? {
+   436→   436→                borderColor: meta.color + '99',
+   437→   437→                background: meta.color + '18',
+   438→   438→                color: meta.color,
+   439→   439→              } : undefined}
+   440→   440→            >{btn.label}</button>
+   441→   441→          );
+   442→   442→        })}
+   443→   443→        <button
+   444→   444→          onClick={() => { setSelectedNode(null); setActiveFilter('all'); }}
+   445→   445→          className="text-xs px-3 py-1.5 rounded-lg border border-white/10 bg-white/4 text-gray-400 hover:bg-white/8 transition-all cursor-pointer mr-auto"
+   446→   446→        >بازنشانی</button>
+   447→   447→      </div>
+   448→   448→
+   449→   449→      {/* ═══ Graph Workspace ═══ */}
+   450→   450→      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">
+   451→   451→        {/* Graph Shell */}
+   452→   452→        <div
+   453→   453→          ref={shellRef}
+   454→   454→          className="relative overflow-auto border border-white/10 border-t-0 rounded-b-2xl min-h-[500px] max-h-[700px]"
+   455→   455→          style={{
+   456→   456→            background: 'radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72)',
+   457→   457→            boxShadow: '0 18px 55px rgba(0,0,0,.35)',
+   458→   458→          }}
+   459→   459→        >
+   460→   460→          <div ref={graphRef} className="relative mx-auto" style={{ width: 1100, height: 780, minWidth: 1100, minHeight: 780 }}>
+   461→   461→            <svg ref={svgRef} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" aria-label="مسیرهای گراف تصمیم" />
+   462→   462→
+   463→   463→            {/* Nodes */}
+   464→   464→            {Object.entries(NODE_POSITIONS).map(([id, pos]) => {
+   465→   465→              const def = nodeDefs[id];
+   466→   466→              if (!def) return null;
+   467→   467→              const isTerminal = def.isTerminal;
+   468→   468→              const isResultNode = SCENARIO_KEYS.includes(id as any);
+   469→   469→              const isSelected = selectedNode === id;
+   470→   470→              const isVisible = visibleNodes.has(id);
+   471→   471→              const scenarioProb = isResultNode ? scenarios[id as keyof typeof scenarios].probability : null;
+   472→   472→              const scenarioColor = isResultNode ? dynamicMeta[id].color : def.color;
+   473→   473→
+   474→   474→              return (
+   475→   475→                <div
+   476→   476→                  key={id}
+   477→   477→                  ref={el => { nodeRefs.current[id] = el; }}
+   478→   478→                  onClick={() => setSelectedNode(id)}
+   479→   479→                  className={`absolute cursor-pointer transition-all duration-200 z-[2] text-center ${
+   480→   480→                    isTerminal ? 'w-[160px] min-h-[85px]' : 'w-[138px] min-h-[72px]'
+   481→   481→                  }`}
+   482→   482→                  style={{
+   483→   483→                    right: pos.right * (1100 / 1500),
+   484→   484→                    top: pos.top * (780 / 780),
+   485→   485→                    '--node-color': scenarioColor,
+   486→   486→                    padding: '8px 7px',
+   487→   487→                    border: `1px solid ${scenarioColor}${isTerminal ? '' : 'aa'}`,
+   488→   488→                    borderWidth: isTerminal ? '2px' : '1px',
+   489→   489→                    borderRadius: '12px',
+   490→   490→                    background: isVisible
+   491→   491→                      ? `linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))`
+   492→   492→                      : 'rgba(6,12,20,0.5)',
+   493→   493→                    boxShadow: isVisible
+   494→   494→                      ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 12%, transparent), 0 10px 25px rgba(0,0,0,.25)`
+   495→   495→                      : 'none',
+   496→   496→                    opacity: isVisible ? 1 : 0.12,
+   497→   497→                    transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
+   498→   498→                    filter: isSelected ? 'brightness(1.18)' : isVisible ? 'none' : 'grayscale(0.8) blur(0.5px)',
+   499→   499→                    ...(isSelected ? {
+   500→   500→                      boxShadow: `0 0 0 2px color-mix(in srgb, ${scenarioColor} 28%, transparent), 0 0 28px color-mix(in srgb, ${scenarioColor} 25%, transparent)`,
+   501→   501→                    } : {}),
+   502→   502→                  } as React.CSSProperties}
+   503→   503→                >
+   504→   504→                  {isResultNode && (
+   505→   505→                    <span className="block text-[9px] font-bold mb-1" style={{ color: scenarioColor }}>نتیجه {id}</span>
+   506→   506→                  )}
+   507→   507→                  {!isResultNode && (
+   508→   508→                    <span className="block text-[9px] font-bold mb-1" style={{ color: isVisible ? scenarioColor : '#555' }}>{id} | {def.type.split(' ').slice(0, 2).join(' ')}</span>
+   509→   509→                  )}
+   510→   510→                  <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-gray-100' : 'text-gray-600'}`}>{def.title}</div>
+   511→   511→                  <div className="text-[10px] text-gray-400 mt-1" dir="ltr">{nodeValues[id] ?? '--'}</div>
+   512→   512→                  {isResultNode && scenarioProb !== null && (
+   513→   513→                    <span
+   514→   514→                      className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-sm font-bold"
+   515→   515→                      style={{
+   516→   516→                        background: `color-mix(in srgb, ${scenarioColor} 17%, transparent)`,
+   517→   517→                        color: scenarioColor,
+   518→   518→                      }}
+   519→   519→                    >{toFa(scenarioProb)}٪</span>
+   520→   520→                  )}
+   521→   521→                </div>
+   522→   522→              );
+   523→   523→            })}
+   524→   524→
+   525→   525→            {/* Legend */}
+   526→   526→            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-white/10 bg-[#07111b]/80 text-[10px] text-gray-500 leading-7 z-10">
+   527→   527→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعود و تأیید</div>
+   528→   528→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />پولبک و بازگشت</div>
+   529→   529→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />اصلاح</div>
+   530→   530→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ef4d62]" />ریسک / ابطال</div>
+   531→   531→            </div>
+   532→   532→          </div>
+   533→   533→        </div>
+   534→   534→
+   535→   535→        {/* ═══ Right Panel: Path Probabilities ═══ */}
+   536→   536→        <div className="rounded-2xl border border-white/10 p-4 flex flex-col"
+   537→   537→          style={{ background: 'linear-gradient(160deg, rgba(16,39,57,.93), rgba(7,19,31,.93))', boxShadow: '0 18px 55px rgba(0,0,0,.35)' }}>
+   538→   538→          <h2 className="text-sm font-bold text-gray-200 mb-3">📋 احتمال مسیرها</h2>
+   539→   539→
+   540→   540→          {selectedNode && detailContent ? (
+   541→   541→            <div className="border-t border-white/10 pt-3 flex-1 overflow-y-auto max-h-[580px] custom-scrollbar">
+   542→   542→              {detailContent}
+   543→   543→            </div>
+   544→   544→          ) : (
+   545→   545→            <div className="flex-1 overflow-y-auto max-h-[580px] space-y-3 custom-scrollbar">
+   546→   546→              {/* Path probabilities per target */}
+   547→   547→              <div className="space-y-2">
+   548→   548→                {SCENARIO_KEYS.map(key => {
+   549→   549→                  const meta = dynamicMeta[key];
+   550→   550→                  const s = scenarios[key];
+   551→   551→                  const pathProb = pathProbsByTarget[key] ?? 0;
+   552→   552→                  const isActive = activeFilter === key;
+   553→   553→                  return (
+   554→   554→                    <div
+   555→   555→                      key={key}
+   556→   556→                      onClick={() => setActiveFilter(key)}
+   557→   557→                      className={`rounded-xl p-3 cursor-pointer transition-all border ${
+   558→   558→                        isActive
+   559→   559→                          ? 'border-opacity-60'
+   560→   560→                          : 'border-white/6 hover:border-white/15'
+   561→   561→                      }`}
+   562→   562→                      style={{
+   563→   563→                        background: isActive ? `${meta.color}10` : 'rgba(255,255,255,0.02)',
+   564→   564→                        borderColor: isActive ? meta.color + '80' : undefined,
+   565→   565→                      }}
+   566→   566→                    >
+   567→   567→                      <div className="flex items-center justify-between mb-1">
+   568→   568→                        <span className="text-xs font-bold" style={{ color: meta.color }}>{key} | {meta.label}</span>
+   569→   569→                        <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((pathProb * 100).toFixed(1))}٪</span>
+   570→   570→                      </div>
+   571→   571→                      {/* Probability bar */}
+   572→   572→                      <div className="w-full h-1.5 rounded-full bg-white/5 mb-2">
+   573→   573→                        <div
+   574→   574→                          className="h-full rounded-full transition-all duration-300"
+   575→   575→                          style={{ width: `${Math.min(100, pathProb * 100)}%`, background: meta.color }}
+   576→   576→                        />
+   577→   577→                      </div>
+   578→   578→                      <div className="flex items-center justify-between text-[10px] text-gray-500">
+   579→   579→                        <span>تعداد مسیرها: {filteredPaths.filter(p => p.target === key).length}</span>
+   580→   580→                        <span>احتمال سناریو: <b className="text-gray-300">{toFa(s.probability)}٪</b></span>
+   581→   581→                      </div>
+   582→   582→                    </div>
+   583→   583→                  );
+   584→   584→                })}
+   585→   585→              </div>
+   586→   586→
+   587→   587→              {/* Top paths list */}
+   588→   588→              <div className="border-t border-white/10 pt-3 mt-3">
+   589→   589→                <h3 className="text-xs font-bold text-gray-300 mb-2">مسیرهای اصلی (تا ۱۰ مسیر)</h3>
+   590→   590→                <div className="space-y-1.5">
+   591→   591→                  {filteredPaths.slice(0, 10).map((p, i) => {
+   592→   592→                    const meta = dynamicMeta[p.target];
+   593→   593→                    return (
+   594→   594→                      <div key={i} className="flex items-center gap-2 text-[10px]">
+   595→   595→                        <span className="w-4 text-center font-bold" style={{ color: meta.color }}>{i + 1}</span>
+   596→   596→                        <span className="flex-1 text-gray-400" dir="ltr">
+   597→   597→                          {p.nodes.join(' → ')}
+   598→   598→                        </span>
+   599→   599→                        <span className="font-bold min-w-[40px] text-left" style={{ color: meta.color }}>
+   600→   600→                          {toPersianDigits((p.prob * 100).toFixed(1))}٪
+   601→   601→                        </span>
+   602→   602→                      </div>
+   603→   603→                    );
+   604→   604→                  })}
+   605→   605→                  {filteredPaths.length > 10 && (
+   606→   606→                    <div className="text-[10px] text-gray-600 text-center pt-1">
+   607→   607→                      و {filteredPaths.length - 10} مسیر دیگر...
+   608→   608→                    </div>
+   609→   609→                  )}
+   610→   610→                </div>
+   611→   611→              </div>
+   612→   612→
+   613→   613→              <div className="border-t border-white/10 pt-3 mt-3">
+   614→   614→                <p className="text-[10px] text-gray-500 leading-relaxed">
+   615→   615→                  <b>قاعده:</b> عبور یا شکست هر سطح فقط با تثبیت معتبر تلقی می‌شود.<br />
+   616→   616→                  <b>احتمال یال:</b> حاصل توزیع شرطی بر اساس سیگنال‌های تکنیکال.<br />
+   617→   617→                  <b>احتمال مسیر:</b> حاصل‌ضرب احتمال یال‌های مسیر.
+   618→   618→                </p>
+   619→   619→              </div>
+   620→   620→            </div>
+   621→   621→          )}
+   622→   622→        </div>
+   623→   623→      </div>
+   624→   624→
+   625→   625→      {/* ═══ Scenario Result Cards ═══ */}
+   626→   626→      <div className="mt-4 p-4 rounded-2xl border border-white/10 bg-[#081623]/80">
+   627→   627→        <h2 className="text-sm font-bold text-gray-200 mb-3">گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی</h2>
+   628→   628→        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+   629→   629→          {SCENARIO_KEYS.map(key => {
+   630→   630→            const s = scenarios[key];
+   631→   631→            const meta = dynamicMeta[key];
+   632→   632→            return (
+   633→   633→              <div
+   634→   634→                key={key}
+   635→   635→                className="rounded-xl p-3"
+   636→   636→                style={{
+   637→   637→                  '--scolor': meta.color,
+   638→   638→                  border: `1px solid color-mix(in srgb, ${meta.color} 40%, transparent)`,
+   639→   639→                  background: `linear-gradient(160deg, color-mix(in srgb, ${meta.color} 12%, transparent), rgba(8,22,35,.65))`,
+   640→   640→                } as React.CSSProperties}
+   641→   641→              >
+   642→   642→                <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
+   643→   643→                <span className="text-xs font-bold text-gray-300">{key} | {meta.label}</span>
+   644→   644→                <small className="block text-[10px] text-gray-500 leading-relaxed mt-2" dir="ltr">
+   645→   645→                  {toFa(s.targetMin)} — {toFa(s.targetMax)} {unit}
+   646→   646→                </small>
+   647→   647→              </div>
+   648→   648→            );
+   649→   649→          })}
+   650→   650→        </div>
+   651→   651→        <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-amber-500/80 bg-amber-500/6 text-[11px] text-gray-400 leading-relaxed">
+   652→   652→          <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی بر اساس فرمول‌های تعریف‌شده (ADX, RSI, MFI, CCI و فاصله از سطوح) محاسبه شده‌اند. احتمال مسیرها از حاصل‌ضرب احتمال شرطی یال‌ها به دست می‌آید.
+   653→   653→        </div>
+   654→   654→      </div>
+   655→   655→    </div>
+   656→   656→  );
+   657→   657→}
+   658→   658→
+   659→   659→// ── Sub-components ──────────────────────────────────────────────────────────────
+   660→   660→
+   661→   661→function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+   662→   662→  return (
+   663→   663→    <div className="px-4 py-3 rounded-xl border border-white/10"
+   664→   664→      style={{ background: 'linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86))' }}>
+   665→   665→      <small className="block text-xs text-gray-500 mb-2">{label}</small>
+   666→   666→      <strong className={`text-lg tracking-wide ${color}`}>{value}</strong>
+   667→   667→    </div>
+   668→   668→  );
+   669→   669→}
+   670→   670→
+   671→   671→// ── Loading ────────────────────────────────────────────────────────────────────
+   672→   672→
+   673→   673→export function VdssGraphSkeleton() {
+   674→   674→  return (
+   675→   675→    <div className="space-y-3">
+   676→   676→      <Skeleton className="h-16 w-full bg-white/5 rounded-2xl" />
+   677→   677→      <div className="grid grid-cols-4 gap-3">
+   678→   678→        <Skeleton className="h-16 bg-white/5 rounded-xl" />
+   679→   679→        <Skeleton className="h-16 bg-white/5 rounded-xl" />
+   680→   680→        <Skeleton className="h-16 bg-white/5 rounded-xl" />
+   681→   681→        <Skeleton className="h-16 bg-white/5 rounded-xl" />
+   682→   682→      </div>
+   683→   683→      <Skeleton className="h-10 w-full bg-white/5 rounded-t-2xl" />
+   684→   684→      <Skeleton className="h-[500px] w-full bg-white/5 rounded-b-2xl" />
+   685→   685→      <Skeleton className="h-40 w-full bg-white/5 rounded-2xl" />
+   686→   686→    </div>
+   687→   687→  );
+   688→   688→}

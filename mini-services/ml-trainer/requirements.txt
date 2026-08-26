@@ -1,0 +1,8 @@
+numpy
+pandas
+scikit-learn
+xgboost
+onnx
+skl2onnx
+onnxmltools
+onnxruntime

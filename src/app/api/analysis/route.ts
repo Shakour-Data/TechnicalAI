@@ -144,8 +144,14 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
     console.error(`[analysis] Error for symbol=${symbol}:`, msg);
-    // 404 for data-not-found, 502 only for actual upstream failures
+    const isTimeout = msg.includes('Timeout') || msg.includes('timeout') || msg.includes('زمان') || msg.includes('اتصال');
     const isNotFound = msg.includes('یافت نشد') || msg.includes('No candle');
-    return NextResponse.json({ error: msg }, { status: isNotFound ? 404 : 502 });
+    const status = isNotFound ? 404 : isTimeout ? 503 : 502;
+    const userMsg = isTimeout
+      ? 'سرور داده در دسترس نیست. لطفاً بعداً تلاش کنید.'
+      : isNotFound
+      ? msg
+      : 'خطا در دریافت داده‌ها. لطفاً دوباره تلاش کنید.';
+    return NextResponse.json({ error: userMsg }, { status });
   }
 }

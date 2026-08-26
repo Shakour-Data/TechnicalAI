@@ -7,6 +7,7 @@ import { type GraphData } from '@/lib/decision-graph';
 import { type ProbabilityTrendResult, type DayPoint } from '@/lib/probability-trend';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useTheme } from '@/lib/theme-store';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -77,15 +78,15 @@ const EDGE_COLORS: Record<string, string> = {
 const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
 
 const SCENARIO_META: Record<string, { label: string; color: string }> = {
-  R1: { label: 'شوک صعودی', color: '#0891b2' },
-  R2: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
-  R3: { label: 'صعودی قوی', color: '#059669' },
-  R4: { label: 'صعودی خفیف', color: '#047857' },
+  R1: { label: 'شوک نزولی', color: '#b91c1c' },
+  R2: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
+  R3: { label: 'نزولی قوی', color: '#ea580c' },
+  R4: { label: 'نزولی خفیف', color: '#c2410c' },
   R5: { label: 'رنج', color: '#b45309' },
-  R6: { label: 'نزولی خفیف', color: '#c2410c' },
-  R7: { label: 'نزولی قوی', color: '#ea580c' },
-  R8: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
-  R9: { label: 'شوک نزولی', color: '#b91c1c' },
+  R6: { label: 'صعودی خفیف', color: '#047857' },
+  R7: { label: 'صعودی قوی', color: '#059669' },
+  R8: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
+  R9: { label: 'شوک صعودی', color: '#0891b2' },
 };
 
 const SCENARIO_DISPLAY: Record<string, string> = {
@@ -116,6 +117,7 @@ const TYPE_FILTERS = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function VdssGraph(props: VdssGraphProps) {
+  const { colors: C } = useTheme();
   const {
     symbolName,
     currentPrice,
@@ -299,27 +301,27 @@ export default function VdssGraph(props: VdssGraphProps) {
       return (
         <div className="space-y-3">
           <h3 className="text-sm font-bold" style={{ color: meta.color }}>{node.title}</h3>
-          <p className="text-xs text-[#374151]">{node.desc}</p>
-          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#e5e7eb] bg-[#f3f4f6] text-[#374151]">{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-          <div className="text-xs text-[#6b7280]" dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
+          <p className="text-xs" style={{ color: C.cardSubFg }}>{node.desc}</p>
+          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border bg-gray-50 text-gray-500">{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
+          <div className="text-xs" style={{ color: C.cardSubFg }} dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
 
-          <div className="mt-3 pt-3 border-t border-[#e5e7eb]">
-            <p className="text-xs font-bold text-[#374151] mb-2">سهم هر استراتژی:</p>
+          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+            <p className="text-xs font-bold mb-2" style={{ color: C.cardFg }}>سهم هر استراتژی:</p>
             {Object.entries(BRANCH_META).map(([bKey, bMeta]) => {
               const val = contrib[bKey as 'trend' | 'breakout' | 'reversal'];
               const pct = (val * 100).toFixed(1);
               return (
-                <div key={bKey} className="flex items-center justify-between py-1.5 border-b border-dashed border-[#e5e7eb]">
+                <div key={bKey} className="flex items-center justify-between py-1.5" style={{ borderBottom: `1px dashed ${C.cardBorder}` }}>
                   <div className="flex items-center gap-1.5">
                     <span className="inline-block w-2 h-2 rounded-full" style={{ background: bMeta.color }} />
-                    <span className="text-[11px] text-[#374151]">{bMeta.label}</span>
+                    <span className="text-[11px]" style={{ color: C.cardFg }}>{bMeta.label}</span>
                   </div>
                   <span className="text-[11px] font-bold" style={{ color: bMeta.color }}>{toPersianDigits(pct)}٪</span>
                 </div>
               );
             })}
             <div className="flex items-center justify-between py-1.5">
-              <span className="text-[11px] font-bold text-[#111827]">مجموع</span>
+              <span className="text-[11px] font-bold" style={{ color: C.cardFg }}>مجموع</span>
               <span className="text-[11px] font-black" style={{ color: meta.color }}>{toFa(s?.probability ?? 0)}٪</span>
             </div>
           </div>
@@ -333,20 +335,20 @@ export default function VdssGraph(props: VdssGraphProps) {
 
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-[#111827]">{node.title}</h3>
-        <p className="text-xs text-[#374151]"><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
-        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#e5e7eb] bg-[#f3f4f6] text-[#374151]">{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-        <p className="text-xs text-[#6b7280] leading-relaxed">{node.desc}</p>
+        <h3 className="text-sm font-bold" style={{ color: C.cardFg }}>{node.title}</h3>
+        <p className="text-xs" style={{ color: C.cardSubFg }}><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border" style={{ borderColor: C.cardBorder, background: C.cardBorder, color: C.cardSubFg }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
+        <p className="text-xs leading-relaxed" style={{ color: C.cardSubFg }}>{node.desc}</p>
         {inputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای ورودی ({toFa(inputs.length)}):</p>
+            <p className="text-xs font-medium mb-1" style={{ color: C.cardFg }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
             <ul className="space-y-1">
               {inputs.map((e, i) => {
                 const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
                 const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
-                  <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
-                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                  <li key={i} className="text-[11px] leading-relaxed pt-1.5" style={{ color: C.cardSubFg, borderTop: `1px dashed ${C.cardBorder}` }}>
+                    <b style={{ color: C.cardFg }}>{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
                     <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${edgeColor}20`, color: edgeColor }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e.label}
                   </li>
@@ -357,13 +359,13 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
         {outputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای خروجی ({toFa(outputs.length)}):</p>
+            <p className="text-xs font-medium mb-1" style={{ color: C.cardFg }}>مسیرهای خروجی ({toFa(outputs.length)}):</p>
             <ul className="space-y-1">
               {outputs.map((e, i) => {
                 const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
                 const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
-                  <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
+                  <li key={i} className="text-[11px] leading-relaxed pt-1.5" style={{ color: C.cardSubFg, borderTop: `1px dashed ${C.cardBorder}` }}>
                     <b className="text-[#374151]">{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
                     <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${edgeColor}20`, color: edgeColor }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e.label}
@@ -402,17 +404,16 @@ export default function VdssGraph(props: VdssGraphProps) {
   return (
     <div className="space-y-3" dir="rtl">
       {/* ═══ HEADER ═══ */}
-      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl border border-[#e5e7eb]"
-        style={{ background: 'linear-gradient(105deg, #ffffff, #f3f4f6)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl" style={{ border: `1px solid ${C.cardBorder}`, background: C.cardBg, boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl border border-amber-200 flex items-center justify-center text-amber-800 text-xl font-bold"
             style={{ boxShadow: 'inset 0 0 22px rgba(146,64,14,.06), 0 0 22px rgba(146,64,14,.04)' }}>◈</div>
           <div>
-            <h2 className="text-base font-bold text-[#111827]">گراف تصمیم {symbolName}</h2>
-            <p className="text-[11px] text-[#6b7280]">مدل ۳‌شاخه‌ای | پیروی از روند، شکست، بازگشت | ۲۷ مسیر به ۹ سناریو</p>
+            <h2 className="text-base font-bold" style={{ color: C.cardFg }}>گراف تصمیم {symbolName}</h2>
+            <p className="text-[11px]" style={{ color: C.cardSubFg }}>مدل ۳‌شاخه‌ای | پیروی از روند، شکست، بازگشت | ۲۷ مسیر به ۹ سناریو</p>
           </div>
         </div>
-        <div className="text-left text-xs text-[#6b7280] leading-relaxed pr-4 border-r border-[#e5e7eb]">
+        <div className="text-left text-xs leading-relaxed pr-4" style={{ color: C.cardSubFg, borderRight: `1px solid ${C.cardBorder}` }}>
           نقطه مرجع: <b className="text-cyan-700">{toFa(currentPrice)}</b><br />
           افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
         </div>
@@ -427,8 +428,8 @@ export default function VdssGraph(props: VdssGraphProps) {
       </div>
 
       {/* ═══ Toolbar ═══ */}
-      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl border border-[#e5e7eb] bg-[#ffffff]">
-        <span className="text-xs text-[#6b7280] ml-1">فیلتر:</span>
+      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl" style={{ border: `1px solid ${C.cardBorder}`, background: C.cardBg }}>
+        <span className="text-xs ml-1" style={{ color: C.cardSubFg }}>فیلتر:</span>
         {allFilters.map((btn, i) => {
           if ('isSep' in btn && btn.isSep) {
             return <span key={`sep-${i}`} className="text-[#B0A89E] mx-1">│</span>;
@@ -476,9 +477,10 @@ export default function VdssGraph(props: VdssGraphProps) {
         {/* Graph Shell */}
         <div
           ref={shellRef}
-          className="relative overflow-auto border border-[#e5e7eb] border-t-0 rounded-b-2xl min-h-[900px]"
+          className="relative overflow-auto rounded-b-2xl min-h-[900px]"
           style={{
-            background: 'radial-gradient(circle at 49% 49%, rgba(180,200,220,.18), transparent 36%), #ffffff',
+            border: `1px solid ${C.cardBorder}`, borderTop: 'none',
+            background: `radial-gradient(circle at 49% 49%, rgba(180,200,220,.18), transparent 36%), ${C.cardBg}`,
             boxShadow: '0 4px 16px rgba(0,0,0,.06)',
           }}
         >
@@ -517,14 +519,14 @@ export default function VdssGraph(props: VdssGraphProps) {
               if (node.type === 'decision' && !isTerminal) {
                 borderLeftWidth = '3px';
                 borderStyle = 'solid';
-                bgStyle = isVisible ? 'linear-gradient(145deg, #ffffff, #f3f4f6)' : 'rgba(243,244,246,0.5)';
+                bgStyle = isVisible ? C.cardBg : 'rgba(243,244,246,0.5)';
                 boxShadowStyle = isVisible
                   ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
                   : 'none';
               } else if (node.type === 'event') {
                 borderLeftWidth = '2px';
                 borderStyle = 'dotted';
-                bgStyle = isVisible ? 'linear-gradient(145deg, #fafbfc, #f3f4f6)' : 'rgba(243,244,246,0.5)';
+                bgStyle = isVisible ? C.cardBg : 'rgba(243,244,246,0.5)';
                 boxShadowStyle = isVisible
                   ? `0 2px 8px rgba(0,0,0,.04)`
                   : 'none';
@@ -620,11 +622,11 @@ export default function VdssGraph(props: VdssGraphProps) {
             })}
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-[#e5e7eb] bg-[#ffffff]/90 text-[10px] text-[#374151] leading-6 z-10">
+            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg z-10" style={{ border: `1px solid ${C.cardBorder}`, background: `${C.cardBg}e6`, fontSize: '10px', color: C.cardSubFg, lineHeight: 1.5 }}>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.cyan }} />پیروی از روند</div>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.gold }} />شکست</div>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.purple }} />بازگشت</div>
-              <div className="border-t border-[#e5e7eb] my-1" />
+              <div style={{ borderTop: `1px solid ${C.cardBorder}` }} className="my-1" />
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعودی</div>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />خنثی / رنج</div>
               <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />نزولی</div>
@@ -634,12 +636,11 @@ export default function VdssGraph(props: VdssGraphProps) {
         </div>
 
         {/* ═══ Right Panel: Scenario Probabilities & Detail ═══ */}
-        <div className="rounded-2xl border border-[#e5e7eb] p-4 flex flex-col"
-          style={{ background: 'linear-gradient(160deg, #ffffff, #f3f4f6)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-          <h2 className="text-sm font-bold text-[#111827] mb-3">📋 احتمال سناریوها</h2>
+        <div className="rounded-2xl p-4 flex flex-col" style={{ border: `1px solid ${C.cardBorder}`, background: C.cardBg, boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <h2 className="text-sm font-bold mb-3" style={{ color: C.cardFg }}>📋 احتمال سناریوها</h2>
 
           {selectedNode && detailContent ? (
-            <div className="border-t border-[#e5e7eb] pt-3 flex-1 overflow-y-auto max-h-[860px] custom-scrollbar">
+            <div className="pt-3 flex-1 overflow-y-auto max-h-[860px] custom-scrollbar" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
               {detailContent}
             </div>
           ) : (
@@ -669,7 +670,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                         <span className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</span>
                         <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((prob * 100).toFixed(1))}٪</span>
                       </div>
-                      <div className="w-full h-1.5 rounded-full bg-[#e5e7eb] mb-2">
+                      <div className="w-full h-1.5 rounded-full mb-2" style={{ background: C.cardBorder }}>
                         <div
                           className="h-full rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, prob * 100)}%`, background: meta.color }}
@@ -797,7 +798,7 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
             style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
           <div className="text-right">
             <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
-            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — مدل لجستیک با اوج متغیر</p>
+            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — مدل زوال نمایی دوگانه + احتمال تجمعی CDF</p>
           </div>
         </div>
         <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
@@ -926,9 +927,20 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
             </TableBody>
           </Table>
 
-          <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
-            <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص. احتمال تجمعی = مجموع تجمعی از روز ۱ تا آن روز.
-            سلول‌های برجسته نشان‌دهنده روز اوج احتمال هر سناریو هستند. نوار روند گروهی نسبت تجمعی گاوی به کل را نشان می‌دهد.
+          <div className="mt-3 space-y-2">
+            <div className="px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
+              <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص.
+              احتمال تجمعی (CDF) = مجموع احتمال از ضعیف‌ترین سناریو تا این سناریو در همان روز.
+              صعودی: از شوک صعودی (R9) تجمعی تا صعودی خفیف (R6) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
+              نزولی: از شوک نزولی (R1) تجمعی تا نزولی خفیف (R4) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
+              سلول‌های برجسته نشان‌دهنده روز اوج احتمال هر سناریو هستند. نوار روند گروهی نسبت تجمعی گاوی به کل را نشان می‌دهد.
+            </div>
+            {/* Scenario interpretations */}
+            {data.scenarios.filter(s => s.interpretation).map(s => (
+              <div key={s.scenarioKey} className="px-4 py-1.5 text-[10px] text-[#6b7280]">
+                <b>{s.label}:</b> {s.interpretation}
+              </div>
+            ))}
           </div>
         </div>
       </CollapsibleContent>

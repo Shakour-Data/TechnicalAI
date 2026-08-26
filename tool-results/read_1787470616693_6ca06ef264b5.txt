@@ -1,0 +1,768 @@
+    74→const EDGES: [string, string, string, string][] = [
+    75→  ['A','B','آزمون R1','up'], ['A','G','رد R1 / افت شتاب','pullback'], ['A','L','پایش روند','risk'],
+    76→  ['B','C','تثبیت بالای R1','up'], ['B','G','رد قیمت و پولبک','pullback'], ['B','A','نوسان در کریدور','risk'], ['B','R3','صعودی تدریجی','up'],
+    77→  ['C','D','آزمون R2','up'], ['C','G','بازگشت زیر R1','pullback'], ['C','L','شکست خط روند','risk'],
+    78→  ['D','E','عبور از R2','up'], ['D','B','رد R2','pullback'], ['D','G','اصلاح سریع','pullback'], ['D','L','واگرایی شتاب','risk'], ['D','R3','صعودی تدریجی از R2','up'],
+    79→  ['E','F','تداوم شتاب تا هدف','up'], ['E','D','توقف / عرضه','pullback'], ['E','G','اصلاح تا S1','pullback'], ['E','H','شکست S1','down'], ['E','R2','تثبیت در کریدور','up'],
+    80→  ['F','R1','حفظ بالای هدف','up'], ['F','E','رد هدف‌ها','pullback'], ['F','D','بازگشت زیر کریدور','down'], ['F','G','شکست روند','risk'],
+    81→  ['G','B','بازپس‌گیری R1','up'], ['G','A','بازگشت به مرجع','pullback'], ['G','H','شکست S1','down'], ['G','L','واکنش به خط روند','risk'], ['G','R4','حفظ S1 و بازیابی','pullback'],
+    82→  ['H','G','بازگشت بالای S1','pullback'], ['H','I','شکست S2','down'], ['H','B','بازیابی تا R1','up'], ['H','L','ارزیابی روند','risk'], ['H','R5','بازگشت سریع از S2','pullback'],
+    83→  ['I','H','حفظ S3 / بازگشت','pullback'], ['I','J','شکست S3','down'], ['I','G','بازگشت قدرتمند','up'], ['I','L','اعتبار روند','risk'], ['I','R6','حفظ S3','down'],
+    84→  ['J','I','بازگشت از S4','pullback'], ['J','K','شکست S4','down'], ['J','H','بازگشت تا S2','up'], ['J','L','فاصله تا MA100','risk'], ['J','R7','بازگشت از S4','down'],
+    85→  ['K','J','حفظ ناحیه و بازگشت','pullback'], ['K','I','بازیابی S3','up'], ['K','L','شکست MA100','risk'], ['K','R8','حفظ MA100','down'], ['K','R9','شکست MA100','risk'],
+    86→  ['L','C','حفظ روند صعودی','up'], ['L','H','شکست روند / حفظ S2','pullback'], ['L','J','شکست روند میانی','down'], ['L','K','حفظ خط پایه','risk'], ['L','R9','شکست کامل روند','risk']
+    87→];
+    88→
+    89→// Node positions (absolute, right/top within 1500x780 container)
+    90→const NODE_POSITIONS: Record<string, { right: number; top: number }> = {
+    91→  A:  { right: 670, top: 336 },
+    92→  B:  { right: 930, top: 230 },
+    93→  C:  { right: 1170, top: 115 },
+    94→  D:  { right: 935, top: 42 },
+    95→  E:  { right: 625, top: 42 },
+    96→  F:  { right: 312, top: 42 },
+    97→  G:  { right: 930, top: 450 },
+    98→  H:  { right: 1170, top: 565 },
+    99→  I:  { right: 680, top: 590 },
+   100→  J:  { right: 375, top: 590 },
+   101→  K:  { right: 72, top: 590 },
+   102→  L:  { right: 348, top: 337 },
+   103→  R1: { right: 1300, top: 42 },
+   104→  R2: { right: 1050, top: 42 },
+   105→  R3: { right: 800, top: 42 },
+   106→  R4: { right: 550, top: 42 },
+   107→  R5: { right: 750, top: 330 },
+   108→  R6: { right: 1100, top: 665 },
+   109→  R7: { right: 850, top: 665 },
+   110→  R8: { right: 600, top: 665 },
+   111→  R9: { right: 350, top: 665 },
+   112→};
+   113→
+   114→const NODE_DEFS: Record<string, { title: string; type: string; desc: string; color: string; isTerminal?: boolean }> = {
+   115→  A:  { title: 'گره تصمیم (ریشه)', type: 'گره تصمیم‌گیری', desc: 'نقطه صفر تصمیم — قیمت فعلی سهم.', color: COLORS.cyan },
+   116→  B:  { title: 'آزمون مقاومت R1', type: 'گره رویداد شانسی', desc: 'واکنش بازار به مقاومت اول. تثبیت بالای آن شرط ادامه صعود است.', color: COLORS.gold },
+   117→  C:  { title: 'تثبیت بالای R1', type: 'گره تأیید روند', desc: 'تثبیت بالای R1، احتمال حرکت به سمت R2 را افزایش می‌دهد.', color: COLORS.green },
+   118→  D:  { title: 'آزمون مقاومت R2', type: 'گره سنجش تقاضا', desc: 'کیفیت تقاضا در این سطح تعیین‌کننده ادامه مسیر است.', color: COLORS.gold },
+   119→  E:  { title: 'کریدور صعودی', type: 'گره نتیجه', desc: 'هدف میانی صعود. تثبیت در این کریدور تأیید روند است.', color: COLORS.green, isTerminal: true },
+   120→  F:  { title: 'هدف توسعه‌ای', type: 'گره نتیجه', desc: 'هدف نهایی در صورت تداوم شتاب بالا.', color: COLORS.green, isTerminal: true },
+   121→  G:  { title: 'پولبک به حمایت S1', type: 'گره حمایت', desc: 'مرز تفکیک پولبک سالم از اصلاح ساختاری.', color: COLORS.blue },
+   122→  H:  { title: 'حمایت S2', type: 'گره حمایت', desc: 'سطح دومین ایستگاه بازسازی ساختار کوتاه‌مدت.', color: COLORS.blue },
+   123→  I:  { title: 'حمایت S3', type: 'گره حمایت', desc: 'سطح ارزیابی قدرت تقاضا در اصلاح‌های عمیق‌تر.', color: COLORS.orange },
+   124→  J:  { title: 'حمایت S4', type: 'گره حمایت', desc: 'آخرین سطح قبل از ناحیه بحرانی MA100.', color: COLORS.orange },
+   125→  K:  { title: 'MA100 — گره بحرانی', type: 'گره ریسک', desc: 'شکست معتبر این ناحیه به منزله ابطال روند صعودی است.', color: COLORS.red },
+   126→  L:  { title: 'خطوط روند', type: 'گره کنترل', desc: 'حفظ قیمت بالای این خطوط برای تداوم روند صعودی حیاتی است.', color: COLORS.purple },
+   127→  R1: { title: 'صعودی با احتیاط', type: 'گره نتیجه', desc: 'تثبیت صعودی تدریجی و ملایم.', color: '#047857', isTerminal: true },
+   128→  R2: { title: 'صعودی قوی', type: 'گره نتیجه', desc: 'تثبیت در کریدور صعودی با شتاب.', color: '#059669', isTerminal: true },
+   129→  R3: { title: 'صعودی شتابدار', type: 'گره نتیجه', desc: 'صعود تدریجی از سطوح مقاومتی.', color: '#0e7490', isTerminal: true },
+   130→  R4: { title: 'شوک صعودی', type: 'گره نتیجه', desc: 'حفظ S1 و بازپس‌گیری سریع مقاومت.', color: '#0891b2', isTerminal: true },
+   131→  R5: { title: 'رنج کم‌نوسان', type: 'گره نتیجه', desc: 'بازگشت سریع از S2 در محدوده رنج.', color: '#b45309', isTerminal: true },
+   132→  R6: { title: 'نزولی با احتیاط', type: 'گره نتیجه', desc: 'حرکت به حمایت‌های میانی.', color: '#c2410c', isTerminal: true },
+   133→  R7: { title: 'نزولی قوی', type: 'گره نتیجه', desc: 'بازگشت از S4 با فشار نزولی.', color: '#ea580c', isTerminal: true },
+   134→  R8: { title: 'نزولی شتاب‌دار', type: 'گره نتیجه', desc: 'شکست MA100 با حفظ ناحیه.', color: '#dc2626', isTerminal: true },
+   135→  R9: { title: 'شوک نزولی', type: 'گره نتیجه', desc: 'شکست معتبر MA100 و ابطال روند.', color: '#b91c1c', isTerminal: true },
+   136→};
+   137→
+   138→const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+   139→
+   140→const SCENARIO_META: Record<string, { label: string; color: string; displayNum: string }> = {
+   141→  R1: { label: 'صعودی با احتیاط', color: '#047857', displayNum: '۱' },
+   142→  R2: { label: 'صعودی قوی', color: '#059669', displayNum: '۲' },
+   143→  R3: { label: 'صعودی شتابدار', color: '#0e7490', displayNum: '۳' },
+   144→  R4: { label: 'شوک صعودی', color: '#0891b2', displayNum: '۴' },
+   145→  R5: { label: 'رنج کم‌نوسان', color: '#b45309', displayNum: '۵' },
+   146→  R6: { label: 'نزولی با احتیاط', color: '#c2410c', displayNum: '۶' },
+   147→  R7: { label: 'نزولی قوی', color: '#ea580c', displayNum: '۷' },
+   148→  R8: { label: 'نزولی شتاب‌دار', color: '#dc2626', displayNum: '۸' },
+   149→  R9: { label: 'شوک نزولی', color: '#b91c1c', displayNum: '۹' },
+   150→};
+   151→
+   152→const SCENARIO_DISPLAY: Record<string, string> = {
+   153→  R1: 'سناریوی ۱', R2: 'سناریوی ۲', R3: 'سناریوی ۳',
+   154→  R4: 'سناریوی ۴', R5: 'سناریوی ۵', R6: 'سناریوی ۶',
+   155→  R7: 'سناریوی ۷', R8: 'سناریوی ۸', R9: 'سناریوی ۹',
+   156→};
+   157→
+   158→const TYPE_FILTERS = [
+   159→  { key: 'all', label: 'همه مسیرها' },
+   160→  { key: 'up', label: 'صعودی' },
+   161→  { key: 'pullback', label: 'پولبک و بازگشت' },
+   162→  { key: 'down', label: 'اصلاحی' },
+   163→  { key: 'risk', label: 'ابطال و ریسک' },
+   164→];
+   165→
+   166→// ═══════════════════════════════════════════════════════════════════════════════
+   167→// Graph Algorithms
+   168→// ═══════════════════════════════════════════════════════════════════════════════
+   169→
+   170→interface EdgeInfo {
+   171→  from: string;
+   172→  to: string;
+   173→  label: string;
+   174→  type: string;
+   175→  prob: number;
+   176→}
+   177→
+   178→interface PathInfo {
+   179→  nodes: string[];
+   180→  edges: number[];
+   181→  prob: number;
+   182→  target: string;
+   183→}
+   184→
+   185→// Calculate edge probabilities based on market conditions
+   186→function calcEdgeProbabilities(
+   187→  bullScore: number, adxVal: number
+   188→): Record<string, number> {
+   189→  const adxW = Math.min(adxVal / 100, 1);
+   190→  const typeWeights: Record<string, number> = {
+   191→    up: bullScore * 0.6 + adxW * 0.4,
+   192→    pullback: 0.3,
+   193→    down: (1 - bullScore) * 0.6 + adxW * 0.4,
+   194→    risk: 0.15 * (1.2 - adxW),
+   195→  };
+   196→
+   197→  // Build adjacency: for each node, group outgoing edges by type
+   198→  const adj: Record<string, { idx: number; type: string }[]> = {};
+   199→  EDGES.forEach((e, i) => {
+   200→    if (!adj[e[0]]) adj[e[0]] = [];
+   201→    adj[e[0]].push({ idx: i, type: e[3] });
+   202→  });
+   203→
+   204→  const edgeProbs: Record<string, number> = {};
+   205→
+   206→  for (const [node, outEdges] of Object.entries(adj)) {
+   207→    // Sum weights of outgoing edges
+   208→    const totalWeight = outEdges.reduce((sum, e) => sum + (typeWeights[e.type] ?? 0.1), 0);
+   209→    if (totalWeight === 0) {
+   210→      outEdges.forEach(e => { edgeProbs[String(e.idx)] = 1 / outEdges.length; });
+   211→      continue;
+   212→    }
+   213→    outEdges.forEach(e => {
+   214→      edgeProbs[String(e.idx)] = (typeWeights[e.type] ?? 0.1) / totalWeight;
+   215→    });
+   216→  }
+   217→
+   218→  return edgeProbs;
+   219→}
+   220→
+   221→// Find all paths from 'A' to terminal nodes using DFS
+   222→function findAllPaths(edgeProbs: Record<string, number>): PathInfo[] {
+   223→  const adj: Record<string, { to: string; edgeIdx: number }[]> = {};
+   224→  EDGES.forEach((e, i) => {
+   225→    if (!adj[e[0]]) adj[e[0]] = [];
+   226→    adj[e[0]].push({ to: e[1], edgeIdx: i });
+   227→  });
+   228→
+   229→  const paths: PathInfo[] = [];
+   230→  const MAX_PATHS = 200;
+   231→
+   232→  function dfs(node: string, visited: Set<string>, currentPath: string[], edgeIndices: number[], currentProb: number) {
+   233→    if (SCENARIO_KEYS.includes(node as any)) {
+   234→      paths.push({ nodes: [...currentPath, node], edges: [...edgeIndices], prob: currentProb, target: node });
+   235→      return;
+   236→    }
+   237→    if (paths.length >= MAX_PATHS) return;
+   238→    if (visited.has(node)) return;
+   239→    visited.add(node);
+   240→
+   241→    const outs = adj[node] ?? [];
+   242→    for (const { to, edgeIdx } of outs) {
+   243→      const ep = edgeProbs[String(edgeIdx)] ?? 0.1;
+   244→      dfs(to, visited, [...currentPath, node], [...edgeIndices, edgeIdx], currentProb * ep);
+   245→    }
+   246→    visited.delete(node);
+   247→  }
+   248→
+   249→  dfs('A', new Set(), [], [], 1);
+   250→  return paths.sort((a, b) => b.prob - a.prob);
+   251→}
+   252→
+   253→// ═══════════════════════════════════════════════════════════════════════════════
+   254→// Component
+   255→// ═══════════════════════════════════════════════════════════════════════════════
+   256→
+   257→export default function VdssGraph(props: VdssGraphProps) {
+   258→  const { symbolName, currentPrice, resistances, supports, ma100, scenarios, rsi, adx, bullScore } = props;
+   259→  const R1_level = resistances[0] ?? currentPrice * 1.05;
+   260→  const S1_level = supports[0] ?? currentPrice * 0.95;
+   261→
+   262→  const [activeFilter, setActiveFilter] = useState('all');
+   263→  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+   264→  const [selectedPathIdx, setSelectedPathIdx] = useState<number | null>(null);
+   265→  const graphRef = useRef<HTMLDivElement>(null);
+   266→  const svgRef = useRef<SVGSVGElement>(null);
+   267→  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+   268→  const shellRef = useRef<HTMLDivElement>(null);
+   269→
+   270→  // ── Edge probabilities (using TA engine's bullScore) ──────────────
+   271→  const edgeProbs = useMemo(() =>
+   272→    calcEdgeProbabilities(bullScore, adx),
+   273→  [bullScore, adx]
+   274→  );
+   275→
+   276→  // ── All paths with raw probabilities ─────────────────────────────
+   277→  const allPathsRaw = useMemo(() => findAllPaths(edgeProbs), [edgeProbs]);
+   278→
+   279→  // ── Calibrate path probabilities to match TA engine scenario probabilities ──
+   280→  const allPaths = useMemo(() => {
+   281→    // Compute raw sum per target
+   282→    const rawSums: Record<string, number> = {};
+   283→    for (const key of SCENARIO_KEYS) rawSums[key] = 0;
+   284→    for (const p of allPathsRaw) rawSums[p.target] += p.prob;
+   285→
+   286→    // Scale each path so the sum per target matches scenario probability
+   287→    return allPathsRaw.map(p => {
+   288→      const rawSum = rawSums[p.target] || 0.0001;
+   289→      const s = scenarios[p.target as keyof typeof scenarios];
+   290→      const targetProb = (s?.probability ?? 0) / 100;
+   291→      const scale = targetProb / rawSum;
+   292→      return { ...p, prob: p.prob * scale };
+   293→    });
+   294→  }, [allPathsRaw, scenarios]);
+   295→
+   296→  // ── Filtered paths ────────────────────────────────────────────────
+   297→  const filteredPaths = useMemo(() => {
+   298→    if (activeFilter === 'all') return allPaths;
+   299→    // Check if filter is a scenario key
+   300→    if (SCENARIO_KEYS.includes(activeFilter as any)) {
+   301→      return allPaths.filter(p => p.target === activeFilter);
+   302→    }
+   303→    // Type filter: paths must use only edges of this type
+   304→    return allPaths.filter(p =>
+   305→      p.edges.every(ei => EDGES[ei][3] === activeFilter)
+   306→    );
+   307→  }, [allPaths, activeFilter]);
+   308→
+   309→  // ── Top 10 paths (sorted by probability, from allPaths not filtered) ──
+   310→  const topPaths = useMemo(() => allPaths.slice(0, 10), [allPaths]);
+   311→
+   312→  // ── Visible edges/nodes based on filter OR selected path ──────────
+   313→  const { visibleEdgeIndices, visibleNodes } = useMemo(() => {
+   314→    // If a specific path is selected, show only that path's nodes/edges
+   315→    if (selectedPathIdx !== null) {
+   316→      const p = allPaths[selectedPathIdx];
+   317→      if (p) {
+   318→        const edgeSet = new Set<number>(p.edges);
+   319→        const nodeSet = new Set<string>(p.nodes);
+   320→        return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
+   321→      }
+   322→    }
+   323→    if (activeFilter === 'all') {
+   324→      const allEdgeIdx = EDGES.map((_, i) => i);
+   325→      const allNodes = new Set(Object.keys(NODE_POSITIONS));
+   326→      return { visibleEdgeIndices: allEdgeIdx, visibleNodes: allNodes };
+   327→    }
+   328→    if (SCENARIO_KEYS.includes(activeFilter as any)) {
+   329→      const edgeSet = new Set<number>();
+   330→      const nodeSet = new Set<string>();
+   331→      for (const p of filteredPaths) {
+   332→        p.edges.forEach(ei => edgeSet.add(ei));
+   333→        p.nodes.forEach(n => nodeSet.add(n));
+   334→      }
+   335→      return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
+   336→    }
+   337→    const edgeSet = new Set<number>();
+   338→    const nodeSet = new Set<string>();
+   339→    EDGES.forEach((e, i) => {
+   340→      if (e[3] === activeFilter) {
+   341→        edgeSet.add(i);
+   342→        nodeSet.add(e[0]);
+   343→        nodeSet.add(e[1]);
+   344→      }
+   345→    });
+   346→    return { visibleEdgeIndices: [...edgeSet], visibleNodes: nodeSet };
+   347→  }, [activeFilter, filteredPaths, selectedPathIdx, allPaths]);
+   348→
+   349→  // ── Node values ──────────────────────────────────────────────────
+   350→  const nodeValues: Record<string, string> = {
+   351→    A: toFa(currentPrice),
+   352→    B: toFa(R1_level),
+   353→    D: toFa(resistances[1] ?? currentPrice * 1.10),
+   354→    E: `${toFa(Math.round(R1_level + (resistances[1] ?? R1_level * 1.05 - R1_level) * 0.5))} — ${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 0.8))}`,
+   355→    F: `${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 1.2))} — ${toFa(Math.round((resistances[1] ?? R1_level * 1.05) + ((resistances[1] ?? R1_level * 1.05) - R1_level) * 2.0))}`,
+   356→    G: toFa(S1_level),
+   357→    H: toFa(supports[1] ?? currentPrice * 0.90),
+   358→    I: toFa(supports[2] ?? currentPrice * 0.85),
+   359→    J: toFa(supports[3] ?? currentPrice * 0.80),
+   360→    K: toFa(ma100),
+   361→    L: props.trendDirection === 'up' ? 'صعودی' : props.trendDirection === 'down' ? 'نزولی' : 'خنثی',
+   362→  };
+   363→  for (const key of SCENARIO_KEYS) {
+   364→    const s = scenarios[key];
+   365→    if (s) nodeValues[key] = `${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`;
+   366→  }
+   367→
+   368→  // ── Draw SVG edges ───────────────────────────────────────────────
+   369→  const drawEdges = useCallback(() => {
+   370→    const svg = svgRef.current;
+   371→    const graph = graphRef.current;
+   372→    if (!svg || !graph) return;
+   373→
+   374→    let markersSvg = '';
+   375→    for (const [k, c] of Object.entries(EDGE_COLORS)) {
+   376→      markersSvg += `<marker id="arrow-${k}" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="${c}"/></marker>`;
+   377→    }
+   378→
+   379→    let pathsSvg = '';
+   380→    const graphRect = graph.getBoundingClientRect();
+   381→
+   382→    for (let ei = 0; ei < EDGES.length; ei++) {
+   383→      const [fromId, toId, label, type] = EDGES[ei];
+   384→      const isVisible = visibleEdgeIndices.includes(ei);
+   385→      const fromEl = nodeRefs.current[fromId];
+   386→      const toEl = nodeRefs.current[toId];
+   387→      if (!fromEl || !toEl) continue;
+   388→
+   389→      const fRect = fromEl.getBoundingClientRect();
+   390→      const tRect = toEl.getBoundingClientRect();
+   391→      const ax = fRect.left - graphRect.left + fRect.width / 2;
+   392→      const ay = fRect.top - graphRect.top + fRect.height / 2;
+   393→      const bx = tRect.left - graphRect.left + tRect.width / 2;
+   394→      const by = tRect.top - graphRect.top + tRect.height / 2;
+   395→      const dx = bx - ax;
+   396→      const dy = by - ay;
+   397→      const dist = Math.sqrt(dx * dx + dy * dy);
+   398→      if (dist === 0) continue;
+   399→
+   400→      const bend = Math.min(52, Math.max(18, dist * 0.11));
+   401→      const mx = (ax + bx) / 2;
+   402→      const my = (ay + by) / 2;
+   403→      const nx = -dy / dist;
+   404→      const ny = dx / dist;
+   405→      const cx = mx + nx * bend;
+   406→      const cy = my + ny * bend;
+   407→
+   408→      const d = `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`;
+   409→      const prob = edgeProbs[String(ei)] ?? 0;
+   410→      const probLabel = toPersianDigits((prob * 100).toFixed(0)) + '٪';
+   411→
+   412→      pathsSvg += `<path d="${d}" stroke="${EDGE_COLORS[type]}" stroke-width="${isVisible ? 2 : 1}" opacity="${isVisible ? 0.72 : 0.06}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
+   413→
+   414→      // Edge probability label (only for visible edges)
+   415→      if (isVisible) {
+   416→        pathsSvg += `<text x="${cx}" y="${cy - 6}" fill="#374151" font-size="9" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round" opacity="0.85" data-type="${type}" class="edge-label">${label}</text>`;
+   417→        pathsSvg += `<text x="${cx}" y="${cy + 8}" fill="${EDGE_COLORS[type]}" font-size="10" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">${probLabel}</text>`;
+   418→      }
+   419→    }
+   420→
+   421→    svg.innerHTML = `<defs>${markersSvg}</defs>${pathsSvg}`;
+   422→  }, [visibleEdgeIndices, edgeProbs]);
+   423→
+   424→  useEffect(() => { drawEdges(); }, [drawEdges]);
+   425→  useEffect(() => {
+   426→    const el = shellRef.current;
+   427→    if (!el) return;
+   428→    const observer = new ResizeObserver(() => drawEdges());
+   429→    observer.observe(el);
+   430→    return () => observer.disconnect();
+   431→  }, [drawEdges]);
+   432→
+   433→  // ── Aggregated path probabilities per target (calibrated = matches scenario prob) ──
+   434→  const pathProbsByTarget = useMemo(() => {
+   435→    const result: Record<string, number> = {};
+   436→    for (const key of SCENARIO_KEYS) result[key] = 0;
+   437→    for (const p of filteredPaths) {
+   438→      result[p.target] = (result[p.target] ?? 0) + p.prob;
+   439→    }
+   440→    // After calibration, these should match scenario probabilities
+   441→    return result;
+   442→  }, [filteredPaths]);
+   443→
+   444→  // ── V11 cumulative probabilities ──────────────────────────────────
+   445→  const v11Result = useMemo((): V11Result => {
+   446→    const input = {
+   447→      R1: scenarios.R1?.probability ?? 0,
+   448→      R2: scenarios.R2?.probability ?? 0,
+   449→      R3: scenarios.R3?.probability ?? 0,
+   450→      R4: scenarios.R4?.probability ?? 0,
+   451→      R5: scenarios.R5?.probability ?? 0,
+   452→      R6: scenarios.R6?.probability ?? 0,
+   453→      R7: scenarios.R7?.probability ?? 0,
+   454→      R8: scenarios.R8?.probability ?? 0,
+   455→      R9: scenarios.R9?.probability ?? 0,
+   456→    };
+   457→    return computeV11Probabilities(input);
+   458→  }, [scenarios]);
+   459→  const v11Map = useMemo(() => {
+   460→    const m: Record<string, number> = {};
+   461→    for (const s of v11Result.scenarios) m[s.key] = s.cumulativeProbability;
+   462→    return m;
+   463→  }, [v11Result]);
+   464→
+   465→  // ── Detail panel content ─────────────────────────────────────────
+   466→  const detailContent = useMemo(() => {
+   467→    if (!selectedNode) return null;
+   468→    const def = NODE_DEFS[selectedNode];
+   469→    if (!def) return null;
+   470→    const relations = EDGES.filter(e => e[0] === selectedNode || e[1] === selectedNode);
+   471→    const inputs = relations.filter(e => e[1] === selectedNode);
+   472→    const outputs = relations.filter(e => e[0] === selectedNode);
+   473→
+   474→    return (
+   475→      <div className="space-y-3">
+   476→        <h3 className="text-sm font-bold text-[#111827]">{def.title}</h3>
+   477→        <p className="text-xs text-[#374151]"><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+   478→        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border border-[#e5e7eb] bg-[#f3f4f6] text-[#374151]">{def.type}</span>
+   479→        <p className="text-xs text-[#6b7280] leading-relaxed">{def.desc}</p>
+   480→        {inputs.length > 0 && (
+   481→          <div>
+   482→            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای ورودی ({toFa(inputs.length)}):</p>
+   483→            <ul className="space-y-1">
+   484→              {inputs.map((e, i) => {
+   485→                const ei = EDGES.indexOf(e);
+   486→                const ep = edgeProbs[String(ei)] ?? 0;
+   487→                return (
+   488→                  <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
+   489→                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e[0]] || e[0]} ← {SCENARIO_DISPLAY[e[1]] || e[1]}</b>
+   490→                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+   491→                    <br />{e[2]}
+   492→                  </li>
+   493→                );
+   494→              })}
+   495→            </ul>
+   496→          </div>
+   497→        )}
+   498→        {outputs.length > 0 && (
+   499→          <div>
+   500→            <p className="text-xs font-medium text-[#374151] mb-1">مسیرهای خروجی ({toFa(outputs.length)}):</p>
+   501→            <ul className="space-y-1">
+   502→              {outputs.map((e, i) => {
+   503→                const ei = EDGES.indexOf(e);
+   504→                const ep = edgeProbs[String(ei)] ?? 0;
+   505→                return (
+   506→                  <li key={i} className="text-[11px] text-[#6b7280] leading-relaxed border-t border-dashed border-[#e5e7eb] pt-1.5">
+   507→                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e[0]] || e[0]} → {SCENARIO_DISPLAY[e[1]] || e[1]}</b>
+   508→                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${EDGE_COLORS[e[3]]}20`, color: EDGE_COLORS[e[3]] }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+   509→                    <br />{e[2]}
+   510→                  </li>
+   511→                );
+   512→              })}
+   513→            </ul>
+   514→          </div>
+   515→        )}
+   516→      </div>
+   517→    );
+   518→  }, [selectedNode, nodeValues, edgeProbs]);
+   519→
+   520→  // ── All filter buttons ────────────────────────────────────────────
+   521→  const allFilters = [
+   522→    ...TYPE_FILTERS,
+   523→    { key: 'sep1', label: '│', isSep: true as const },
+   524→    ...SCENARIO_KEYS.map(k => ({ key: k, label: SCENARIO_META[k].label, scenarioKey: k })),
+   525→  ];
+   526→
+   527→  return (
+   528→    <div className="space-y-3" dir="rtl">
+   529→      {/* ═══ HEADER ═══ */}
+   530→      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl border border-[#e5e7eb]"
+   531→        style={{ background: 'linear-gradient(105deg, #ffffff, #f3f4f6)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+   532→        <div className="flex items-center gap-3">
+   533→          <div className="w-10 h-10 rounded-xl border border-amber-200 flex items-center justify-center text-amber-800 text-xl font-bold"
+   534→            style={{ boxShadow: 'inset 0 0 22px rgba(146,64,14,.06), 0 0 22px rgba(146,64,14,.04)' }}>◈</div>
+   535→          <div>
+   536→            <h2 className="text-base font-bold text-[#111827]">گراف تصمیم {symbolName}</h2>
+   537→            <p className="text-[11px] text-[#6b7280]">مدل ۱۲پایه گره‌ـ‌مسیر | مبتنی بر EMV و مسیرهای بحرانی</p>
+   538→          </div>
+   539→        </div>
+   540→        <div className="text-left text-xs text-[#6b7280] leading-relaxed pr-4 border-r border-[#e5e7eb]">
+   541→          نقطه مرجع: <b className="text-cyan-700">{toFa(currentPrice)}</b><br />
+   542→          افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
+   543→        </div>
+   544→      </div>
+   545→
+   546→      {/* ═══ Metric Cards ═══ */}
+   547→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   548→        <MetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color="text-cyan-700" />
+   549→        <MetricCard label="مقاومت آنی (R1)" value={toFa(R1_level) + ' ریال'} color="text-amber-800" />
+   550→        <MetricCard label="حمایت تفکیک‌کننده (S1)" value={toFa(S1_level) + ' ریال'} color="text-blue-700" />
+   551→        <MetricCard label="میانگین متحرک ۱۰۰" value={toFa(ma100) + ' ریال'} color="text-[#374151]" />
+   552→      </div>
+   553→
+   554→      {/* ═══ Toolbar ═══ */}
+   555→      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl border border-[#e5e7eb] bg-[#ffffff]">
+   556→        <span className="text-xs text-[#6b7280] ml-1">فیلتر:</span>
+   557→        {allFilters.map((btn, i) => {
+   558→          if ('isSep' in btn && btn.isSep) {
+   559→            return <span key={`sep-${i}`} className="text-[#B0A89E] mx-1">│</span>;
+   560→          }
+   561→          const isScenario = 'scenarioKey' in btn;
+   562→          const isActive = activeFilter === btn.key;
+   563→          const meta = isScenario ? SCENARIO_META[btn.scenarioKey] : null;
+   564→          return (
+   565→            <button
+   566→              key={btn.key}
+   567→              onClick={() => setActiveFilter(btn.key)}
+   568→              className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
+   569→                isActive
+   570→                  ? isScenario
+   571→                    ? 'text-[#111827] border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.06)]'
+   572→                    : 'text-[#111827] border-cyan-500/60 bg-cyan-50 shadow-[0_0_18px_rgba(58,213,219,.10)]'
+   573→                  : 'text-[#374151] border-[#e5e7eb] bg-[#f3f4f6]/50 hover:bg-[#e5e7eb]'
+   574→              }`}
+   575→              style={isActive && isScenario && meta ? {
+   576→                borderColor: meta.color + '80',
+   577→                background: meta.color + '12',
+   578→                color: meta.color,
+   579→              } : undefined}
+   580→            >{btn.label}</button>
+   581→          );
+   582→        })}
+   583→        <button
+   584→          onClick={() => { setSelectedNode(null); setActiveFilter('all'); setSelectedPathIdx(null); }}
+   585→          className="text-xs px-3 py-1.5 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6]/50 text-[#374151] hover:bg-[#e5e7eb] transition-all cursor-pointer mr-auto"
+   586→        >بازنشانی</button>
+   587→      </div>
+   588→
+   589→      {/* ═══ Graph Workspace ═══ */}
+   590→      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-3">
+   591→        {/* Graph Shell */}
+   592→        <div
+   593→          ref={shellRef}
+   594→          className="relative overflow-auto border border-[#e5e7eb] border-t-0 rounded-b-2xl min-h-[500px] max-h-[700px]"
+   595→          style={{
+   596→            background: 'radial-gradient(circle at 49% 49%, rgba(180,200,220,.18), transparent 36%), #ffffff',
+   597→            boxShadow: '0 4px 16px rgba(0,0,0,.06)',
+   598→          }}
+   599→        >
+   600→          <div ref={graphRef} className="relative mx-auto" style={{ width: 1100, height: 780, minWidth: 1100, minHeight: 780 }}>
+   601→            <svg ref={svgRef} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" aria-label="مسیرهای گراف تصمیم" />
+   602→
+   603→            {/* Nodes */}
+   604→            {Object.entries(NODE_POSITIONS).map(([id, pos]) => {
+   605→              const def = NODE_DEFS[id];
+   606→              if (!def) return null;
+   607→              const isTerminal = def.isTerminal;
+   608→              const isResultNode = SCENARIO_KEYS.includes(id as any);
+   609→              const isSelected = selectedNode === id;
+   610→              const isVisible = visibleNodes.has(id);
+   611→              const scenarioProb = isResultNode ? (scenarios[id as keyof typeof scenarios]?.probability ?? 0) : null;
+   612→              const scenarioColor = isResultNode ? SCENARIO_META[id].color : def.color;
+   613→
+   614→              return (
+   615→                <div
+   616→                  key={id}
+   617→                  ref={el => { nodeRefs.current[id] = el; }}
+   618→                  onClick={() => setSelectedNode(id)}
+   619→                  className={`absolute cursor-pointer transition-all duration-200 z-[2] text-center ${
+   620→                    isTerminal ? 'w-[160px] min-h-[85px]' : 'w-[138px] min-h-[72px]'
+   621→                  }`}
+   622→                  style={{
+   623→                    right: pos.right * (1100 / 1500),
+   624→                    top: pos.top * (780 / 780),
+   625→                    '--node-color': scenarioColor,
+   626→                    padding: '8px 7px',
+   627→                    border: `1px solid ${scenarioColor}${isTerminal ? '' : 'aa'}`,
+   628→                    borderWidth: isTerminal ? '2px' : '1px',
+   629→                    borderRadius: '12px',
+   630→                    background: isVisible
+   631→                      ? `linear-gradient(145deg, #ffffff, #f3f4f6)`
+   632→                      : 'rgba(243,244,246,0.5)',
+   633→                    boxShadow: isVisible
+   634→                      ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
+   635→                      : 'none',
+   636→                    opacity: isVisible ? 1 : 0.12,
+   637→                    transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
+   638→                    filter: isSelected ? 'brightness(1.18)' : isVisible ? 'none' : 'grayscale(0.8) blur(0.5px)',
+   639→                    ...(isSelected ? {
+   640→                      boxShadow: `0 0 0 2px color-mix(in srgb, ${scenarioColor} 28%, transparent), 0 0 28px color-mix(in srgb, ${scenarioColor} 25%, transparent)`,
+   641→                    } : {}),
+   642→                  } as React.CSSProperties}
+   643→                >
+   644→                  {isResultNode && (
+   645→                    <span className="block text-[9px] font-bold mb-1" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[id]}</span>
+   646→                  )}
+   647→                  {!isResultNode && (
+   648→                    <span className="block text-[9px] font-bold mb-1" style={{ color: isVisible ? scenarioColor : '#555' }}>{NODE_DEFS[id].title.split(' ')[0]} | {def.type.split(' ').slice(0, 2).join(' ')}</span>
+   649→                  )}
+   650→                  <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{def.title}</div>
+   651→                  <div className="text-[10px] text-[#6b7280] mt-1" dir="ltr">{nodeValues[id] ?? '--'}</div>
+   652→                  {isResultNode && scenarioProb !== null && (
+   653→                    <span
+   654→                      className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-sm font-bold"
+   655→                      style={{
+   656→                        background: `color-mix(in srgb, ${scenarioColor} 17%, transparent)`,
+   657→                        color: scenarioColor,
+   658→                      }}
+   659→                    >{toFa(scenarioProb)}٪</span>
+   660→                  )}
+   661→                </div>
+   662→              );
+   663→            })}
+   664→
+   665→            {/* Legend */}
+   666→            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg border border-[#e5e7eb] bg-[#ffffff]/90 text-[10px] text-[#374151] leading-7 z-10">
+   667→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعود و تأیید</div>
+   668→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />پولبک و بازگشت</div>
+   669→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />اصلاح</div>
+   670→              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ef4d62]" />ریسک / ابطال</div>
+   671→            </div>
+   672→          </div>
+   673→        </div>
+   674→
+   675→        {/* ═══ Left Panel: Path Probabilities & Path Selection ═══ */}
+   676→        <div className="rounded-2xl border border-[#e5e7eb] p-4 flex flex-col"
+   677→          style={{ background: 'linear-gradient(160deg, #ffffff, #f3f4f6)', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+   678→          <h2 className="text-sm font-bold text-[#111827] mb-3">📋 احتمال مسیرها</h2>
+   679→
+   680→          {selectedNode && detailContent ? (
+   681→            <div className="border-t border-[#e5e7eb] pt-3 flex-1 overflow-y-auto max-h-[580px] custom-scrollbar">
+   682→              {detailContent}
+   683→            </div>
+   684→          ) : (
+   685→            <div className="flex-1 overflow-y-auto max-h-[580px] space-y-3 custom-scrollbar">
+   686→              {/* Path probabilities per target */}
+   687→              <div className="space-y-2">
+   688→                {SCENARIO_KEYS.map(key => {
+   689→                  const meta = SCENARIO_META[key];
+   690→                  const pathProb = pathProbsByTarget[key] ?? 0;
+   691→                  const isActive = activeFilter === key;
+   692→                  const cumProb = v11Map[key] ?? 0;
+   693→                  return (
+   694→                    <div
+   695→                      key={key}
+   696→                      onClick={() => { setActiveFilter(key); setSelectedPathIdx(null); }}
+   697→                      className={`rounded-xl p-3 cursor-pointer transition-all border ${
+   698→                        isActive
+   699→                          ? 'border-opacity-60'
+   700→                          : 'border-[#e5e7eb]/60 hover:border-[#e5e7eb]'
+   701→                      }`}
+   702→                      style={{
+   703→                        background: isActive ? `${meta.color}0a` : 'rgba(243,244,246,0.5)',
+   704→                        borderColor: isActive ? meta.color + '80' : undefined,
+   705→                      }}
+   706→                    >
+   707→                      <div className="flex items-center justify-between mb-1">
+   708→                        <span className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</span>
+   709→                        <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((pathProb * 100).toFixed(1))}٪</span>
+   710→                      </div>
+   711→                      {/* Probability bar */}
+   712→                      <div className="w-full h-1.5 rounded-full bg-[#e5e7eb] mb-2">
+   713→                        <div
+   714→                          className="h-full rounded-full transition-all duration-300"
+   715→                          style={{ width: `${Math.min(100, pathProb * 100)}%`, background: meta.color }}
+   716→                        />
+   717→                      </div>
+   718→                      <div className="flex items-center justify-between text-[10px] text-[#6b7280]">
+   719→                        <span>تعداد مسیرها: {filteredPaths.filter(p => p.target === key).length}</span>
+   720→                        <span>تجمیعی: <b className="text-[#374151]">{toPersianDigits(cumProb)}٪</b></span>
+   721→                      </div>
+   722→                    </div>
+   723→                  );
+   724→                })}
+   725→              </div>
+   726→
+   727→              {/* Top 10 paths list - CLICKABLE */}
+   728→              <div className="border-t border-[#e5e7eb] pt-3 mt-3">
+   729→                <h3 className="text-xs font-bold text-[#111827] mb-2">۱۰ مسیر اصلی (بر اساس احتمال)</h3>
+   730→                <div className="space-y-1.5">
+   731→                  {topPaths.map((p, i) => {
+   732→                    const meta = SCENARIO_META[p.target];
+   733→                    const isSelected = selectedPathIdx === i;
+   734→                    return (
+   735→                      <div
+   736→                        key={i}
+   737→                        onClick={() => {
+   738→                          if (isSelected) {
+   739→                            setSelectedPathIdx(null);
+   740→                            setActiveFilter('all');
+   741→                          } else {
+   742→                            setSelectedPathIdx(i);
+   743→                            setSelectedNode(null);
+   744→                          }
+   745→                        }}
+   746→                        className={`flex items-center gap-2 text-[10px] p-2 rounded-lg cursor-pointer transition-all border ${
+   747→                          isSelected
+   748→                            ? 'border-amber-300 bg-amber-50 shadow-sm'
+   749→                            : 'border-transparent hover:bg-gray-50'
+   750→                        }`}
+   751→                      >
+   752→                        <span className="w-5 text-center font-bold text-[#6b7280]">{toPersianDigits(i + 1)}</span>
+   753→                        <span className="flex-1 text-[#374151] overflow-hidden" dir="ltr">
+   754→                          {p.nodes.map(n => SCENARIO_DISPLAY[n] || n).join(' → ')}
+   755→                        </span>
+   756→                        <span className="font-bold min-w-[42px] text-left" style={{ color: meta.color }}>
+   757→                          {toPersianDigits((p.prob * 100).toFixed(1))}٪
+   758→                        </span>
+   759→                      </div>
+   760→                    );
+   761→                  })}
+   762→                </div>
+   763→              </div>
+   764→
+   765→              <div className="border-t border-[#e5e7eb] pt-3 mt-3">
+   766→                <p className="text-[10px] text-[#6b7280] leading-relaxed">
+   767→                  <b>قاعده:</b> عبور یا شکست هر سطح فقط با تثبیت معتبر تلقی می‌شود.<br />
+   768→                  <b>احتمال یال:</b> حاصل توزیع شرطی بر اساس سیگنال‌های تکنیکال.<br />
+   769→                  <b>احتمال مسیر:</b> حاصل‌ضرب احتمال یال‌های مسیر.
+   770→                </p>
+   771→              </div>
+   772→            </div>
+   773→          )}
+   774→        </div>
+   775→      </div>
+   776→
+   777→      {/* ═══ Scenario Result Cards ═══ */}
+   778→      <div className="mt-4 p-4 rounded-2xl border border-[#e5e7eb] bg-[#ffffff]">
+   779→        <h2 className="text-sm font-bold text-[#111827] mb-3">گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی</h2>
+   780→        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
+   781→          {SCENARIO_KEYS.map(key => {
+   782→            const s = scenarios[key];
+   783→            if (!s) return null;
+   784→            const meta = SCENARIO_META[key];
+   785→            return (
+   786→              <div
+   787→                key={key}
+   788→                className="rounded-xl p-3"
+   789→                style={{
+   790→                  '--scolor': meta.color,
+   791→                  border: `1px solid color-mix(in srgb, ${meta.color} 40%, transparent)`,
+   792→                  background: `linear-gradient(160deg, color-mix(in srgb, ${meta.color} 8%, #ffffff), #ffffff)`,
+   793→                } as React.CSSProperties}
+   794→              >
+   795→                <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
+   796→                <span className="text-xs font-bold text-[#374151]">{meta.label}</span>
+   797→                <small className="block text-[10px] text-[#6b7280] leading-relaxed mt-2" dir="ltr">
+   798→                  {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
+   799→                </small>
+   800→              </div>
+   801→            );
+   802→          })}
+   803→        </div>
+   804→        <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-amber-700/60 bg-amber-50 text-[11px] text-[#374151] leading-relaxed">
+   805→          <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی بر اساس فرمول‌های تعریف‌شده (ADX, RSI, MFI, CCI و فاصله از سطوح) محاسبه شده‌اند. احتمال مسیرها از حاصل‌ضرب احتمال شرطی یال‌ها به دست می‌آید.
+   806→        </div>
+   807→      </div>
+   808→    </div>
+   809→  );
+   810→}
+   811→
+   812→// ── Sub-components ──────────────────────────────────────────────────────────────
+   813→
+   814→function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+   815→  return (
+   816→    <div className="px-4 py-3 rounded-xl border border-[#e5e7eb]"
+   817→      style={{ background: 'linear-gradient(145deg, #ffffff, #f3f4f6)' }}>
+   818→      <small className="block text-xs text-[#6b7280] mb-2">{label}</small>
+   819→      <strong className={`text-lg tracking-wide ${color}`}>{value}</strong>
+   820→    </div>
+   821→  );
+   822→}
+   823→
+   824→// ── Loading ────────────────────────────────────────────────────────────────────
+   825→
+   826→export function VdssGraphSkeleton() {
+   827→  return (
+   828→    <div className="space-y-3">
+   829→      <Skeleton className="h-16 w-full bg-[#e5e7eb] rounded-2xl" />
+   830→      <div className="grid grid-cols-4 gap-3">
+   831→        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
+   832→        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
+   833→        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
+   834→        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
+   835→      </div>
+   836→      <Skeleton className="h-10 w-full bg-[#e5e7eb] rounded-t-2xl" />
+   837→      <Skeleton className="h-[500px] w-full bg-[#e5e7eb] rounded-b-2xl" />
+   838→      <Skeleton className="h-40 w-full bg-[#e5e7eb] rounded-2xl" />
+   839→    </div>
+   840→  );
+   841→}

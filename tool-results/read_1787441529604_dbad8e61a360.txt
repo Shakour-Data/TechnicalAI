@@ -1,0 +1,1001 @@
+     1→'use client';
+     2→
+     3→import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+     4→import { Skeleton } from '@/components/ui/skeleton';
+     5→import TVWidgetInner, { TVWidgetSkeleton, type CandleData } from '@/components/tse/tv-widget';
+     6→import type { IChartApi } from 'lightweight-charts';
+     7→import { toPersianDigits, toShamsi, toFaGrouped } from '@/lib/jalali';
+     8→import { Download, Type, Loader2, Shield, ShieldAlert, Target, RefreshCw, BrainCircuit, ChevronDown, Image as ImageIcon, FileSpreadsheet, Table, Code, CheckCircle, AlertCircle } from 'lucide-react';
+     9→import { exportHTML, exportText, exportExcel, exportCSV, exportChartImage, type ExportData } from '@/lib/export-utils';
+    10→import { toast } from 'sonner';
+    11→import { getDynamicScenarioMeta } from '@/lib/vdss-algorithms';
+    12→import { buildV12Scenarios, type V11Scenario, getV12ScenarioDefs } from '@/lib/ta-engine-v12';
+    13→
+    14→// ═══════════════════════════════════════════════════════════════════════════════
+    15→// Types
+    16→// ═══════════════════════════════════════════════════════════════════════════════
+    17→
+    18→interface Scenario {
+    19→  name: string;
+    20→  nameEn: string;
+    21→  probability: number;
+    22→  targetMin: number;
+    23→  targetMax: number;
+    24→  description: string;
+    25→}
+    26→
+    27→export interface VdesAnalysisProps {
+    28→  symbolName: string;
+    29→  candles: CandleData[];
+    30→  currentPrice: number;
+    31→  resistances: number[];
+    32→  supports: number[];
+    33→  ma21: number;
+    34→  ma100: number;
+    35→  /** Whether this is a TSE index (شاخص) */
+    36→  isIndex?: boolean;
+    37→  /** Whether data comes from TGJU (ارز/طلا/کریپتو) */
+    38→  isTgju?: boolean;
+    39→  /** TGJU category if applicable */
+    40→  tgjuCategory?: string;
+    41→  /** Dynamic currency unit (ریال, تومان, تتر, دلار, واحد) */
+    42→  currencyUnit?: string;
+    43→  rsi: number;
+    44→  mfi: number;
+    45→  cci: number;
+    46→  adx: number;
+    47→  stochK: number;
+    48→  stochD: number;
+    49→  macdLine: number;
+    50→  macdSignal: number;
+    51→  macdHist: number;
+    52→  diPlus: number;
+    53→  diMinus: number;
+    54→  sar: number;
+    55→  atr: number;
+    56→  obv: number;
+    57→  hasVolume: boolean;
+    58→  bollingerUpper: number;
+    59→  bollingerMiddle: number;
+    60→  bollingerLower: number;
+    61→  trendDirection: string;
+    62→  trendAngle: number;
+    63→  trendR2: number;
+    64→  overallSignal: string;
+    65→  scenarios: {
+    66→    R1: Scenario;
+    67→    R2: Scenario;
+    68→    R3: Scenario;
+    69→    R4: Scenario;
+    70→    R5: Scenario;
+    71→    R6: Scenario;
+    72→    R7: Scenario;
+    73→    R8: Scenario;
+    74→    R9: Scenario;
+    75→  };
+    76→  supportStrengths: { price: number; strength: number; isTarget: boolean; grade?: string; overlapCount?: number; touchCount?: number; volumeRatio?: number }[];
+    77→  resistanceStrengths: { price: number; strength: number; isTarget: boolean; grade?: string; overlapCount?: number; touchCount?: number; volumeRatio?: number }[];
+    78→  priceTargets: { price: number; strength: number; isTarget: boolean; grade?: string; overlapCount?: number; touchCount?: number; volumeRatio?: number }[];
+    79→  /** ML weights for S/R analysis */
+    80→  srMlWeights?: { touch: number; volume: number; overlap: number; freshness: number; distance: number } | null;
+    81→  /** Directional targets */
+    82→  upwardTargets?: { price: number; strength: number; isTarget: boolean; grade?: string }[];
+    83→  downwardTargets?: { price: number; strength: number; isTarget: boolean; grade?: string }[];
+    84→  /** VDss edge weights for path probability calculation */
+    85→  edgeWeights?: { up: number; down: number; pullback: number; risk: number };
+    86→  /** Bull score from TA engine */
+    87→  bullScore?: number;
+    88→}
+    89→
+    90→// ═══════════════════════════════════════════════════════════════════════════════
+    91→// Constants
+    92→// ═══════════════════════════════════════════════════════════════════════════════
+    93→
+    94→const toFa = (n: number) => {
+    95→  const rounded = Math.round(n);
+    96→  if (!isFinite(rounded) || isNaN(rounded)) return '۰';
+    97→  return rounded.toLocaleString('fa-IR');
+    98→};
+    99→const toFaD = (n: number, d: number = 1) => toPersianDigits(n.toFixed(d));
+   100→// Grouped Persian digits with controlled decimal places
+   101→const toFaG = (n: number | null | undefined, d: number = 0) => n != null ? toFaGrouped(Number(n.toFixed(d))) : '—';
+   102→
+   103→const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+   104→const V11_KEYS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9'] as const;
+   105→
+   106→// V11 scenario colors: bearish=red shades, range=amber, bullish=green shades
+   107→const V11_COLORS: Record<string, { border: string; badgeBg: string; badgeColor: string }> = {
+   108→  S1: { border: '#991b1b', badgeBg: 'rgba(153,27,27,0.15)', badgeColor: '#991b1b' }, // شوک نزولی - darkest red
+   109→  S2: { border: '#dc2626', badgeBg: 'rgba(220,38,38,0.12)', badgeColor: '#dc2626' }, // نزولی شتاب‌دار
+   110→  S3: { border: '#f87171', badgeBg: 'rgba(248,113,113,0.12)', badgeColor: '#f87171' }, // نزولی قوی
+   111→  S4: { border: '#fca5a5', badgeBg: 'rgba(252,165,165,0.15)', badgeColor: '#ef4444' }, // نزولی با احتیاط
+   112→  S5: { border: '#d97706', badgeBg: 'rgba(217,119,6,0.12)', badgeColor: '#d97706' }, // رنج کم‌نوسان - amber
+   113→  S6: { border: '#22c55e', badgeBg: 'rgba(34,197,94,0.12)', badgeColor: '#16a34a' }, // صعودی با احتیاط
+   114→  S7: { border: '#10b981', badgeBg: 'rgba(16,185,129,0.12)', badgeColor: '#059669' }, // صعودی قوی
+   115→  S8: { border: '#14b8a6', badgeBg: 'rgba(20,184,166,0.12)', badgeColor: '#0d9488' }, // صعودی شتاب‌دار
+   116→  S9: { border: '#065f46', badgeBg: 'rgba(6,95,70,0.15)', badgeColor: '#065f46' }, // شوک صعودی - darkest green
+   117→};
+   118→
+   119→// ═══════════════════════════════════════════════════════════════════════════════
+   120→// Component
+   121→// ═══════════════════════════════════════════════════════════════════════════════
+   122→
+   123→export default function VdesAnalysis(props: VdesAnalysisProps) {
+   124→  const {
+   125→    symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
+   126→    rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
+   127→    diPlus, diMinus, sar, atr, obv, hasVolume, bollingerUpper, bollingerMiddle, bollingerLower,
+   128→    trendDirection, trendAngle, trendR2, overallSignal, scenarios,
+   129→    supportStrengths, resistanceStrengths, priceTargets,
+   130→    isIndex, isTgju, currencyUnit,
+   131→    edgeWeights,
+   132→  } = props;
+   133→
+   134→  const unit = currencyUnit || 'ریال';
+   135→
+   136→  // ── Instrument Context (for intelligent naming) ─────────────────
+   137→  const instrumentLabel = useMemo(() => {
+   138→    if (isIndex) return { name: `شاخص ${symbolName}`, type: 'index' as const, verb: 'قرار دارد' };
+   139→    if (isTgju) return { name: symbolName, type: 'tgju' as const, verb: 'قرار دارد' };
+   140→    return { name: `سهم ${symbolName}`, type: 'stock' as const, verb: 'قرار دارد' };
+   141→  }, [symbolName, isIndex, isTgju]);
+   142→
+   143→  const IL = instrumentLabel;
+   144→
+   145→  const containerRef = useRef<HTMLDivElement>(null);
+   146→  const textAnalysisRef = useRef<HTMLDivElement>(null);
+   147→  const chartApiRef = useRef<IChartApi | null>(null);
+   148→  const [exporting, setExporting] = useState(false);
+   149→  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+   150→  const exportMenuRef = useRef<HTMLDivElement>(null);
+   151→
+   152→  // ── AI Analysis state ───────────────────────────────────────────
+   153→  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+   154→  const [aiLoading, setAiLoading] = useState(false);
+   155→  const [aiError, setAiError] = useState<string | null>(null);
+   156→  const aiFetchIdRef = useRef(0);
+   157→  // Track the current AbortController + its timeout for proper cleanup
+   158→  const abortControllerRef = useRef<{ controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
+   159→
+   160→  // Cleanup any in-flight fetch (abort + clear timeout)
+   161→  const cancelInFlightFetch = useCallback(() => {
+   162→    if (abortControllerRef.current) {
+   163→      clearTimeout(abortControllerRef.current.timeoutId);
+   164→      try {
+   165→        abortControllerRef.current.controller.abort('cancelled');
+   166→      } catch { /* ignore */ }
+   167→      abortControllerRef.current = null;
+   168→    }
+   169→  }, []);
+   170→
+   171→  // Cleanup on unmount
+   172→  useEffect(() => {
+   173→    return () => cancelInFlightFetch();
+   174→  }, [cancelInFlightFetch]);
+   175→
+   176→  // ── V12 Debug data ──────────────────────────────────────────────
+   177→  const [v12Debug, setV12Debug] = useState<any>(null);
+   178→
+   179→  // ── V12 Scenarios (built from TA data + S/R levels) ───────────────
+   180→  const v12Result = useMemo(() => {
+   181→    return buildV12Scenarios({
+   182→      currentPrice,
+   183→      atr,
+   184→      overallSignal: overallSignal as 'bullish' | 'bearish' | 'neutral',
+   185→      v9Scenarios: scenarios,
+   186→      supports,
+   187→      resistances,
+   188→      bollingerUpper,
+   189→      bollingerLower,
+   190→      bollingerMiddle,
+   191→      ma21,
+   192→      ma100,
+   193→    });
+   194→  }, [currentPrice, atr, overallSignal, scenarios, supports, resistances,
+   195→      bollingerUpper, bollingerLower, bollingerMiddle, ma21, ma100]);
+   196→
+   197→  // ── Fetch AI analysis (robust with logging + auto-retry) ─────────────
+   198→  const fetchAiAnalysis = useCallback(async (isRetry = false) => {
+   199→    // Cancel any previous in-flight fetch first
+   200→    cancelInFlightFetch();
+   201→
+   202→    const fetchId = ++aiFetchIdRef.current;
+   203→    setAiLoading(true);
+   204→    setAiError(null);
+   205→    try {
+   206→      const apiUrl = '/api/v12-analysis';
+   207→      const activeScenarios = v12Result.scenarios;
+   208→      const requestBody: any = {
+   209→          symbolName, currentPrice, ma21, ma100,
+   210→          rsi, mfi, cci, adx, stochK, stochD,
+   211→          macdLine, macdSignal, macdHist,
+   212→          diPlus, diMinus, sar, atr, obv, hasVolume,
+   213→          bollingerUpper, bollingerMiddle, bollingerLower,
+   214→          trendDirection, trendAngle, trendR2, overallSignal,
+   215→          scenarios: activeScenarios, resistances, supports,
+   216→          resistanceStrengths, supportStrengths,
+   217→          isIndex, isTgju, currencyUnit,
+   218→          v12DominantKey: v12Result.dominantKey,
+   219→          v12HighestCumulativeKey: v12Result.highestCumulativeKey,
+   220→        };
+   221→      // Include OHLCV history for ML training/prediction
+   222→      // Cap at last 500 candles to keep request payload small (ML needs ~120, patterns ~50)
+   223→      if (candles.length > 0) {
+   224→        const recentCandles = candles.length > 500 ? candles.slice(-500) : candles;
+   225→        requestBody.ohlcvHistory = recentCandles.map(c => ({
+   226→          date: c.date, open: c.open, high: c.high,
+   227→          low: c.low, close: c.close, volume: c.volume,
+   228→        }));
+   229→      }
+   230→
+   231→      // AbortController for 120s client-side timeout
+   232→      const controller = new AbortController();
+   233→      const timeoutId = setTimeout(() => {
+   234→        controller.abort('Client timeout after 120s');
+   235→      }, 120000);
+   236→      // Store for cleanup on re-fetch / unmount
+   237→      abortControllerRef.current = { controller, timeoutId };
+   238→
+   239→      console.log(`[VdesAnalysis v12] Fetching ${apiUrl} for ${symbolName} (retry=${isRetry})`);
+   240→      const res = await fetch(apiUrl, {
+   241→        method: 'POST',
+   242→        headers: { 'Content-Type': 'application/json' },
+   243→        body: JSON.stringify(requestBody),
+   244→        signal: controller.signal,
+   245→      });
+   246→      // Fetch completed — clear timeout and ref
+   247→      clearTimeout(timeoutId);
+   248→      abortControllerRef.current = null;
+   249→
+   250→      if (!res.ok) {
+   251→        let errorMsg = `خطای سرور (${res.status})`;
+   252→        try {
+   253→          const errData = await res.json();
+   254→          errorMsg = errData.error || errorMsg;
+   255→        } catch {
+   256→          // Response body is not JSON (e.g. 502 from Caddy)
+   257→          if (res.status === 502) errorMsg = 'سرور در حال بارگذاری مجدد است. لطفاً چند ثانیه صبر کنید و دوباره تلاش کنید.';
+   258→        }
+   259→        console.error(`[VdesAnalysis v12] API error ${res.status}:`, errorMsg);
+   260→        throw new Error(errorMsg);
+   261→      }
+   262→      const data = await res.json();
+   263→      if (fetchId === aiFetchIdRef.current) {
+   264→        if (data.analysis && data.analysis.trim().length > 0) {
+   265→          setAiAnalysis(data.analysis);
+   266→          console.log(`[VdesAnalysis v12] Got analysis for ${symbolName}: ${data.analysis.length} chars`);
+   267→        } else {
+   268→          console.error(`[VdesAnalysis v12] Empty analysis for ${symbolName}`, data);
+   269→          setAiError('مدل پاسخ خالی تولید کرد. لطفاً دوباره تلاش کنید.');
+   270→        }
+   271→        if (data._debug?.v11) setV11Debug({ ...data._debug.v11, v11Persona: data._debug.v11Persona, v11Template: data._debug.v11Template });
+   272→        else setV11Debug(null);
+   273→      }
+   274→    } catch (err) {
+   275→      // Clear timeout and ref on error too
+   276→      clearTimeout(abortControllerRef.current?.timeoutId);
+   277→      abortControllerRef.current = null;
+   278→
+   279→      // Determine if this is an abort
+   280→      const errMsg = err instanceof Error ? err.message : String(err);
+   281→      const isAbort = err instanceof Error && err.name === 'AbortError';
+   282→      // Browser prefixes the reason: "The operation was aborted. cancelled"
+   283→      // so we use .includes() to catch intentional cancellations regardless of browser prefix
+   284→      const isIntentionalCancel = isAbort && errMsg.includes('cancelled');
+   285→
+   286→      // Silently ignore intentional cancellations (superseded by new fetch or unmount)
+   287→      if (isIntentionalCancel) {
+   288→        return;
+   289→      }
+   290→
+   291→      console.error(`[VdesAnalysis v12] Error for ${symbolName}:`, err);
+   292→      if (fetchId === aiFetchIdRef.current) {
+   293→        if (isAbort) {
+   294→          setAiError('زمان پاسخگویی سرور به پایان رسید. لطفاً دوباره تلاش کنید.');
+   295→        } else {
+   296→          setAiError(errMsg || 'خطای ناشناخته');
+   297→        }
+   298→        // Auto-retry once on transient errors (503/429/timeout/abort) after 5s
+   299→        if (!isRetry) {
+   300→          const isTransient = errMsg.includes('503') || errMsg.includes('429') || errMsg.includes('پایان رسید') || errMsg.includes('بارگذاری مجدد') || errMsg.includes('timeout') || isAbort;
+   301→          if (isTransient) {
+   302→            console.log(`[VdesAnalysis v12] Auto-retry in 5s for ${symbolName}`);
+   303→            setTimeout(() => {
+   304→              if (fetchId === aiFetchIdRef.current) fetchAiAnalysis(true).catch(() => {});
+   305→            }, 5000);
+   306→          }
+   307→        }
+   308→      }
+   309→    } finally {
+   310→      if (fetchId === aiFetchIdRef.current) {
+   311→        setAiLoading(false);
+   312→      }
+   313→    }
+   314→  }, [symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx, stochK, stochD,
+   315→    macdLine, macdSignal, macdHist, diPlus, diMinus, sar, atr, obv, hasVolume,
+   316→    bollingerUpper, bollingerMiddle, bollingerLower, trendDirection, trendAngle, trendR2,
+   317→    overallSignal, scenarios, resistances, supports, resistanceStrengths, supportStrengths,
+   318→    isIndex, isTgju, currencyUnit, v12Result, cancelInFlightFetch]);
+   319→
+   320→  // ── Auto-fetch AI analysis only on symbol change ──
+   321→  // NOT on every data refresh (auto-refresh every 15min would re-trigger
+   322→  // a 10-25s LLM call, making the text disappear each time)
+   323→  const fetchTriggerKey = symbolName;
+   324→  const lastAutoFetchKeyRef = useRef('');
+   325→  // Keep a ref to fetchAiAnalysis so the effect always calls the latest version
+   326→  const fetchAiAnalysisRef = useRef(fetchAiAnalysis);
+   327→  fetchAiAnalysisRef.current = fetchAiAnalysis;
+   328→  useEffect(() => {
+   329→    if (fetchTriggerKey === lastAutoFetchKeyRef.current) return;
+   330→    if (!symbolName || !currentPrice || currentPrice <= 0) {
+   331→      console.log('[VdesAnalysis] Skipping fetch: no symbol or invalid price', { symbolName, currentPrice });
+   332→      return;
+   333→    }
+   334→    lastAutoFetchKeyRef.current = fetchTriggerKey;
+   335→    // Reset old text when switching symbols/versions
+   336→    setAiAnalysis(null);
+   337→    setAiError(null);
+   338→    // Small delay to ensure all useMemo values (v12Result etc.) are computed
+   339→    const timer = setTimeout(() => {
+   340→      fetchAiAnalysisRef.current().catch(() => {});
+   341→    }, 150);
+   342→    return () => {
+   343→      clearTimeout(timer);
+   344→      // Also cancel any in-flight fetch when this effect re-runs or unmounts
+   345→      cancelInFlightFetch();
+   346→    };
+   347→  }, [fetchTriggerKey, symbolName, currentPrice, cancelInFlightFetch]);
+   348→
+   349→  // ── Close export menu on outside click ───────────────────────
+   350→  useEffect(() => {
+   351→    if (!exportMenuOpen) return;
+   352→    const handler = (e: MouseEvent) => {
+   353→      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+   354→        setExportMenuOpen(false);
+   355→      }
+   356→    };
+   357→    document.addEventListener('mousedown', handler);
+   358→    return () => document.removeEventListener('mousedown', handler);
+   359→  }, [exportMenuOpen]);
+   360→
+   361→  const R1_level = resistances[0] ?? currentPrice * 1.05;
+   362→  const R2_level = resistances[1] ?? currentPrice * 1.10;
+   363→  const S1_level = supports[0] ?? currentPrice * 0.95;
+   364→  const S2_level = supports[1] ?? currentPrice * 0.90;
+   365→  const S3_level = supports[2] ?? currentPrice * 0.85;
+   366→
+   367→  const targetMin = Math.round(R1_level + (R2_level - R1_level) * 0.5);
+   368→  const targetMax = Math.round(R2_level + (R2_level - R1_level) * 0.8);
+   369→
+   370→  // ── Dominant scenario (V9) ──────────────────────────────────────
+   371→  let highestKey = 'R3';
+   372→  let highestProb = 0;
+   373→  for (const key of SCENARIO_KEYS) {
+   374→    if (scenarios[key].probability > highestProb) {
+   375→      highestProb = scenarios[key].probability;
+   376→      highestKey = key;
+   377→    }
+   378→  }
+   379→  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + scenarios[k].probability, 0);
+   380→
+   381→  // ── V11 dominant + highest cumulative + total ────────────
+   382→  const v12DominantKey = v12Result?.dominantKey || 'S5';
+   383→  const v12HighestCumKey = v12Result?.highestCumulativeKey || 'S5';
+   384→  const v12TotalProb = v12Result
+   385→    ? V11_KEYS.reduce((sum, k) => sum + (v12Result.scenarios[k]?.probability || 0), 0)
+   386→    : 0;
+   387→
+   388→  // ── Sorted scenarios by target price (ascending) ─────────────
+   389→  const sortedScenarios = useMemo(() => {
+   390→    return [...SCENARIO_KEYS]
+   391→      .map(k => ({ key: k, ...scenarios[k] }))
+   392→      .sort((a, b) => a.targetMin - b.targetMin);
+   393→  }, [scenarios]);
+   394→
+   395→  // ── Dynamic scenario labels (context-aware based on overallSignal) ─
+   396→  const dynamicMeta = useMemo(() => getDynamicScenarioMeta(overallSignal), [overallSignal]);
+   397→  const strategy = dynamicMeta[highestKey];
+   398→
+   399→  // ── Text variety: hash-based selector for varied language ──────────
+   400→  const varietySeed = useMemo(() => {
+   401→    const raw = `${rsi}${macdHist}${cci}${adx}${stochK}${trendAngle}${Math.round(currentPrice)}`;
+   402→    let hash = 0;
+   403→    for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+   404→    return Math.abs(hash);
+   405→  }, [rsi, macdHist, cci, adx, stochK, trendAngle, currentPrice]);
+   406→
+   407→  // ── RSI signal ─────────────────────────────────────────────────
+   408→  const rsiZone = rsi > 70 ? 'overbought' : rsi > 60 ? 'weak_ob' : rsi > 40 ? 'neutral' : rsi > 30 ? 'weak_os' : 'oversold';
+   409→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   410→  const rsiColor = rsi > 70 ? 'text-red-700' : rsi > 60 ? 'text-amber-800' : rsi > 40 ? 'text-gray-600' : rsi > 30 ? 'text-amber-800' : 'text-emerald-700';
+   411→
+   412→  // ── Stochastic signal ──────────────────────────────────────────
+   413→  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+   414→
+   415→  // ── Trend text ─────────────────────────────────────────────────
+   416→  const isUp = trendDirection === 'up';
+   417→  const isDown = trendDirection === 'down';
+   418→  const trendLabel = isUp ? 'صعودی' : isDown ? 'نزولی' : 'خنثی';
+   419→  const trendColorCls = isUp ? 'text-emerald-700' : isDown ? 'text-red-700' : 'text-amber-800';
+   420→  const adxStrength = adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف';
+   421→  const adxColor = adx > 40 ? 'text-emerald-700' : adx > 25 ? 'text-amber-800' : 'text-gray-500';
+   422→  const r2Pct = (trendR2 * 100).toFixed(1);
+   423→
+   424→  // ── Bollinger position ─────────────────────────────────────────
+   425→  const bbRange = bollingerUpper - bollingerLower;
+   426→  const bbPos = bbRange > 0 ? toPersianDigits(((currentPrice - bollingerLower) / bbRange * 100).toFixed(0)) : '۵۰';
+   427→  const bbAbove = currentPrice > bollingerUpper;
+   428→  const bbBelow = currentPrice < bollingerLower;
+   429→  const bbSignal = bbAbove ? 'بالای باند بالایی' : bbBelow ? 'زیر باند پایینی' : `داخل باندها (${bbPos}٪)`;
+   430→
+   431→  // ── Distance to MA ─────────────────────────────────────────────
+   432→  const distMa21 = ((currentPrice - ma21) / ma21 * 100).toFixed(1);
+   433→  const distMa100 = ((currentPrice - ma100) / ma100 * 100).toFixed(1);
+   434→
+   435→  // ── TradingView scenario colors ────────────────────────────────
+   436→  const chartCandles = useMemo(() => {
+   437→    if (candles.length <= 2000) return candles;
+   438→    return candles.slice(-2000);
+   439→  }, [candles]);
+   440→
+   441→  const tvScenarios = useMemo(() => {
+   442→    const colors: Record<string, string> = {
+   443→      R1: '#34c98b', R2: '#3ad5db', R3: '#ff7b32', R4: '#ffb11b', R5: '#ef4d62',
+   444→      R6: '#fca5a5', R7: '#fbbf24', R8: '#fb923c', R9: '#a855f7',
+   445→    };
+   446→    return Object.fromEntries(
+   447→      SCENARIO_KEYS.map(k => [k, { targetMin: scenarios[k].targetMin, targetMax: scenarios[k].targetMax, name: scenarios[k].name, probability: scenarios[k].probability, color: colors[k] }])
+   448→    );
+   449→  }, [scenarios]);
+   450→
+   451→  // ── Strategy recommendation text (intelligent) ────────────────────
+   452→  const mfiWarning = hasVolume ? ` (مقدار ${toFa(mfi)})` : '';
+   453→  const strategyText = useMemo(() => {
+   454→    const v = varietySeed % 3; // 3 variants per signal type
+   455→    if (rsi > 70 || (hasVolume && mfi > 80)) {
+   456→      const variants = [
+   457→        `هشدار اشباع خرید فعال است (RSI: ${toFaG(rsi, 1)}${mfiWarning}). فاصله تا مقاومت اول ${toFaG(R1_level)} ${unit} است. بهترین استراتژی در این شرایط، صبر برای اصلاح قیمت تا محدوده حمایت ${toFaG(S1_level)} تا ${toFaG(S2_level)} و ورود در نقطه بهینه‌تر می‌باشد.`,
+   458→        `با توجه به ورود به منطقه اشباع خرید (RSI=${toFaG(rsi, 1)}${mfiWarning}) و نزدیکی به مقاومت ${toFaG(R1_level)}، ریسک اصلاح کوتاه‌مدت بالا ارزیابی می‌شود. پیشنهاد: انتظار برای بازگشت قیمت به ${toFaG(S1_level)}-${toFaG(S2_level)} و سپس بررسی مجدد سیگنال‌ها.`,
+   459→        `${IL.name} در محدوده اشباع خرید (RSI: ${toFaG(rsi, 1)}${mfiWarning}) ${IL.verb}. با در نظر گرفتن مقاومت ${toFaG(R1_level)} در بالا و حمایت ${toFaG(S1_level)} در پایین، ورود جدید در این نقطه توصیه نمی‌شود. بهتر است منتظر عقبنشینی به ${toFaG(S2_level)} بمانید.`,
+   460→      ];
+   461→      return variants[v];
+   462→    }
+   463→    if (rsi < 30 || (hasVolume && mfi < 20)) {
+   464→      const variants = [
+   465→        `اشباع فروش قابل توجه (RSI: ${toFaG(rsi, 1)}${mfiWarning}) در محدوده حمایت ${toFaG(S1_level)} شناسایی شد. این شرایط می‌تواند فرصت مناسبی برای ورود باشد، با حد ضرر ${toFaG(S2_level)}. هدف اول ${toFaG(R1_level)} و هدف دوم ${toFaG(R2_level)} ${unit}.`,
+   466→        `${IL.name} به منطقه اشباع فروش رسیده (RSI=${toFaG(rsi, 1)}${mfiWarning}). فاصله تا حمایت کلیدی ${toFaG(S1_level)} کم است. اگر واکنش مثبت به این حمایت مشاهده شود، بازگشت به ${toFaG(R1_level)} محتمل خواهد بود.`,
+   467→        `شاخص قدرت نسبی در محدوده اشباع فروش (مقدار ${toFaG(rsi, 1)}${mfiWarning}) ${IL.verb}. نزدیکی به حمایت ${toFaG(S1_level)} و سیگنال فروش بیش از حد، احتمال بازگشت کوتاه‌مدت را تقویت می‌کند. حد ضرر پیشنهادی: ${toFaG(S2_level)}.`,
+   468→      ];
+   469→      return variants[v];
+   470→    }
+   471→    const variants = [
+   472→      `سیگنال‌ها در محدوده خنثی قرار دارند (RSI: ${toFaG(rsi, 1)}، قدرت روند: ${adxStrength}). محدوده رنج فعلی بین ${toFaG(S1_level)} و ${toFaG(R1_level)} است. تا خروج قیمت از این کانال، بهترین اقدام نظاره و عدم ورود است.`,
+   473→      `وضعیت فعلی ${IL.name} نشان‌دهنده عدم قطعیت (RSI=${toFaG(rsi, 1)}، ADX=${toFaG(adx, 1)}). ${IL.name} در بازه ${toFaG(S1_level)} تا ${toFaG(R1_level)} در نوسان است. شکست معتبر یکی از این سطوح، مسیر آینده را مشخص خواهد کرد.`,
+   474→      `شاخص‌ها هم‌جهت نیستند (RSI: ${toFaG(rsi, 1)}) و قدرت روند ${adxStrength} ارزیابی می‌شود. تا زمانی که ${IL.name} از محدوده ${toFaG(S1_level)}-${toFaG(R1_level)} خارج نشود، ورود با ریسک بالا همراه خواهد بود.`,
+   475→    ];
+   476→    return variants[v];
+   477→  }, [rsi, mfi, hasVolume, R1_level, R2_level, S1_level, S2_level, varietySeed, IL.name, IL.verb, unit]);
+   478→
+   479→  // ── Chart API callback (for screenshot export) ──────────────
+   480→  const handleChartReady = useCallback((chart: IChartApi | null) => {
+   481→    chartApiRef.current = chart;
+   482→  }, []);
+   483→
+   484→  // ── Build export data (memoized) ─────────────────────────────
+   485→  const exportData = useMemo((): ExportData => ({
+   486→    symbolName,
+   487→    instrumentLabel: IL.name,
+   488→    candles,
+   489→    currentPrice,
+   490→    unit,
+   491→    rsi, mfi, cci, adx, stochK, stochD,
+   492→    macdLine, macdSignal, macdHist,
+   493→    diPlus, diMinus, sar, atr, obv, hasVolume,
+   494→    bollingerUpper, bollingerMiddle, bollingerLower,
+   495→    trendDirection, trendAngle, trendR2, overallSignal,
+   496→    ma21, ma100,
+   497→    resistances, supports,
+   498→    resistanceStrengths: resistanceStrengths.map(r => ({ price: r.price, strength: r.strength, isTarget: r.isTarget, grade: r.grade })),
+   499→    supportStrengths: supportStrengths.map(s => ({ price: s.price, strength: s.strength, isTarget: s.isTarget, grade: s.grade })),
+   500→    scenarios,
+   501→    aiAnalysis,
+   502→    chartApi: chartApiRef.current,
+   503→  }), [symbolName, IL.name, candles, currentPrice, unit, rsi, mfi, cci, adx, stochK, stochD,
+   504→    macdLine, macdSignal, macdHist, diPlus, diMinus, sar, atr, obv, hasVolume,
+   505→    bollingerUpper, bollingerMiddle, bollingerLower, trendDirection, trendAngle, trendR2, overallSignal,
+   506→    ma21, ma100, resistances, supports, resistanceStrengths, supportStrengths, scenarios, aiAnalysis]);
+   507→
+   508→  // ═══════════════════════════════════════════════════════════════════
+   509→  // Export handlers
+   510→  // ═══════════════════════════════════════════════════════════════════
+   511→
+   512→  const handleExport = useCallback(async (type: 'html' | 'text' | 'excel' | 'csv' | 'chart') => {
+   513→    setExporting(true);
+   514→    setExportMenuOpen(false);
+   515→    const labels: Record<string, string> = {
+   516→      html: 'HTML + نمودار تعاملی', text: 'فایل متنی', excel: 'فایل اکسل', csv: 'فایل CSV', chart: 'عکس نمودار',
+   517→    };
+   518→    try {
+   519→      const ed = { ...exportData, chartApi: chartApiRef.current };
+   520→      switch (type) {
+   521→        case 'html': exportHTML(ed); break;
+   522→        case 'text': exportText(ed); break;
+   523→        case 'excel': await exportExcel(ed); break;
+   524→        case 'csv': exportCSV(ed); break;
+   525→        case 'chart': {
+   526→          const ok = exportChartImage(ed);
+   527→          if (!ok) {
+   528→            toast.error('نمودار هنوز بارگذاری نشده. لطفاً کمی صبر کنید و دوباره تلاش کنید.', {
+   529→              icon: <AlertCircle className="w-4 h-4 text-red-500" />,
+   530→            });
+   531→            return;
+   532→          }
+   533→          break;
+   534→        }
+   535→      }
+   536→      toast.success(`${labels[type]} با موفقیت دانلود شد`, {
+   537→        icon: <CheckCircle className="w-4 h-4 text-emerald-500" />,
+   538→      });
+   539→    } catch (err) {
+   540→      console.error('Export failed:', err);
+   541→      toast.error(`خطا در خروجی ${labels[type]}`, {
+   542→        icon: <AlertCircle className="w-4 h-4 text-red-500" />,
+   543→      });
+   544→    } finally {
+   545→      setExporting(false);
+   546→    }
+   547→  }, [exportData]);
+   548→
+   549→  return (
+   550→    <div ref={containerRef} className="space-y-5" dir="rtl">
+   551→      {/* ═══ HEADER ═══ */}
+   552→      <div className="rounded-[32px] px-6 py-5 border border-amber-200"
+   553→        style={{ background: 'rgba(255,251,235,0.7)', backdropFilter: 'blur(14px)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.08)' }}>
+   554→        <div className="flex items-center justify-between flex-wrap gap-3">
+   555→          <h1 className="text-xl font-bold" style={{ color: '#92400e' }}>
+   556→            📈 تحلیل تکنیکال {IL.name}
+   557→          </h1>
+   558→          {/* ── Export Dropdown ── */}
+   559→          <div className="relative" ref={exportMenuRef} data-export-toolbar>
+   560→            <button
+   561→              onClick={() => setExportMenuOpen(p => !p)}
+   562→              disabled={exporting}
+   563→              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 border border-amber-300 text-xs font-medium text-amber-900 hover:bg-amber-200 transition-all disabled:opacity-50 cursor-pointer"
+   564→            >
+   565→              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+   566→              خروجی
+   567→              <ChevronDown className={`w-3 h-3 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+   568→            </button>
+   569→            {exportMenuOpen && (
+   570→              <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+   571→                <ExportMenuItem icon={<Code className="w-4 h-4" />} label="HTML + نمودار تعاملی" desc="فایل HTML با نمودار" onClick={() => handleExport('html')} />
+   572→                <ExportMenuItem icon={<Type className="w-4 h-4" />} label="فایل متنی" desc="متن کامل تحلیل" onClick={() => handleExport('text')} />
+   573→                <ExportMenuItem icon={<FileSpreadsheet className="w-4 h-4" />} label="فایل اکسل (XLSX)" desc="داده‌های قیمتی و اندیکاتورها" onClick={() => handleExport('excel')} />
+   574→                <ExportMenuItem icon={<Table className="w-4 h-4" />} label="فایل CSV" desc="داده‌های قیمتی و میانگین‌ها" onClick={() => handleExport('csv')} />
+   575→                <ExportMenuItem icon={<ImageIcon className="w-4 h-4" />} label="عکس نمودار" desc="تصویر PNG از نمودار" onClick={() => handleExport('chart')} />
+   576→              </div>
+   577→            )}
+   578→          </div>
+   579→        </div>
+   580→        <div className="flex flex-wrap gap-3 mt-3">
+   581→          <span className="px-3.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-500">
+   582→            📍 قیمت مرجع: <b className="text-gray-900">{toFaG(currentPrice)} {unit}</b>
+   583→          </span>
+   584→          <span className="px-3.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-500">
+   585→            🎯 هدف کوتاه‌مدت: <b className="text-gray-900">{toFaG(targetMin)} — {toFaG(targetMax)} {unit}</b>
+   586→          </span>
+   587→          <span className="px-3.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-500">
+   588→            📊 روند: <b className="text-gray-900">{trendLabel} (R²={toPersianDigits(r2Pct)}٪)</b>
+   589→          </span>
+   590→          <span className={`px-3.5 py-1 rounded-full border text-xs font-medium ${
+   591→            rsi > 70 ? 'bg-red-50 text-red-700 border-red-200'
+   592→            : rsi < 30 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+   593→            : 'bg-amber-50 text-amber-800 border-amber-200'
+   594→          }`}>
+   595→            قدرت نسبی: {toFa(rsi)} ({rsiSignal})
+   596→          </span>
+   597→        </div>
+   598→      </div>
+   599→
+   600→      {/* ═══ TRADINGVIEW CHART ═══ */}
+   601→      <div className="rounded-[28px] p-4 border border-gray-100"
+   602→        style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   603→        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-3 mb-3">
+   604→          <span style={{ color: '#92400e' }}>📊</span>
+   605→          نمودار قیمتی سهم (روزانه) — به همراه MA21، MA100، سطوح حمایت/مقاومت و اهداف قیمتی
+   606→        </h2>
+   607→        <TVWidgetInner
+   608→          symbolName={symbolName}
+   609→          candles={chartCandles}
+   610→          supports={supports}
+   611→          resistances={resistances}
+   612→          supportStrengths={supportStrengths}
+   613→          resistanceStrengths={resistanceStrengths}
+   614→          ma21={ma21}
+   615→          ma100={ma100}
+   616→          scenarios={tvScenarios}
+   617→          height={580}
+   618→          onChartReady={handleChartReady}
+   619→        />
+   620→      </div>
+   621→
+   622→      {/* ═══ SUPPORT / RESISTANCE LEVELS BOXES ═══ */}
+   623→      <div className="rounded-[28px] p-5 border border-gray-100"
+   624→        style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   625→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   626→          {/* ── Resistance Levels ── */}
+   627→          <div>
+   628→            <div className="flex items-center gap-2 mb-3">
+   629→              <ShieldAlert className="w-4 h-4 text-red-700" />
+   630→              <h3 className="text-sm font-bold text-red-700">سطوح مقاومت</h3>
+   631→            </div>
+   632→            <div className="space-y-2">
+   633→              {resistanceStrengths.filter(r => r.price > 0).map((r, i) => (
+   634→                <LevelBox key={`r-${i}`} index={i} label={`R${i + 1}`} price={r.price} strength={r.strength} isTarget={r.isTarget} type="resistance" unit={unit} grade={(r as {grade?:string}).grade} overlapCount={(r as {overlapCount?:number}).overlapCount} touchCount={(r as {touchCount?:number}).touchCount} />
+   635→              ))}
+   636→            </div>
+   637→          </div>
+   638→
+   639→          {/* ── Support Levels ── */}
+   640→          <div>
+   641→            <div className="flex items-center gap-2 mb-3">
+   642→              <Shield className="w-4 h-4 text-emerald-700" />
+   643→              <h3 className="text-sm font-bold text-emerald-700">سطوح حمایت</h3>
+   644→            </div>
+   645→            <div className="space-y-2">
+   646→              {supportStrengths.filter(s => s.price > 0).map((s, i) => (
+   647→                <LevelBox key={`s-${i}`} index={i} label={`S${i + 1}`} price={s.price} strength={s.strength} isTarget={s.isTarget} type="support" unit={unit} grade={(s as {grade?:string}).grade} overlapCount={(s as {overlapCount?:number}).overlapCount} touchCount={(s as {touchCount?:number}).touchCount} />
+   648→              ))}
+   649→            </div>
+   650→          </div>
+   651→        </div>
+   652→
+   653→        {/* ── Price Targets ── */}
+   654→        {priceTargets && priceTargets.length > 0 && (
+   655→          <div className="mt-5 pt-4 border-t border-gray-100">
+   656→            <div className="flex items-center gap-2 mb-3">
+   657→              <Target className="w-4 h-4 text-amber-800" />
+   658→              <h3 className="text-sm font-bold text-amber-800">اهداف قیمتی</h3>
+   659→            </div>
+   660→            <div className="flex flex-wrap gap-2">
+   661→              {priceTargets.filter(t => t.price > 0).map((t, i) => (
+   662→                <LevelBox key={`t-${i}`} index={i} label={`هدف ${toPersianDigits(i + 1)}`} price={t.price} strength={t.strength} isTarget={true} type="target" unit={unit} grade={(t as {grade?:string}).grade} overlapCount={(t as {overlapCount?:number}).overlapCount} touchCount={(t as {touchCount?:number}).touchCount} />
+   663→              ))}
+   664→            </div>
+   665→          </div>
+   666→        )}
+   667→      </div>
+   668→
+   669→      {/* ═══ DUAL ANALYSIS LAYOUT ═══ */}
+   670→      <div className="rounded-[28px] p-5 border border-gray-100"
+   671→        style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   672→        <h2 className="text-sm font-semibold mb-4 text-gray-900 flex items-center gap-3">
+   673→          <span style={{ color: '#92400e' }}>🧠</span>
+   674→          تحلیل جامع روند و سطوح کلیدی
+   675→        </h2>
+   676→
+   677→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+   678→          {/* ── AI Text Analysis (Right in RTL) ── */}
+   679→          <div ref={textAnalysisRef} className="rounded-2xl p-4 border border-gray-100 flex flex-col min-h-0" style={{ background: 'rgba(249,250,251,0.5)' }}>
+   680→            <div className="flex items-center justify-between mb-3 gap-2">
+   681→              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+   682→                <BrainCircuit className="w-4 h-4" style={{ color: '#92400e' }} />
+   683→                تحلیل هوشمند روایت‌محور
+   684→              </h3>
+   685→              <div className="flex items-center gap-2">
+   686→                <span className="px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">v11</span>
+   687→                <button
+   688→                  onClick={() => fetchAiAnalysis()}
+   689→                  disabled={aiLoading}
+   690→                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-300 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-all disabled:opacity-50 cursor-pointer"
+   691→                >
+   692→                  <RefreshCw className={`w-3 h-3 ${aiLoading ? 'animate-spin' : ''}`} />
+   693→                  بازتولید
+   694→                </button>
+   695→              </div>
+   696→            </div>
+   697→
+   698→            {/* Loading State */}
+   699→            {aiLoading && (
+   700→              <div className="flex-1 flex flex-col items-center justify-center py-12 gap-4">
+   701→                <div className="relative">
+   702→                  <div className="w-12 h-12 rounded-full border-4 border-gray-200" />
+   703→                  <div className="w-12 h-12 rounded-full border-4 border-t-amber-600 absolute inset-0 animate-spin" />
+   704→                </div>
+   705→                <div className="text-center">
+   706→                  <p className="text-sm font-medium text-gray-700">در حال تولید تحلیل (v۱۱)</p>
+   707→                  <p className="text-xs text-gray-400 mt-1">مدل هوش مصنوعی در حال تحلیل داده‌ها، شناسایی الگوهای کندل‌استیک و پیش‌بینی ML</p>
+   708→                </div>
+   709→                <div className="flex items-center gap-2 text-[10px] text-gray-400 flex-wrap justify-center">
+   710→                  <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">روایت پویا</span>
+   711→                  <span className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200">۸۰۰-۱۸۰۰ کلمه</span>
+   712→                  <span className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200">بدون ایموجی</span>
+   713→                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">ML + کندل‌استیک + بیزی</span>
+   714→                </div>
+   715→              </div>
+   716→            )}
+   717→
+   718→            {/* Error State */}
+   719→            {aiError && !aiLoading && (
+   720→              <div className="flex-1 flex flex-col items-center justify-center py-12 gap-3">
+   721→                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+   722→                  <span className="text-red-500 text-lg">!</span>
+   723→                </div>
+   724→                <div className="text-center">
+   725→                  <p className="text-sm font-medium text-red-700">خطا در تولید تحلیل</p>
+   726→                  <p className="text-xs text-gray-500 mt-1 max-w-[280px]">{aiError}</p>
+   727→                </div>
+   728→                <button
+   729→                  onClick={() => fetchAiAnalysis()}
+   730→                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 hover:bg-red-100 transition-all cursor-pointer"
+   731→                >
+   732→                  <RefreshCw className="w-3 h-3" />
+   733→                  تلاش مجدد
+   734→                </button>
+   735→              </div>
+   736→            )}
+   737→
+   738→            {/* Blank State: no loading, no error, no text — show retry */}
+   739→            {!aiAnalysis && !aiLoading && !aiError && (
+   740→              <div className="flex-1 flex flex-col items-center justify-center py-10 gap-3">
+   741→                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+   742→                  <BrainCircuit className="w-5 h-5 text-amber-500" />
+   743→                </div>
+   744→                <div className="text-center">
+   745→                  <p className="text-sm font-medium text-gray-600">تحلیل هوشمند آماده نیست</p>
+   746→                  <p className="text-xs text-gray-400 mt-1">برای تولید تحلیل کلیک کنید</p>
+   747→                </div>
+   748→                <button
+   749→                  onClick={() => fetchAiAnalysis().catch(() => {})}
+   750→                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 hover:bg-amber-100 transition-all cursor-pointer"
+   751→                >
+   752→                  <RefreshCw className="w-3.5 h-3.5" />
+   753→                  تولید تحلیل
+   754→                </button>
+   755→              </div>
+   756→            )}
+   757→
+   758→            {/* AI Analysis Content */}
+   759→            {aiAnalysis && !aiLoading && (
+   760→              <div className="flex-1 text-sm text-gray-700 leading-[2.1] ai-analysis-content min-h-0 overflow-y-auto custom-scrollbar mx-4 px-6">
+   761→                {aiAnalysis.split('\n').map((line, i) => {
+   762→                  // Bold text: **text**
+   763→                  const parts = line.split(/(\*\*[^*]+\*\*)/g);
+   764→                  const rendered = parts.map((part, j) => {
+   765→                    if (part.startsWith('**') && part.endsWith('**')) {
+   766→                      return <strong key={j} className="text-gray-900 font-bold">{part.slice(2, -2)}</strong>;
+   767→                    }
+   768→                    return <span key={j}>{part}</span>;
+   769→                  });
+   770→                  // Empty line = paragraph break
+   771→                  if (line.trim() === '') return <div key={i} className="h-4" />;
+   772→                  return <p key={i} className="mb-2">{rendered}</p>;
+   773→                })}
+   774→              </div>
+   775→            )}
+   776→
+   777→            {/* V12 Debug Info Panel */}
+   778→            {v12Debug && !aiLoading && (
+   779→              <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+   780→                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">V12 Debug</div>
+   781→                <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+   782→                  {v12Debug.v12Persona && <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">{v12Debug.v12Persona}</span>}
+   783→                  {v12Debug.v12Template && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">{v12Debug.v12Template}</span>}
+   784→                </div>
+   785→                {v12Debug.candlePatterns && v12Debug.candlePatterns.patterns && v12Debug.candlePatterns.patterns.length > 0 && (
+   786→                  <div className="flex flex-wrap gap-1">
+   787→                    {v12Debug.candlePatterns.patterns.slice(0, 3).map((p: any, idx: number) => (
+   788→                      <span key={idx} className={[
+   789→                        'px-2 py-0.5 rounded-full text-[10px] border',
+   790→                        p.direction === 'bullish' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+   791→                        : p.direction === 'bearish' ? 'bg-red-50 text-red-700 border-red-200'
+   792→                        : 'bg-gray-50 text-gray-600 border-gray-200'
+   793→                      ].join(' ')}>
+   794→                        {p.name} ({Math.round(p.reliabilityScore * 100)}%)
+   795→                      </span>
+   796→                    ))}
+   797→                  </div>
+   798→                )}
+   799→                <div className="flex items-center gap-3 text-[10px] text-gray-500">
+   800→                  <span>ML: {
+   801→                    v12Debug.mlTrainingStatus === 'trained'
+   802→                      ? 'آموزش‌دیده'
+   803→                      : v11Debug.mlTrainingStatus === 'training'
+   804→                      ? 'در حال آموزش'
+   805→                      : 'آموزش ندیده'
+   806→                  }</span>
+   807→                  {v11Debug.mlPrediction && (
+   808→                    <span>پیش‌بینی: {
+   809→                      v11Debug.mlPrediction.overall_direction === 'up' ? 'صعودی'
+   810→                      : v11Debug.mlPrediction.overall_direction === 'down' ? 'نزولی'
+   811→                      : 'خنثی'
+   812→                    } ({Math.round(v11Debug.mlPrediction.overall_confidence * 100)}%)</span>
+   813→                  )}
+   814→                  <span>سرویس ML: {v11Debug.mlServiceAvailable ? 'فعال' : 'غیرفعال'}</span>
+   815→                </div>
+   816→              </div>
+   817→            )}
+   818→          </div>
+   819→
+   820→          {/* ── Scenario Summary (Left in RTL) ── */}
+   821→          <div className="rounded-2xl p-4 border border-gray-100 flex flex-col min-h-0" style={{ background: 'rgba(249,250,251,0.5)' }}>
+   822→            <h3 className="text-sm font-bold mb-3 pb-2 border-b border-gray-200" style={{ color: '#0891b2' }}>
+   823→              🏛️ سناریوهای پیش‌بینی و احتمالات
+   824→            </h3>
+   825→
+   826→            {v12Result ? (
+   827→              <>
+   828→                <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto">
+   829→                  {v12Result.orderedKeys.map((key) => {
+   830→                    const s = v12Result.scenarios[key];
+   831→                    if (!s) return null;
+   832→                    const colorCfg = V11_COLORS[key] || V11_COLORS.S5;
+   833→                    const isDominant = key === v11DominantKey;
+   834→                    const isHighestCum = key === v11HighestCumKey;
+   835→                    // Both flags on same scenario: use cumulative color (purple)
+   836→                    const isHighlighted = isDominant || isHighestCum;
+   837→                    const highlightColor = isHighestCum ? '#7c3aed' : '#0891b2'; // purple for cumulative, teal for dominant-only
+   838→                    const highlightBg = isHighestCum ? 'rgba(124,58,237,0.06)' : 'rgba(8,145,178,0.06)';
+   839→                    const highlightBorder = isHighestCum ? 'rgba(124,58,237,0.3)' : 'rgba(8,145,178,0.3)';
+   840→                    const dirIcon = s.direction === 'bullish' ? '▲' : s.direction === 'bearish' ? '▼' : '◆';
+   841→                    const dirColor = s.direction === 'bullish' ? 'text-emerald-700' : s.direction === 'bearish' ? 'text-red-700' : 'text-amber-700';
+   842→                    return (
+   843→                      <div key={key} className="rounded-lg p-2 transition-all"
+   844→                        style={{
+   845→                          background: isHighlighted ? highlightBg : 'rgba(249,250,251,1)',
+   846→                          border: isHighlighted ? `1px solid ${highlightBorder}` : '1px solid rgba(229,231,235,1)',
+   847→                          borderRight: `3px solid ${isHighlighted ? highlightColor : colorCfg.border}`,
+   848→                        }}>
+   849→                        <div className="flex items-center justify-between gap-2">
+   850→                          <div className="flex items-center gap-1.5 min-w-0">
+   851→                            <span className={`text-[10px] font-bold ${dirColor}`}>{dirIcon}</span>
+   852→                            <span className="text-xs font-bold text-gray-900 truncate">{s.name}</span>
+   853→                            {isDominant && isHighestCum && (
+   854→                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap" style={{ background: 'rgba(124,58,237,0.15)', color: '#7c3aed' }}>غالب + بیشترین تجمعی</span>
+   855→                            )}
+   856→                            {isDominant && !isHighestCum && (
+   857→                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap" style={{ background: 'rgba(8,145,178,0.12)', color: '#0891b2' }}>غالب</span>
+   858→                            )}
+   859→                            {isHighestCum && !isDominant && (
+   860→                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap" style={{ background: 'rgba(124,58,237,0.15)', color: '#7c3aed' }}>بیشترین تجمعی</span>
+   861→                            )}
+   862→                          </div>
+   863→                          <div className="flex items-center gap-2 flex-shrink-0">
+   864→                            <span className="text-[10px] text-gray-400" dir="ltr">
+   865→                              {toFa(s.targetMin)} — {toFa(s.targetMax)}
+   866→                            </span>
+   867→                          </div>
+   868→                        </div>
+   869→                        <div className="flex items-center justify-between mt-1">
+   870→                          <span className="inline-block px-2.5 py-0.5 rounded-full text-sm font-black" style={{ background: colorCfg.badgeBg, color: colorCfg.badgeColor }}>
+   871→                            {toFa(s.probability)}٪
+   872→                          </span>
+   873→                          <span className="text-[10px] text-gray-400">
+   874→                            تجمعی: <b className={isHighestCum ? 'text-purple-700 font-bold' : 'text-gray-600'}>{toFa(s.cumulativeProbability)}٪</b>
+   875→                          </span>
+   876→                        </div>
+   877→                      </div>
+   878→                    );
+   879→                  })}
+   880→                </div>
+   881→                <div className="mt-2 pt-2 border-t border-gray-200 text-[10px] text-gray-400 leading-relaxed">
+   882→                  مجموع احتمالات: <b className="text-gray-600">{toFa(v11TotalProb)}٪</b>
+   883→                  <span className="mx-1">|</span>
+   884→                  هر سناریو: احتمال اختصاصی سناریو + احتمال تجمعی
+   885→                </div>
+   886→              </>
+   887→            ) : (
+   888→              <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+   889→                داده سناریو در دسترس نیست
+   890→              </div>
+   891→            )}
+   892→          </div>
+   893→        </div>
+   894→      </div>
+   895→
+   896→      {/* ── Strategy Tag ── */}
+   897→      <div className="flex flex-wrap items-center gap-3 px-4">
+   898→        <span className="text-xs text-gray-500">سیگنال غالب:</span>
+   899→        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold border ${strategy.strategyTag}`}>
+   900→          {strategy.strategyText}
+   901→        </span>
+   902→      </div>
+   903→    </div>
+   904→  );
+   905→}
+   906→
+   907→// ═══════════════════════════════════════════════════════════════════════════════
+   908→// Sub-components
+   909→// ═══════════════════════════════════════════════════════════════════════════════
+   910→
+   911→// ── Export Menu Item ────────────────────────────────────────────────────────
+   912→function ExportMenuItem({ icon, label, desc, onClick }: {
+   913→  icon: React.ReactNode; label: string; desc: string; onClick: () => void;
+   914→}) {
+   915→  return (
+   916→    <button
+   917→      onClick={onClick}
+   918→      className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer"
+   919→    >
+   920→      <span className="text-gray-500 flex-shrink-0">{icon}</span>
+   921→      <div className="flex-1 min-w-0">
+   922→        <div className="text-sm font-medium text-gray-800">{label}</div>
+   923→        <div className="text-[11px] text-gray-400">{desc}</div>
+   924→      </div>
+   925→    </button>
+   926→  );
+   927→}
+   928→
+   929→// ── Level Box (Support / Resistance / Target) ────────────────────────────────
+   930→function LevelBox({ index, label, price, strength, isTarget, type, unit, grade, overlapCount, touchCount }: {
+   931→  index: number; label: string; price: number; strength: number; isTarget: boolean; type: 'support' | 'resistance' | 'target'; unit?: string;
+   932→  grade?: string; overlapCount?: number; touchCount?: number;
+   933→}) {
+   934→  const isSupport = type === 'support';
+   935→  const isTargetType = type === 'target';
+   936→
+   937→  const accentColor = isTargetType ? '#ffb11b' : isSupport ? '#34c98b' : '#ef4d62';
+   938→  const bgAccent = isTargetType ? 'rgba(255,177,27,0.06)' : isSupport ? 'rgba(52,201,139,0.06)' : 'rgba(239,77,98,0.06)';
+   939→  const borderAccent = isTargetType ? 'rgba(255,177,27,0.3)' : isSupport ? 'rgba(52,201,139,0.3)' : 'rgba(239,77,98,0.3)';
+   940→
+   941→  const strengthPct = Math.min(100, Math.max(0, strength * 10));
+   942→  const displayGrade = grade || (strength >= 8.5 ? 'بسیار قوی' : strength >= 7 ? 'قوی' : strength >= 5 ? 'متوسط' : strength >= 3 ? 'ضعیف' : 'بسیار ضعیف');
+   943→  const strengthColor = strength >= 8.5 ? '#34c98b' : strength >= 7 ? '#3ad5db' : strength >= 5 ? '#ffb11b' : strength >= 3 ? '#ff7b32' : '#ef4d62';
+   944→
+   945→  return (
+   946→    <div
+   947→      className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border transition-all hover:scale-[1.01]"
+   948→      style={{
+   949→        background: bgAccent,
+   950→        border: `1px solid ${borderAccent}`,
+   951→        borderRight: `3px solid ${accentColor}`,
+   952→      }}
+   953→    >
+   954→      {/* Label + Price */}
+   955→      <div className="flex-1 min-w-0">
+   956→        <div className="flex items-center gap-2">
+   957→          <span className="text-[11px] font-bold" style={{ color: accentColor }}>{label}</span>
+   958→          {isTarget && <span className="text-[9px]">🎯</span>}
+   959→          {overlapCount !== undefined && overlapCount > 0 && (
+   960→            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+   961→              {toPersianDigits(overlapCount)} هم‌پوشانی
+   962→            </span>
+   963→          )}
+   964→        </div>
+   965→        <div className="flex items-baseline gap-1">
+   966→          <span className="text-sm font-black text-gray-900 tabular-nums" dir="ltr">{toPersianDigits(Math.round(price).toLocaleString('en-US'))}</span>
+   967→          <span className="text-[10px] text-gray-500">{unit || 'ریال'}</span>
+   968→        </div>
+   969→      </div>
+   970→
+   971→      {/* Strength + Grade */}
+   972→      <div className="flex flex-col items-end gap-1 min-w-[100px]">
+   973→        <div className="flex items-center gap-1.5">
+   974→          <span className="text-[9px] font-bold" style={{ color: strengthColor }}>{displayGrade}</span>
+   975→          <span className="text-[10px] font-black tabular-nums" style={{ color: strengthColor }}>{toPersianDigits(Math.round(strength * 10) / 10)}</span>
+   976→          <span className="text-[9px] text-gray-500">/۱۰</span>
+   977→        </div>
+   978→        <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+   979→          <div
+   980→            className="h-full rounded-full transition-all duration-500"
+   981→            style={{ width: `${strengthPct}%`, backgroundColor: strengthColor }}
+   982→          />
+   983→        </div>
+   984→        {touchCount !== undefined && touchCount > 0 && (
+   985→          <span className="text-[8px] text-gray-400">{toPersianDigits(touchCount)} برخورد</span>
+   986→        )}
+   987→      </div>
+   988→    </div>
+   989→  );
+   990→}
+   991→
+   992→// ── Loading ────────────────────────────────────────────────────────────────────
+   993→
+   994→export function VdesAnalysisSkeleton() {
+   995→  return (
+   996→    <div className="space-y-5">
+   997→      <Skeleton className="h-28 w-full bg-gray-200 rounded-[32px]" />
+   998→      <Skeleton className="h-[650px] w-full bg-gray-200 rounded-[28px]" />
+   999→    </div>
+  1000→  );
+  1001→}

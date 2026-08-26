@@ -1,0 +1,502 @@
+     1→     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→     2→// ML Narrative Engine v8 — LOCKED — School × Style × Tone Selector
+     3→     3→// LOCKED — Deterministic scoring system: evaluates market conditions and selects
+     4→     4→// exactly ONE combination per request (school + style + tone).
+     5→     5→// ═══════════════════════════════════════════════════════════════════════════════
+     6→     6→
+     7→     7→export interface NarrativeCombination {
+     8→     8→  school: SchoolDef;
+     9→     9→  style: StyleDef;
+    10→    10→  tone: ToneDef;
+    11→    11→  schoolScore: number;
+    12→    12→  styleScore: number;
+    13→    13→  toneScore: number;
+    14→    14→}
+    15→    15→
+    16→    16→export interface SchoolDef {
+    17→    17→  id: string;
+    18→    18→  name: string;
+    19→    19→  nameEn: string;
+    20→    20→  description: string;
+    21→    21→  methodology: string;   // what tools/indicators this school emphasizes
+    22→    22→  focusQuestion: string;  // the key question this school asks
+    23→    23→}
+    24→    24→
+    25→    25→export interface StyleDef {
+    26→    26→  id: string;
+    27→    27→  name: string;
+    28→    28→  nameEn: string;
+    29→    29→  voice: string;        // narrative voice description
+    30→    30→  structure: string;    // how the analysis is structured
+    31→    31→  endingStyle: string;  // how the analysis concludes
+    32→    32→}
+    33→    33→
+    34→    34→export interface ToneDef {
+    35→    35→  id: string;
+    36→    36→  name: string;
+    37→    37→  nameEn: string;
+    38→    38→  characteristics: string;
+    39→    39→  vocabulary: string;   // key words/phrases to use
+    40→    40→  sentenceStyle: string;
+    41→    41→}
+    42→    42→
+    43→    43→// ─── Selection Input ────────────────────────────────────────────────────────
+    44→    44→export interface NarrativeInput {
+    45→    45→  price: number;
+    46→    46→  trendDirection: string;  // 'up' | 'down' | 'neutral'
+    47→    47→  rsi: number;
+    48→    48→  adx: number;
+    49→    49→  stochK: number;
+    50→    50→  stochD: number;
+    51→    51→  macdLine: number;
+    52→    52→  macdSignal: number;
+    53→    53→  macdHist: number;
+    54→    54→  diPlus: number;
+    55→    55→  diMinus: number;
+    56→    56→  obv: number;
+    57→    57→  hasVolume: boolean;
+    58→    58→  cci: number;
+    59→    59→  mfi: number;
+    60→    60→  atr: number;
+    61→    61→  bbPosition: number;      // 0-100, where price sits in Bollinger Bands
+    62→    62→  bbUpper: number;
+    63→    63→  bbLower: number;
+    64→    64→  dominantScenarioKey: string;  // 'R1'-'R5'
+    65→    65→  scenarioProbabilities: Record<string, number>;  // R1-R5 probabilities (0-100)
+    66→    66→  nearResistance: boolean;  // price within 3% of resistance
+    67→    67→   nearSupport: boolean;     // price within 3% of support
+    68→    68→  priceVsMa21: 'above' | 'below';
+    69→    69→  priceVsMa100: 'above' | 'below';
+    70→    70→  trendR2: number;       // R-squared of trend fit (0-1)
+    71→    71→}
+    72→    72→
+    73→    73→// ═══════════════════════════════════════════════════════════════════════════════
+    74→    74→// 10 Schools of Technical Analysis
+    75→    75→// ═══════════════════════════════════════════════════════════════════════════════
+    76→    76→
+    77→    77→export const SCHOOLS: SchoolDef[] = [
+    78→    78→  {
+    79→    79→    id: 'trend',
+    80→    80→    name: '\u062a\u062d\u0644\u06cc\u0644 \u0631\u0648\u0646\u062f',
+    81→    81→    nameEn: 'Trend Following',
+    82→    82→    description: '\u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u0634\u062f\u062a \u0631\u0648\u0646\u062f\u060c \u0632\u0627\u0648\u06cc\u0647 \u0631\u0648\u0646\u062f\u060c \u062a\u062b\u0628\u06cc\u062a \u06a9\u0627\u0646\u0627\u0644 \u0648 \u0645\u0639\u0627\u06cc\u0631\u0647 \u0645\u062a\u062d\u0631\u06a9 \u0628\u0627 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 EMA\u060c MACD \u0648 ADX.',
+    83→    83→    methodology: 'EMA 20/50/100\u060c MACD\u060c ADX\u060c DI+/DI-\u060c \u062e\u0637\u0648\u0637 \u0631\u0648\u0646\u062f\u060c \u062a\u062b\u0628\u06cc\u062a \u06a9\u0627\u0646\u0627\u0644',
+    84→    84→    focusQuestion: '\u0622\u06cc\u0627 \u0631\u0648\u0646\u062f \u0642\u0627\u0628\u0644 \u0627\u0639\u062a\u0645\u0627\u062f \u0627\u0633\u062a \u0648 \u06a9\u062c\u0627 \u06cc \u0646\u0642\u0627\u0637 \u062a\u0627\u06cc\u06cc\u062f\u061f',
+    85→    85→  },
+    86→    86→  {
+    87→    87→    id: 'classical',
+    88→    88→    name: '\u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u06a9\u0644\u0627\u0633\u06cc\u06a9',
+    89→    89→    nameEn: 'Classical Patterns',
+    90→    90→    description: '\u0634\u0646\u0627\u0633\u0627\u06cc\u06cc \u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0642\u06cc\u0645\u062a\u06cc \u06a9\u0644\u0627\u0633\u06cc\u06a9 \u0645\u0627\u0646\u0646\u062f \u0633\u0631 \u0648 \u0634\u0627\u0646\u0647\u060c \u062f\u0648\u0644 \u0628\u0627\u0644\u0627\u060c \u0645\u062b\u0644\u062b \u0648 \u0644\u0627\u06af\u0646\u0627.',
+    91→    91→    methodology: '\u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0628\u0627\u0632\u06af\u0634\u062a\u06cc (Head & Shoulders\u060c Double Top/Bottom)\u060c \u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0627\u062f\u0627\u0645\u0647 (Flags\u060c Triangles)\u060c \u0648\u0627\u06af\u0631\u0627\u06cc\u06cc',
+    92→    92→    focusQuestion: '\u0622\u06cc\u0627 \u0627\u0644\u06af\u0648\u06cc \u0642\u06cc\u0645\u062a\u06cc \u062f\u0631 \u062d\u0627\u0644 \u0634\u06a9\u0644\u06af\u06cc\u0631\u06cc \u0627\u0633\u062a \u0648 \u0647\u062f\u0641 \u0642\u06cc\u0645\u062a\u06cc \u0622\u0646 \u0686\u06cc\u0633\u062a\u061f',
+    93→    93→  },
+    94→    94→  {
+    95→    95→    id: 'candlestick',
+    96→    96→    name: '\u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u06a9\u0646\u062f\u0644\u06cc',
+    97→    97→    nameEn: 'Candlestick Patterns',
+    98→    98→    description: '\u062a\u062d\u0644\u06cc\u0644 \u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0634\u0639\u0644\u0627\u06cc \u0698\u0627\u067e\u0646\u06cc \u062f\u0631 \u0633\u0637\u0648\u062d \u06a9\u0644\u06cc\u062f\u06cc \u0628\u0631\u0627\u06cc \u062a\u0634\u062e\u06cc\u0635 \u0639\u06a9\u0633 \u0631\u0648\u0646\u062f.',
+    99→    99→    methodology: '\u062f\u0648\u062c\u06cc\u060c Hammer\u060c Engulfing\u060c Morning/Evening Star\u060c Harami\u060c Doji\u060c Spinng Top\u060c \u062a\u0639\u062f\u0627\u062f \u0628\u0627\u0631 \u06a9\u0646\u062f\u0644',
+   100→   100→    focusQuestion: '\u0622\u06cc\u0627 \u0627\u06a9\u0646\u0648\u0646 \u06a9\u0646\u062f\u0644\u06cc \u062f\u0631 \u0633\u0637\u0648\u062d \u06a9\u0644\u06cc\u062f\u06cc \u0639\u06a9\u0633 \u0631\u0648\u0646\u062f \u0631\u0627 \u062a\u0623\u06cc\u06cc\u062f \u0645\u06cc\u06a9\u0646\u062f\u061f',
+   101→   101→  },
+   102→   102→  {
+   103→   103→    id: 'fibonacci',
+   104→   104→    name: '\u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc \u0648 \u0647\u0646\u062f\u0633\u06cc',
+   105→   105→    nameEn: 'Fibonacci & Geometric',
+   106→   106→    description: '\u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 \u0633\u0637\u0648\u062d \u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc \u0628\u0631\u0627\u06cc \u062a\u0639\u06cc\u06cc\u0646 \u0646\u0633\u0628\u062a\u0647\u0627\u06cc \u0627\u0635\u0644\u0627\u062d \u0648 \u0627\u0647\u062f\u0627\u0641 \u0642\u06cc\u0645\u062a\u06cc.',
+   107→   107→    methodology: '\u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc \u0627\u0635\u0644\u0627\u062d\u06cc (23.6%\u060c 38.2%\u060c 50%\u060c 61.8%)\u060c \u0627\u0641\u0632\u0627\u06cc\u0634\u06cc (127.2%\u060c 161.8%)\u060c \u0627\u0646\u0628\u0633\u0627\u0637 \u0647\u0646\u062f\u0633\u06cc',
+   108→   108→    focusQuestion: '\u0646\u0633\u0628\u062a \u0627\u0635\u0644\u0627\u062d \u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc \u062f\u0631 \u06a9\u062c\u0627 \u0642\u0631\u0627\u0631 \u062f\u0627\u0631\u062f \u0648 \u0627\u0647\u062f\u0627\u0641 \u0627\u0641\u0632\u0627\u06cc\u0634\u06cc \u0686\u06cc\u0633\u062a\u061f',
+   109→   109→  },
+   110→   110→  {
+   111→   111→    id: 'volatility',
+   112→   112→    name: '\u062a\u062d\u0644\u06cc\u0644 \u0646\u0648\u0633\u0627\u0646 \u0648 \u062d\u062c\u0645',
+   113→   113→    nameEn: 'Volatility & Volume',
+   114→   114→    description: '\u0628\u0631\u0631\u0633\u06cc \u0634\u062f\u062a \u0646\u0648\u0633\u0627\u0646 \u0628\u0627 ATR \u0648 Bollinger\u060c \u062a\u062d\u0644\u06cc\u0644 \u062d\u062c\u0645 \u0645\u0639\u0627\u0645\u0644\u0627\u062a \u0648 OBV \u0628\u0631\u0627\u06cc \u062a\u0634\u062e\u06cc\u0635 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f.',
+   115→   115→    methodology: 'ATR\u060c Bollinger Bands\u060c OBV\u060c \u062d\u062c\u0645 \u0646\u0633\u0628\u06cc\u060c \u0646\u0648\u0633\u0627\u0646 \u0641\u0634\u0631\u062f\u0647 (Squeeze)\u060c \u0648\u0627\u06af\u0631\u0627\u06cc\u06cc \u062d\u062c\u0645',
+   116→   116→    focusQuestion: '\u0622\u06cc\u0627 \u0628\u0627\u0632\u0627\u0631 \u062f\u0631 \u062d\u0627\u0644 \u0641\u0634\u0631\u062f\u06af\u06cc \u0627\u0633\u062a \u0648 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0686\u0647 \u0633\u06cc\u06af\u0646\u0627\u0644\u06cc \u062f\u0627\u0631\u062f\u061f',
+   117→   117→  },
+   118→   118→  {
+   119→   119→    id: 'oscillator',
+   120→   120→    name: '\u0627\u0633\u06cc\u0644\u0627\u062a\u0648\u0631\u0647\u0627 \u0648 \u0645\u0648\u0645\u0646\u062a\u0648\u0645',
+   121→   121→    nameEn: 'Oscillators & Momentum',
+   122→   122→    description: '\u062a\u062d\u0644\u06cc\u0644 \u0639\u062f\u062f\u06cc \u0634\u0627\u062e\u0635\u0647\u0627\u06cc \u062a\u06a9\u0646\u06cc\u06a9\u0627\u0644 \u0628\u0631\u0627\u06cc \u062a\u0634\u062e\u06cc\u0635 \u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f/\u0641\u0631\u0648\u0634 \u0648 \u0648\u0627\u06af\u0631\u0627\u06cc\u06cc.',
+   123→   123→    methodology: 'RSI\u060c Stochastic\u060c CCI\u060c MFI\u060c MACD\u060c Williams %R\u060c \u0648\u0627\u06af\u0631\u0627\u06cc\u06cc \u0645\u0648\u0645\u0646\u062a\u0648\u0645',
+   124→   124→    focusQuestion: '\u06a9\u062f\u0627\u0645 \u0627\u0633\u06cc\u0644\u0627\u062a\u0648\u0631 \u062f\u0631 \u0646\u0632\u062f\u06cc\u06a9 \u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f/\u0641\u0631\u0648\u0634 \u0642\u0631\u0627\u0631 \u062f\u0627\u0631\u062f \u0648 \u0622\u06cc\u0627 \u0648\u0627\u06af\u0631\u0627\u06cc\u06cc \u0645\u0648\u0645\u0646\u062a\u0648\u0645 \u0648\u062c\u0648\u062f \u062f\u0627\u0631\u062f\u061f',
+   125→   125→  },
+   126→   126→  {
+   127→   127→    id: 'sr',
+   128→   128→    name: '\u062d\u0645\u0627\u06cc\u062a \u0648 \u0645\u0642\u0627\u0648\u0645\u062a',
+   129→   129→    nameEn: 'Support & Resistance',
+   130→   130→    description: '\u0634\u0646\u0627\u0633\u0627\u06cc\u06cc \u0633\u0637\u0648\u062d \u06a9\u0644\u06cc\u062f\u06cc\u060c \u062a\u0639\u06cc\u06cc\u0646 \u0642\u062f\u0631\u062a \u0622\u0646\u0647\u0627 \u0648 \u062a\u062d\u0644\u06cc\u0644 \u0648\u0627\u06a9\u0646\u0634 \u0642\u06cc\u0645\u062a \u062f\u0631 \u06a9\u0646\u0627\u0644\u0647\u0627\u06cc \u0627\u0641\u0642\u06cc.',
+   131→   131→    methodology: '\u0633\u0637\u0648\u062d \u0627\u0641\u0642\u06cc\u060c \u06a9\u0627\u0646\u0627\u0644\u0647\u0627\u06cc \u0642\u06cc\u0645\u062a\u060c \u062a\u0639\u062f\u0627\u062f \u0628\u0631\u062e\u0648\u0631\u062f\u060c \u062d\u062c\u0645 \u062f\u0631 \u0633\u0637\u0648\u062d\u060c \u0634\u06a9\u0633\u062a \u0645\u0639\u062a\u0628\u0631',
+   132→   132→    focusQuestion: '\u0622\u06cc\u0627 \u0642\u06cc\u0645\u062a \u062f\u0631 \u0646\u0632\u062f\u06cc\u06a9 \u06cc\u06a9 \u0633\u0637\u062d \u06a9\u0644\u06cc\u062f\u06cc \u0642\u0631\u0627\u0631 \u062f\u0627\u0631\u062f \u0648 \u0634\u06a9\u0633\u062a \u0622\u0646 \u0686\u0647 \u0627\u062d\u062a\u0645\u0627\u0644\u06cc \u0627\u0633\u062a\u061f',
+   133→   133→  },
+   134→   134→  {
+   135→   135→    id: 'harmonic',
+   136→   136→    name: '\u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0647\u0627\u0631\u0645\u0648\u0646\u06cc\u06a9',
+   137→   137→    nameEn: 'Harmonic Patterns',
+   138→   138→    description: '\u0634\u0646\u0627\u0633\u0627\u06cc\u06cc \u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0647\u0646\u062f\u0633\u06cc Gartley\u060c Butterfly\u060c Bat\u060c Crab \u0648 Shark \u0628\u0627 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0627\u0632 \u0646\u0633\u0628\u062a\u0647\u0627\u06cc \u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc.',
+   139→   139→    methodology: 'Gartley (AB=CD)\u060c Butterfly\u060c Bat\u060c Crab\u060c Shark\u060c \u0646\u0633\u0628\u062a 0.618/0.786/1.272/1.618\u060c PRZ (Potential Reversal Zone)',
+   140→   140→    focusQuestion: '\u0622\u06cc\u0627 \u0633\u0627\u062e\u062a\u0627\u0631 \u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc \u06cc\u06a9 \u0627\u0644\u06af\u0648\u06cc \u0647\u0627\u0631\u0645\u0648\u0646\u06cc\u06a9 \u0631\u0627 \u062a\u0634\u06a9\u06cc\u0644 \u0645\u06cc\u062f\u0647\u062f \u0648 D \u06a9\u062c\u0627 \u0642\u0631\u0627\u0631 \u062f\u0627\u0631\u062f\u061f',
+   141→   141→  },
+   142→   142→  {
+   143→   143→    id: 'elliott',
+   144→   144→    name: '\u0646\u0638\u0631\u06cc\u0647 \u0645\u0648\u062c \u0627\u0644\u06cc\u0648\u062a',
+   145→   145→    nameEn: 'Elliott Wave Theory',
+   146→   146→    description: '\u0634\u0645\u0627\u0631\u0634 \u0645\u0648\u062c\u0647\u0627\u06cc \u062a\u06a9\u0645\u06cc\u0644\u06cc (5 \u0645\u0648\u062c \u0635\u0639\u0648\u062f\u06cc/\u0646\u0632\u0648\u0644\u06cc) \u0648 \u0627\u0635\u0644\u0627\u062d\u06cc (3 \u0645\u0648\u062c) \u0628\u0631\u0627\u06cc \u062a\u0634\u062e\u06cc\u0635 \u062c\u0627\u06cc\u06af\u0627\u0647 \u0631\u0648\u0646\u062f \u062f\u0631 \u0686\u0631\u062e\u0647 \u0628\u0627\u0632\u0627\u0631.',
+   147→   147→    methodology: '\u0645\u0648\u062c\u0647\u0627\u06cc \u0627\u0648\u0644 \u062a\u0627 \u067e\u0646\u062c\u0645\u060c \u0627\u0635\u0644\u0627\u062d\u06cc ABC\u060c \u0641\u06cc\u0628\u0648\u0646\u0627\u0686\u06cc \u0645\u0648\u062c\u06cc\u060c \u062a\u0648\u0633\u0639\u0647 \u0645\u0648\u062c\u06cc\u060c \u062a\u0631\u06a9\u06cc\u0628 \u0645\u0648\u062c\u06cc',
+   148→   148→    focusQuestion: '\u0628\u0627\u0632\u0627\u0631 \u062f\u0631 \u06a9\u062f\u0627\u0645 \u0645\u0648\u062c \u0627\u0632 \u0686\u0631\u062e\u0647 \u0627\u0644\u06cc\u0648\u062a \u0642\u0631\u0627\u0631 \u062f\u0627\u0631\u062f \u0648 \u0645\u0648\u062c \u0628\u0639\u062f\u06cc \u0686\u0647 \u062c\u0647\u062a\u06cc \u062f\u0627\u0631\u062f\u061f',
+   149→   149→  },
+   150→   150→  {
+   151→   151→    id: 'psychology',
+   152→   152→    name: '\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc \u0628\u0627\u0632\u0627\u0631',
+   153→   153→    nameEn: 'Market Psychology & Sentiment',
+   154→   154→    description: '\u062a\u062d\u0644\u06cc\u0644 \u0631\u0641\u062a\u0627\u0631 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646\u060c \u0637\u0645\u0639 \u0648 \u0631\u0647\u0628\u060c \u0633\u0631\u062e\u0648\u0631\u062f\u06af\u06cc \u0648 \u0627\u0639\u062a\u0645\u0627\u062f \u06a9\u0648\u0631 \u0628\u0631 \u0627\u0633\u0627\u0633 \u062d\u062c\u0645\u060c \u0646\u0648\u0633\u0627\u0646 \u0648 \u0631\u0641\u062a\u0627\u0631 \u0642\u06cc\u0645\u062a.',
+   155→   155→    methodology: '\u0631\u0641\u062a\u0627\u0631 \u062d\u062c\u0645 \u06cc (OBV)\u060c \u0646\u0627\u062d\u06cc\u0647 \u0645\u062b\u0628\u062a \u0641\u0631\u0648\u0634\u060c \u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f\u060c \u0634\u06a9\u0627\u0641 \u0642\u06cc\u0645\u062a\u06cc\u060c \u0627\u0646\u062a\u0638\u0627\u0631 \u0648 \u0633\u0631\u062e\u0648\u0631\u062f\u06af\u06cc',
+   156→   156→    focusQuestion: '\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc \u063a\u0627\u0644\u0628 \u0628\u0627\u0632\u0627\u0631 \u0686\u06cc\u0633\u062a \u0648 \u0622\u06cc\u0627 \u0627\u06cc\u0646 \u0631\u0641\u062a\u0627\u0631 \u0628\u0647 \u062a\u062f\u0627\u0648\u0645 \u06cc\u0627 \u0633\u0631\u0648\u0641\u0631 \u062e\u0648\u0627\u0647\u062f \u06a9\u0631\u062f\u061f',
+   157→   157→  },
+   158→   158→];
+   159→   159→
+   160→   160→// ═══════════════════════════════════════════════════════════════════════════════
+   161→   161→// 10 Narrative Styles
+   162→   162→// ═══════════════════════════════════════════════════════════════════════════════
+   163→   163→
+   164→   164→export const STYLES: StyleDef[] = [
+   165→   165→  {
+   166→   166→    id: 'conservative',
+   167→   167→    name: '\u0645\u062d\u0627\u0641\u0638\u0647\u200c\u06a9\u0627\u0631',
+   168→   168→    nameEn: 'Conservative',
+   169→   169→    voice: '\u0631\u0633\u0645\u06cc\u060c \u062f\u0642\u06cc\u0642\u060c \u0628\u0627 \u062a\u0623\u06a9\u06cc\u062f \u0628\u0631 \u0631\u06cc\u0633\u06a9. \u0627\u0632 \u06a9\u0644\u0645\u0627\u062a \u00ab\u0627\u062d\u062a\u0645\u0627\u0644\u00bb\u060c \u00ab\u0631\u06cc\u0633\u06a9\u00bb\u060c \u00ab\u0645\u062d\u0627\u0641\u0638\u062a\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   170→   170→    structure: '\u0648\u0636\u0639\u06cc\u062a \u0641\u0639\u0644\u06cc \u2190 \u062a\u062d\u0644\u06cc\u0644 \u0631\u06cc\u0633\u06a9\u200c\u0647\u0627 \u2190 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627 \u2190 \u062a\u0648\u0635\u06cc\u0647 \u0645\u062d\u062a\u0627\u0637\u0627\u0646\u0647',
+   171→   171→    endingStyle: '\u00ab\u0635\u0628\u0631 \u06a9\u0646\u06cc\u062f \u062a\u0627 \u0628\u0627\u0632\u0627\u0631 \u062c\u0647\u062a \u062e\u0648\u062f \u0631\u0627 \u0645\u0634\u062e\u0635 \u06a9\u0646\u062f\u00bb',
+   172→   172→  },
+   173→   173→  {
+   174→   174→    id: 'scalper',
+   175→   175→    name: '\u0627\u0633\u06a9\u0627\u0644\u067e\u0631',
+   176→   176→    nameEn: 'Scalper',
+   177→   177→    voice: '\u0633\u0631\u06cc\u0639\u060c \u067e\u0631\u0627\u0646\u0631\u0698\u06cc\u060c \u0628\u0627 \u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u0641\u0631\u0635\u062a\u200c\u0647\u0627\u06cc \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a. \u0627\u0632 \u00ab\u06a9\u0634\u0634\u00bb\u060c \u00ab\u0634\u0627\u0631\u067e\u00bb\u060c \u00ab\u0641\u0631\u0635\u062a\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   178→   178→    structure: '\u0634\u062a\u0627\u0628 \u0628\u0627\u0632\u0627\u0631 \u2190 \u0641\u0631\u0635\u062a\u200c\u0647\u0627\u06cc \u0648\u0631\u0648\u062f \u2190 \u0646\u0642\u0627\u0637 \u062e\u0631\u0648\u062c \u2190 \u0627\u0633\u062a\u0631\u0627\u062a\u0698\u06cc \u0645\u0639\u0627\u0645\u0644\u0627\u062a\u06cc',
+   179→   179→    endingStyle: '\u00ab\u062f\u0631 \u067e\u0648\u0644\u0628\u06a9 \u0628\u062e\u0631\u06cc\u062f\u060c \u062f\u0631 \u0647\u06cc\u062c\u0627\u0646 \u0628\u0641\u0631\u0648\u0634\u06cc\u062f\u00bb',
+   180→   180→  },
+   181→   181→  {
+   182→   182→    id: 'trendFollower',
+   183→   183→    name: '\u0631\u0648\u0646\u062f\u06af\u0631\u0627',
+   184→   184→    nameEn: 'Trend Follower',
+   185→   185→    voice: '\u0622\u0631\u0627\u0645\u060c \u062a\u0648\u0635\u06cc\u0641\u06cc\u060c \u0628\u0627 \u0646\u06af\u0627\u0647 \u0628\u0644\u0646\u062f\u0645\u062f\u062a. \u0627\u0632 \u00ab\u0686\u0631\u062e\u0647\u00bb\u060c \u00ab\u0641\u0627\u0632\u00bb\u060c \u00ab\u062a\u062b\u0628\u06cc\u062a\u00bb\u060c \u00ab\u0632\u0645\u0627\u0646\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   186→   186→    structure: '\u062c\u0627\u06cc\u06af\u0627\u0647 \u0631\u0648\u0646\u062f \u062f\u0631 \u0686\u0631\u062e\u0647 \u2190 \u062a\u062d\u0644\u06cc\u0644 \u062a\u062b\u0628\u06cc\u062a \u2190 \u0686\u0634\u0645\u0627\u0646\u062f\u0627\u0632 \u0628\u0644\u0646\u062f\u0645\u062f\u062a \u2190 \u0646\u062a\u06cc\u062c\u0647 \u0631\u0648\u0646\u062f\u06cc',
+   187→   187→    endingStyle: '\u00ab\u0631\u0648\u0646\u062f \u062f\u0633\u062a\u200c\u0646\u062e\u0648\u0631\u062f\u0647 \u0627\u0633\u062a\u060c \u0627\u06cc\u0646 \u0641\u0642\u0637 \u06cc\u06a9 \u0646\u0641\u0633\u200c\u06af\u06cc\u0631\u06cc \u0627\u0633\u062a\u00bb',
+   188→   188→  },
+   189→   189→  {
+   190→   190→    id: 'bearish',
+   191→   191→    name: '\u0628\u062f\u0628\u06cc\u0646',
+   192→   192→    nameEn: 'Bearish / Risk Manager',
+   193→   193→    voice: '\u0647\u0634\u062f\u0627\u0631\u062f\u0647\u0646\u062f\u0647\u060c \u062a\u0644\u062e. \u0627\u0632 \u00ab\u062e\u0637\u0631\u00bb\u060c \u00ab\u0634\u06a9\u0633\u062a\u00bb\u060c \u00ab\u0641\u0631\u06cc\u0628\u0646\u062f\u0647\u00bb\u060c \u00ab\u0634\u06a9\u0627\u0641\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   194→   194→    structure: '\u0639\u0644\u0627\u0626\u0645 \u0647\u0634\u062f\u0627\u0631 \u2190 \u062a\u062d\u0644\u06cc\u0644 \u0634\u06a9\u0633\u062a \u0627\u062d\u062a\u0645\u0627\u0644\u06cc \u2190 \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0646\u0632\u0648\u0644\u06cc \u2190 \u062a\u0648\u0635\u06cc\u0647 \u0627\u062c\u062a\u0646\u0627\u0628',
+   195→   195→    endingStyle: '\u00ab\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0646\u0634\u0627\u0646\u0647\u200c\u0627\u06cc \u0627\u0632 \u0631\u06cc\u0632\u0634 \u0642\u0631\u06cc\u0628\u200c\u0627\u0644\u0648\u0642\u0648\u0639 \u0627\u0633\u062a\u00bb',
+   196→   196→  },
+   197→   197→  {
+   198→   198→    id: 'narrative',
+   199→   199→    name: '\u0631\u0648\u0627\u06cc\u06cc',
+   200→   200→    nameEn: 'Narrative',
+   201→   201→    voice: '\u062a\u0648\u0635\u06cc\u0641\u06cc\u060c \u0627\u0633\u062a\u0639\u0627\u0631\u06cc\u060c \u062a\u0635\u0648\u06cc\u0631\u0633\u0627\u0632. \u0627\u0632 \u00ab\u062c\u0627\u062f\u0647\u00bb\u060c \u00ab\u0645\u0633\u06cc\u0631\u00bb\u060c \u00ab\u0641\u0646\u0631\u00bb\u060c \u00ab\u0633\u0627\u06cc\u0647\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   202→   202→    structure: '\u062a\u0635\u0648\u06cc\u0631 \u06a9\u0644\u06cc \u0628\u0627\u0632\u0627\u0631 \u2190 \u062a\u0648\u0635\u06cc\u0641 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627 \u0628\u0647 \u0639\u0646\u0648\u0627\u0646 \u0645\u0633\u06cc\u0631 \u2190 \u0646\u0642\u0637\u0647 \u062a\u0635\u0645\u06cc\u0645 \u2190 \u0646\u062a\u06cc\u062c\u0647 \u0631\u0648\u0627\u06cc\u06cc',
+   203→   203→    endingStyle: '\u00ab\u0628\u0627\u0632\u0627\u0631 \u062f\u0631 \u0686\u0647\u0627\u0631\u0627\u0647 \u0627\u0633\u062a\u060c \u062d\u0645\u0627\u06cc\u062a \u0648 \u0645\u0642\u0627\u0648\u0645\u062a \u062a\u0635\u0645\u06cc\u0645\u200c\u06af\u06cc\u0631\u0646\u062f\u0647\u200c\u0647\u0627 \u0647\u0633\u062a\u0646\u062f\u00bb',
+   204→   204→  },
+   205→   205→  {
+   206→   206→    id: 'decision',
+   207→   207→    name: '\u062a\u0635\u0645\u06cc\u0645\u200c\u0645\u062d\u0648\u0631',
+   208→   208→    nameEn: 'Decision-Oriented',
+   209→   209→    voice: '\u0634\u0631\u0637\u06cc\u060c \u06af\u0627\u0645\u200c\u0628\u0647\u200c\u06af\u0627\u0645\u060c \u0634\u0641\u0627\u0641. \u0627\u0632 \u00ab\u0627\u06af\u0631\u00bb\u060c \u00ab\u0622\u0646\u06af\u0627\u0647\u00bb\u060c \u00ab\u0627\u0642\u062f\u0627\u0645\u00bb\u060c \u00ab\u0645\u0631\u062d\u0644\u0647\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   210→   210→    structure: '\u0646\u0642\u0627\u0637 \u06a9\u0644\u06cc\u062f\u06cc \u2190 \u0634\u0631\u0637\u200c\u0647\u0627\u06cc \u0648\u0631\u0648\u062f/\u062e\u0631\u0648\u062c \u2190 \u0645\u062f\u06cc\u0631\u06cc\u062a \u0631\u06cc\u0633\u06a9 \u2190 \u0628\u0631\u0646\u0627\u0645\u0647 \u0639\u0645\u0644\u06cc',
+   211→   211→    endingStyle: '\u00ab\u062a\u0627 \u0634\u06a9\u0633\u062a \u0633\u0637\u0648\u062d \u06a9\u0644\u06cc\u062f\u06cc\u060c \u0647\u06cc\u0686 \u0627\u0642\u062f\u0627\u0645\u06cc \u0646\u06a9\u0646\u06cc\u062f\u00bb',
+   212→   212→  },
+   213→   213→  {
+   214→   214→    id: 'volumeAnalyst',
+   215→   215→    name: '\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u062d\u062c\u0645',
+   216→   216→    nameEn: 'Volume Analyst',
+   217→   217→    voice: '\u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u062c\u0631\u06cc\u0627\u0646 \u067e\u0648\u0644 \u0647\u0648\u0634\u0645\u0646\u062f\u060c \u062a\u0623\u06cc\u06cc\u062f \u06cc\u0627 \u062a\u0639\u0627\u0631\u0636 \u062d\u062c\u0645. \u0627\u0632 \u00ab\u062c\u0631\u06cc\u0627\u0646\u00bb\u060c \u00ab\u062a\u0623\u06cc\u06cc\u062f\u00bb\u060c \u00ab\u0648\u0627\u06af\u0631\u0627\u06cc\u06cc\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   218→   218→    structure: '\u062a\u062d\u0644\u06cc\u0644 OBV \u2190 \u062a\u0623\u06cc\u06cc\u062f/\u062a\u0639\u0627\u0631\u0636 \u062d\u062c\u0645 \u2190 \u062d\u062c\u0645 \u062f\u0631 \u0633\u0637\u0648\u062d \u2190 \u0646\u062a\u06cc\u062c\u0647 \u062d\u062c\u0645\u06cc',
+   219→   219→    endingStyle: '\u00ab\u062d\u062c\u0645 \u0647\u0648\u0634\u0645\u0646\u062f \u0628\u0627\u06cc\u062f \u0631\u0627\u0647\u0631\u0627\u0647\u06cc \u0642\u06cc\u0645\u062a \u0631\u0627 \u062a\u0623\u06cc\u06cc\u062f \u06a9\u0646\u062f\u00bb',
+   220→   220→  },
+   221→   221→  {
+   222→   222→    id: 'patternAnalyst',
+   223→   223→    name: '\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0644\u06af\u0648',
+   224→   224→    nameEn: 'Pattern Analyst',
+   225→   225→    voice: '\u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u0634\u06a9\u0644\u200c\u06af\u06cc\u0631\u06cc \u0627\u0644\u06af\u0648\u0647\u0627\u06cc \u0642\u06cc\u0645\u062a\u06cc. \u0627\u0632 \u00ab\u0627\u0644\u06af\u0648\u00bb\u060c \u00ab\u0634\u06a9\u0644\u00bb\u060c \u00ab\u062a\u06a9\u0645\u06cc\u0644\u00bb\u060c \u00ab\u062a\u0623\u06cc\u06cc\u062f\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   226→   226→    structure: '\u0634\u0646\u0627\u0633\u0627\u06cc\u06cc \u0627\u0644\u06af\u0648 \u2190 \u0645\u0631\u062d\u0644\u0647 \u062a\u06a9\u0645\u06cc\u0644 \u2190 \u0647\u062f\u0641 \u0642\u06cc\u0645\u062a\u06cc \u2190 \u0646\u062a\u06cc\u062c\u0647 \u0627\u0644\u06af\u0648\u06cc\u06cc',
+   227→   227→    endingStyle: '\u00ab\u0627\u0644\u06af\u0648\u06cc \u0642\u06cc\u0645\u062a\u06cc \u062f\u0631 \u062d\u0627\u0644 \u0634\u06a9\u0644\u200c\u06af\u06cc\u0631\u06cc \u0627\u0633\u062a\u060c \u0627\u0647\u062f\u0627\u0641 \u0642\u0627\u0628\u0644 \u0645\u062d\u0627\u0633\u0628\u0647 \u0627\u0633\u062a\u00bb',
+   228→   228→  },
+   229→   229→  {
+   230→   230→    id: 'psychological',
+   231→   231→    name: '\u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc',
+   232→   232→    nameEn: 'Psychological',
+   233→   233→    voice: '\u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u0631\u0641\u062a\u0627\u0631 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646\u060c \u0637\u0645\u0639 \u0648 \u0631\u0647\u0628. \u0627\u0632 \u00ab\u062a\u0631\u0633\u00bb\u060c \u00ab\u0637\u0645\u0639\u00bb\u060c \u00ab\u0633\u0631\u062e\u0648\u0631\u062f\u06af\u06cc\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   234→   234→    structure: '\u0631\u0641\u062a\u0627\u0631 \u062d\u062c\u0645 \u2190 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc \u0628\u0627\u0632\u0627\u0631 \u2190 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0631\u0641\u062a\u0627\u0631\u06cc \u2190 \u0646\u062a\u06cc\u062c\u0647 \u0631\u0648\u0627\u0646\u0634\u0646\u0627\u062e\u062a\u06cc',
+   235→   235→    endingStyle: '\u00ab\u0631\u0641\u062a\u0627\u0631 \u0645\u0639\u0627\u0645\u0644\u06af\u0631\u0627\u0646 \u0642\u0627\u0628\u0644 \u067e\u06cc\u0634\u200c\u0628\u06cc\u0646\u06cc \u0627\u0633\u062a \u0627\u06af\u0631 \u062f\u0642\u06cc\u0642 \u0628\u0627\u0634\u06cc\u0645\u00bb',
+   236→   236→  },
+   237→   237→  {
+   238→   238→    id: 'volatilityAnalyst',
+   239→   239→    name: '\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0646\u0648\u0633\u0627\u0646',
+   240→   240→    nameEn: 'Volatility Analyst',
+   241→   241→    voice: '\u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u0634\u062f\u062a \u0646\u0648\u0633\u0627\u0646 \u0648 \u0627\u062a\u0641\u0627\u0642\u0627\u062a. \u0627\u0632 \u00ab\u0646\u0648\u0633\u0627\u0646\u00bb\u060c \u00ab\u0627\u062a\u0641\u0627\u0642\u00bb\u060c \u00ab\u0641\u0634\u0631\u062f\u06af\u06cc\u00bb\u060c \u00ab\u0628\u0627\u0631\u06cc\u06a9\u00bb \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u0634\u0648\u062f.',
+   242→   242→    structure: '\u0634\u062f\u062a \u0646\u0648\u0633\u0627\u0646 (ATR) \u2190 \u0641\u0634\u0631\u062f\u06af\u06cc/\u0628\u0627\u0631\u06cc\u06a9 \u2190 \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc \u0627\u062a\u0641\u0627\u0642\u06cc \u2190 \u0645\u062f\u06cc\u0631\u06cc\u062a \u0631\u06cc\u0633\u06a9 \u0628\u0627 ATR',
+   243→   243→    endingStyle: '\u00ab\u0646\u0648\u0633\u0627\u0646 \u0628\u0627\u0644\u0627 \u06cc\u0639\u0646\u06cc \u0641\u0631\u0635\u062a\u060c \u0646\u0648\u0633\u0627\u0646 \u067e\u0627\u06cc\u06cc\u0646 \u06cc\u0639\u0646\u06cc \u0635\u0628\u0631\u00bb',
+   244→   244→  },
+   245→   245→];
+   246→   246→
+   247→   247→// ═══════════════════════════════════════════════════════════════════════════════
+   248→   248→// 15 Analytical Tones
+   249→   249→// ═══════════════════════════════════════════════════════════════════════════════
+   250→   250→
+   251→   251→export const TONES: ToneDef[] = [
+   252→   252→  { id: 'formal', name: '\u0631\u0633\u0645\u06cc \u0648 \u0622\u06a9\u0627\u062f\u0645\u06cc\u06a9', nameEn: 'Formal Academic', characteristics: '\u062c\u0645\u0644\u0627\u062a \u0628\u0644\u0646\u062f\u060c \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u200c\u0645\u062d\u0648\u0631\u060c \u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0645\u0628\u0627\u0646\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc.', vocabulary: '\u0628\u06cc\u0627\u0646\u06a9\u0646\u06cc\u060c \u0628\u0627\u0632\u0627\u0631\u0634\u0627\u062e\u0635\u060c \u0645\u0634\u062e\u0635\u0627\u062a\u060c \u0627\u0631\u0632\u06cc\u0627\u0628\u06cc', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u067e\u06cc\u0686\u06cc\u062f\u0647 \u0628\u0627 \u0648\u0627\u0635\u0644\u0647\u200c\u0647\u0627\u06cc \u0645\u0646\u0637\u0642\u06cc' },
+   253→   253→  { id: 'fast', name: '\u0633\u0631\u06cc\u0639 \u0648 \u0639\u0645\u0644\u06cc\u0627\u062a\u06cc', nameEn: 'Fast Operational', characteristics: '\u062c\u0645\u0644\u0627\u062a \u06a9\u0648\u062a\u0627\u0647\u060c \u0633\u0631\u06cc\u0639\u060c \u0628\u062f\u0648\u0646 \u062d\u0627\u0634\u06cc\u0647.', vocabulary: '\u0627\u06a9\u0646\u0648\u0646\u060c \u0641\u0648\u0631\u06cc\u060c \u0627\u0644\u0627\u0646\u060c \u0628\u0644\u0627\u0641\u0627\u0635\u0644\u0647', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u06a9\u0648\u062a\u0627\u0647 \u0648 \u0627\u0646\u062f\u0627\u0632\u06af\u06cc\u0631' },
+   254→   254→  { id: 'philosophical', name: '\u0641\u0644\u0633\u0641\u06cc \u0648 \u0632\u0645\u0627\u0646\u06cc', nameEn: 'Philosophical Temporal', characteristics: '\u0622\u0631\u0627\u0645\u060c \u062a\u0648\u0635\u06cc\u0641\u06cc\u060c \u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0632\u0645\u0627\u0646 \u0648 \u0633\u0627\u062e\u062a\u0627\u0631 \u0628\u0627\u0632\u0627\u0631.', vocabulary: '\u0686\u0631\u062e\u0647\u060c \u0641\u0627\u0632\u060c \u062a\u062b\u0628\u06cc\u062a\u060c \u0632\u0645\u0627\u0646\u060c \u062a\u06a9\u0627\u0645\u0644', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0628\u0644\u0646\u062f \u062a\u0648\u0635\u06cc\u0641\u06cc \u0628\u0627 \u0627\u0633\u062a\u0639\u0627\u0631\u0647' },
+   255→   255→  { id: 'warning', name: '\u0647\u0634\u062f\u0627\u0631\u062f\u0647\u0646\u062f\u0647 \u0648 \u0631\u06cc\u0633\u06a9\u200c\u0645\u062d\u0648\u0631', nameEn: 'Warning Risk-Focused', characteristics: '\u062a\u0644\u062e\u060c \u0647\u0634\u062f\u0627\u0631\u062f\u0647\u0646\u062f\u0647\u060c \u0628\u0627 \u062a\u0623\u06a9\u06cc\u062f \u0628\u0631 \u062e\u0637\u0648\u0631.', vocabulary: '\u062e\u0637\u0631\u060c \u0631\u06cc\u0633\u06a9\u060c \u0634\u06a9\u0633\u062a\u060c \u0627\u062d\u062a\u06cc\u0627\u0637\u06cc\u060c \u0647\u0634\u062f\u0627\u0631', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0647\u0634\u062f\u0627\u0631 \u0628\u0627 \u0627\u0641\u0639\u0627\u0644 \u0641\u0631\u06cc\u0628\u0646\u062f\u0647' },
+   256→   256→  { id: 'storytelling', name: '\u062f\u0627\u0633\u062a\u0627\u0646\u06cc \u0648 \u062a\u0648\u0635\u06cc\u0641\u06cc', nameEn: 'Storytelling Descriptive', characteristics: '\u062a\u0635\u0648\u06cc\u0631\u0633\u0627\u0632\u060c \u0627\u0633\u062a\u0639\u0627\u0631\u06cc\u060c \u0628\u0627 \u0627\u0644\u0647\u0627\u0645 \u0628\u0635\u0631\u06cc.', vocabulary: '\u062c\u0627\u062f\u0647\u060c \u0645\u0633\u06cc\u0631\u060c \u0641\u0646\u0631\u060c \u0633\u0627\u06cc\u0647\u060c \u0633\u06af\u0627\u0631', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u062a\u0635\u0648\u06cc\u0631\u06cc \u0628\u0627 \u0627\u0633\u062a\u0639\u0627\u0631\u0647 \u0648 \u062a\u0634\u0628\u06cc\u0647' },
+   257→   257→  { id: 'stepByStep', name: '\u06af\u0627\u0645\u200c\u0628\u0647\u200c\u06af\u0627\u0645 \u0648 \u0639\u0645\u0644\u06cc', nameEn: 'Step-by-Step Practical', characteristics: '\u0634\u0631\u0637\u06cc\u060c \u0645\u0631\u062d\u0644\u0647\u200c\u0627\u06cc\u060c \u0634\u0641\u0627\u0641.', vocabulary: '\u0627\u06af\u0631\u060c \u0622\u0646\u06af\u0627\u0647\u060c \u0627\u0642\u062f\u0627\u0645\u060c \u0645\u0631\u062d\u0644\u0647\u060c \u0634\u0631\u0637', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0634\u0631\u0637\u06cc \u0628\u0627 \u0627\u0631\u0632\u06cc\u0627\u0628\u06cc \u0627\u0646\u062f\u0627\u0632\u0647\u200c\u0627\u06cc' },
+   258→   258→  { id: 'skeptical', name: '\u0634\u06a9\u0627\u06a9 \u0648 \u067e\u0631\u0633\u0634\u06af\u0631', nameEn: 'Skeptical Questioning', characteristics: '\u067e\u0631\u0633\u0634\u06af\u0631\u060c \u062a\u0631\u062f\u06cc\u062f\u06cc\u060c \u0628\u0627 \u062a\u0623\u06a9\u06cc\u062f \u0628\u0631 \u0633\u06cc\u06af\u0646\u0627\u0644\u200c\u0647\u0627\u06cc \u0645\u062a\u0636\u0627\u062f.', vocabulary: '\u0622\u06cc\u0627\u061f\u060c \u0686\u0631\u0627\u061f\u060c \u062a\u0636\u0627\u062f\u060c \u0627\u0628\u0647\u0627\u0645\u060c \u0634\u06a9\u0627\u0641', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u067e\u0631\u0633\u0634\u06cc \u0648 \u062a\u0631\u062f\u06cc\u062f\u06cc' },
+   259→   259→  { id: 'optimistic', name: '\u062e\u0648\u0634\u0628\u06cc\u0646 \u0648 \u0631\u0648\u0646\u062f\u067e\u0630\u06cc\u0631', nameEn: 'Optimistic Trend-Following', characteristics: '\u0627\u0631\u0632\u0634\u062f\u0647\u060c \u0645\u062b\u0628\u062a\u060c \u0628\u0627 \u062a\u0645\u0631\u06a9\u0632 \u0628\u0631 \u0641\u0631\u0635\u062a\u200c\u0647\u0627.', vocabulary: '\u0641\u0631\u0635\u062a\u060c \u062a\u0642\u0648\u06cc\u062a\u060c \u062a\u062f\u0627\u0648\u0645\u060c \u0635\u0639\u0648\u062f\u060c \u062a\u0623\u06cc\u06cc\u062f', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0645\u062b\u0628\u062a \u0628\u0627 \u0627\u0641\u0639\u0627\u0644 \u0627\u0646\u0631\u0698\u06cc' },
+   260→   260→  { id: 'simple', name: '\u0633\u0627\u062f\u0647 \u0648 \u0634\u0641\u0627\u0641', nameEn: 'Simple Clear', characteristics: '\u0634\u0641\u0627\u0641\u060c \u0645\u0633\u062a\u0642\u06cc\u0645\u060c \u0628\u062f\u0648\u0646 \u067e\u06cc\u0686\u06cc\u062f\u06af\u06cc.', vocabulary: '\u0627\u0633\u062a\u060c \u0646\u06cc\u0633\u062a\u060c \u0628\u0627\u0644\u0627\u060c \u067e\u0627\u06cc\u06cc\u0646\u060c \u0645\u06cc\u0627\u0646\u0647', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u06a9\u0648\u062a\u0627\u0647 \u0648 \u0631\u0648\u0627\u0646' },
+   261→   261→  { id: 'quantitative', name: '\u0639\u062f\u062f\u0645\u062d\u0648\u0631 \u0648 \u0633\u062e\u062a\u06af\u06cc\u0631', nameEn: 'Quantitative Rigorous', characteristics: '\u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0639\u062f\u062f\u06cc \u0645\u0634\u062e\u0635\u060c \u0633\u062e\u062a\u06af\u06cc\u0631\u060c \u0628\u062f\u0648\u0646 \u0627\u062d\u0633\u0627\u0633.', vocabulary: '\u0646\u0633\u0628\u062a\u060c \u0627\u0646\u062d\u0631\u0627\u0641\u060c \u0627\u0646\u062d\u0631\u0627\u0641 \u0645\u0639\u06cc\u0627\u0631\u060c \u0627\u062d\u062a\u0645\u0627\u0644\u060c \u0622\u0645\u0627\u0631', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0639\u062f\u062f\u06cc \u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0627\u0631\u0642\u0627\u0645' },
+   262→   262→  { id: 'mysterious', name: '\u0686\u0646\u062f\u0644\u0627\u06cc\u0647 \u0648 \u0645\u0631\u0645\u0648\u0632', nameEn: 'Multi-Layer Mysterious', characteristics: '\u067e\u06cc\u0686\u06cc\u062f\u0647\u060c \u0627\u0631\u062c\u0627\u0639\u200c\u0645\u062d\u0648\u0631\u060c \u0628\u0627 \u0644\u0627\u06cc\u0647\u200c\u0647\u0627\u06cc \u067e\u0646\u0647\u0627\u0646.', vocabulary: '\u062a\u0646\u062a\u0627\u0646\u06cc\u062c\u060c \u0628\u0627\u0632\u0646\u0634\u06cc\u060c \u0631\u0627\u0632\u0646\u0634\u06cc\u060c \u062f\u0631\u0648\u0646\u060c \u067e\u062a\u0631\u0646\u0647\u0627\u06cc', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0637\u0648\u0644\u0627\u0646\u06cc \u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0627\u0633\u062a\u0639\u0627\u0631\u06cc' },
+   263→   263→  { id: 'educational', name: '\u0622\u0645\u0648\u0632\u0634\u06cc \u0648 \u0631\u0627\u0647\u0646\u0645\u0627\u06cc\u0627\u0646\u0647', nameEn: 'Educational Guiding', characteristics: '\u0622\u0645\u0648\u0632\u0634\u06cc\u060c \u0631\u0627\u0647\u0646\u0645\u0627\u06cc\u0627\u0646\u0647\u060c \u0628\u0627 \u062a\u0648\u0636\u06cc\u062d \u062f\u0644\u06cc\u0644.', vocabulary: '\u062a\u0648\u062c\u0647 \u06a9\u0646\u06cc\u062f\u060c \u062f\u0631 \u0646\u0638\u0631 \u0628\u06af\u06cc\u0631\u06cc\u062f\u060c \u0645\u0647\u0645 \u0627\u0633\u062a\u060c \u0628\u0647 \u0627\u06cc\u0646 \u062f\u0644\u06cc\u0644', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u062a\u0648\u0636\u06cc\u062d\u06cc \u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0645\u0646\u0637\u0642' },
+   264→   264→  { id: 'comparative', name: '\u0645\u0642\u0627\u06cc\u0633\u0647\u200c\u0627\u06cc \u0648 \u0686\u0646\u062f\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc', nameEn: 'Comparative Multi-Scenario', characteristics: '\u062a\u0637\u0628\u06cc\u0642\u06cc\u060c \u0628\u0627 \u0628\u0631\u0631\u0633\u06cc \u0686\u0646\u062f \u0632\u0627\u0648\u06cc\u0647.', vocabulary: '\u062f\u0631 \u0645\u0642\u0627\u0628\u0644\u060c \u0627\u0632 \u06cc\u06a9 \u0633\u0648\u060c \u0628\u0647 \u0627\u062a\u0641\u0627\u0642\u060c \u0646\u0633\u0628\u062a\u0627', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0645\u0642\u0627\u06cc\u0633\u0647\u200c\u0627\u06cc \u0628\u0627 \u0627\u0631\u062c\u0627\u0639 \u0628\u0647 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627' },
+   265→   265→  { id: 'balanced', name: '\u0645\u062a\u0648\u0627\u0632\u0646 \u0648 \u0628\u06cc\u0637\u0631\u0641', nameEn: 'Balanced Neutral', characteristics: '\u0645\u062a\u0648\u0627\u0632\u0646\u060c \u0628\u06cc\u0637\u0631\u0641\u060c \u0628\u062f\u0648\u0646 \u062a\u062d\u0632\u06cc\u0635.', vocabulary: '\u062f\u0631 \u0645\u062c\u0645\u0648\u0639\u060c \u0628\u0627 \u062a\u0648\u062c\u0647 \u0628\u0647\u060c \u0645\u0646\u0637\u0642\u0647\u200c\u0627\u06cc\u060c \u0628\u0627\u0644\u0627\u062a\u0631', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u0645\u062a\u0648\u0627\u0632\u0646 \u0628\u0627 \u0627\u0631\u0627\u0626\u0647 \u0645\u0633\u062a\u0642\u06cc\u0645' },
+   266→   266→  { id: 'conclusive', name: '\u062c\u0645\u0639\u200c\u0628\u0646\u062f\u06cc\u200c\u0645\u062d\u0648\u0631 \u0648 \u0646\u062a\u06cc\u062c\u0647\u200c\u06af\u0631\u0627', nameEn: 'Conclusive Result-Oriented', characteristics: '\u0646\u062a\u06cc\u062c\u0647\u200c\u06af\u0631\u0627\u060c \u062c\u0645\u0639\u200c\u0628\u0646\u062f\u0647\u060c \u0628\u0627 \u0646\u06a9\u062a\u0647 \u0646\u0647\u0627\u06cc\u06cc \u0645\u0634\u062e\u0635.', vocabulary: '\u0646\u062a\u06cc\u062c\u062a\u0627\u060c \u0628\u0646\u0627\u0628\u0631\u0627\u06cc\u0646\u060c \u0645\u0633\u0644\u0645\u060c \u062e\u0644\u0627\u0635\u0647\u060c \u0628\u0627\u0632\u06af\u0634\u062a', sentenceStyle: '\u062c\u0645\u0644\u0627\u062a \u062c\u0645\u0639\u200c\u0628\u0646\u062f\u06cc \u0628\u0627 \u0627\u0641\u0639ا\u0644 \u0646\u0647\u0627\u06cc\u06cc' },
+   267→   267→];
+   268→   268→
+   269→   269→// ═══════════════════════════════════════════════════════════════════════════════
+   270→   270→// Scoring Engine
+   271→   271→// ═══════════════════════════════════════════════════════════════════════════════
+   272→   272→
+   273→   273→type ScoreFn<T> = (item: T, input: NarrativeInput) => number;
+   274→   274→
+   275→   275→interface ScoredCandidate<T> { item: T; score: number; }
+   276→   276→
+   277→   277→function scoreAll<T>(items: T[], input: NarrativeInput, scoreFn: ScoreFn<T>): ScoredCandidate<T>[] {
+   278→   278→  return items.map(item => ({ item, score: scoreFn(item, input) })).sort((a, b) => b.score - a.score);
+   279→   279→}
+   280→   280→
+   281→   281→// ─── School Scoring (per-item: checks school.id) ───────────────
+   282→   282→function scoreSchool(item: SchoolDef, input: NarrativeInput): number {
+   283→   283→  let s = 0;
+   284→   284→  const id = item.id;
+   285→   285→  const { adx, rsi, stochK, macdHist, obv, hasVolume, cci, bbPosition, trendDirection, nearResistance, nearSupport, trendR2, diPlus, diMinus } = input;
+   286→   286→
+   287→   287→  if (id === 'trend') {
+   288→   288→    if (adx > 25 && trendR2 > 0.7) s += (trendDirection === 'up' ? 8 : 6);
+   289→   289→    if (adx > 35) s += 3;
+   290→   290→    if (diPlus > diMinus && macdHist > 0) s += 2;
+   291→   291→    if (trendDirection !== 'neutral') s += 2;
+   292→   292→  }
+   293→   293→
+   294→   294→  if (id === 'classical') {
+   295→   295→    if (nearResistance || nearSupport) s += 4;
+   296→   296→    if ((rsi > 60 && trendDirection === 'down') || (rsi < 40 && trendDirection === 'up')) s += 5;
+   297→   297→    if (cci > 100 || cci < -100) s += 3;
+   298→   298→    if (bbPosition > 85 || bbPosition < 15) s += 2;
+   299→   299→  }
+   300→   300→
+   301→   301→  if (id === 'candlestick') {
+   302→   302→    if (nearResistance && stochK > 75) s += 5;
+   303→   303→    if (nearSupport && stochK < 25) s += 5;
+   304→   304→    if (nearResistance || nearSupport) s += 2;
+   305→   305→    if (rsi > 70 || rsi < 30) s += 2;
+   306→   306→  }
+   307→   307→
+   308→   308→  if (id === 'fibonacci') {
+   309→   309→    if (input.priceVsMa21 !== input.priceVsMa100) s += 4;
+   310→   310→    if (bbPosition > 80 || bbPosition < 20) s += 3;
+   311→   311→    if (nearResistance || nearSupport) s += 2;
+   312→   312→  }
+   313→   313→
+   314→   314→  if (id === 'volatility') {
+   315→   315→    if (bbPosition > 20 && bbPosition < 80 && adx < 20) s += 6;
+   316→   316→    if (bbPosition > 90 || bbPosition < 10) s += 4;
+   317→   317→    if (hasVolume) s += 2;
+   318→   318→  }
+   319→   319→
+   320→   320→  if (id === 'oscillator') {
+   321→   321→    if (rsi > 70 || rsi < 30) s += 5;
+   322→   322→    if (stochK > 80 || stochK < 20) s += 4;
+   323→   323→    if (cci > 100 || cci < -100) s += 3;
+   324→   324→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 5;
+   325→   325→  }
+   326→   326→
+   327→   327→  if (id === 'sr') {
+   328→   328→    if (adx < 20) s += 5;
+   329→   329→    if (nearResistance) s += 4;
+   330→   330→    if (nearSupport) s += 4;
+   331→   331→  }
+   332→   332→
+   333→   333→  if (id === 'harmonic') {
+   334→   334→    if ((bbPosition > 80 || bbPosition < 20) && (nearResistance || nearSupport)) s += 5;
+   335→   335→    if (input.priceVsMa21 !== input.priceVsMa100) s += 3;
+   336→   336→    if (nearResistance || nearSupport) s += 2;
+   337→   337→  }
+   338→   338→
+   339→   339→  if (id === 'elliott') {
+   340→   340→    if (adx > 30 && trendR2 > 0.8) s += 5;
+   341→   341→    if (trendDirection === 'up' && bbPosition > 75) s += 3;
+   342→   342→    if (trendDirection === 'down' && bbPosition < 25) s += 3;
+   343→   343→  }
+   344→   344→
+   345→   345→  if (id === 'psychology') {
+   346→   346→    if (adx < 15 || (rsi > 70 && trendDirection === 'down') || (rsi < 30 && trendDirection === 'up')) s += 5;
+   347→   347→    if (hasVolume && obv !== 0 && Math.sign(obv) !== (trendDirection === 'up' ? 1 : -1)) s += 4;
+   348→   348→    if (rsi > 75 || rsi < 25) s += 2;
+   349→   349→  }
+   350→   350→
+   351→   351→  // Baseline so no school gets zero
+   352→   352→  return s + 1;
+   353→   353→}
+   354→   354→
+   355→   355→// ─── Style Scoring (per-item: checks style.id) ─────────────────
+   356→   356→function scoreStyle(item: StyleDef, input: NarrativeInput): number {
+   357→   357→  let s = 0;
+   358→   358→  const id = item.id;
+   359→   359→  const { adx, rsi, stochK, macdHist, obv, hasVolume, cci, bbPosition, trendDirection, nearResistance, nearSupport } = input;
+   360→   360→
+   361→   361→  if (id === 'conservative') {
+   362→   362→    if (adx < 20) s += 6;
+   363→   363→    if (rsi > 40 && rsi < 60) s += 3;
+   364→   364→    if (bbPosition > 30 && bbPosition < 70) s += 2;
+   365→   365→  }
+   366→   366→
+   367→   367→  if (id === 'scalper') {
+   368→   368→    if (adx > 25 && trendDirection === 'up' && macdHist > 0) s += 6;
+   369→   369→    if (stochK > 50 && stochK < 80) s += 2;
+   370→   370→    if (bbPosition > 50) s += 2;
+   371→   371→  }
+   372→   372→
+   373→   373→  if (id === 'trendFollower') {
+   374→   374→    if (adx > 25) s += 5;
+   375→   375→    if (trendDirection === 'up' && macdHist > 0) s += 3;
+   376→   376→    if (trendDirection === 'down' && macdHist < 0) s += 3;
+   377→   377→  }
+   378→   378→
+   379→   379→  if (id === 'bearish') {
+   380→   380→    if ((rsi > 70 || stochK > 80) && nearResistance) s += 7;
+   381→   381→    if (macdHist < 0 && rsi > 60) s += 4;
+   382→   382→    if (cci > 100) s += 2;
+   383→   383→  }
+   384→   384→
+   385→   385→  if (id === 'narrative') {
+   386→   386→    if (adx < 20) s += 5;
+   387→   387→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 3;
+   388→   388→  }
+   389→   389→
+   390→   390→  if (id === 'decision') {
+   391→   391→    if (nearResistance || nearSupport) s += 5;
+   392→   392→    if (adx > 25) s += 3;
+   393→   393→  }
+   394→   394→
+   395→   395→  if (id === 'volumeAnalyst') {
+   396→   396→    if (hasVolume && obv !== 0) s += 5;
+   397→   397→    if (hasVolume && Math.sign(obv) !== (trendDirection === 'up' ? 1 : -1)) s += 3;
+   398→   398→  }
+   399→   399→
+   400→   400→  if (id === 'patternAnalyst') {
+   401→   401→    if (nearResistance || nearSupport) s += 5;
+   402→   402→    if (bbPosition > 85 || bbPosition < 15) s += 3;
+   403→   403→  }
+   404→   404→
+   405→   405→  if (id === 'psychological') {
+   406→   406→    if (rsi > 75 || rsi < 25) s += 5;
+   407→   407→    if (stochK > 85 || stochK < 15) s += 3;
+   408→   408→    if (hasVolume && obv !== 0 && Math.sign(obv) !== (trendDirection === 'up' ? 1 : -1)) s += 2;
+   409→   409→  }
+   410→   410→
+   411→   411→  if (id === 'volatilityAnalyst') {
+   412→   412→    if (bbPosition > 20 && bbPosition < 80 && adx < 20) s += 6;
+   413→   413→    if (bbPosition > 90 || bbPosition < 10) s += 4;
+   414→   414→  }
+   415→   415→
+   416→   416→  return s + 1;
+   417→   417→}
+   418→   418→
+   419→   419→// ─── Tone Scoring (per-item: checks tone.id) ───────────────────
+   420→   420→function scoreTone(item: ToneDef, input: NarrativeInput): number {
+   421→   421→  let s = 0;
+   422→   422→  const id = item.id;
+   423→   423→  const { adx, rsi, stochK, macdHist, obv, hasVolume, bbPosition, trendDirection, nearResistance, nearSupport, dominantScenarioKey, trendR2 } = input;
+   424→   424→
+   425→   425→  if (id === 'formal') {
+   426→   426→    if (adx > 25) s += 3;
+   427→   427→    if (trendR2 > 0.7) s += 2;
+   428→   428→  }
+   429→   429→
+   430→   430→  if (id === 'fast') {
+   431→   431→    if (adx > 30 && macdHist > 0 && trendDirection === 'up') s += 5;
+   432→   432→    if (stochK > 60) s += 2;
+   433→   433→  }
+   434→   434→
+   435→   435→  if (id === 'philosophical') {
+   436→   436→    if (adx > 15 && adx < 35) s += 4;
+   437→   437→    if (rsi > 40 && rsi < 60) s += 2;
+   438→   438→  }
+   439→   439→
+   440→   440→  if (id === 'warning') {
+   441→   441→    if ((rsi > 70 || stochK > 80) && nearResistance) s += 7;
+   442→   442→    if (macdHist > 0 && rsi < 50) s += 3;
+   443→   443→    if ((rsi < 30 || stochK < 20) && nearSupport && trendDirection === 'down') s += 4;
+   444→   444→  }
+   445→   445→
+   446→   446→  if (id === 'storytelling') {
+   447→   447→    if (adx < 25) s += 4;
+   448→   448→    if (bbPosition > 30 && bbPosition < 70) s += 2;
+   449→   449→  }
+   450→   450→
+   451→   451→  if (id === 'stepByStep') {
+   452→   452→    if (nearResistance || nearSupport) s += 4;
+   453→   453→    if (adx > 25) s += 2;
+   454→   454→  }
+   455→   455→
+   456→   456→  if (id === 'skeptical') {
+   457→   457→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 6;
+   458→   458→    if (rsi > 60 && trendDirection === 'down') s += 3;
+   459→   459→    if (rsi < 40 && trendDirection === 'up') s += 3;
+   460→   460→  }
+   461→   461→
+   462→   462→  if (id === 'optimistic') {
+   463→   463→    if (trendDirection === 'up' && adx > 25 && rsi > 50 && rsi < 70) s += 6;
+   464→   464→    if (macdHist > 0 && obv > 0) s += 2;
+   465→   465→  }
+   466→   466→
+   467→   467→  if (id === 'simple') {
+   468→   468→    if (adx > 20 && adx < 40 && rsi > 40 && rsi < 60) s += 4;
+   469→   469→    if (!nearResistance && !nearSupport) s += 2;
+   470→   470→  }
+   471→   471→
+   472→   472→  if (id === 'quantitative') {
+   473→   473→    if (hasVolume && adx > 25) s += 3;
+   474→   474→    if (rsi > 70 || rsi < 30) s += 2;
+   475→   475→  }
+   476→   476→
+   477→   477→  if (id === 'mysterious') {
+   478→   478→    if (adx < 20) s += 4;
+   479→   479→    if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 3;
+   480→   480→    if (dominantScenarioKey === 'R3') s += 2;
+   481→   481→  }
+   482→   482→
+   483→   483→  if (id === 'educational') {
+   484→   484→    if (nearResistance || nearSupport) s += 3;
+   485→   485→    if (rsi > 65 || rsi < 35) s += 2;
+   486→   486→  }
+   487→   487→
+   488→   488→  if (id === 'comparative') {
+   489→   489→    const probs = Object.values(input.scenarioProbabilities);
+   490→   490→    const maxProb = Math.max(...probs);
+   491→   491→    if (maxProb < 35) s += 5;
+   492→   492→    if (probs.filter(p => p > 20).length >= 3) s += 3;
+   493→   493→  }
+   494→   494→
+   495→   495→  if (id === 'balanced') {
+   496→   496→    if (adx < 20) s += 5;
+   497→   497→    if (rsi > 40 && rsi < 60) s += 3;
+   498→   498→  }
+   499→   499→
+   500→   500→  if (id === 'conclusive') {
+
+[showing lines 1-500 of 607; use offset=501 with limit to continue reading]

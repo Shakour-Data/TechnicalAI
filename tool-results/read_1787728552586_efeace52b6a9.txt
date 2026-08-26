@@ -1,0 +1,494 @@
+     1→import { NextRequest, NextResponse } from 'next/server';
+     2→import { getZai } from '@/lib/zai-shared';
+     3→import {
+     4→  selectMLCombination,
+     5→  selectMethods,
+     6→  getScenarioName,
+     7→  type MLSelectorInput,
+     8→} from '@/lib/analysis-ml-selector';
+     9→import {
+    10→  selectMSLV4,
+    11→  buildMSLV4PromptSection,
+    12→  type MSLV4Context,
+    13→} from '@/lib/msl-v4';
+    14→
+    15→export const dynamic = 'force-dynamic';
+    16→export const maxDuration = 60; // Allow up to 60s for AI generation
+    17→
+    18→// --- 1-hour in-memory cache ---
+    19→interface CacheEntry {
+    20→  text: string;
+    21→  ml: { school: string; style: string; tone: string; reasoning: string; methods: string[] };
+    22→  ts: number;
+    23→}
+    24→const cache = new Map<string, CacheEntry>();
+    25→const CACHE_TTL = 3_600_000;
+    26→
+    27→function cacheKey(body: Record<string, unknown>): string {
+    28→  const k = { v: 11, s: body.symbolName, p: body.currentPrice, t: body.trendDirection, r: body.rsi, a: body.adx };
+    29→  return JSON.stringify(k);
+    30→}
+    31→
+    32→// --- Global rate limiter (serial queue) ---
+    33→let lastAITime = 0;
+    34→const AI_MIN_INTERVAL = 20_000;
+    35→let cooldownUntil = 0;
+    36→let activeCall = false;
+    37→const pendingQueue: Array<{
+    38→  resolve: (text: string) => void;
+    39→  reject: (err: Error) => void;
+    40→  messages: { role: string; content: string }[];
+    41→}> = [];
+    42→
+    43→function processAIQueue() {
+    44→  if (activeCall || pendingQueue.length === 0) return;
+    45→  const now = Date.now();
+    46→
+    47→  if (cooldownUntil > now) {
+    48→    setTimeout(processAIQueue, Math.min(cooldownUntil - now, 5000));
+    49→    return;
+    50→  }
+    51→
+    52→  const elapsed = now - lastAITime;
+    53→  if (elapsed < AI_MIN_INTERVAL) {
+    54→    setTimeout(processAIQueue, AI_MIN_INTERVAL - elapsed);
+    55→    return;
+    56→  }
+    57→
+    58→  const item = pendingQueue.shift()!;
+    59→  activeCall = true;
+    60→
+    61→  callZaiSDK(item.messages)
+    62→    .then(text => {
+    63→      lastAITime = Date.now();
+    64→      cooldownUntil = 0;
+    65→      item.resolve(text);
+    66→    })
+    67→    .catch(err => {
+    68→      const msg = err.message || '';
+    69→      if (msg.includes('429')) {
+    70→        const cd = Math.max(cooldownUntil - Date.now(), 0) + 120_000;
+    71→        cooldownUntil = Date.now() + Math.min(cd, 300_000);
+    72→        console.warn(`[AI v5] 429, cooldown ${Math.min(cd, 300_000) / 1000}s`);
+    73→      }
+    74→      item.reject(err);
+    75→    })
+    76→    .finally(() => {
+    77→      activeCall = false;
+    78→      setTimeout(processAIQueue, 2000);
+    79→    });
+    80→}
+    81→
+    82→function queueAI(messages: { role: string; content: string }[], timeoutMs = 45_000): Promise<string> {
+    83→  return new Promise((resolve, reject) => {
+    84→    const timer = setTimeout(() => {
+    85→      const idx = pendingQueue.findIndex(q => q.messages === messages);
+    86→      if (idx >= 0) pendingQueue.splice(idx, 1);
+    87→      reject(new Error('AI request timeout'));
+    88→    }, timeoutMs);
+    89→
+    90→    pendingQueue.push({
+    91→      messages,
+    92→      resolve: (text) => { clearTimeout(timer); resolve(text); },
+    93→      reject: (err) => { clearTimeout(timer); reject(err); },
+    94→    });
+    95→
+    96→    processAIQueue();
+    97→  });
+    98→}
+    99→
+   100→// --- Z.ai SDK call with retry ---
+   101→function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+   102→function jitter(base: number): number { return base + Math.random() * base * 0.5; }
+   103→
+   104→async function callZaiSDK(messages: { role: string; content: string }[], maxRetries = 1): Promise<string> {
+   105→  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+   106→    try {
+   107→      let zai;
+   108→      try {
+   109→        zai = await getZai();
+   110→      } catch (initErr: unknown) {
+   111→        const initMsg = initErr instanceof Error ? initErr.message : String(initErr);
+   112→        console.error(`[AI v5] SDK init failed (attempt ${attempt}):`, initMsg);
+   113→        if (attempt < maxRetries) {
+   114→          await sleep(3000);
+   115→          continue;
+   116→        }
+   117→        throw new Error('خطا در اتصال به سرور هوش مصنوعی. لطفاً صفحه را رفرش کنید.');
+   118→      }
+   119→
+   120→      const completion = await Promise.race([
+   121→        zai.chat.completions.create({
+   122→          messages,
+   123→          thinking: { type: 'disabled' },
+   124→        }),
+   125→        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('AI SDK timeout')), 30_000)),
+   126→      ]);
+   127→      const raw = completion.choices[0]?.message?.content;
+   128→      if (!raw || raw.trim().length === 0) {
+   129→        throw new Error('Empty AI response');
+   130→      }
+   131→      const text = raw.trim();
+   132→      if (text.length < 10) {
+   133→        throw new Error('AI response too short: ' + text.slice(0, 100));
+   134→      }
+   135→      return text;
+   136→    } catch (err: unknown) {
+   137→      const msg = err instanceof Error ? err.message : String(err);
+   138→      console.error(`[AI v5] attempt ${attempt}/${maxRetries} error:`, msg);
+   139→      if (msg.includes('429') && attempt < maxRetries) {
+   140→        console.warn(`[AI v5] 429 retry ${attempt}/${maxRetries}, waiting 10s...`);
+   141→        await sleep(10_000);
+   142→        continue;
+   143→      }
+   144→      throw err;
+   145→    }
+   146→  }
+   147→  throw new Error('Max retries exceeded');
+   148→}
+   149→
+   150→// --- Helpers ---
+   151→function toPersianNum(n: number): string {
+   152→  if (!isFinite(n) || isNaN(n)) return '\u06f0';
+   153→  return Math.round(n).toLocaleString('fa-IR');
+   154→}
+   155→
+   156→function srGrade(strength: number): string {
+   157→  if (strength >= 8.5) return '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc';
+   158→  if (strength >= 7) return '\u0642\u0648\u06cc';
+   159→  if (strength >= 5) return '\u0645\u062a\u0648\u0633\u0637';
+   160→  if (strength >= 3) return '\u0636\u0639\u06cc\u0641';
+   161→  return '\u0628\u0633\u06cc\u0627\u0631 \u0636\u0639\u06cc\u0641';
+   162→}
+   163→
+   164→// --- Build ML Selector Input ---
+   165→function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
+   166→  const price = (body.currentPrice as number) || 0;
+   167→  const trendDir = (body.trendDirection as string) || 'range';
+   168→  const adx = (body.adx as number) || 0;
+   169→  const rsi = (body.rsi as number) || 50;
+   170→  const stochK = (body.stochK as number) || 50;
+   171→  const macdHist = (body.macdHist as number) || 0;
+   172→  const obv = (body.obv as number) || 0;
+   173→  const bollingerUpper = (body.bollingerUpper as number) || 0;
+   174→  const bollingerLower = (body.bollingerLower as number) || 0;
+   175→  const resistance = (body.resistanceStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
+   176→  const support = (body.supportStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
+   177→  const atr = (body.atr as number) || 0;
+   178→  const bbRange = bollingerUpper - bollingerLower;
+   179→  const bbPosition = bbRange > 0 ? Math.min(100, Math.max(0, Math.round((price - bollingerLower) / bbRange * 100))) : 50;
+   180→  const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
+   181→  let dominantKey = 'R3';
+   182→  let dominantProb = 0;
+   183→  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5'] as const) {
+   184→    const p = scenarios?.[k]?.probability ?? 0;
+   185→    if (p > dominantProb) { dominantProb = p; dominantKey = k; }
+   186→  }
+   187→  return { price, trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range', adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0, rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr, scenarioDominant: dominantKey, hasVolume: (body.hasVolume as boolean) ?? false };
+   188→}
+   189→
+   190→// --- Build MSL v4 Context ---
+   191→function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
+   192→  const price = (body.currentPrice as number) || 0;
+   193→  const atr = (body.atr as number) || 0;
+   194→  const atrRatio = price > 0 ? atr / price : 0;
+   195→
+   196→  // Dominant scenario from v11 or legacy scenarios
+   197→  const v11Probs = body.v11Probabilities as {
+   198→    scenarios: Array<{ key: string; name: string; rawProbability: number }>;
+   199→  } | undefined;
+   200→  let dominantScenario = '';
+   201→  if (v11Probs?.scenarios) {
+   202→    const sorted = [...v11Probs.scenarios].sort((a, b) => b.rawProbability - a.rawProbability);
+   203→    dominantScenario = sorted[0]?.name ?? '';
+   204→  } else {
+   205→    const scenarios = body.scenarios as Record<string, { name?: string; probability: number }> | undefined;
+   206→    let maxProb = 0;
+   207→    for (const k of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9']) {
+   208→      const p = scenarios?.[k]?.probability ?? 0;
+   209→      if (p > maxProb) { maxProb = p; dominantScenario = scenarios?.[k]?.name ?? k; }
+   210→    }
+   211→  }
+   212→
+   213→  const trendDir = (body.trendDirection as string) || 'range';
+   214→  const isBull = trendDir === 'up';
+   215→  const isBear = trendDir === 'down';
+   216→  const adx = (body.adx as number) || 0;
+   217→  const trendStrength = adx > 40 ? 0.9 : adx > 25 ? 0.7 : adx > 15 ? 0.4 : 0.15;
+   218→
+   219→  let regime: MSLV4Context['regime'] = 'Range';
+   220→  if (isBull && trendStrength > 0.6) regime = 'Strong Bull';
+   221→  else if (isBull) regime = 'Weak Bull';
+   222→  else if (isBear && trendStrength > 0.6) regime = 'Strong Bear';
+   223→  else if (isBear) regime = 'Weak Bear';
+   224→
+   225→  const instrumentType = (body.instrumentType as string) ||
+   226→    (body.symbolName as string) || 'stock';
+   227→
+   228→  const ta = body.technicalAnalysis as {
+   229→    classicPatternCount?: number;
+   230→    harmonicPatternCount?: number;
+   231→    elliottWaveCount?: number;
+   232→    divergenceCount?: number;
+   233→  } | undefined;
+   234→
+   235→  const overallConfidence = (body.overallConfidence as number) ??
+   236→    (body.confidence as number) ?? 0.6;
+   237→
+   238→  return {
+   239→    asset: instrumentType,
+   240→    timeframe: (body.timeframe as string) || 'daily',
+   241→    regime,
+   242→    confidence: Math.max(0, Math.min(1, overallConfidence)),
+   243→    volatility: atrRatio,
+   244→    trend_strength: trendStrength,
+   245→    dominantScenario,
+   246→    pattern_counts: {
+   247→      classical: ta?.classicPatternCount ?? 0,
+   248→      harmonic: ta?.harmonicPatternCount ?? 0,
+   249→      elliott: ta?.elliottWaveCount ?? 0,
+   250→    },
+   251→    divergence_present: (ta?.divergenceCount ?? 0) > 0,
+   252→    hasVolume: (body.hasVolume as boolean) ?? false,
+   253→    rsi: (body.rsi as number) || 50,
+   254→    adx,
+   255→    audience_level: (body.audienceLevel as string) || 'pro',
+   256→  };
+   257→}
+   258→
+   259→// --- Build Prompt ---
+   260→function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
+   261→  const {
+   262→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   263→    stochK, stochD, macdLine, macdSignal, macdHist,
+   264→    diPlus, diMinus, sar, atr, obv, hasVolume,
+   265→    bollingerUpper, bollingerLower,
+   266→    trendDirection, trendAngle, trendR2,
+   267→    scenarios, resistanceStrengths, supportStrengths,
+   268→  } = body as {
+   269→    symbolName: string; currentPrice: number; ma21: number; ma100: number;
+   270→    rsi: number; mfi: number; cci: number; adx: number;
+   271→    stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number;
+   272→    diPlus: number; diMinus: number; sar: number; atr: number; obv: number;
+   273→    bollingerUpper: number; bollingerLower: number;
+   274→    trendDirection: string; trendAngle: number; trendR2: number;
+   275→    scenarios: Record<string, { name?: string; probability: number; targetMin: number; targetMax: number }>;
+   276→    hasVolume: boolean;
+   277→    resistanceStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+   278→    supportStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+   279→  };
+   280→
+   281→  const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
+   282→  const r2Pct = (trendR2 * 100).toFixed(1);
+   283→  const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
+   284→  const rsiSignal = rsi > 70 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0634\u062f\u06cc\u062f' : rsi > 60 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : rsi > 40 ? '\u062e\u0646\u062b\u06cc' : rsi > 30 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634 \u0634\u062f\u06cc\u062f';
+   285→  const stochSignal = stochK > 80 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : stochK < 20 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : stochK > stochD ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
+   286→
+   287→  const bbRange = bollingerUpper - bollingerLower;
+   288→  const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
+   289→  const bbSignal = currentPrice > bollingerUpper
+   290→    ? '\u0628\u0627\u0644\u0627\u06cc \u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc'
+   291→    : currentPrice < bollingerLower
+   292→    ? '\u0632\u06cc\u0631 \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc'
+   293→    : `\u062f\u0627\u062e\u0644 \u0628\u0627\u0646\u062f\u0647\u0627 (${toPersianNum(bbPos)}\u066a)`;
+   294→
+   295→  const R1 = resistanceStrengths?.[0];
+   296→  const S1 = supportStrengths?.[0];
+   297→  const R1Price = R1?.price ?? Math.round(currentPrice * 1.05);
+   298→  const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
+   299→  const R1Grade = R1?.strength ? srGrade(R1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+   300→  const S1Grade = S1?.strength ? srGrade(S1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+   301→  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
+   302→  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
+   303→
+   304→  const obvDesc = hasVolume
+   305→    ? (obv > 0
+   306→      ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u0648\u0631\u0648\u062f \u067e\u0648\u0644`
+   307→      : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u062e\u0631\u0648\u062c \u067e\u0648\u0644`)
+   308→    : '\u0628\u062f\u0648\u0646 \u062f\u0627\u062f\u0647 \u062d\u062c\u0645';
+   309→
+   310→  const macdDesc = macdHist > 0 && macdLine > macdSignal
+   311→    ? '\u0635\u0639\u0648\u062f\u06cc (\u062e\u0637 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644)'
+   312→    : macdHist > 0
+   313→    ? '\u0635\u0639\u0648\u062f\u06cc \u0628\u0627 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u062b\u0628\u062a'
+   314→    : '\u0646\u0632\u0648\u0644\u06cc (\u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u0646\u0641\u06cc)';
+   315→
+   316→  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
+   317→
+   318→  const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
+   319→
+   320→  // Dynamic scenario list sorted by probability
+   321→  const scenarioList = (['R1', 'R2', 'R3', 'R4', 'R5'] as const)
+   322→    .map((k, i) => ({
+   323→      label: `\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)}`,
+   324→      name: scenarios?.[k]?.name || getScenarioName(k),
+   325→      prob: scenarios?.[k]?.probability ?? 0,
+   326→      min: scenarios?.[k]?.targetMin ?? 0,
+   327→      max: scenarios?.[k]?.targetMax ?? 0,
+   328→    }))
+   329→    .sort((a, b) => b.prob - a.prob);
+   330→
+   331→  const scenarioBlock = scenarioList
+   332→    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
+   333→    .join('\n');
+   334→
+   335→  // V11 probabilities section
+   336→  let v11Block = '';
+   337→  const v11Probs = body.v11Probabilities as {
+   338→    scenarios: Array<{ key: string; name: string; rawProbability: number; cumulativeProbability: number }>;
+   339→    bullishCumulative: number;
+   340→    bearishCumulative: number;
+   341→    neutralCumulative: number;
+   342→    riskProfile: string;
+   343→  } | undefined;
+   344→  if (v11Probs?.scenarios) {
+   345→    const v11Lines = v11Probs.scenarios.map((s, i) =>
+   346→      `- \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)} (${s.name}): \u0627\u062d\u062a\u0645\u0627\u0644 \u0627\u062e\u062a\u0635\u0627\u0635\u06cc ${toPersianNum(s.rawProbability)}\u066a | \u0627\u062d\u062a\u0645\u0627\u0644 \u062a\u062c\u0645\u0639\u06cc ${toPersianNum(s.cumulativeProbability)}\u066a`
+   347→    ).join('\n');
+   348→    const riskLabels: Record<string, string> = {
+   349→      very_bullish: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc',
+   350→      bullish: '\u0635\u0639\u0648\u062f\u06cc',
+   351→      neutral: '\u062e\u0646\u062b\u06cc',
+   352→      bearish: '\u0646\u0632\u0648\u0644\u06cc',
+   353→      very_bearish: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc',
+   354→    };
+   355→    v11Block = `
+   356→
+   357→**\u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a v11:**
+   358→${v11Lines}
+   359→- \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0635\u0639\u0648\u062f\u06cc: ${toPersianNum(v11Probs.bullishCumulative)}\u066a
+   360→- \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0646\u0632\u0648\u0644\u06cc: ${toPersianNum(v11Probs.bearishCumulative)}\u066a
+   361→- \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0631\u06cc\u0633\u06a9: ${riskLabels[v11Probs.riskProfile] || v11Probs.riskProfile}`;
+   362→  }
+   363→
+   364→  return `
+   365→**\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644:**
+   366→\u0634\u0645\u0627 \u06cc\u06a9 **\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0628\u0627 20 \u0633\u0627\u0644 \u062a\u062c\u0631\u0628\u0647** \u0647\u0633\u062a\u06cc\u062f.
+   367→
+   368→\u0648\u0638\u06cc\u0641\u0647 \u0634\u0645\u0627 \u0627\u06cc\u0646 \u0627\u0633\u062a \u06a9\u0647 \u0628\u0631\u0627\u06cc **\u00ab${symbolName}\u00bb** \u062f\u0631 **\u062a\u0627\u06cc\u0645\u0641\u0631\u06cc\u0645 \u0631\u0648\u0632\u0627\u0646\u0647**\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 **\u0686\u0646\u062f\u0644\u0627\u06cc\u0647 \u0648 \u06a9\u0627\u0645\u0644\u0627\u064b \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u06cc** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f.
+   369→
+   370→
+   371→---
+   372→**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647 (\u0648\u0627\u0642\u0639\u06cc \u0648 \u063a\u06cc\u0631\u0642\u0627\u0628\u0644 \u062a\u063a\u06cc\u06cc\u0631):**
+   373→- \u0646\u0627\u0645 \u0627\u0628\u0632\u0627\u0631: **${symbolName}**
+   374→- \u0642\u06cc\u0645\u062a \u0645\u0631\u062c\u0639: **${toPersianNum(currentPrice)} \u0631\u06cc\u0627\u0644**
+   375→- \u0631\u0648\u0646\u062f \u0645\u06cc\u0627\u0646\u200c\u0645\u062f\u062a: **${trendLabel}** (\u0632\u0627\u0648\u06cc\u0647 ${toPersianNum(Math.abs(trendAngle))}\u00b0\u060c R\u00b2=${r2Pct} \u062f\u0631\u0635\u062f)
+   376→- \u0645\u0648\u0642\u0639\u06cc\u062a \u0646\u0633\u0628\u062a \u0628\u0647 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646\u200c\u0647\u0627: ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA21 (${toPersianNum(ma21)})** \u0648 ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA100 (${toPersianNum(ma100)})**
+   377→- **ADX=${toPersianNum(adx)}** (${adxStrength})\u060c **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** \u2190 ${diPressure}
+   378→- **RSI=${toPersianNum(rsi)}** (${rsiSignal})\u060c **\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})
+   379→- **CCI=${toPersianNum(cci)}**${mfi > 0 ? `\u060c **MFI=${toPersianNum(mfi)}**` : ''}
+   380→- **MACD** ${macdDesc} (\u062e\u0637=${toPersianNum(macdLine)}\u060c \u0633\u06cc\u06af\u0646\u0627\u0644=${toPersianNum(macdSignal)}\u060c \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645=${toPersianNum(macdHist)})
+   381→- **OBV** ${obvDesc}
+   382→- \u0642\u06cc\u0645\u062a **${bbSignal}** (\u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc ${toPersianNum(bollingerUpper)}\u060c \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc ${toPersianNum(bollingerLower)})
+   383→- **SAR (\u067e\u0627\u0631\u0627\u0628\u0648\u0644\u06cc\u06a9):** ${toPersianNum(sar)} \u0631\u06cc\u0627\u0644
+   384→- \u0645\u0642\u0627\u0648\u0645\u062a **R1** \u062f\u0631 ${toPersianNum(R1Price)} \u0631\u06cc\u0627\u0644 (${R1Grade} ${R1Confirm})
+   385→- \u062d\u0645\u0627\u06cc\u062a **S1** \u062f\u0631 ${toPersianNum(S1Price)} \u0631\u06cc\u0627\u0644 (${S1Grade} ${S1Confirm})
+   386→- \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0646\u0648\u0633\u0627\u0646 \u0631\u0648\u0632\u0627\u0646\u0647 (ATR): ${toPersianNum(atr)} \u0631\u06cc\u0627\u0644
+   387→
+   388→**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
+   389→${scenarioBlock}
+   390→${v11Block}
+   391→**\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0645\u0648\u0631\u062f \u0627\u0633\u062a\u0641\u0627\u062f\u0647:**
+   392→${methodsStr}
+   393→
+   394→
+   395→---
+   396→\u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 \u062c\u0627\u0645\u0639 \u0648 \u062d\u0631\u0641\u0647\u0627\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f \u0645\u0633\u062a\u0642\u06cc\u0645 \u0634\u0631\u0648\u0639 \u0634\u0648\u062f \u0628\u062f\u0648\u0646 \u0647\u06cc\u0686 \u0633\u0631\u0641\u0635\u0644 \u06cc\u0627 \u0639\u0646\u0648\u0627\u0646 \u062f\u0627\u062e\u0644\u06cc. \u0641\u0642\u0637 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f.
+   397→`;
+   398→}
+   399→
+   400→// System prompt (SDK uses role 'assistant' for system instructions)
+   401→const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.
+   402→یک تحلیل حرفه‌ای و کاربردی بنویسید.
+   403→
+   404→قواعد خروجی:
+   405→1. حداقل 800 کلمه و حداکثر 1,500 کلمه.
+   406→2. تمام اعداد به فارسی و سه رقم سه رقم جدا شوند.
+   407→3. از ایموجی‌های تحلیلی مناسب استفاده کنید: 📊 📈 📉 ⚡ 🔑 ⚠️ 🎯 ✅ ❌ ❓ 💡 🔴 🟢. حداکثر 6 تا در کل متن. **ممنوعیت مطلق:** به هیچ عنوان از ایموجی‌های آدمک، چهره، شخص یا بدن انسان استفاده نکنید (مثل 🧑‍💼 👤 🙋 💂 🧑‍💻 🧑‍🔧 و مشابه آن‌ها).
+   408→4. متن شامل 3 تا 5 پاراگراف باشد. هر پاراگراف بلند و عمیق (200 تا 500 کلمه).
+   409→5. متن کاملاً به زبان فارسی باشد. **ممنوعیت مطلق:** به هیچ عنوان از کلمات، عبارات یا جمله‌سازی‌های زبان چینی در متن استفاده نشود.
+   410→6. تحلیل یک‌پارچه و پیوسته بنویسید. **ممنوعیت مطلق:** به هیچ عنوان از عباراتی مثل «از منظر عملیاتی»، «از دیدگاه عملیاتی»، «از زاویه عملیاتی» یا هر عبارت مشابه که متن را به بخش‌های جداگانه تقسیم می‌کند استفاده نکنید. تحلیل باید یک جریان یکپارچه و روان باشد بدون هیچ‌گونه برچسب‌گذاری داخلی یا دسته‌بندی لایه‌ای.
+   411→7. شامل سناریوی معاملاتی کامل باشد: جهت, نقطه ورود, حد ضرر, اهداف, نسبت ریسک/ریوارد.
+   412→8. شامل درخت سناریویی انشعابی و تحلیل حساسیت باشد.
+   413→9. اگر در متن سؤالی یا ابهامی مطرح می‌شود، **حتماً** باید در همان پاراگراف یا پاراگراف بعدی با استناد به سناریوها و احتمالات ارائه‌شده به آن پاسخ داده شود. هیچ سؤالی بدون پاسخ باقی نماند.
+   414→10. هیچ اشاره‌ای به مکتب, سبک, لحن, سیستم هوشمند, روش ML یا هر اصطلاح داخلی سیستم نشود.
+   415→11. در ابتدا یک عنوان مختصر و در انتها جمله روایت غالب (پررنگ) و خلاصه عملی (حداکثر 30 کلمه) بیاورید.
+   416→12. درصدها را به صورت کامل بنویسید: مثلاً «5 درصد» نه «5٪». درصدها باید منطقی و معقول باشند (مثلاً بین 1 تا 99 درصد).
+   417→13. برای کلمات و عبارات مهم از **بولد** استفاده کنید (حداقل 8 مورد بولد در کل متن).
+   418→14. هیچ سرفصل یا عنوان داخلی سیستم (مثل مرحله, فاز, خروجی سه‌لایه, تحلیل عملیاتی, تحلیل تحلیلی, تحلیل روانشناختی و غیره) در متن نباشد. متن باید یکپارچه و روان باشد.
+   419→15. متن خروجی فقط و فقط تحلیل باشد. هیچ دستورالعمل, ساختار یا راهنمای داخلی در خروجی نیاید.
+   420→16. برای رنگی کلمات مهم از دستور {color:COLOR}متن{/color} استفاده کنید. رنگهای مجاز: red, green, amber, blue, orange, purple, emerald. مثال: {color:red}**خطر شکست سطح مقاومت**{/color}. حداکثر 8 مورد رنگی در کل متن.
+   421→17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.`;
+   422→
+   423→// --- POST Handler ---
+   424→export async function POST(req: NextRequest) {
+   425→  try {
+   426→    const body = await req.json();
+   427→    if (!body.currentPrice) {
+   428→      return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
+   429→    }
+   430→
+   431→    // Check cache
+   432→    const key = cacheKey(body);
+   433→    const cached = cache.get(key);
+   434→    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+   435→      console.log(`[AI v5] Cache hit for ${body.symbolName}`);
+   436→      return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
+   437→    }
+   438→
+   439→    // ML selection (base)
+   440→    const mlInput = buildMLInput(body);
+   441→    const mlSelection = selectMLCombination(mlInput);
+   442→    const methods = selectMethods(mlInput);
+   443→
+   444→    // MSL v4 selection
+   445→    const mslCtx = buildMSLV4Context(body);
+   446→    const mslResult = selectMSLV4(mslCtx);
+   447→    mlSelection.school = mslResult.school_of_analysis.primary.id as typeof mlSelection.school;
+   448→    mlSelection.style = mslResult.analysis_style.primary.id as typeof mlSelection.style;
+   449→    mlSelection.tone = mslResult.analysis_tone.primary.id as typeof mlSelection.tone;
+   450→    mlSelection.reasoning = `MSLv4: ${mslResult.school_of_analysis.primary.id}/${mslResult.analysis_style.primary.id}/${mslResult.analysis_tone.primary.id}`;
+   451→    console.log(`[AI v5] ${body.symbolName}: MSLv4 school=${mslResult.school_of_analysis.primary.id} w=${mslResult.school_of_analysis.primary.weight}, style=${mslResult.analysis_style.primary.id}, tone=${mslResult.analysis_tone.primary.id}`);
+   452→    console.log(`[AI v5] Methods: ${methods.join(', ')}`);
+   453→
+   454→    // Build system prompt with MSL v4 instructions
+   455→    const mslSystemPrompt = buildMSLV4PromptSection(mslResult);
+   456→
+   457→    // Build prompt (with MSL v4 context)
+   458→    const userMessage = buildPrompt(body, mlSelection, methods);
+   459→
+   460→    // Call AI via SDK (v3 approach with queue + retry)
+   461→    const dynamicSystemPrompt = `${SYSTEM_PROMPT}
+   462→
+   463→${mslSystemPrompt}`;
+   464→    const content = await queueAI([
+   465→      { role: 'assistant', content: dynamicSystemPrompt },
+   466→      { role: 'user', content: userMessage },
+   467→    ], 90_000);
+   468→
+   469→    const result = {
+   470→      text: content,
+   471→      ml: { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods },
+   472→    };
+   473→
+   474→    // Cache result
+   475→    cache.set(key, { text: content, ml: result.ml, ts: Date.now() });
+   476→    for (const [k, v] of cache.entries()) {
+   477→      if (Date.now() - v.ts > CACHE_TTL) cache.delete(k);
+   478→    }
+   479→
+   480→    return NextResponse.json(result);
+   481→  } catch (err) {
+   482→    console.error('[AI v5] error:', err);
+   483→    return NextResponse.json({ error: userFriendlyError(err), text: '' }, { status: 500 });
+   484→  }
+   485→}
+   486→
+   487→function userFriendlyError(err: unknown): string {
+   488→  const msg = err instanceof Error ? err.message : String(err);
+   489→  if (msg.includes('429')) return '\u0633\u0631\u0648\u0631 \u0647\u0648\u0634\u0645\u0646\u062f \u062f\u0631 \u062d\u0627\u0644 \u062d\u0627\u0636\u0631 \u0634\u0627\u0631\u0698 \u062f\u0627\u0631\u062f. \u0644\u0637\u0641\u0627\u064b \u0686\u0646\u062f \u062f\u0642\u06cc\u0642\u0647 \u062f\u06cc\u06af\u0631 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+   490→  if (msg.includes('timeout') || msg.includes('\u0632\u0645\u0627\u0646') || msg.includes('Max retries')) return '\u0632\u0645\u0627\u0646 \u067e\u0627\u0633\u062e\u062f\u0647\u06cc \u0647\u0648\u0634\u0645\u0646\u062f \u0628\u0647 \u067e\u0627\u06cc\u0627\u0646 \u0631\u0633\u06cc\u062f. \u0644\u0637\u0641\u0627\u064b \u0628\u0627\u0632 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+   491→  if (msg.includes('اتصال') || msg.includes('SDK')) return msg;
+   492→  return '\u062e\u0637\u0627\u06cc\u06cc \u062f\u0631 \u062a\u0648\u0644\u06cc\u062f \u062a\u062d\u0644\u06cc\u0644 \u0631\u062e \u062f\u0627\u062f. \u0644\u0637\u0641\u0627\u064b \u062f\u0648\u0628\u0627\u0631\u0647 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+   493→}
+   494→

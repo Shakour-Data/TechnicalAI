@@ -1,0 +1,16 @@
+{
+  "name": "finpy-tse",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "jalaali-js": "^2.0.1",
+    "z-ai-web-dev-sdk": "^0.0.18"
+  }
+}

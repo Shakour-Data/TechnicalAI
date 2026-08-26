@@ -1,0 +1,2002 @@
+     1→     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→     2→// TSE Technical Analysis Engine — 7-Layer ML-Based VDss Algorithm
+     3→     3→// ═══════════════════════════════════════════════════════════════════════════════
+     4→     4→
+     5→     5→import {
+     6→     6→  AdaptiveWeightModel,
+     7→     7→  clamp,
+     8→     8→  sigmoid,
+     9→     9→  FEATURES_ORDER,
+    10→    10→  NUM_FEATURES,
+    11→    11→  type FeatureKey,
+    12→    12→} from './ml-model';
+    13→    13→
+    14→    14→export interface OHLCV {
+    15→    15→  date: string;
+    16→    16→  open: number;
+    17→    17→  high: number;
+    18→    18→  low: number;
+    19→    19→  close: number;
+    20→    20→  volume: number;
+    21→    21→}
+    22→    22→
+    23→    23→export interface ScenarioResult {
+    24→    24→  name: string;
+    25→    25→  nameEn: string;
+    26→    26→  probability: number;
+    27→    27→  targetMin: number;
+    28→    28→  targetMax: number;
+    29→    29→  description: string;
+    30→    30→}
+    31→    31→
+    32→    32→export interface TrendResult {
+    33→    33→  direction: string;
+    34→    34→  slope: number;
+    35→    35→  angle: number;
+    36→    36→  r2: number;
+    37→    37→}
+    38→    38→
+    39→    39→export interface LevelStrength {
+    40→    40→  price: number;
+    41→    41→  strength: number;       // 1-10
+    42→    42→  score: number;          // 0-10 continuous (final_score from ML)
+    43→    43→  grade: string;          // 'Very Strong' | 'Strong' | 'Moderate' | 'Weak'
+    44→    44→  isTarget: boolean;      // true if score >= 7
+    45→    45→  overlapCount: number;   // number of methods that agree at this level
+    46→    46→  methods: string[];      // e.g. ['Swing_High', 'Fibonacci_0.618', 'Pivot_R1']
+    47→    47→  fibRatio: string;       // e.g. '0.382' — keep for backward compat
+    48→    48→  fibLabel: string;       // Persian label e.g. 'فیبو ۳۸.۲٪' — keep for backward compat
+    49→    49→}
+    50→    50→
+    51→    51→export interface TAResult {
+    52→    52→  // Moving Averages
+    53→    53→  sma: Record<string, number>;
+    54→    54→  ema: Record<string, number>;
+    55→    55→  // SMA arrays for chart overlays
+    56→    56→  smaArray: Record<string, number[]>;
+    57→    57→  emaArray: Record<string, number[]>;
+    58→    58→  ichimokuArrays: {
+    59→    59→    tenkan: number[];
+    60→    60→    kijun: number[];
+    61→    61→    senkouA: number[];
+    62→    62→    senkouB: number[];
+    63→    63→  };
+    64→    64→  vwapArray: number[];
+    65→    65→  // Oscillators
+    66→    66→  rsi: number;
+    67→    67→  mfi: number;
+    68→    68→  cci: number;
+    69→    69→  stochK: number;
+    70→    70→  stochD: number;
+    71→    71→  williamsR: number;
+    72→    72→  macd: { line: number; signal: number; histogram: number };
+    73→    73→  // Trend
+    74→    74→  adx: number;
+    75→    75→  diPlus: number;
+    76→    76→  diMinus: number;
+    77→    77→  sar: number;
+    78→    78→  // Volatility
+    79→    79→  atr: number;
+    80→    80→  bollingerBands: { upper: number; middle: number; lower: number };
+    81→    81→  // Volume
+    82→    82→  obv: number;
+    83→    83→  // Ichimoku Cloud (TradingView free)
+    84→    84→  ichimoku: {
+    85→    85→    tenkan: number;  // Conversion Line (9)
+    86→    86→    kijun: number;   // Base Line (26)
+    87→    87→    senkouA: number; // Senkou Span A (leading)
+    88→    88→    senkouB: number; // Senkou Span B (leading)
+    89→    89→    chikou: number;  // Chikou Span (lagging)
+    90→    90→  };
+    91→    91→  // VWAP (TradingView free)
+    92→    92→  vwap: number;
+    93→    93→  // Support / Resistance (6 each, Fibonacci-based)
+    94→    94→  resistances: number[];
+    95→    95→  supports: number[];
+    96→    96→  supportStrengths: LevelStrength[];
+    97→    97→  resistanceStrengths: LevelStrength[];
+    98→    98→  priceTargets: LevelStrength[];
+    99→    99→  // Trend Lines
+   100→   100→  trend: {
+   101→   101→    short: TrendResult;
+   102→   102→    medium: TrendResult;
+   103→   103→    long: TrendResult;
+   104→   104→  };
+   105→   105→  // VDss / VDes Scenarios (probabilities sum to 100)
+   106→   106→  scenarios: {
+   107→   107→    R1: ScenarioResult;
+   108→   108→    R2: ScenarioResult;
+   109→   109→    R3: ScenarioResult;
+   110→   110→    R4: ScenarioResult;
+   111→   111→    R5: ScenarioResult;
+   112→   112→    R6: ScenarioResult;
+   113→   113→    R7: ScenarioResult;
+   114→   114→    R8: ScenarioResult;
+   115→   115→    R9: ScenarioResult;
+   116→   116→  };
+   117→   117→  // Summary
+   118→   118→  bullScore: number;
+   119→   119→  bearScore: number;
+   120→   120→  overallSignal: 'bullish' | 'bearish' | 'neutral';
+   121→   121→  // ── VDss Layer 3-6 ML Metadata ──
+   122→   122→  bullConsensus: number;
+   123→   123→  isMLTrained: boolean;
+   124→   124→  mlAccuracy: number;
+   125→   125→  mlWeights: number[] | null;
+   126→   126→  edgeWeights: { up: number; down: number; pullback: number; risk: number };
+   127→   127→  calibrationFactors: Record<string, number>;
+   128→   128→  scenarioSums: Record<string, number>;
+   129→   129→  adaptiveFactors: { momentum: number; volatility: number; trend: number };
+   130→   130→  // Volume availability flag
+   131→   131→  hasVolume: boolean;
+   132→   132→}
+   133→   133→
+   134→   134→// ─── Helper: SMA ──────────────────────────────────────────────────────────────
+   135→   135→function sma(closes: number[], period: number): number {
+   136→   136→  if (closes.length < period) return 0;
+   137→   137→  const slice = closes.slice(-period);
+   138→   138→  return slice.reduce((a, b) => a + b, 0) / period;
+   139→   139→}
+   140→   140→
+   141→   141→// ─── Helper: EMA ──────────────────────────────────────────────────────────────
+   142→   142→function emaCalc(closes: number[], period: number): number {
+   143→   143→  if (closes.length < period) return 0;
+   144→   144→  const k = 2 / (period + 1);
+   145→   145→  let emaVal = sma(closes.slice(0, period), period);
+   146→   146→  for (let i = period; i < closes.length; i++) {
+   147→   147→    emaVal = closes[i] * k + emaVal * (1 - k);
+   148→   148→  }
+   149→   149→  return emaVal;
+   150→   150→}
+   151→   151→
+   152→   152→// ─── Helper: RSI(14) ──────────────────────────────────────────────────────────
+   153→   153→function calcRSI(closes: number[], period: number = 14): number {
+   154→   154→  if (closes.length < period + 1) return 50;
+   155→   155→  let avgGain = 0;
+   156→   156→  let avgLoss = 0;
+   157→   157→  for (let i = 1; i <= period; i++) {
+   158→   158→    const diff = closes[i] - closes[i - 1];
+   159→   159→    if (diff > 0) avgGain += diff;
+   160→   160→    else avgLoss += Math.abs(diff);
+   161→   161→  }
+   162→   162→  avgGain /= period;
+   163→   163→  avgLoss /= period;
+   164→   164→  for (let i = period + 1; i < closes.length; i++) {
+   165→   165→    const diff = closes[i] - closes[i - 1];
+   166→   166→    const gain = diff > 0 ? diff : 0;
+   167→   167→    const loss = diff < 0 ? Math.abs(diff) : 0;
+   168→   168→    avgGain = (avgGain * (period - 1) + gain) / period;
+   169→   169→    avgLoss = (avgLoss * (period - 1) + loss) / period;
+   170→   170→  }
+   171→   171→  if (avgLoss === 0) return 100;
+   172→   172→  const rs = avgGain / avgLoss;
+   173→   173→  return 100 - 100 / (1 + rs);
+   174→   174→}
+   175→   175→
+   176→   176→// ─── Helper: MFI(14) ──────────────────────────────────────────────────────────
+   177→   177→function calcMFI(data: OHLCV[], period: number = 14): number {
+   178→   178→  if (data.length < period + 1) return 50;
+   179→   179→  let posFlow = 0;
+   180→   180→  let negFlow = 0;
+   181→   181→  for (let i = data.length - period; i < data.length; i++) {
+   182→   182→    const tp = (data[i].high + data[i].low + data[i].close) / 3;
+   183→   183→    const mf = tp * data[i].volume;
+   184→   184→    const prevTp = (data[i - 1].high + data[i - 1].low + data[i - 1].close) / 3;
+   185→   185→    if (tp > prevTp) posFlow += mf;
+   186→   186→    else negFlow += mf;
+   187→   187→  }
+   188→   188→  if (negFlow === 0) return 100;
+   189→   189→  const mfr = posFlow / negFlow;
+   190→   190→  return 100 - 100 / (1 + mfr);
+   191→   191→}
+   192→   192→
+   193→   193→// ─── Helper: CCI(20) ──────────────────────────────────────────────────────────
+   194→   194→function calcCCI(data: OHLCV[], period: number = 20): number {
+   195→   195→  if (data.length < period) return 0;
+   196→   196→  const tps: number[] = [];
+   197→   197→  for (let i = data.length - period; i < data.length; i++) {
+   198→   198→    tps.push((data[i].high + data[i].low + data[i].close) / 3);
+   199→   199→  }
+   200→   200→  const meanTP = tps.reduce((a, b) => a + b, 0) / period;
+   201→   201→  const meanDev = tps.reduce((a, b) => a + Math.abs(b - meanTP), 0) / period;
+   202→   202→  if (meanDev === 0) return 0;
+   203→   203→  return (tps[tps.length - 1] - meanTP) / (0.015 * meanDev);
+   204→   204→}
+   205→   205→
+   206→   206→// ─── Helper: Stochastic(14,3,3) ───────────────────────────────────────────────
+   207→   207→function calcStochastic(data: OHLCV[], kPeriod: number = 14, smoothK: number = 3, smoothD: number = 3): { k: number; d: number } {
+   208→   208→  if (data.length < kPeriod) return { k: 50, d: 50 };
+   209→   209→  const rawKs: number[] = [];
+   210→   210→  for (let i = kPeriod - 1; i < data.length; i++) {
+   211→   211→    let lowest = Infinity;
+   212→   212→    let highest = -Infinity;
+   213→   213→    for (let j = i - kPeriod + 1; j <= i; j++) {
+   214→   214→      if (data[j].low < lowest) lowest = data[j].low;
+   215→   215→      if (data[j].high > highest) highest = data[j].high;
+   216→   216→    }
+   217→   217→    const range = highest - lowest;
+   218→   218→    rawKs.push(range === 0 ? 50 : ((data[i].close - lowest) / range) * 100);
+   219→   219→  }
+   220→   220→  const smoothedK: number[] = [];
+   221→   221→  for (let i = smoothK - 1; i < rawKs.length; i++) {
+   222→   222→    const slice = rawKs.slice(i - smoothK + 1, i + 1);
+   223→   223→    smoothedK.push(slice.reduce((a, b) => a + b, 0) / smoothK);
+   224→   224→  }
+   225→   225→  const k = smoothedK[smoothedK.length - 1] ?? 50;
+   226→   226→  const dSlice = smoothedK.slice(-smoothD);
+   227→   227→  const d = dSlice.reduce((a, b) => a + b, 0) / dSlice.length;
+   228→   228→  return { k, d };
+   229→   229→}
+   230→   230→
+   231→   231→// ─── Helper: Williams %R(14) ──────────────────────────────────────────────────
+   232→   232→function calcWilliamsR(data: OHLCV[], period: number = 14): number {
+   233→   233→  if (data.length < period) return -50;
+   234→   234→  const slice = data.slice(-period);
+   235→   235→  let highest = -Infinity;
+   236→   236→  let lowest = Infinity;
+   237→   237→  for (const c of slice) {
+   238→   238→    if (c.high > highest) highest = c.high;
+   239→   239→    if (c.low < lowest) lowest = c.low;
+   240→   240→  }
+   241→   241→  const range = highest - lowest;
+   242→   242→  if (range === 0) return -50;
+   243→   243→  return ((highest - data[data.length - 1].close) / range) * -100;
+   244→   244→}
+   245→   245→
+   246→   246→// ─── Helper: MACD(12,26,9) ────────────────────────────────────────────────────
+   247→   247→function calcMACD(closes: number[], fast: number = 12, slow: number = 26, sig: number = 9): { line: number; signal: number; histogram: number } {
+   248→   248→  if (closes.length < slow + sig) return { line: 0, signal: 0, histogram: 0 };
+   249→   249→  const emaFast = emaCalc(closes, fast);
+   250→   250→  const emaSlow = emaCalc(closes, slow);
+   251→   251→  const macdLine = emaFast - emaSlow;
+   252→   252→  // Calculate signal as EMA of MACD values
+   253→   253→  const macdValues: number[] = [];
+   254→   254→  const kFast = 2 / (fast + 1);
+   255→   255→  const kSlow = 2 / (slow + 1);
+   256→   256→  let eFast = sma(closes.slice(0, fast), fast);
+   257→   257→  let eSlow = sma(closes.slice(0, slow), slow);
+   258→   258→  for (let i = Math.max(fast, slow); i < closes.length; i++) {
+   259→   259→    eFast = closes[i] * kFast + eFast * (1 - kFast);
+   260→   260→    eSlow = closes[i] * kSlow + eSlow * (1 - kSlow);
+   261→   261→    macdValues.push(eFast - eSlow);
+   262→   262→  }
+   263→   263→  if (macdValues.length < sig) return { line: macdLine, signal: 0, histogram: macdLine };
+   264→   264→  const kSig = 2 / (sig + 1);
+   265→   265→  let signalVal = sma(macdValues.slice(0, sig), sig);
+   266→   266→  for (let i = sig; i < macdValues.length; i++) {
+   267→   267→    signalVal = macdValues[i] * kSig + signalVal * (1 - kSig);
+   268→   268→  }
+   269→   269→  return { line: macdLine, signal: signalVal, histogram: macdLine - signalVal };
+   270→   270→}
+   271→   271→
+   272→   272→// ─── Helper: ATR(14) ──────────────────────────────────────────────────────────
+   273→   273→function calcATR(data: OHLCV[], period: number = 14): number {
+   274→   274→  if (data.length < 2) return 0;
+   275→   275→  const trs: number[] = [];
+   276→   276→  for (let i = 1; i < data.length; i++) {
+   277→   277→    const tr = Math.max(
+   278→   278→      data[i].high - data[i].low,
+   279→   279→      Math.abs(data[i].high - data[i - 1].close),
+   280→   280→      Math.abs(data[i].low - data[i - 1].close)
+   281→   281→    );
+   282→   282→    trs.push(tr);
+   283→   283→  }
+   284→   284→  if (trs.length < period) return trs.reduce((a, b) => a + b, 0) / trs.length;
+   285→   285→  let atrVal = trs.slice(0, period).reduce((a, b) => a + b, 0) / period;
+   286→   286→  for (let i = period; i < trs.length; i++) {
+   287→   287→    atrVal = (atrVal * (period - 1) + trs[i]) / period;
+   288→   288→  }
+   289→   289→  return atrVal;
+   290→   290→}
+   291→   291→
+   292→   292→// ─── Helper: ADX(14) + DI+/DI- ────────────────────────────────────────────────
+   293→   293→function calcADX(data: OHLCV[], period: number = 14): { adx: number; diPlus: number; diMinus: number } {
+   294→   294→  if (data.length < period + 1) return { adx: 0, diPlus: 0, diMinus: 0 };
+   295→   295→  const plusDMs: number[] = [];
+   296→   296→  const minusDMs: number[] = [];
+   297→   297→  const trs: number[] = [];
+   298→   298→  for (let i = 1; i < data.length; i++) {
+   299→   299→    const upMove = data[i].high - data[i - 1].high;
+   300→   300→    const downMove = data[i - 1].low - data[i].low;
+   301→   301→    plusDMs.push(upMove > downMove && upMove > 0 ? upMove : 0);
+   302→   302→    minusDMs.push(downMove > upMove && downMove > 0 ? downMove : 0);
+   303→   303→    trs.push(Math.max(
+   304→   304→      data[i].high - data[i].low,
+   305→   305→      Math.abs(data[i].high - data[i - 1].close),
+   306→   306→      Math.abs(data[i].low - data[i - 1].close)
+   307→   307→    ));
+   308→   308→  }
+   309→   309→  if (trs.length < period) return { adx: 0, diPlus: 0, diMinus: 0 };
+   310→   310→  let smoothTR = trs.slice(0, period).reduce((a, b) => a + b, 0);
+   311→   311→  let smoothPlusDM = plusDMs.slice(0, period).reduce((a, b) => a + b, 0);
+   312→   312→  let smoothMinusDM = minusDMs.slice(0, period).reduce((a, b) => a + b, 0);
+   313→   313→  const dxValues: number[] = [];
+   314→   314→  for (let i = period; i < trs.length; i++) {
+   315→   315→    smoothTR = smoothTR - smoothTR / period + trs[i];
+   316→   316→    smoothPlusDM = smoothPlusDM - smoothPlusDM / period + plusDMs[i];
+   317→   317→    smoothMinusDM = smoothMinusDM - smoothMinusDM / period + minusDMs[i];
+   318→   318→    const diPlus = smoothTR === 0 ? 0 : (smoothPlusDM / smoothTR) * 100;
+   319→   319→    const diMinus = smoothTR === 0 ? 0 : (smoothMinusDM / smoothTR) * 100;
+   320→   320→    const diSum = diPlus + diMinus;
+   321→   321→    const dx = diSum === 0 ? 0 : (Math.abs(diPlus - diMinus) / diSum) * 100;
+   322→   322→    dxValues.push(dx);
+   323→   323→  }
+   324→   324→  if (dxValues.length === 0) return { adx: 0, diPlus: 0, diMinus: 0 };
+   325→   325→  let adxVal = dxValues.slice(0, period).reduce((a, b) => a + b, 0) / Math.min(period, dxValues.length);
+   326→   326→  for (let i = period; i < dxValues.length; i++) {
+   327→   327→    adxVal = (adxVal * (period - 1) + dxValues[i]) / period;
+   328→   328→  }
+   329→   329→  const lastDIPlus = smoothTR === 0 ? 0 : (smoothPlusDM / smoothTR) * 100;
+   330→   330→  const lastDIMinus = smoothTR === 0 ? 0 : (smoothMinusDM / smoothTR) * 100;
+   331→   331→  return { adx: adxVal, diPlus: lastDIPlus, diMinus: lastDIMinus };
+   332→   332→}
+   333→   333→
+   334→   334→// ─── Helper: Parabolic SAR ────────────────────────────────────────────────────
+   335→   335→function calcSAR(data: OHLCV[], step: number = 0.02, max: number = 0.2): number {
+   336→   336→  if (data.length < 5) return data[data.length - 1]?.low ?? 0;
+   337→   337→  let isLong = true;
+   338→   338→  let af = step;
+   339→   339→  let ep = data[0].high;
+   340→   340→  let sar = data[0].low;
+   341→   341→  for (let i = 1; i < data.length; i++) {
+   342→   342→    const prevSar = sar;
+   343→   343→    sar = prevSar + af * (ep - prevSar);
+   344→   344→    // Ensure SAR is within bounds
+   345→   345→    if (isLong) {
+   346→   346→      if (i >= 2) sar = Math.min(sar, data[i - 1].low, data[i - 2]?.low ?? Infinity);
+   347→   347→      if (data[i].low < sar) {
+   348→   348→        isLong = false;
+   349→   349→        sar = ep;
+   350→   350→        ep = data[i].low;
+   351→   351→        af = step;
+   352→   352→      } else {
+   353→   353→        if (data[i].high > ep) {
+   354→   354→          ep = data[i].high;
+   355→   355→          af = Math.min(af + step, max);
+   356→   356→        }
+   357→   357→      }
+   358→   358→    } else {
+   359→   359→      if (i >= 2) sar = Math.max(sar, data[i - 1].high, data[i - 2]?.high ?? -Infinity);
+   360→   360→      if (data[i].high > sar) {
+   361→   361→        isLong = true;
+   362→   362→        sar = ep;
+   363→   363→        ep = data[i].high;
+   364→   364→        af = step;
+   365→   365→      } else {
+   366→   366→        if (data[i].low < ep) {
+   367→   367→          ep = data[i].low;
+   368→   368→          af = Math.min(af + step, max);
+   369→   369→        }
+   370→   370→      }
+   371→   371→    }
+   372→   372→  }
+   373→   373→  return sar;
+   374→   374→}
+   375→   375→
+   376→   376→// ─── Helper: Bollinger Bands(20,2) ────────────────────────────────────────────
+   377→   377→function calcBollingerBands(closes: number[], period: number = 20, stdDev: number = 2): { upper: number; middle: number; lower: number } {
+   378→   378→  if (closes.length < period) {
+   379→   379→    const c = closes[closes.length - 1] ?? 0;
+   380→   380→    return { upper: c, middle: c, lower: c };
+   381→   381→  }
+   382→   382→  const slice = closes.slice(-period);
+   383→   383→  const middle = slice.reduce((a, b) => a + b, 0) / period;
+   384→   384→  const variance = slice.reduce((a, b) => a + (b - middle) ** 2, 0) / period;
+   385→   385→  const sd = Math.sqrt(variance);
+   386→   386→  return { upper: middle + stdDev * sd, lower: middle - stdDev * sd, middle };
+   387→   387→}
+   388→   388→
+   389→   389→// ─── Helper: OBV ──────────────────────────────────────────────────────────────
+   390→   390→function calcOBV(data: OHLCV[]): number {
+   391→   391→  let obv = 0;
+   392→   392→  for (let i = 1; i < data.length; i++) {
+   393→   393→    if (data[i].close > data[i - 1].close) obv += data[i].volume;
+   394→   394→    else if (data[i].close < data[i - 1].close) obv -= data[i].volume;
+   395→   395→  }
+   396→   396→  return obv;
+   397→   397→}
+   398→   398→
+   399→   399→// ─── Helper: VWAP ──────────────────────────────────────────────────────────────
+   400→   400→function calcVWAP(data: OHLCV[]): number {
+   401→   401→  if (data.length === 0) return 0;
+   402→   402→  let cumTPV = 0;
+   403→   403→  let cumVol = 0;
+   404→   404→  for (const d of data) {
+   405→   405→    const tp = (d.high + d.low + d.close) / 3;
+   406→   406→    cumTPV += tp * d.volume;
+   407→   407→    cumVol += d.volume;
+   408→   408→  }
+   409→   409→  return cumVol === 0 ? data[data.length - 1].close : cumTPV / cumVol;
+   410→   410→}
+   411→   411→
+   412→   412→function calcVWAPArray(data: OHLCV[]): number[] {
+   413→   413→  const result: number[] = [];
+   414→   414→  let cumTPV = 0;
+   415→   415→  let cumVol = 0;
+   416→   416→  for (const d of data) {
+   417→   417→    const tp = (d.high + d.low + d.close) / 3;
+   418→   418→    cumTPV += tp * d.volume;
+   419→   419→    cumVol += d.volume;
+   420→   420→    result.push(cumVol === 0 ? d.close : cumTPV / cumVol);
+   421→   421→  }
+   422→   422→  return result;
+   423→   423→}
+   424→   424→
+   425→   425→// ─── Helper: Ichimoku Cloud (9, 26, 52) ──────────────────────────────────────
+   426→   426→function calcIchimoku(data: OHLCV[]): {
+   427→   427→  tenkan: number; kijun: number; senkouA: number; senkouB: number; chikou: number;
+   428→   428→} {
+   429→   429→  if (data.length < 52) {
+   430→   430→    const c = data[data.length - 1]?.close ?? 0;
+   431→   431→    return { tenkan: c, kijun: c, senkouA: c, senkouB: c, chikou: c };
+   432→   432→  }
+   433→   433→  const highs = data.map(d => d.high);
+   434→   434→  const lows = data.map(d => d.low);
+   435→   435→  const closes = data.map(d => d.close);
+   436→   436→
+   437→   437→  function donchian(h: number[], l: number[], end: number, period: number): number {
+   438→   438→    const start = end - period + 1;
+   439→   439→    if (start < 0) return (h[end] + l[end]) / 2;
+   440→   440→    let hi = -Infinity, lo = Infinity;
+   441→   441→    for (let i = start; i <= end; i++) {
+   442→   442→      if (h[i] > hi) hi = h[i];
+   443→   443→      if (l[i] < lo) lo = l[i];
+   444→   444→    }
+   445→   445→    return (hi + lo) / 2;
+   446→   446→  }
+   447→   447→
+   448→   448→  const n = data.length;
+   449→   449→  const tenkan = donchian(highs, lows, n - 1, 9);
+   450→   450→  const kijun = donchian(highs, lows, n - 1, 26);
+   451→   451→  // Senkou A = (tenkan + kijun) / 2, shifted 26 periods ahead
+   452→   452→  // We compute it at bar n-27 (shifted to current)
+   453→   453→  const senkouAIdx = Math.max(n - 1 - 26, 0);
+   454→   454→  const tA = donchian(highs, lows, senkouAIdx, 9);
+   455→   455→  const kA = donchian(highs, lows, senkouAIdx, 26);
+   456→   456→  const senkouA = (tA + kA) / 2;
+   457→   457→  // Senkou B = donchian(52), shifted 26 periods ahead
+   458→   458→  const senkouBIdx = Math.max(n - 1 - 26, 0);
+   459→   459→  const senkouB = donchian(highs, lows, senkouBIdx, 52);
+   460→   460→  // Chikou = current close plotted 26 periods back
+   461→   461→  const chikou = closes[n - 1];
+   462→   462→
+   463→   463→  return { tenkan, kijun, senkouA, senkouB, chikou };
+   464→   464→}
+   465→   465→
+   466→   466→function calcIchimokuArrays(data: OHLCV[]): {
+   467→   467→  tenkan: number[]; kijun: number[]; senkouA: number[]; senkouB: number[];
+   468→   468→} {
+   469→   469→  const n = data.length;
+   470→   470→  const highs = data.map(d => d.high);
+   471→   471→  const lows = data.map(d => d.low);
+   472→   472→
+   473→   473→  function donchian(end: number, period: number): number {
+   474→   474→    const start = end - period + 1;
+   475→   475→    if (start < 0) return (highs[end] + lows[end]) / 2;
+   476→   476→    let hi = -Infinity, lo = Infinity;
+   477→   477→    for (let i = start; i <= end; i++) {
+   478→   478→      if (highs[i] > hi) hi = highs[i];
+   479→   479→      if (lows[i] < lo) lo = lows[i];
+   480→   480→    }
+   481→   481→    return (hi + lo) / 2;
+   482→   482→  }
+   483→   483→
+   484→   484→  const tenkan: number[] = [];
+   485→   485→  const kijun: number[] = [];
+   486→   486→  const senkouA: number[] = [];
+   487→   487→  const senkouB: number[] = [];
+   488→   488→
+   489→   489→  for (let i = 0; i < n; i++) {
+   490→   490→    tenkan.push(donchian(i, 9));
+   491→   491→    kijun.push(donchian(i, 26));
+   492→   492→    // Senkou A shifted +26: at bar i, we need tenkan/kijun at bar i-26
+   493→   493→    const sIdx = i - 26;
+   494→   494→    if (sIdx >= 0) {
+   495→   495→      const t = donchian(sIdx, 9);
+   496→   496→      const k = donchian(sIdx, 26);
+   497→   497→      senkouA.push((t + k) / 2);
+   498→   498→    } else {
+   499→   499→      senkouA.push(donchian(i, 9)); // fallback
+   500→   500→    }
+   501→   501→    // Senkou B shifted +26: at bar i, we need donchian(52) at bar i-26
+   502→   502→    if (sIdx >= 0) {
+   503→   503→      senkouB.push(donchian(sIdx, 52));
+   504→   504→    } else {
+   505→   505→      senkouB.push(donchian(i, 52)); // fallback
+   506→   506→    }
+   507→   507→  }
+   508→   508→
+   509→   509→  return { tenkan, kijun, senkouA, senkouB };
+   510→   510→}
+   511→   511→
+   512→   512→// ─── Helper: SMA Array (full series) ──────────────────────────────────────
+   513→   513→function smaArray(closes: number[], period: number): number[] {
+   514→   514→  const result: number[] = [];
+   515→   515→  for (let i = 0; i < closes.length; i++) {
+   516→   516→    if (i < period - 1) { result.push(0); continue; }
+   517→   517→    let sum = 0;
+   518→   518→    for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+   519→   519→    result.push(sum / period);
+   520→   520→  }
+   521→   521→  return result;
+   522→   522→}
+   523→   523→
+   524→   524→// ─── Helper: EMA Array (full series) ──────────────────────────────────────
+   525→   525→function emaArrayCalc(closes: number[], period: number): number[] {
+   526→   526→  const result: number[] = [];
+   527→   527→  if (closes.length < period) return closes.map(() => 0);
+   528→   528→  const k = 2 / (period + 1);
+   529→   529→  let emaVal = 0;
+   530→   530→  for (let i = 0; i < period; i++) emaVal += closes[i];
+   531→   531→  emaVal /= period;
+   532→   532→  for (let i = 0; i < closes.length; i++) {
+   533→   533→    if (i < period) { result.push(0); continue; }
+   534→   534→    if (i === period) { result.push(emaVal); continue; }
+   535→   535→    emaVal = closes[i] * k + emaVal * (1 - k);
+   536→   536→    result.push(emaVal);
+   537→   537→  }
+   538→   538→  return result;
+   539→   539→}
+   540→   540→
+   541→   541→// ─── Helper: Linear Regression ────────────────────────────────────────────────
+   542→   542→function linearRegression(values: number[]): { slope: number; intercept: number; r2: number } {
+   543→   543→  const n = values.length;
+   544→   544→  if (n < 2) return { slope: 0, intercept: values[0] ?? 0, r2: 0 };
+   545→   545→  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+   546→   546→  for (let i = 0; i < n; i++) {
+   547→   547→    sumX += i;
+   548→   548→    sumY += values[i];
+   549→   549→    sumXY += i * values[i];
+   550→   550→    sumX2 += i * i;
+   551→   551→    sumY2 += values[i] * values[i];
+   552→   552→  }
+   553→   553→  const denom = n * sumX2 - sumX * sumX;
+   554→   554→  if (denom === 0) return { slope: 0, intercept: sumY / n, r2: 0 };
+   555→   555→  const slope = (n * sumXY - sumX * sumY) / denom;
+   556→   556→  const intercept = (sumY - slope * sumX) / n;
+   557→   557→  const meanY = sumY / n;
+   558→   558→  let ssRes = 0, ssTot = 0;
+   559→   559→  for (let i = 0; i < n; i++) {
+   560→   560→    const predicted = slope * i + intercept;
+   561→   561→    ssRes += (values[i] - predicted) ** 2;
+   562→   562→    ssTot += (values[i] - meanY) ** 2;
+   563→   563→  }
+   564→   564→  const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+   565→   565→  return { slope, intercept, r2 };
+   566→   566→}
+   567→   567→
+   568→   568→// ─── Helper: Round to nice number (per spec price-range rules) ─────────────
+   569→   569→function roundToNice(price: number): number {
+   570→   570→  const abs = Math.abs(price);
+   571→   571→  let step: number;
+   572→   572→  if (abs >= 100000) step = 100;
+   573→   573→  else if (abs >= 10000) step = 10;
+   574→   574→  else if (abs >= 1000) step = 5;
+   575→   575→  else if (abs >= 100) step = 1;
+   576→   576→  else step = 0.5;
+   577→   577→  return Math.round(price / step) * step;
+   578→   578→}
+   579→   579→
+   580→   580→// ─── Helper: Swing Highs/Lows ─────────────────────────────────────────────────
+   581→   581→function findSwingLevels(data: OHLCV[], lookback: number = 3): { highs: { price: number; idx: number }[]; lows: { price: number; idx: number }[] } {
+   582→   582→  const highs: { price: number; idx: number }[] = [];
+   583→   583→  const lows: { price: number; idx: number }[] = [];
+   584→   584→  for (let i = lookback; i < data.length - lookback; i++) {
+   585→   585→    let isHigh = true;
+   586→   586→    let isLow = true;
+   587→   587→    for (let j = i - lookback; j <= i + lookback; j++) {
+   588→   588→      if (j === i) continue;
+   589→   589→      if (data[j].high >= data[i].high) isHigh = false;
+   590→   590→      if (data[j].low <= data[i].low) isLow = false;
+   591→   591→    }
+   592→   592→    if (isHigh) highs.push({ price: data[i].high, idx: i });
+   593→   593→    if (isLow) lows.push({ price: data[i].low, idx: i });
+   594→   594→  }
+   595→   595→  return { highs, lows };
+   596→   596→}
+   597→   597→
+   598→   598→// ─── Fibonacci Constants ───────────────────────────────────────────────────
+   599→   599→const FIB_RETRACEMENTS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+   600→   600→const FIB_EXTENSIONS = [1.272, 1.618, 2.0, 2.618, 3.618, 4.236];
+   601→   601→
+   602→   602→// Persian labels for Fibonacci ratios — keys normalized via String(ratio)
+   603→   603→const FIB_LABELS: Record<string, string> = {
+   604→   604→  '0': '۰٪ (اوج)',
+   605→   605→  '0.236': '۲۳.۶٪',
+   606→   606→  '0.382': '۳۸.۲٪',
+   607→   607→  '0.5': '۵۰٪',
+   608→   608→  '0.618': '۶۱.۸٪',
+   609→   609→  '0.786': '۷۸.۶٪',
+   610→   610→  '1': '۱۰۰٪ (کف)',
+   611→   611→  '1.272': '۱۲۷.۲٪',
+   612→   612→  '1.618': '۱۶۱.۸٪',
+   613→   613→  '2': '۲۰۰٪',
+   614→   614→  '2.618': '۲۶۱.۸٪',
+   615→   615→  '3.618': '۳۶۱.۸٪',
+   616→   616→  '4.236': '۴۲۳.۶٪',
+   617→   617→};
+   618→   618→
+   619→   619→// Key Fibonacci ratios for strength scoring
+   620→   620→const KEY_FIB_RATIOS = [0.236, 0.382, 0.5, 0.618, 0.786, 1.272, 1.618, 2.618];
+   621→   621→
+   622→   622→// ─── Internal S/R Types ──────────────────────────────────────────────────
+   623→   623→interface RawSRLevel {
+   624→   624→  price: number;
+   625→   625→  method: string;
+   626→   626→  type: 'support' | 'resistance';
+   627→   627→  fibRatio: string;
+   628→   628→  fibLabel: string;
+   629→   629→}
+   630→   630→
+   631→   631→interface MergedSRLevel {
+   632→   632→  price: number;
+   633→   633→  type: 'support' | 'resistance';
+   634→   634→  methods: string[];
+   635→   635→  overlapCount: number;
+   636→   636→  fibRatio: string;
+   637→   637→  fibLabel: string;
+   638→   638→  score: number;
+   639→   639→  strength: number;
+   640→   640→  touchCount: number;
+   641→   641→  volumeRatio: number;
+   642→   642→  freshness: number;
+   643→   643→  distancePercent: number;
+   644→   644→}
+   645→   645→
+   646→   646→// ─── Helper: Psychological Rounding ────────────────────────────────────────
+   647→   647→function psychStep(price: number): number {
+   648→   648→  if (price >= 100000) return 5000;
+   649→   649→  if (price >= 10000) return 1000;
+   650→   650→  if (price >= 1000) return 100;
+   651→   651→  if (price >= 100) return 10;
+   652→   652→  if (price >= 10) return 1;
+   653→   653→  return 0.01;
+   654→   654→}
+   655→   655→
+   656→   656→function psychRound(price: number): number {
+   657→   657→  const step = psychStep(price);
+   658→   658→  return Math.round(price / step) * step;
+   659→   659→}
+   660→   660→
+   661→   661→// ─── Helper: Linear System Solver (Gaussian Elimination) ─────────────────
+   662→   662→function solveLinearSystem(A: number[][], b: number[]): number[] | null {
+   663→   663→  const n = b.length;
+   664→   664→  const aug = A.map((row, i) => [...row, b[i]]);
+   665→   665→
+   666→   666→  for (let col = 0; col < n; col++) {
+   667→   667→    let maxVal = Math.abs(aug[col][col]);
+   668→   668→    let maxRow = col;
+   669→   669→    for (let row = col + 1; row < n; row++) {
+   670→   670→      if (Math.abs(aug[row][col]) > maxVal) {
+   671→   671→        maxVal = Math.abs(aug[row][col]);
+   672→   672→        maxRow = row;
+   673→   673→      }
+   674→   674→    }
+   675→   675→    if (maxVal < 1e-10) return null;
+   676→   676→    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+   677→   677→
+   678→   678→    for (let row = col + 1; row < n; row++) {
+   679→   679→      const factor = aug[row][col] / aug[col][col];
+   680→   680→      for (let j = col; j <= n; j++) {
+   681→   681→        aug[row][j] -= factor * aug[col][j];
+   682→   682→      }
+   683→   683→    }
+   684→   684→  }
+   685→   685→
+   686→   686→  const x = new Array(n).fill(0);
+   687→   687→  for (let i = n - 1; i >= 0; i--) {
+   688→   688→    x[i] = aug[i][n];
+   689→   689→    for (let j = i + 1; j < n; j++) {
+   690→   690→      x[i] -= aug[i][j] * x[j];
+   691→   691→    }
+   692→   692→    if (Math.abs(aug[i][i]) < 1e-10) return null;
+   693→   693→    x[i] /= aug[i][i];
+   694→   694→  }
+   695→   695→
+   696→   696→  return x;
+   697→   697→}
+   698→   698→
+   699→   699→// ─── Helper: Generate All 7-Method S/R Levels ─────────────────────────────
+   700→   700→function generateAllLevels(data: OHLCV[], endIdx: number): RawSRLevel[] {
+   701→   701→  const levels: RawSRLevel[] = [];
+   702→   702→  if (endIdx < 10) return levels;
+   703→   703→
+   704→   704→  const slice = data.slice(0, endIdx + 1);
+   705→   705→  const currentPrice = slice[slice.length - 1].close;
+   706→   706→  const closes = slice.map(d => d.close);
+   707→   707→  const noFib: [string, string] = ['—', ''];
+   708→   708→
+   709→   709→  // ── Method 1: Swing High/Low (Price Action) ──────────────────────────
+   710→   710→  for (const lookback of [3, 5, 7]) {
+   711→   711→    const swings = findSwingLevels(slice, lookback);
+   712→   712→    const tol = currentPrice * 0.005; // 0.5% tolerance
+   713→   713→
+   714→   714→    // Connect swing highs → resistance
+   715→   715→    const usedHigh = new Set<number>();
+   716→   716→    for (const h of swings.highs) {
+   717→   717→      if (usedHigh.has(h.idx)) continue;
+   718→   718→      let sum = h.price;
+   719→   719→      let count = 1;
+   720→   720→      for (const h2 of swings.highs) {
+   721→   721→        if (h2 === h || usedHigh.has(h2.idx)) continue;
+   722→   722→        if (Math.abs(h2.price - h.price) < tol) {
+   723→   723→          sum += h2.price;
+   724→   724→          count++;
+   725→   725→          usedHigh.add(h2.idx);
+   726→   726→        }
+   727→   727→      }
+   728→   728→      usedHigh.add(h.idx);
+   729→   729→      if (sum / count > currentPrice * 1.005) {
+   730→   730→        levels.push({ price: sum / count, method: 'Swing_High', type: 'resistance', ...noFib });
+   731→   731→      }
+   732→   732→    }
+   733→   733→
+   734→   734→    // Connect swing lows → support
+   735→   735→    const usedLow = new Set<number>();
+   736→   736→    for (const l of swings.lows) {
+   737→   737→      if (usedLow.has(l.idx)) continue;
+   738→   738→      let sum = l.price;
+   739→   739→      let count = 1;
+   740→   740→      for (const l2 of swings.lows) {
+   741→   741→        if (l2 === l || usedLow.has(l2.idx)) continue;
+   742→   742→        if (Math.abs(l2.price - l.price) < tol) {
+   743→   743→          sum += l2.price;
+   744→   744→          count++;
+   745→   745→          usedLow.add(l2.idx);
+   746→   746→        }
+   747→   747→      }
+   748→   748→      usedLow.add(l.idx);
+   749→   749→      if (sum / count < currentPrice * 0.995) {
+   750→   750→        levels.push({ price: sum / count, method: 'Swing_Low', type: 'support', ...noFib });
+   751→   751→      }
+   752→   752→    }
+   753→   753→  }
+   754→   754→
+   755→   755→  // ── Method 2: SMA Dynamic S/R ──────────────────────────────────────
+   756→   756→  for (const period of [20, 50, 100, 200]) {
+   757→   757→    const smaVal = sma(closes, period);
+   758→   758→    if (smaVal <= 0) continue;
+   759→   759→    const type: 'support' | 'resistance' = currentPrice > smaVal ? 'support' : 'resistance';
+   760→   760→    levels.push({ price: smaVal, method: `SMA_${period}`, type, ...noFib });
+   761→   761→  }
+   762→   762→
+   763→   763→  // ── Method 3: Bollinger Bands ───────────────────────────────────────
+   764→   764→  const bb = calcBollingerBands(closes);
+   765→   765→  if (bb.upper > 0 && bb.lower > 0) {
+   766→   766→    levels.push({ price: bb.upper, method: 'BB_Upper', type: 'resistance', ...noFib });
+   767→   767→    levels.push({ price: bb.lower, method: 'BB_Lower', type: 'support', ...noFib });
+   768→   768→  }
+   769→   769→
+   770→   770→  // ── Method 4: Fibonacci Retracement + Extension ─────────────────────
+   771→   771→  interface SwingPair { high: number; highIdx: number; low: number; lowIdx: number; range: number }
+   772→   772→  let bestSwing: SwingPair | null = null;
+   773→   773→
+   774→   774→  for (const lb of [3, 5, 7, 10, 15, 20]) {
+   775→   775→    const sw = findSwingLevels(slice, lb);
+   776→   776→    if (sw.highs.length === 0 || sw.lows.length === 0) continue;
+   777→   777→    for (const h of sw.highs) {
+   778→   778→      for (const l of sw.lows) {
+   779→   779→        if (Math.abs(h.idx - l.idx) < 3) continue;
+   780→   780→        const range = Math.abs(h.price - l.price);
+   781→   781→        if (range / currentPrice < 0.03) continue;
+   782→   782→        if (!bestSwing || range > bestSwing.range) {
+   783→   783→          bestSwing = {
+   784→   784→            high: Math.max(h.price, l.price),
+   785→   785→            highIdx: h.price > l.price ? h.idx : l.idx,
+   786→   786→            low: Math.min(h.price, l.price),
+   787→   787→            lowIdx: h.price < l.price ? l.idx : h.idx,
+   788→   788→            range,
+   789→   789→          };
+   790→   790→        }
+   791→   791→      }
+   792→   792→    }
+   793→   793→  }
+   794→   794→
+   795→   795→  if (bestSwing) {
+   796→   796→    const H = bestSwing.high;
+   797→   797→    const L = bestSwing.low;
+   798→   798→    const range = H - L;
+   799→   799→
+   800→   800→    for (const ratio of FIB_RETRACEMENTS) {
+   801→   801→      const price = H - ratio * range;
+   802→   802→      if (price <= 0) continue;
+   803→   803→      const rounded = roundToNice(price);
+   804→   804→      const type: 'support' | 'resistance' = rounded >= currentPrice ? 'resistance' : 'support';
+   805→   805→      levels.push({
+   806→   806→        price: rounded, method: `Fibonacci_${ratio}`, type,
+   807→   807→        fibRatio: String(ratio), fibLabel: FIB_LABELS[String(ratio)] || '',
+   808→   808→      });
+   809→   809→    }
+   810→   810→
+   811→   811→    for (const extRatio of FIB_EXTENSIONS) {
+   812→   812→      const price = H + (extRatio - 1) * range;
+   813→   813→      if (price <= 0) continue;
+   814→   814→      const rounded = roundToNice(price);
+   815→   815→      const type: 'support' | 'resistance' = rounded >= currentPrice ? 'resistance' : 'support';
+   816→   816→      levels.push({
+   817→   817→        price: rounded, method: `Fibonacci_${extRatio}`, type,
+   818→   818→        fibRatio: String(extRatio), fibLabel: FIB_LABELS[String(extRatio)] || '',
+   819→   819→      });
+   820→   820→    }
+   821→   821→
+   822→   822→    // Inverse extensions (below L)
+   823→   823→    for (const extRatio of FIB_EXTENSIONS) {
+   824→   824→      const price = L - (extRatio - 1) * range;
+   825→   825→      if (price <= 0) continue;
+   826→   826→      const rounded = roundToNice(price);
+   827→   827→      const type: 'support' | 'resistance' = rounded >= currentPrice ? 'resistance' : 'support';
+   828→   828→      levels.push({
+   829→   829→        price: rounded, method: `Fibonacci_${-extRatio}`, type,
+   830→   830→        fibRatio: String(-extRatio), fibLabel: '',
+   831→   831→      });
+   832→   832→    }
+   833→   833→
+   834→   834→    // Secondary swing confluence (check overlap with secondary swings)
+   835→   835→    const secondarySwings: SwingPair[] = [];
+   836→   836→    for (const lb of [3, 5, 7]) {
+   837→   837→      const sw = findSwingLevels(slice, lb);
+   838→   838→      for (const h of sw.highs) {
+   839→   839→        for (const l of sw.lows) {
+   840→   840→          if (Math.abs(h.idx - l.idx) < 3) continue;
+   841→   841→          const r = Math.abs(h.price - l.price);
+   842→   842→          if (r / currentPrice < 0.05) continue;
+   843→   843→          if (bestSwing && Math.abs(r - bestSwing.range) / bestSwing.range < 0.1) continue;
+   844→   844→          secondarySwings.push({
+   845→   845→            high: Math.max(h.price, l.price), highIdx: h.price > l.price ? h.idx : l.idx,
+   846→   846→            low: Math.min(h.price, l.price), lowIdx: h.price < l.price ? l.idx : h.idx,
+   847→   847→            range: r,
+   848→   848→          });
+   849→   849→        }
+   850→   850→      }
+   851→   851→    }
+   852→   852→    // Secondary swings' fib levels are merged via confluence (1% rule in mergeLevels)
+   853→   853→    const confluenceTol = currentPrice * 0.005;
+   854→   854→    for (const sec of secondarySwings.slice(0, 3)) {
+   855→   855→      const sH = sec.high, sL = sec.low, sR = sH - sL;
+   856→   856→      for (const ratio of FIB_RETRACEMENTS) {
+   857→   857→        const price = roundToNice(sH - ratio * sR);
+   858→   858→        if (price <= 0) continue;
+   859→   859→        const type: 'support' | 'resistance' = price >= currentPrice ? 'resistance' : 'support';
+   860→   860→        levels.push({
+   861→   861→          price, method: `Fibonacci_${ratio}`, type,
+   862→   862→          fibRatio: String(ratio), fibLabel: FIB_LABELS[String(ratio)] || '',
+   863→   863→        });
+   864→   864→      }
+   865→   865→      for (const extR of FIB_EXTENSIONS) {
+   866→   866→        const price = roundToNice(sH + (extR - 1) * sR);
+   867→   867→        if (price <= 0) continue;
+   868→   868→        const type: 'support' | 'resistance' = price >= currentPrice ? 'resistance' : 'support';
+   869→   869→        levels.push({
+   870→   870→          price, method: `Fibonacci_${extR}`, type,
+   871→   871→          fibRatio: String(extR), fibLabel: FIB_LABELS[String(extR)] || '',
+   872→   872→        });
+   873→   873→      }
+   874→   874→    }
+   875→   875→  }
+   876→   876→
+   877→   877→  // ── Method 5: Volume Profile (VAP) ──────────────────────────────────
+   878→   878→  const dataHasVolume = slice.some(d => d.volume > 0);
+   879→   879→  if (dataHasVolume) {
+   880→   880→    let minP = Infinity, maxP = -Infinity;
+   881→   881→    for (const d of slice) {
+   882→   882→      if (d.low < minP) minP = d.low;
+   883→   883→      if (d.high > maxP) maxP = d.high;
+   884→   884→    }
+   885→   885→    const numBins = 40;
+   886→   886→    const binSize = Math.max((maxP - minP) / numBins, currentPrice * 0.001);
+   887→   887→    const vap = new Array(numBins).fill(0);
+   888→   888→    const binCenters: number[] = [];
+   889→   889→
+   890→   890→    for (let b = 0; b < numBins; b++) {
+   891→   891→      binCenters.push(minP + (b + 0.5) * binSize);
+   892→   892→    }
+   893→   893→
+   894→   894→    for (const d of slice) {
+   895→   895→      for (let b = 0; b < numBins; b++) {
+   896→   896→        if (d.low <= binCenters[b] && binCenters[b] <= d.high) {
+   897→   897→          vap[b] += d.volume;
+   898→   898→        }
+   899→   899→      }
+   900→   900→    }
+   901→   901→
+   902→   902→    const maxVAP = Math.max(...vap);
+   903→   903→    if (maxVAP > 0) {
+   904→   904→      // POC (Point of Control)
+   905→   905→      let pocIdx = 0;
+   906→   906→      for (let b = 1; b < numBins; b++) {
+   907→   907→        if (vap[b] > vap[pocIdx]) pocIdx = b;
+   908→   908→      }
+   909→   909→      const pocPrice = binCenters[pocIdx];
+   910→   910→      const pocType: 'support' | 'resistance' = pocPrice > currentPrice ? 'resistance' : 'support';
+   911→   911→      levels.push({ price: pocPrice, method: 'VAP_POC', type: pocType, ...noFib });
+   912→   912→
+   913→   913→      // HVN (High Volume Nodes)
+   914→   914→      for (let b = 0; b < numBins; b++) {
+   915→   915→        if (b === pocIdx) continue;
+   916→   916→        if (vap[b] > 0.7 * maxVAP) {
+   917→   917→          const hvnPrice = binCenters[b];
+   918→   918→          const hvnType: 'support' | 'resistance' = hvnPrice > currentPrice ? 'resistance' : 'support';
+   919→   919→          levels.push({ price: hvnPrice, method: 'VAP_HVN', type: hvnType, ...noFib });
+   920→   920→        }
+   921→   921→      }
+   922→   922→    }
+   923→   923→  }
+   924→   924→
+   925→   925→  // ── Method 6: Pivot Points (4 algorithms) ───────────────────────────
+   926→   926→  if (endIdx >= 1) {
+   927→   927→    const prev = slice[endIdx - 1]; // Previous completed bar
+   928→   928→    const pH = prev.high, pL = prev.low, pC = prev.close, pO = prev.open;
+   929→   929→
+   930→   930→    // Standard Pivot
+   931→   931→    {
+   932→   932→      const PP = (pH + pL + pC) / 3;
+   933→   933→      const R1 = 2 * PP - pL, S1 = 2 * PP - pH;
+   934→   934→      const R2 = PP + (pH - pL), S2 = PP - (pH - pL);
+   935→   935→      const R3 = pH + 2 * (PP - pL), S3 = pL - 2 * (pH - PP);
+   936→   936→ if (R1 > 0) levels.push({ price: R1, method: 'Pivot_R1', type: 'resistance', ...noFib });
+   937→   937→      if (R2 > 0) levels.push({ price: R2, method: 'Pivot_R2', type: 'resistance', ...noFib });
+   938→   938→      if (R3 > 0) levels.push({ price: R3, method: 'Pivot_R3', type: 'resistance', ...noFib });
+   939→   939→      if (S1 > 0) levels.push({ price: S1, method: 'Pivot_S1', type: 'support', ...noFib });
+   940→   940→      if (S2 > 0) levels.push({ price: S2, method: 'Pivot_S2', type: 'support', ...noFib });
+   941→   941→      if (S3 > 0) levels.push({ price: S3, method: 'Pivot_S3', type: 'support', ...noFib });
+   942→   942→    }
+   943→   943→
+   944→   944→    // Fibonacci Pivot
+   945→   945→    {
+   946→   946→      const PP = (pH + pL + pC) / 3;
+   947→   947→      const range = pH - pL;
+   948→   948→      for (const [mult, suffix] of [[0.382, '1'], [0.618, '2'], [1.0, '3']] as [number, string][]) {
+   949→   949→        const R = PP + mult * range;
+   950→   950→        const S = PP - mult * range;
+   951→   951→        if (R > 0) levels.push({ price: R, method: `Fib_Pivot_R${suffix}`, type: 'resistance', ...noFib });
+   952→   952→        if (S > 0) levels.push({ price: S, method: `Fib_Pivot_S${suffix}`, type: 'support', ...noFib });
+   953→   953→      }
+   954→   954→    }
+   955→   955→
+   956→   956→    // Woodie's Pivot
+   957→   957→    {
+   958→   958→      const PP = (pH + pL + 2 * pC) / 4;
+   959→   959→      const R1 = 2 * PP - pL, S1 = 2 * PP - pH;
+   960→   960→      const R2 = PP + (pH - pL), S2 = PP - (pH - pL);
+   961→   961→      if (R1 > 0) levels.push({ price: R1, method: 'Woodie_R1', type: 'resistance', ...noFib });
+   962→   962→      if (R2 > 0) levels.push({ price: R2, method: 'Woodie_R2', type: 'resistance', ...noFib });
+   963→   963→      if (S1 > 0) levels.push({ price: S1, method: 'Woodie_S1', type: 'support', ...noFib });
+   964→   964→      if (S2 > 0) levels.push({ price: S2, method: 'Woodie_S2', type: 'support', ...noFib });
+   965→   965→    }
+   966→   966→
+   967→   967→    // DeMark Pivot
+   968→   968→    {
+   969→   969→      const X = pC < pO ? pH + 2 * pL + pC : pC > pO ? 2 * pH + pL + pC : pH + pL + 2 * pC;
+   970→   970→      const PP = X / 4;
+   971→   971→      const R1 = X / 2 - pL;
+   972→   972→      const S1 = X / 2 - pH;
+   973→   973→      if (R1 > 0) levels.push({ price: R1, method: 'DeMark_R1', type: 'resistance', ...noFib });
+   974→   974→      if (S1 > 0) levels.push({ price: S1, method: 'DeMark_S1', type: 'support', ...noFib });
+   975→   975→    }
+   976→   976→  }
+   977→   977→
+   978→   978→  // ── Method 7: Psychological Levels ──────────────────────────────────
+   979→   979→  {
+   980→   980→    const step = psychStep(currentPrice);
+   981→   981→    const base = psychRound(currentPrice);
+   982→   982→    for (const mult of [-2, -1, 1, 2]) {
+   983→   983→      const price = base + mult * step;
+   984→   984→      if (price <= 0) continue;
+   985→   985→      const type: 'support' | 'resistance' = price > currentPrice ? 'resistance' : 'support';
+   986→   986→      levels.push({ price, method: 'Psychological', type, ...noFib });
+   987→   987→    }
+   988→   988→  }
+   989→   989→
+   990→   990→  return levels;
+   991→   991→}
+   992→   992→
+   993→   993→// ─── Helper: Merge Nearby Levels (1% Confluence) ──────────────────────────
+   994→   994→function mergeLevels(rawLevels: RawSRLevel[], currentPrice: number): MergedSRLevel[] {
+   995→   995→  if (rawLevels.length === 0) return [];
+   996→   996→
+   997→   997→  const tol = currentPrice * 0.01; // 1% tolerance
+   998→   998→  const merged: MergedSRLevel[] = [];
+   999→   999→  const used = new Set<number>();
+  1000→  1000→
+  1001→  1001→  for (let i = 0; i < rawLevels.length; i++) {
+  1002→  1002→    if (used.has(i)) continue;
+  1003→  1003→
+  1004→  1004→    let sumPrice = rawLevels[i].price;
+  1005→  1005→    let count = 1;
+  1006→  1006→    const methods = new Set<string>();
+  1007→  1007→    methods.add(rawLevels[i].method);
+  1008→  1008→    let bestFibRatio = rawLevels[i].fibRatio;
+  1009→  1009→    let bestFibLabel = rawLevels[i].fibLabel;
+  1010→  1010→
+  1011→  1011→    for (let j = i + 1; j < rawLevels.length; j++) {
+  1012→  1012→      if (used.has(j)) continue;
+  1013→  1013→      if (Math.abs(rawLevels[j].price - rawLevels[i].price) < tol) {
+  1014→  1014→        sumPrice += rawLevels[j].price;
+  1015→  1015→        count++;
+  1016→  1016→        methods.add(rawLevels[j].method);
+  1017→  1017→        used.add(j);
+  1018→  1018→        // Prefer Fibonacci label if available
+  1019→  1019→        if (rawLevels[j].fibRatio !== '—' && bestFibRatio === '—') {
+  1020→  1020→          bestFibRatio = rawLevels[j].fibRatio;
+  1021→  1021→          bestFibLabel = rawLevels[j].fibLabel;
+  1022→  1022→        }
+  1023→  1023→      }
+  1024→  1024→    }
+  1025→  1025→    used.add(i);
+  1026→  1026→
+  1027→  1027→    const avgPrice = sumPrice / count;
+  1028→  1028→    const type: 'support' | 'resistance' = avgPrice >= currentPrice ? 'resistance' : 'support';
+  1029→  1029→
+  1030→  1030→    merged.push({
+  1031→  1031→      price: avgPrice,
+  1032→  1032→      type,
+  1033→  1033→      methods: [...methods],
+  1034→  1034→      overlapCount: methods.size,
+  1035→  1035→      fibRatio: bestFibRatio,
+  1036→  1036→      fibLabel: bestFibLabel,
+  1037→  1037→      score: 0,
+  1038→  1038→      strength: 1,
+  1039→  1039→      touchCount: 0,
+  1040→  1040→      volumeRatio: 0,
+  1041→  1041→      freshness: 0,
+  1042→  1042→      distancePercent: 0,
+  1043→  1043→    });
+  1044→  1044→  }
+  1045→  1045→
+  1046→  1046→  return merged;
+  1047→  1047→}
+  1048→  1048→
+  1049→  1049→// ─── Helper: Compute Level Features (5 ML features) ──────────────────────
+  1050→  1050→function computeLevelFeatures(
+  1051→  1051→  levelPrice: number,
+  1052→  1052→  data: OHLCV[],
+  1053→  1053→  endIdx: number,
+  1054→  1054→  currentPrice: number,
+  1055→  1055→  overlapCount: number,
+  1056→  1056→): number[] {
+  1057→  1057→  const lookback = Math.min(30, endIdx);
+  1058→  1058→  const startIdx = endIdx - lookback;
+  1059→  1059→  const touchTol = currentPrice * 0.002; // 0.2%
+  1060→  1060→
+  1061→  1061→  let touchCount = 0;
+  1062→  1062→  let totalVolAtTouches = 0;
+  1063→  1063→  let totalVol = 0;
+  1064→  1064→  let barsSinceLastTouch = lookback;
+  1065→  1065→
+  1066→  1066→  for (let i = startIdx; i <= endIdx; i++) {
+  1067→  1067→    const bar = data[i];
+  1068→  1068→    totalVol += bar.volume;
+  1069→  1069→
+  1070→  1070→    if (bar.low <= levelPrice + touchTol && bar.high >= levelPrice - touchTol) {
+  1071→  1071→      touchCount++;
+  1072→  1072→      totalVolAtTouches += bar.volume;
+  1073→  1073→      barsSinceLastTouch = endIdx - i;
+  1074→  1074→    }
+  1075→  1075→  }
+  1076→  1076→
+  1077→  1077→  const avgVol = lookback > 0 ? totalVol / lookback : 0;
+  1078→  1078→  const volumeRatio = (touchCount > 0 && avgVol > 0) ? (totalVolAtTouches / touchCount) / avgVol : 1;
+  1079→  1079→  const freshness = Math.max(0, Math.min(1, 1 - barsSinceLastTouch / 30));
+  1080→  1080→  const distancePercent = Math.min(1, Math.abs(levelPrice - currentPrice) / currentPrice);
+  1081→  1081→
+  1082→  1082→  // Features: [touch_count, volume_ratio, overlap_count, freshness, distance_percent]
+  1083→  1083→  return [touchCount, volumeRatio, overlapCount - 1, freshness, distancePercent];
+  1084→  1084→}
+  1085→  1085→
+  1086→  1086→// ─── Helper: Train S/R Scoring Weights (Ridge OLS) ───────────────────────
+  1087→  1087→function trainSRWeights(data: OHLCV[]): number[] {
+  1088→  1088→  const defaultWeights = [0.25, 0.20, 0.25, 0.15, 0.15];
+  1089→  1089→
+  1090→  1090→  if (data.length < 50) return defaultWeights;
+  1091→  1091→
+  1092→  1092→  const X: number[][] = [];
+  1093→  1093→  const y: number[] = [];
+  1094→  1094→
+  1095→  1095→  for (let i = 40; i <= data.length - 11; i += 5) {
+  1096→  1096→    const barPrice = data[i].close;
+  1097→  1097→    const rawLevels = generateAllLevels(data, i);
+  1098→  1098→    if (rawLevels.length === 0) continue;
+  1099→  1099→    const merged = mergeLevels(rawLevels, barPrice);
+  1100→  1100→
+  1101→  1101→    for (const level of merged) {
+  1102→  1102→      const features = computeLevelFeatures(level.price, data, i, barPrice, level.overlapCount);
+  1103→  1103→      X.push(features);
+  1104→  1104→
+  1105→  1105→      // Label: did price return within 10 bars?
+  1106→  1106→      let returned = false;
+  1107→  1107→      const retTol = barPrice * 0.005;
+  1108→  1108→      for (let j = i + 1; j <= Math.min(i + 10, data.length - 1); j++) {
+  1109→  1109→        if (data[j].low <= level.price + retTol && data[j].high >= level.price - retTol) {
+  1110→  1110→          returned = true;
+  1111→  1111→          break;
+  1112→  1112→        }
+  1113→  1113→      }
+  1114→  1114→      y.push(returned ? 1 : 0);
+  1115→  1115→    }
+  1116→  1116→  }
+  1117→  1117→
+  1118→  1118→  if (X.length < 20) return defaultWeights;
+  1119→  1119→
+  1120→  1120→  // Ridge OLS: w = (X^T X + λI)^(-1) X^T y
+  1121→  1121→  const n = X.length;
+  1122→  1122→  const p = 5;
+  1123→  1123→  const lambda = 0.01;
+  1124→  1124→
+  1125→  1125→  const XtX: number[][] = Array.from({ length: p }, () => new Array(p).fill(0));
+  1126→  1126→  for (let i = 0; i < n; i++) {
+  1127→  1127→    for (let a = 0; a < p; a++) {
+  1128→  1128→      for (let b = 0; b < p; b++) {
+  1129→  1129→        XtX[a][b] += X[i][a] * X[i][b];
+  1130→  1130→      }
+  1131→  1131→    }
+  1132→  1132→  }
+  1133→  1133→  for (let a = 0; a < p; a++) XtX[a][a] += lambda;
+  1134→  1134→
+  1135→  1135→  const Xty: number[] = new Array(p).fill(0);
+  1136→  1136→  for (let i = 0; i < n; i++) {
+  1137→  1137→    for (let a = 0; a < p; a++) {
+  1138→  1138→      Xty[a] += X[i][a] * y[i];
+  1139→  1139→    }
+  1140→  1140→  }
+  1141→  1141→
+  1142→  1142→  const weights = solveLinearSystem(XtX, Xty);
+  1143→  1143→  if (!weights) return defaultWeights;
+  1144→  1144→  if (weights.some(w => isNaN(w) || !isFinite(w))) return defaultWeights;
+  1145→  1145→
+  1146→  1146→  for (let i = 0; i < p; i++) {
+  1147→  1147→    if (weights[i] < 0) weights[i] = 0;
+  1148→  1148→  }
+  1149→  1149→
+  1150→  1150→  const sum = weights.reduce((a, b) => a + b, 0);
+  1151→  1151→  if (sum <= 0) return defaultWeights;
+  1152→  1152→
+  1153→  1153→  return weights.map(w => w / sum);
+  1154→  1154→}
+  1155→  1155→
+  1156→  1156→// ─── Support / Resistance (7-Method ML-Based System) ─────────────────────
+  1157→  1157→function calcSupportResistance(data: OHLCV[], currentPrice: number): {
+  1158→  1158→  resistances: number[];
+  1159→  1159→  supports: number[];
+  1160→  1160→  supportStrengths: LevelStrength[];
+  1161→  1161→  resistanceStrengths: LevelStrength[];
+  1162→  1162→  priceTargets: LevelStrength[];
+  1163→  1163→} {
+  1164→  1164→  if (data.length < 10) {
+  1165→  1165→    return {
+  1166→  1166→      resistances: [], supports: [],
+  1167→  1167→      supportStrengths: [], resistanceStrengths: [],
+  1168→  1168→      priceTargets: [],
+  1169→  1169→    };
+  1170→  1170→  }
+  1171→  1171→
+  1172→  1172→  // ── Step 1: Generate all levels from 7 methods ────────────────────────
+  1173→  1173→  const rawLevels = generateAllLevels(data, data.length - 1);
+  1174→  1174→
+  1175→  1175→  // ── Step 2: Merge nearby levels (confluence within 1%) ────────────────
+  1176→  1176→  let merged = mergeLevels(rawLevels, currentPrice);
+  1177→  1177→
+  1178→  1178→  // ── Step 3: Train ML weights on historical data ───────────────────────
+  1179→  1179→  const weights = trainSRWeights(data);
+  1180→  1180→
+  1181→  1181→  // ── Step 4: Compute features & score each merged level ────────────────
+  1182→  1182→  for (const level of merged) {
+  1183→  1183→    const features = computeLevelFeatures(level.price, data, data.length - 1, currentPrice, level.overlapCount);
+  1184→  1184→
+  1185→  1185→    const touchScore = Math.min(features[0] / 5, 1);
+  1186→  1186→    const volumeScore = Math.min(features[1] / 2, 1);
+  1187→  1187→    const overlapScore = Math.min(features[2] * 2, 10) / 10;
+  1188→  1188→    const freshnessScore = features[3];
+  1189→  1189→    const distanceScore = 1 - features[4];
+  1190→  1190→
+  1191→  1191→    const powerScore = (
+  1192→  1192→      weights[0] * touchScore +
+  1193→  1193→      weights[1] * volumeScore +
+  1194→  1194→      weights[2] * overlapScore +
+  1195→  1195→      weights[3] * freshnessScore +
+  1196→  1196→      weights[4] * distanceScore
+  1197→  1197→    ) * 10;
+  1198→  1198→
+  1199→  1199→    level.score = Math.max(0, Math.min(10, powerScore));
+  1200→  1200→    level.strength = Math.max(1, Math.min(10, Math.round(level.score)));
+  1201→  1201→    level.touchCount = features[0];
+  1202→  1202→    level.volumeRatio = features[1];
+  1203→  1203→    level.freshness = features[3];
+  1204→  1204→    level.distancePercent = features[4];
+  1205→  1205→  }
+  1206→  1206→
+  1207→  1207→  // ── Step 5: Psychological rounding of all level prices ─────────────────
+  1208→  1208→  for (const level of merged) {
+  1209→  1209→    level.price = psychRound(level.price);
+  1210→  1210→  }
+  1211→  1211→
+  1212→  1212→  // Re-classify types after rounding
+  1213→  1213→  for (const level of merged) {
+  1214→  1214→    level.type = level.price >= currentPrice ? 'resistance' : 'support';
+  1215→  1215→  }
+  1216→  1216→
+  1217→  1217→  // Deduplicate after rounding (keep strongest at same price)
+  1218→  1218→  {
+  1219→  1219→    const deduped: MergedSRLevel[] = [];
+  1220→  1220→    for (const level of merged) {
+  1221→  1221→      const existing = deduped.find(d => Math.abs(d.price - level.price) < currentPrice * 0.001);
+  1222→  1222→      if (existing) {
+  1223→  1223→        if (level.score > existing.score) {
+  1224→  1224→          Object.assign(existing, level);
+  1225→  1225→        }
+  1226→  1226→      } else {
+  1227→  1227→        deduped.push(level);
+  1228→  1228→      }
+  1229→  1229→    }
+  1230→  1230→    merged = deduped;
+  1231→  1231→  }
+  1232→  1232→
+  1233→  1233→  // ── Step 6: Separate into supports and resistances ─────────────────────
+  1234→  1234→  let supports = merged.filter(l => l.type === 'support');
+  1235→  1235→  let resistances = merged.filter(l => l.type === 'resistance');
+  1236→  1236→
+  1237→  1237→  // ── Step 7: Distance filtering (strict 5-10% gap rules) ─────────────
+  1238→  1238→  // Rules:
+  1239→  1239→  //   1. Consecutive lines of same type: 5% ≤ gap ≤ 10%
+  1240→  1240→  //   2. Nearest support ≤ 10% below price (can be < 5%)
+  1241→  1241→  //   3. Nearest resistance ≤ 10% above price (can be < 5%)
+  1242→  1242→
+  1243→  1243→  const filterAndSelectLevels = (
+  1244→  1244→    levels: MergedSRLevel[],
+  1245→  1245→    type: 'support' | 'resistance'
+  1246→  1246→  ): MergedSRLevel[] => {
+  1247→  1247→    if (levels.length === 0) return [];
+  1248→  1248→
+  1249→  1249→    // Sort: supports descending (nearest first), resistances ascending (nearest first)
+  1250→  1250→    const sorted = [...levels].sort((a, b) =>
+  1251→  1251→      type === 'support' ? b.price - a.price : a.price - b.price
+  1252→  1252→    );
+  1253→  1253→
+  1254→  1254→    // ── Rule 2/3: Nearest level must be within 10% of price ──
+  1255→  1255→    const nearest = sorted[0];
+  1256→  1256→    const distFromPrice = Math.abs(nearest.price - currentPrice) / currentPrice;
+  1257→  1257→    if (distFromPrice > 0.10) {
+  1258→  1258→      // Nearest level is too far — generate a synthetic level at ~5% from price
+  1259→  1259→      const syntheticPrice = type === 'support'
+  1260→  1260→        ? Math.round(currentPrice * 0.95 / psychStep(currentPrice)) * psychStep(currentPrice)
+  1261→  1261→        : Math.round(currentPrice * 1.05 / psychStep(currentPrice)) * psychStep(currentPrice);
+  1262→  1262→      const synthetic: MergedSRLevel = {
+  1263→  1263→        price: syntheticPrice,
+  1264→  1264→        type,
+  1265→  1265→        score: 3,
+  1266→  1266→        strength: 3,
+  1267→  1267→        overlapCount: 1,
+  1268→  1268→        methods: ['Psychological'],
+  1269→  1269→        fibRatio: '—',
+  1270→  1270→        fibLabel: '',
+  1271→  1271→      };
+  1272→  1272→      sorted.unshift(synthetic);
+  1273→  1273→    }
+  1274→  1274→
+  1275→  1275→    // ── Rule 1: Select levels with 5-10% gaps between consecutive ──
+  1276→  1276→    const result: MergedSRLevel[] = [sorted[0]];
+  1277→  1277→
+  1278→  1278→    for (let i = 1; i < sorted.length && result.length < 6; i++) {
+  1279→  1279→      const prevPrice = result[result.length - 1].price;
+  1280→  1280→      const currPrice = sorted[i].price;
+  1281→  1281→      const gap = Math.abs(currPrice - prevPrice) / prevPrice;
+  1282→  1282→
+  1283→  1283→      if (gap < 0.05) {
+  1284→  1284→        // Too close — keep the stronger one
+  1285→  1285→        if (sorted[i].score > result[result.length - 1].score) {
+  1286→  1286→          result[result.length - 1] = sorted[i];
+  1287→  1287→        }
+  1288→  1288→      } else if (gap <= 0.10) {
+  1289→  1289→        // Perfect gap (5-10%) — accept
+  1290→  1290→        result.push(sorted[i]);
+  1291→  1291→      } else {
+  1292→  1292→        // Gap > 10% — try to find an intermediate level
+  1293→  1293→        let found = false;
+  1294→  1294→        for (let j = i + 1; j < sorted.length; j++) {
+  1295→  1295→          const midPrice = sorted[j].price;
+  1296→  1296→          const gapFromPrev = Math.abs(midPrice - prevPrice) / prevPrice;
+  1297→  1297→          const gapToNext = Math.abs(currPrice - midPrice) / midPrice;
+  1298→  1298→          if (gapFromPrev >= 0.05 && gapFromPrev <= 0.10) {
+  1299→  1299→            result.push(sorted[j]);
+  1300→  1300→            found = true;
+  1301→  1301→            // Skip levels that are too close to the inserted one
+  1302→  1302→            i = j;
+  1303→  1303→            break;
+  1304→  1304→          }
+  1305→  1305→        }
+  1306→  1306→        if (!found) {
+  1307→  1307→          // No intermediate found — generate a synthetic level at ~7.5% from prev
+  1308→  1308→          const synthGap = 0.075;
+  1309→  1309→          const syntheticPrice = type === 'support'
+  1310→  1310→            ? Math.round((prevPrice * (1 - synthGap)) / psychStep(prevPrice)) * psychStep(prevPrice)
+  1311→  1311→            : Math.round((prevPrice * (1 + synthGap)) / psychStep(prevPrice)) * psychStep(prevPrice);
+  1312→  1312→          // Make sure it's not too close to next level
+  1313→  1313→          const gapToNext = Math.abs(currPrice - syntheticPrice) / syntheticPrice;
+  1314→  1314→          if (gapToNext >= 0.05) {
+  1315→  1315→            const synthetic: MergedSRLevel = {
+  1316→  1316→              price: syntheticPrice,
+  1317→  1317→              type,
+  1318→  1318→              score: 2,
+  1319→  1319→              strength: 2,
+  1320→  1320→              overlapCount: 1,
+  1321→  1321→              methods: ['Psychological'],
+  1322→  1322→              fibRatio: '—',
+  1323→  1323→              fibLabel: '',
+  1324→  1324→            };
+  1325→  1325→            result.push(synthetic);
+  1326→  1326→          }
+  1327→  1327→        }
+  1328→  1328→      }
+  1329→  1329→    }
+  1330→  1330→
+  1331→  1331→    return result;
+  1332→  1332→  };
+  1333→  1333→
+  1334→  1334→  const finalSupports = filterAndSelectLevels(supports, 'support');
+  1335→  1335→  const finalResistances = filterAndSelectLevels(resistances, 'resistance');
+  1336→  1336→
+  1337→  1337→  // ── Step 9: Build LevelStrength objects ────────────────────────────────
+  1338→  1338→  const toLevelStrength = (m: MergedSRLevel): LevelStrength => {
+  1339→  1339→    let grade: string;
+  1340→  1340→    if (m.score >= 8.5) grade = 'Very Strong';
+  1341→  1341→    else if (m.score >= 7) grade = 'Strong';
+  1342→  1342→    else if (m.score >= 5) grade = 'Moderate';
+  1343→  1343→    else grade = 'Weak';
+  1344→  1344→
+  1345→  1345→    return {
+  1346→  1346→      price: m.price,
+  1347→  1347→      strength: m.strength,
+  1348→  1348→      score: m.score,
+  1349→  1349→      grade,
+  1350→  1350→      isTarget: m.score >= 7,
+  1351→  1351→      overlapCount: m.overlapCount,
+  1352→  1352→      methods: m.methods,
+  1353→  1353→      fibRatio: m.fibRatio,
+  1354→  1354→      fibLabel: m.fibLabel,
+  1355→  1355→    };
+  1356→  1356→  };
+  1357→  1357→
+  1358→  1358→  const supportStrengths = finalSupports.map(toLevelStrength);
+  1359→  1359→  const resistanceStrengths = finalResistances.map(toLevelStrength);
+  1360→  1360→
+  1361→  1361→  // Price targets: all levels with isTarget=true
+  1362→  1362→  const priceTargets = [...supportStrengths, ...resistanceStrengths].filter(l => l.isTarget);
+  1363→  1363→
+  1364→  1364→  return {
+  1365→  1365→    resistances: resistanceStrengths.map(l => l.price),
+  1366→  1366→    supports: supportStrengths.map(l => l.price),
+  1367→  1367→    supportStrengths,
+  1368→  1368→    resistanceStrengths,
+  1369→  1369→    priceTargets,
+  1370→  1370→  };
+  1371→  1371→}
+  1372→  1372→
+  1373→  1373→
+  1374→  1374→// ─── Trend Analysis ───────────────────────────────────────────────────────────
+  1375→  1375→function calcTrend(closes: number[], period: number): TrendResult {
+  1376→  1376→  const slice = closes.slice(-Math.min(period, closes.length));
+  1377→  1377→  const { slope, r2 } = linearRegression(slice);
+  1378→  1378→  const avgPrice = slice.reduce((a, b) => a + b, 0) / slice.length;
+  1379→  1379→  const angle = avgPrice === 0 ? 0 : Math.atan(slope / avgPrice) * (180 / Math.PI);
+  1380→  1380→  const priceThreshold = avgPrice * 0.001; // 0.1%
+  1381→  1381→  const direction = slope > priceThreshold ? 'up' : slope < -priceThreshold ? 'down' : 'flat';
+  1382→  1382→  return { direction, slope, angle, r2: Math.max(0, Math.min(1, r2)) };
+  1383→  1383→}
+  1384→  1384→
+  1385→  1385→
+  1386→  1386→// ═══════════════════════════════════════════════════════════════════════════════
+  1387→  1387→// VDss 7-LAYER PROBABILITY ENGINE
+  1388→  1388→// ═══════════════════════════════════════════════════════════════════════════════
+  1389→  1389→
+  1390→  1390→// ─── Helper: simplified S/R at a historical bar using swing levels ─────────────
+  1391→  1391→function simplifiedSR(data: OHLCV[], barIdx: number): { R1: number; S1: number } {
+  1392→  1392→  const slice = data.slice(0, barIdx + 1);
+  1393→  1393→  const price = slice[slice.length - 1].close;
+  1394→  1394→  let nearestR = price * 1.05;
+  1395→  1395→  let nearestS = price * 0.95;
+  1396→  1396→
+  1397→  1397→  // Collect all swing highs (resistance) and swing lows (support)
+  1398→  1398→  const resistances: number[] = [];
+  1399→  1399→  const supports: number[] = [];
+  1400→  1400→  for (const lb of [3, 5, 7]) {
+  1401→  1401→    const swings = findSwingLevels(slice, lb);
+  1402→  1402→    resistances.push(...swings.highs);
+  1403→  1403→    supports.push(...swings.lows);
+  1404→  1404→  }
+  1405→  1405→
+  1406→  1406→  // Find nearest resistance above price
+  1407→  1407→  const abovePrice = resistances.filter(r => r > price).sort((a, b) => a - b);
+  1408→  1408→  if (abovePrice.length > 0) nearestR = abovePrice[0];
+  1409→  1409→
+  1410→  1410→  // Find nearest support below price
+  1411→  1411→  const belowPrice = supports.filter(s => s < price).sort((a, b) => b - a);
+  1412→  1412→  if (belowPrice.length > 0) nearestS = belowPrice[0];
+  1413→  1413→
+  1414→  1414→  return { R1: nearestR, S1: nearestS };
+  1415→  1415→}
+  1416→  1416→
+  1417→  1417→// ─── Helper: divergence detection on last 20 bars (SIMPLIFIED for speed) ───────
+  1418→  1418→// Returns true if bullish divergence detected, false if bearish, null if none
+  1419→  1419→function detectDivergenceSimple(data: OHLCV[], barIdx: number): boolean | null {
+  1420→  1420→  const lookback = 20;
+  1421→  1421→  const start = Math.max(0, barIdx - lookback);
+  1422→  1422→  const slice = data.slice(start, barIdx + 1);
+  1423→  1423→  if (slice.length < 10) return null;
+  1424→  1424→
+  1425→  1425→  const mid = Math.floor(slice.length / 2);
+  1426→  1426→  const firstHalf = slice.slice(0, mid);
+  1427→  1427→  const secondHalf = slice.slice(mid);
+  1428→  1428→
+  1429→  1429→  const priceHigh1 = Math.max(...firstHalf.map(d => d.high));
+  1430→  1430→  const priceHigh2 = Math.max(...secondHalf.map(d => d.high));
+  1431→  1431→  const priceLow1 = Math.min(...firstHalf.map(d => d.low));
+  1432→  1432→  const priceLow2 = Math.min(...secondHalf.map(d => d.low));
+  1433→  1433→
+  1434→  1434→  // Bearish divergence: price higher high but RSI proxy (MFI-like) lower
+  1435→  1435→  // Use close/avg ratio as simple momentum proxy instead of computing full RSI
+  1436→  1436→  const avgClose1 = firstHalf.reduce((s, d) => s + d.close, 0) / firstHalf.length;
+  1437→  1437→  const avgClose2 = secondHalf.reduce((s, d) => s + d.close, 0) / secondHalf.length;
+  1438→  1438→  const momentum1 = priceHigh1 > 0 ? (priceHigh1 - avgClose1) / priceHigh1 : 0;
+  1439→  1439→  const momentum2 = priceHigh2 > 0 ? (priceHigh2 - avgClose2) / priceHigh2 : 0;
+  1440→  1440→
+  1441→  1441→  if (priceHigh2 > priceHigh1 && momentum2 < momentum1 * 0.8) {
+  1442→  1442→    return false; // bearish divergence
+  1443→  1443→  }
+  1444→  1444→
+  1445→  1445→  const negMomentum1 = avgClose1 > 0 ? (avgClose1 - priceLow1) / avgClose1 : 0;
+  1446→  1446→  const negMomentum2 = avgClose2 > 0 ? (avgClose2 - priceLow2) / avgClose2 : 0;
+  1447→  1447→
+  1448→  1448→  if (priceLow2 < priceLow1 && negMomentum2 < negMomentum1 * 0.8) {
+  1449→  1449→    return true; // bullish divergence
+  1450→  1450→  }
+  1451→  1451→
+  1452→  1452→  return null;
+  1453→  1453→}
+  1454→  1454→
+  1455→  1455→// ═══════════════════════════════════════════════════════════════════════════════
+  1456→  1456→// LAYER 1 & 2 — Feature Computation at a Historical Bar
+  1457→  1457→// ═══════════════════════════════════════════════════════════════════════════════
+  1458→  1458→
+  1459→  1459→/**
+  1460→  1460→ * Computes all 16 ML features at a specific historical bar.
+  1461→  1461→ * Uses data[0..barIdx] (inclusive) for all indicator calculations.
+  1462→  1462→ * Returns an object keyed by feature name matching FEATURES_ORDER.
+  1463→  1463→ */
+  1464→  1464→function computeFeaturesAtBar(data: OHLCV[], barIdx: number): Record<string, number> {
+  1465→  1465→  // Need at least 30 bars for meaningful indicators
+  1466→  1466→  if (barIdx < 30) {
+  1467→  1467→    const empty: Record<string, number> = {};
+  1468→  1468→    for (const key of FEATURES_ORDER) empty[key] = 0.5;
+  1469→  1469→    return empty;
+  1470→  1470→  }
+  1471→  1471→
+  1472→  1472→  const slice = data.slice(0, barIdx + 1);
+  1473→  1473→  const closes = slice.map(d => d.close);
+  1474→  1474→  const price = closes[closes.length - 1];
+  1475→  1475→  const eps = 1e-10;
+  1476→  1476→
+  1477→  1477→  // ── Compute all base indicators ───────────────────────────────────────────
+  1478→  1478→  const rsiVal = calcRSI(closes);
+  1479→  1479→  const sliceHasVolume = slice.some(d => d.volume > 0);
+  1480→  1480→  const mfiVal = sliceHasVolume ? calcMFI(slice) : 50; // neutral when no volume
+  1481→  1481→  const cciVal = calcCCI(slice);
+  1482→  1482→  const stoch = calcStochastic(slice);
+  1483→  1483→  const macd = calcMACD(closes);
+  1484→  1484→  const adxResult = calcADX(slice);
+  1485→  1485→  const atrVal = calcATR(slice);
+  1486→  1486→  const bb = calcBollingerBands(closes);
+  1487→  1487→  const ma21 = sma(closes, 21);
+  1488→  1488→  const ma100 = sma(closes, 100);
+  1489→  1489→  const ema12 = emaCalc(closes, 12);
+  1490→  1490→  const ema26 = emaCalc(closes, 26);
+  1491→  1491→  const trendResult = calcTrend(closes, 21);
+  1492→  1492→  const sr = simplifiedSR(data, barIdx);
+  1493→  1493→
+  1494→  1494→  // ── Layer 1: Raw Scores (s_*) ────────────────────────────────────────────
+  1495→  1495→
+  1496→  1496→  // s_rsi — RSI mapped to 0-1
+  1497→  1497→  const s_rsi = rsiVal > 80 ? 0.95
+  1498→  1498→    : rsiVal > 70 ? 0.85
+  1499→  1499→    : rsiVal > 60 ? 0.70
+  1500→  1500→    : rsiVal > 50 ? 0.55
+  1501→  1501→    : rsiVal > 40 ? 0.45
+  1502→  1502→    : rsiVal > 30 ? 0.30
+  1503→  1503→    : rsiVal > 20 ? 0.15
+  1504→  1504→    : 0.05;
+  1505→  1505→
+  1506→  1506→  // s_mfi — MFI mapped to 0-1 (same formula as RSI)
+  1507→  1507→  const s_mfi = mfiVal > 80 ? 0.95
+  1508→  1508→    : mfiVal > 70 ? 0.85
+  1509→  1509→    : mfiVal > 60 ? 0.70
+  1510→  1510→    : mfiVal > 50 ? 0.55
+  1511→  1511→    : mfiVal > 40 ? 0.45
+  1512→  1512→    : mfiVal > 30 ? 0.30
+  1513→  1513→    : mfiVal > 20 ? 0.15
+  1514→  1514→    : 0.05;
+  1515→  1515→
+  1516→  1516→  // s_cci — CCI mapped to 0-1
+  1517→  1517→  const s_cci = cciVal > 200 ? 0.90
+  1518→  1518→    : cciVal > 100 ? 0.75
+  1519→  1519→    : cciVal > 0 ? 0.60
+  1520→  1520→    : cciVal > -100 ? 0.40
+  1521→  1521→    : cciVal > -200 ? 0.25
+  1522→  1522→    : 0.10;
+  1523→  1523→
+  1524→  1524→  // s_adx — Directional bias
+  1525→  1525→  const s_adx = (adxResult.diPlus - adxResult.diMinus + 100) / 200;
+  1526→  1526→
+  1527→  1527→  // s_macd — MACD histogram + signal combined
+  1528→  1528→  const absMacdLine = Math.abs(macd.line) + 1;
+  1529→  1529→  const s_macd = macd.line > macd.signal
+  1530→  1530→    ? 0.5 + Math.min(0.5, macd.histogram / absMacdLine)
+  1531→  1531→    : 0.5 - Math.min(0.5, Math.abs(macd.histogram) / absMacdLine);
+  1532→  1532→
+  1533→  1533→  // s_stoch — Stochastic %K mapped to 0-1
+  1534→  1534→  const s_stoch = stoch.k / 100;
+  1535→  1535→
+  1536→  1536→  // s_bb — Bollinger Band position
+  1537→  1537→  const bbRange = bb.upper - bb.lower;
+  1538→  1538→  const s_bb = bbRange > eps
+  1539→  1539→    ? clamp((price - bb.lower) / bbRange, 0, 1)
+  1540→  1540→    : 0.5;
+  1541→  1541→
+  1542→  1542→  // s_ma21 — Price relative to 21-period SMA
+  1543→  1543→  const s_ma21 = ma21 > eps
+  1544→  1544→    ? clamp(0.5 + (price - ma21) / ma21, 0, 1)
+  1545→  1545→    : 0.5;
+  1546→  1546→
+  1547→  1547→  // s_ma100 — Price relative to 100-period SMA
+  1548→  1548→  const s_ma100 = ma100 > eps
+  1549→  1549→    ? clamp(0.5 + (price - ma100) / ma100, 0, 1)
+  1550→  1550→    : 0.5;
+  1551→  1551→
+  1552→  1552→  // s_ema — EMA12 vs EMA26 spread
+  1553→  1553→  const s_ema = ema26 > eps
+  1554→  1554→    ? clamp(0.5 + (ema12 - ema26) / ema26 * 5, 0, 1)
+  1555→  1555→    : 0.5;
+  1556→  1556→
+  1557→  1557→  // s_atr — Inverse volatility (lower ATR = higher score)
+  1558→  1558→  const s_atr = price > eps ? 1 - Math.min(atrVal / price * 10, 1) : 0.5;
+  1559→  1559→
+  1560→  1560→  // s_trend — R² + angle combination
+  1561→  1561→  const s_trend = (trendResult.r2 * 0.7) +
+  1562→  1562→    (Math.max(0, Math.min(1, (trendResult.angle + 45) / 90)) * 0.3);
+  1563→  1563→
+  1564→  1564→  // s_sr — Support/Resistance proximity
+  1565→  1565→  const dR1 = (sr.R1 - price) / (price > eps ? price : 1);
+  1566→  1566→  const dS1 = (price - sr.S1) / (price > eps ? price : 1);
+  1567→  1567→  const s_sr = clamp(0.5 - dR1 * 1.5 + dS1 * 1.0, 0, 1);
+  1568→  1568→
+  1569→  1569→  // ── Layer 2: Corrections (f_*) ───────────────────────────────────────────
+  1570→  1570→
+  1571→  1571→  // f_rsi — RSI with momentum correction
+  1572→  1572→  const rsiCurrent = rsiVal;
+  1573→  1573→  const rsi5ago = barIdx >= 5
+  1574→  1574→    ? calcRSI(closes.slice(0, barIdx - 5 + 1))
+  1575→  1575→    : rsiCurrent;
+  1576→  1576→  const f_rsi = clamp(s_rsi + (rsiCurrent - rsi5ago) / 100 * 0.08, 0, 1);
+  1577→  1577→
+  1578→  1578→  // f_mfi — MFI with momentum correction (skip when no volume)
+  1579→  1579→  const mfiCurrent = mfiVal;
+  1580→  1580→  const mfi5ago = (barIdx >= 5 && sliceHasVolume)
+  1581→  1581→    ? calcMFI(data.slice(0, barIdx - 5 + 1))
+  1582→  1582→    : mfiCurrent;
+  1583→  1583→  const f_mfi = sliceHasVolume
+  1584→  1584→    ? clamp(s_mfi + (mfiCurrent - mfi5ago) / 100 * 0.08, 0, 1)
+  1585→  1585→    : 0.5; // neutral when no volume
+  1586→  1586→
+  1587→  1587→  // f_cci — CCI with momentum correction (scale: /200 instead of /100)
+  1588→  1588→  const cciCurrent = cciVal;
+  1589→  1589→  const cci5ago = barIdx >= 5
+  1590→  1590→    ? calcCCI(data.slice(0, barIdx - 5 + 1))
+  1591→  1591→    : cciCurrent;
+  1592→  1592→  const f_cci = clamp(s_cci + (cciCurrent - cci5ago) / 200 * 0.08, 0, 1);
+  1593→  1593→
+  1594→  1594→  // f_macd — Same as s_macd (no additional correction)
+  1595→  1595→  const f_macd = s_macd;
+  1596→  1596→
+  1597→  1597→  // f_stoch — Same as s_stoch
+  1598→  1598→  const f_stoch = s_stoch;
+  1599→  1599→
+  1600→  1600→  // f_stochCross — Stochastic K/D crossover detection
+  1601→  1601→  let f_stochCross = 0.1;
+  1602→  1602→  if (barIdx >= 1) {
+  1603→  1603→    const prevSlice = data.slice(0, barIdx);
+  1604→  1604→    const prevStoch = calcStochastic(prevSlice);
+  1605→  1605→    if (prevStoch.k < prevStoch.d && stoch.k > stoch.d) {
+  1606→  1606→      f_stochCross = 0.9; // K crossed above D (bullish)
+  1607→  1607→    }
+  1608→  1608→  }
+  1609→  1609→
+  1610→  1610→  // f_macdCross — MACD/Signal crossover detection
+  1611→  1611→  let f_macdCross = 0.1;
+  1612→  1612→  if (barIdx >= 1) {
+  1613→  1613→    const prevCloses = closes.slice(0, -1);
+  1614→  1614→    if (prevCloses.length >= 35) {
+  1615→  1615→      const prevMacd = calcMACD(prevCloses);
+  1616→  1616→      if (prevMacd.line <= prevMacd.signal && macd.line > macd.signal) {
+  1617→  1617→        f_macdCross = 0.9; // MACD crossed above signal (bullish)
+  1618→  1618→      }
+  1619→  1619→    }
+  1620→  1620→  }
+  1621→  1621→
+  1622→  1622→  // f_div — Divergence detection (bullish div = 0.85, else 0.15)
+  1623→  1623→  const divResult = detectDivergenceSimple(data, barIdx);
+  1624→  1624→  const f_div = divResult === true ? 0.85 : 0.15;
+  1625→  1625→
+  1626→  1626→  // ── Assemble feature vector matching FEATURES_ORDER ──────────────────────
+  1627→  1627→  return {
+  1628→  1628→    rsi: f_rsi,
+  1629→  1629→    mfi: f_mfi,
+  1630→  1630→    cci: f_cci,
+  1631→  1631→    adx: s_adx,
+  1632→  1632→    macd: f_macd,
+  1633→  1633→    stoch: f_stoch,
+  1634→  1634→    bb: s_bb,
+  1635→  1635→    ma21: s_ma21,
+  1636→  1636→    ma100: s_ma100,
+  1637→  1637→    ema: s_ema,
+  1638→  1638→    atr: s_atr,
+  1639→  1639→    trend: s_trend,
+  1640→  1640→    sr: s_sr,
+  1641→  1641→    stochCross: f_stochCross,
+  1642→  1642→    macdCross: f_macdCross,
+  1643→  1643→    div: f_div,
+  1644→  1644→  };
+  1645→  1645→}
+  1646→  1646→
+  1647→  1647→// ═══════════════════════════════════════════════════════════════════════════════
+  1648→  1648→// TRAINING DATA CREATION (Layer 0 — Data Preparation)
+  1649→  1649→// ═══════════════════════════════════════════════════════════════════════════════
+  1650→  1650→
+  1651→  1651→/**
+  1652→  1652→ * Creates supervised training data from historical OHLCV data.
+  1653→  1653→ * For each bar, computes features and labels based on future price movement.
+  1654→  1654→ * Label = 1 if price rises >1% within `horizon` bars, else 0.
+  1655→  1655→ * Samples every `sampleStep` bars to reduce computation.
+  1656→  1656→ */
+  1657→  1657→function createTrainingData(
+  1658→  1658→  data: OHLCV[],
+  1659→  1659→  horizon: number = 5,
+  1660→  1660→  sampleStep: number = 5
+  1661→  1661→): { X: number[][]; y: number[] } {
+  1662→  1662→  const X: number[][] = [];
+  1663→  1663→  const y: number[] = [];
+  1664→  1664→
+  1665→  1665→  // Start from horizon+30 to ensure enough data for indicators
+  1666→  1666→  // End at data.length - horizon - 1 to have future bars for labeling
+  1667→  1667→  // Sample every sampleStep bars for performance
+  1668→  1668→  for (let i = horizon + 30; i < data.length - horizon - 1; i += sampleStep) {
+  1669→  1669→    const features = computeFeaturesAtBar(data, i);
+  1670→  1670→
+  1671→  1671→    // Convert to array following FEATURES_ORDER
+  1672→  1672→    const featureVec: number[] = [];
+  1673→  1673→    let valid = true;
+  1674→  1674→    for (const key of FEATURES_ORDER) {
+  1675→  1675→      const val = features[key];
+  1676→  1676→      if (val === undefined || val === null || Number.isNaN(val)) {
+  1677→  1677→        valid = false;
+  1678→  1678→        break;
+  1679→  1679→      }
+  1680→  1680→      featureVec.push(val);
+  1681→  1681→    }
+  1682→  1682→    if (!valid) continue;
+  1683→  1683→
+  1684→  1684→    // Label: 1 if future close > 1% above current close
+  1685→  1685→    const currentClose = data[i].close;
+  1686→  1686→    const futureClose = data[i + horizon].close;
+  1687→  1687→    const label = futureClose > currentClose * 1.01 ? 1 : 0;
+  1688→  1688→
+  1689→  1689→    X.push(featureVec);
+  1690→  1690→    y.push(label);
+  1691→  1691→  }
+  1692→  1692→
+  1693→  1693→  return { X, y };
+  1694→  1694→}
+  1695→  1695→
+  1696→  1696→// ═══════════════════════════════════════════════════════════════════════════════
+  1697→  1697→// VDss GRAPH STRUCTURE (Layer 5 — State Machine)
+  1698→  1698→// ═══════════════════════════════════════════════════════════════════════════════
+  1699→  1699→
+  1700→  1700→/**
+  1701→  1701→ * VDss Graph: Each node represents a market state.
+  1702→  1702→ * Edges represent transitions with types: 'up', 'down', 'pullback', 'risk', 'terminal'.
+  1703→  1703→ * Terminal nodes map to scenario results (R1=strong bullish, R5=deep correction).
+  1704→  1704→ */
+  1705→  1705→const VDSS_GRAPH = {
+  1706→  1706→  // outgoing edges from each node: [target, type]
+  1707→  1707→  outgoing: {
+  1708→  1708→    A: [['B', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
+  1709→  1709→    B: [['C', 'up'], ['G', 'pullback'], ['A', 'risk'], ['R3', 'terminal']] as [string, string][],
+  1710→  1710→    C: [['D', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
+  1711→  1711→    D: [['E', 'up'], ['B', 'pullback'], ['G', 'pullback'], ['L', 'risk'], ['R3', 'terminal']] as [string, string][],
+  1712→  1712→    E: [['F', 'up'], ['D', 'pullback'], ['G', 'pullback'], ['H', 'down'], ['R2', 'terminal']] as [string, string][],
+  1713→  1713→    F: [['R1', 'terminal'], ['E', 'pullback'], ['D', 'down'], ['G', 'risk']] as [string, string][],
+  1714→  1714→    G: [['B', 'up'], ['A', 'pullback'], ['H', 'down'], ['L', 'risk'], ['R4', 'terminal']] as [string, string][],
+  1715→  1715→    H: [['G', 'pullback'], ['I', 'down'], ['B', 'up'], ['L', 'risk'], ['R5', 'terminal']] as [string, string][],
+  1716→  1716→    I: [['H', 'pullback'], ['J', 'down'], ['G', 'up'], ['L', 'risk'], ['R6', 'terminal']] as [string, string][],
+  1717→  1717→    J: [['I', 'pullback'], ['K', 'down'], ['H', 'up'], ['L', 'risk'], ['R7', 'terminal']] as [string, string][],
+  1718→  1718→    K: [['J', 'pullback'], ['I', 'up'], ['L', 'risk'], ['R8', 'terminal'], ['R9', 'terminal']] as [string, string][],
+  1719→  1719→    L: [['C', 'up'], ['H', 'pullback'], ['J', 'down'], ['K', 'risk'], ['R9', 'terminal']] as [string, string][],
+  1720→  1720→  },
+  1721→  1721→  // which result scenario each terminal node maps to
+  1722→  1722→  terminalMap: { R1: 'R1', R2: 'R2', R3: 'R3', R4: 'R4', R5: 'R5', R6: 'R6', R7: 'R7', R8: 'R8', R9: 'R9' } as Record<string, string>,
+  1723→  1723→  startNode: 'A' as string,
+  1724→  1724→};
+  1725→  1725→
+  1726→  1726→// ═══════════════════════════════════════════════════════════════════════════════
+  1727→  1727→// LAYER 5 — Edge Weight Calculation
+  1728→  1728→// ═══════════════════════════════════════════════════════════════════════════════
+  1729→  1729→
+  1730→  1730→/**
+  1731→  1731→ * Calculates transition edge weights for the VDss graph.
+  1732→  1732→ * Uses bull/bear consensus, ADX trend strength, and ML-derived coefficients
+  1733→  1733→ * to determine the relative probability of up/down/pullback/risk transitions.
+  1734→  1734→ */
+  1735→  1735→function calculateEdgeWeights(
+  1736→  1736→  bullConsensus: number,
+  1737→  1737→  adx: number,
+  1738→  1738→  mlModel: AdaptiveWeightModel
+  1739→  1739→): { up: number; down: number; pullback: number; risk: number } {
+  1740→  1740→  // Extract ML coefficient insights if model is trained
+  1741→  1741→  let trend_coef = 1 / 3;
+  1742→  1742→  let momentum_coef = 1 / 3;
+  1743→  1743→  let volatility_coef = 1 / 3;
+  1744→  1744→
+  1745→  1745→  if (mlModel.isTrained && mlModel.weights) {
+  1746→  1746→    const coefs = mlModel.getCoefficients();
+  1747→  1747→    // Map feature indices to coefficient categories
+  1748→  1748→    // FEATURES_ORDER: ['rsi','mfi','cci','adx','macd','stoch','bb','ma21','ma100','ema','atr','trend','sr','stochCross','macdCross','div']
+  1749→  1749→    const trendIdx = 11;  // 'trend' in FEATURES_ORDER
+  1750→  1750→    const rsiIdx = 0;     // 'rsi' in FEATURES_ORDER
+  1751→  1751→    const atrIdx = 10;    // 'atr' in FEATURES_ORDER
+  1752→  1752→
+  1753→  1753→    const absTrend = Math.abs(coefs[trendIdx] ?? 0);
+  1754→  1754→    const absRsi = Math.abs(coefs[rsiIdx] ?? 0);
+  1755→  1755→    const absAtr = Math.abs(coefs[atrIdx] ?? 0);
+  1756→  1756→
+  1757→  1757→    const coefSum = absTrend + absRsi + absAtr;
+  1758→  1758→    if (coefSum > 1e-10) {
+  1759→  1759→      trend_coef = absTrend / coefSum;
+  1760→  1760→      momentum_coef = absRsi / coefSum;
+  1761→  1761→      volatility_coef = absAtr / coefSum;
+  1762→  1762→    }
+  1763→  1763→  }
+  1764→  1764→
+  1765→  1765→  // Base weights driven by bull consensus
+  1766→  1766→  const up_base = bullConsensus * 0.7 + 0.15;
+  1767→  1767→  const down_base = (1 - bullConsensus) * 0.7 + 0.15;
+  1768→  1768→  const pullback_base = 0.25;
+  1769→  1769→  const risk_base = 0.12 * (1.2 - adx / 100);
+  1770→  1770→
+  1771→  1771→  // Apply ML coefficient adjustments
+  1772→  1772→  const up = clamp(
+  1773→  1773→    up_base * (1 + (momentum_coef - 1 / 3) * 0.3),
+  1774→  1774→    0.05, 0.95
+  1775→  1775→  );
+  1776→  1776→  const down = clamp(
+  1777→  1777→    down_base * (1 + (trend_coef - 1 / 3) * 0.3),
+  1778→  1778→    0.05, 0.95
+  1779→  1779→  );
+  1780→  1780→  const pullback = clamp(
+  1781→  1781→    pullback_base * (1 + (volatility_coef - 1 / 3) * 0.2),
+  1782→  1782→    0.05, 0.50
+  1783→  1783→  );
+  1784→  1784→  const risk = clamp(
+  1785→  1785→    risk_base * (1 - (trend_coef - 1 / 3) * 0.5),
+  1786→  1786→    0.02, 0.30
+  1787→  1787→  );
+  1788→  1788→
+  1789→  1789→  return { up, down, pullback, risk };
+  1790→  1790→}
+  1791→  1791→
+  1792→  1792→// ═══════════════════════════════════════════════════════════════════════════════
+  1793→  1793→// LAYER 6 — Path Probability Calculation (Graph DFS + Calibration)
+  1794→  1794→// ═══════════════════════════════════════════════════════════════════════════════
+  1795→  1795→
+  1796→  1796→/**
+  1797→  1797→ * Performs iterative DFS from the start node through the VDss graph,
+  1798→  1798→ * computing raw path probabilities, then calibrating them against
+  1799→  1799→ * Layer 4 scenario probabilities.
+  1800→  1800→ *
+  1801→  1801→ * Returns:
+  1802→  1802→ * - calibratedPaths: Map<pathString, probability>
+  1803→  1803→ * - calibrationFactors: per-scenario multiplier used
+  1804→  1804→ * - scenarioSums: raw probability sums per scenario before calibration
+  1805→  1805→ */
+  1806→  1806→function calculatePathProbabilities(
+  1807→  1807→  edgeWeights: { up: number; down: number; pullback: number; risk: number },
+  1808→  1808→  scenarioProbs: Record<string, number>
+  1809→  1809→): {
+  1810→  1810→  calibratedPaths: Map<string, number>;
+  1811→  1811→  calibrationFactors: Record<string, number>;
+  1812→  1812→  scenarioSums: Record<string, number>;
+  1813→  1813→} {
+  1814→  1814→  const { outgoing, terminalMap, startNode } = VDSS_GRAPH;
+  1815→  1815→  const MAX_PATHS = 200;
+  1816→  1816→
+  1817→  1817→  // Type for DFS stack entries: [currentNode, pathString, pathProbability]
+  1818→  1818→  type StackEntry = [string, string, number];
+  1819→  1819→
+  1820→  1820→  // Collect all terminal paths with raw probabilities
+  1821→  1821→  const rawPaths: { path: string; scenario: string; prob: number }[] = [];
+  1822→  1822→
+  1823→  1823→  // Iterative DFS
+  1824→  1824→  const stack: StackEntry[] = [[startNode, startNode, 1.0]];
+  1825→  1825→
+  1826→  1826→  while (stack.length > 0 && rawPaths.length < MAX_PATHS) {
+  1827→  1827→    const [node, pathStr, pathProb] = stack.pop()!;
+  1828→  1828→
+  1829→  1829→    const edges = outgoing[node as keyof typeof outgoing];
+  1830→  1830→    if (!edges) continue;
+  1831→  1831→
+  1832→  1832→    // Normalize outgoing edge weights to probabilities for this node
+  1833→  1833→    // Map edge types to their weights
+  1834→  1834→    let totalWeight = 0;
+  1835→  1835→    const edgeWeightsList: number[] = [];
+  1836→  1836→    for (const [, edgeType] of edges) {
+  1837→  1837→      const w = edgeWeights[edgeType as keyof typeof edgeWeights] ?? 0.1;
+  1838→  1838→      edgeWeightsList.push(w);
+  1839→  1839→      totalWeight += w;
+  1840→  1840→    }
+  1841→  1841→
+  1842→  1842→    if (totalWeight < 1e-10) continue;
+  1843→  1843→
+  1844→  1844→    // Expand edges
+  1845→  1845→    for (let i = 0; i < edges.length; i++) {
+  1846→  1846→      const [target, edgeType] = edges[i];
+  1847→  1847→      const edgeProb = edgeWeightsList[i] / totalWeight;
+  1848→  1848→      const newProb = pathProb * edgeProb;
+  1849→  1849→      const newPath = pathStr + '→' + target;
+  1850→  1850→
+  1851→  1851→      if (edgeType === 'terminal') {
+  1852→  1852→        // Reached a terminal node
+  1853→  1853→        const scenario = terminalMap[target] ?? 'R3';
+  1854→  1854→        rawPaths.push({ path: newPath, scenario, prob: newProb });
+  1855→  1855→      } else {
+  1856→  1856→        // Continue DFS
+  1857→  1857→        stack.push([target, newPath, newProb]);
+  1858→  1858→      }
+  1859→  1859→    }
+  1860→  1860→  }
+  1861→  1861→
+  1862→  1862→  // Group raw probabilities by scenario
+  1863→  1863→  const rawSums: Record<string, number> = { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0, R9: 0 };
+  1864→  1864→  for (const rp of rawPaths) {
+  1865→  1865→    rawSums[rp.scenario] = (rawSums[rp.scenario] ?? 0) + rp.prob;
+  1866→  1866→  }
+  1867→  1867→
+  1868→  1868→  // Compute calibration factors: scenarioProbs[scenario] / rawSum[scenario]
+  1869→  1869→  const calibrationFactors: Record<string, number> = {};
+  1870→  1870→  for (const scenario of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9']) {
+  1871→  1871→    const rawSum = rawSums[scenario] ?? 0;
+  1872→  1872→    const targetProb = (scenarioProbs[scenario] ?? 20) / 100; // convert from percentage
+  1873→  1873→    calibrationFactors[scenario] = rawSum > 1e-10 ? targetProb / rawSum : 1.0;
+  1874→  1874→  }
+  1875→  1875→
+  1876→  1876→  // Apply calibration to each path
+  1877→  1877→  const calibratedPaths = new Map<string, number>();
+  1878→  1878→  for (const rp of rawPaths) {
+  1879→  1879→    const factor = calibrationFactors[rp.scenario] ?? 1.0;
+  1880→  1880→    calibratedPaths.set(rp.path, rp.prob * factor);
+  1881→  1881→  }
+  1882→  1882→
+  1883→  1883→  return { calibratedPaths, calibrationFactors, scenarioSums: rawSums };
+  1884→  1884→}
+  1885→  1885→
+  1886→  1886→// ═══════════════════════════════════════════════════════════════════════════════
+  1887→  1887→// SCENARIO TARGET BUILDER — ATR-based, S/R levels, max 1 ATR range
+  1888→  1888→// ═══════════════════════════════════════════════════════════════════════════════
+  1889→  1889→
+  1890→  1890→function buildBullishTargets(price: number, atr: number, resistances: number[]): Array<{min: number; max: number}> {
+  1891→  1891→  // Filter resistances above price, take up to 4
+  1892→  1892→  const above = resistances.filter(r => r > price);
+  1893→  1893→  // Use price-range-based rounding per spec
+  1894→  1894→  const rnd = (n: number) => roundToNice(n);
+  1895→  1895→
+  1896→  1896→  const results: Array<{min: number; max: number}> = [];
+  1897→  1897→  let prevMax = price;
+  1898→  1898→
+  1899→  1899→  for (let i = 0; i < 4; i++) {
+  1900→  1900→    const base = above[i] ?? (price + (i + 1) * 0.25 * atr);
+  1901→  1901→    // Ensure base is above previous target and above price
+  1902→  1902→    const safeBase = Math.max(base, prevMax + 1);
+  1903→  1903→    let min = rnd(Math.max(safeBase - 0.25 * atr, prevMax + 1));
+  1904→  1904→    let max = rnd(Math.min(safeBase + 0.5 * atr, min + atr));
+  1905→  1905→    if (max <= min) max = rnd(min + 0.25 * atr);
+  1906→  1906→    if (min <= prevMax) min = rnd(prevMax + 1);
+  1907→  1907→    if (max <= min) max = rnd(min + 0.25 * atr);
+  1908→  1908→    // Enforce max 1 ATR range
+  1909→  1909→    if (max - min > atr) max = rnd(min + atr);
+  1910→  1910→    results.push({min, max});
+  1911→  1911→    prevMax = max;
+  1912→  1912→  }
+  1913→  1913→  return results;
+  1914→  1914→}
+  1915→  1915→
+  1916→  1916→function buildBearishTargets(price: number, atr: number, supports: number[]): Array<{min: number; max: number}> {
+  1917→  1917→  // Filter supports below price, take up to 4
+  1918→  1918→  const below = supports.filter(s => s < price);
+  1919→  1919→  const rnd = (n: number) => roundToNice(n);
+  1920→  1920→
+  1921→  1921→  const results: Array<{min: number; max: number}> = [];
+  1922→  1922→  let prevMin = price;
+  1923→  1923→
+  1924→  1924→  for (let i = 0; i < 4; i++) {
+  1925→  1925→    const base = below[i] ?? (price - (i + 1) * 0.25 * atr);
+  1926→  1926→    const safeBase = Math.min(base, prevMin - 1);
+  1927→  1927→    let max = rnd(Math.min(safeBase + 0.25 * atr, prevMin - 1));
+  1928→  1928→    let min = rnd(Math.max(safeBase - 0.5 * atr, max - atr));
+  1929→  1929→    if (min >= max) min = rnd(max - 0.25 * atr);
+  1930→  1930→    if (max >= prevMin) max = rnd(prevMin - 1);
+  1931→  1931→    if (min >= max) min = rnd(max - 0.25 * atr);
+  1932→  1932→    // Enforce max 1 ATR range
+  1933→  1933→    if (max - min > atr) min = rnd(max - atr);
+  1934→  1934→    results.push({min, max});
+  1935→  1935→    prevMin = min;
+  1936→  1936→  }
+  1937→  1937→  return results;
+  1938→  1938→}
+  1939→  1939→
+  1940→  1940→function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1: number | undefined): {min: number; max: number} {
+  1941→  1941→  const rnd = (n: number) => roundToNice(n);
+  1942→  1942→  const lower = s1 != null ? Math.min(s1, price - 0.5 * atr) : price - 0.5 * atr;
+  1943→  1943→  const upper = r1 != null ? Math.max(r1, price + 0.5 * atr) : price + 0.5 * atr;
+  1944→  1944→  return {
+  1945→  1945→    min: rnd(Math.min(lower, price)),
+  1946→  1946→    max: rnd(Math.max(upper, price)),
+  1947→  1947→  };
+  1948→  1948→}
+  1949→  1949→
+  1950→  1950→// ═══════════════════════════════════════════════════════════════════════════════
+  1951→  1951→// LAYER 4 — Scenario Probability Calculation (Adaptive with ML)
+  1952→  1952→// ═══════════════════════════════════════════════════════════════════════════════
+  1953→  1953→
+  1954→  1954→/**
+  1955→  1955→ * Calculates 9 VDss scenario probabilities (R1-R9) that sum to 100.
+  1956→  1956→ * R1-R4: Bullish (ascending strength), R5: Range, R6-R9: Bearish (descending).
+  1957→  1957→ */
+  1958→  1958→function calculateScenarioProbabilities(
+  1959→  1959→  bullConsensus: number,
+  1960→  1960→  price: number,
+  1961→  1961→  R1: number,
+  1962→  1962→  S1: number,
+  1963→  1963→  MA100: number,
+  1964→  1964→  rsi: number,
+  1965→  1965→  mfi: number,
+  1966→  1966→  stochK: number,
+  1967→  1967→  mlModel: AdaptiveWeightModel
+  1968→  1968→): { R1: number; R2: number; R3: number; R4: number; R5: number; R6: number; R7: number; R8: number; R9: number; factors: { momentum: number; volatility: number; trend: number } } {
+  1969→  1969→  const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
+  1970→  1970→  const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
+  1971→  1971→
+  1972→  1972→  const overboughtRisk = (rsi > 70 || (mfi > 80 && mfi !== 50) || stochK > 80) ? 1 : 0;
+  1973→  1973→  const oversoldBounce = (rsi < 30 || (mfi < 20 && mfi !== 50) || stochK < 20) ? 1 : 0;
+  1974→  1974→
+  1975→  1975→  let momentum = 0.7;
+  1976→  1976→  let volatility = 0.5;
+  1977→  1977→  let trend = 0.6;
+  1978→  1978→
+  1979→  1979→  if (mlModel.isTrained && mlModel.weights) {
+  1980→  1980→    const coefs = mlModel.getCoefficients();
+  1981→  1981→    momentum = sigmoid(coefs[0] ?? 0);
+  1982→  1982→    volatility = sigmoid(coefs[10] ?? 0);
+  1983→  1983→    trend = sigmoid(coefs[11] ?? 0);
+  1984→  1984→  }
+  1985→  1985→
+  1986→  1986→  const belowMA100 = price < MA100 ? 1 : 0;
+  1987→  1987→  const bearish = 1 - bullConsensus;
+  1988→  1988→
+  1989→  1989→  // ── Raw probabilities ───────────────────────────────────────────────
+  1990→  1990→
+  1991→  1991→  // R1: صعودی با احتیاط — mild bull, needs confirmation
+  1992→  1992→  const raw_R1 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
+  1993→  1993→
+  1994→  1994→  // R2: صعودی قوی — solid uptrend
+  1995→  1995→  const raw_R2 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
+  1996→  1996→
+  1997→  1997→  // R3: صعودی شتابدار — strong momentum
+  1998→  1998→  const raw_R3 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
+  1999→  1999→
+  2000→  2000→  // R4: شوک صعودی — explosive breakout
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]

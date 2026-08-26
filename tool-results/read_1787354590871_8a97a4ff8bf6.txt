@@ -1,0 +1,997 @@
+     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→// TSE Technical Analysis Engine — Complete Implementation
+     3→// ═══════════════════════════════════════════════════════════════════════════════
+     4→
+     5→import { analyzeSupportResistance } from './sr-analyzer';
+     6→import type { SRLevel } from './sr-analyzer';
+     7→
+     8→export interface OHLCV {
+     9→  date: string;
+    10→  open: number;
+    11→  high: number;
+    12→  low: number;
+    13→  close: number;
+    14→  volume: number;
+    15→}
+    16→
+    17→export interface ScenarioResult {
+    18→  name: string;
+    19→  nameEn: string;
+    20→  probability: number;
+    21→  targetMin: number;
+    22→  targetMax: number;
+    23→  description: string;
+    24→}
+    25→
+    26→export interface TrendResult {
+    27→  direction: string;
+    28→  slope: number;
+    29→  angle: number;
+    30→  r2: number;
+    31→}
+    32→
+    33→export interface LevelStrength {
+    34→  price: number;
+    35→  strength: number; // 0-10 (ML composite score)
+    36→  isTarget: boolean;
+    37→  grade: string;          // Persian grade label
+    38→  overlapCount: number;   // number of converging lines
+    39→  touchCount: number;     // how many times price touched this level
+    40→  volumeRatio: number;    // volume at touches / avg volume
+    41→  daysSinceLastTouch: number;
+    42→  distancePercent: number;
+    43→}
+    44→
+    45→export interface TAResult {
+    46→  // Moving Averages
+    47→  sma: Record<string, number>;
+    48→  ema: Record<string, number>;
+    49→  // Oscillators
+    50→  rsi: number;
+    51→  mfi: number;
+    52→  cci: number;
+    53→  stochK: number;
+    54→  stochD: number;
+    55→  williamsR: number;
+    56→  macd: { line: number; signal: number; histogram: number };
+    57→  // Trend
+    58→  adx: number;
+    59→  diPlus: number;
+    60→  diMinus: number;
+    61→  sar: number;
+    62→  // Volatility
+    63→  atr: number;
+    64→  bollingerBands: { upper: number; middle: number; lower: number };
+    65→  // Volume (only valid when hasVolume is true)
+    66→  obv: number;
+    67→  hasVolume: boolean;
+    68→  // Support / Resistance (6 each, ML-scored)
+    69→  resistances: number[];
+    70→  supports: number[];
+    71→  supportStrengths: LevelStrength[];
+    72→  resistanceStrengths: LevelStrength[];
+    73→  priceTargets: LevelStrength[];
+    74→  // ML weights for S/R (trained per symbol)
+    75→  srMlWeights: {
+    76→    touch: number;
+    77→    volume: number;
+    78→    overlap: number;
+    79→    freshness: number;
+    80→    distance: number;
+    81→  } | null;
+    82→  // Directional price targets
+    83→  upwardTargets: LevelStrength[];
+    84→  downwardTargets: LevelStrength[];
+    85→  // Trend Lines
+    86→  trend: {
+    87→    short: TrendResult;
+    88→    medium: TrendResult;
+    89→    long: TrendResult;
+    90→  };
+    91→  // VDss / VDes Scenarios (probabilities sum to 100) — V8: 9 scenarios
+    92→  scenarios: {
+    93→    R1: ScenarioResult;
+    94→    R2: ScenarioResult;
+    95→    R3: ScenarioResult;
+    96→    R4: ScenarioResult;
+    97→    R5: ScenarioResult;
+    98→    R6: ScenarioResult;
+    99→    R7: ScenarioResult;
+   100→    R8: ScenarioResult;
+   101→    R9: ScenarioResult;
+   102→  };
+   103→  // Summary
+   104→  bullScore: number;
+   105→  bearScore: number;
+   106→  overallSignal: 'bullish' | 'bearish' | 'neutral';
+   107→  // Enhanced probability engine (Layer 5)
+   108→  edgeWeights: { up: number; down: number; pullback: number; risk: number };
+   109→  // ML Engine V2 results (Logistic Regression, Adaptive Weights)
+   110→  ml: {
+   111→    weightsUsed: boolean;
+   112→    indicatorWeights: Record<string, number>; // 16-feature normalized weights (sum=1)
+   113→    accuracy: number;           // TimeSeriesSplit validation accuracy
+   114→    isTrained: boolean;
+   115→    sampleCount: number;
+   116→    predictionProb: number | null;  // P(bullish) direct prediction
+   117→    predictedReturn5d: number;
+   118→    predictionConfidence: number;
+   119→    mlScore: number;
+   120→    // Adaptive parameters extracted from ML coefficients
+   121→    adaptiveParams: {
+   122→      momentumFactor: number;
+   123→      volatilityFactor: number;
+   124→      trendFactor: number;
+   125→    };
+   126→    // Scenario adaptive factors from ML
+   127→    scenarioFactors: {
+   128→      momentum: number;
+   129→      volatility: number;
+   130→      trend: number;
+   131→    };
+   132→  } | null;
+   133→}
+   134→
+   135→// ─── Helper: SMA ──────────────────────────────────────────────────────────────
+   136→function sma(closes: number[], period: number): number {
+   137→  if (closes.length < period) return 0;
+   138→  const slice = closes.slice(-period);
+   139→  return slice.reduce((a, b) => a + b, 0) / period;
+   140→}
+   141→
+   142→// ─── Helper: EMA ──────────────────────────────────────────────────────────────
+   143→function emaCalc(closes: number[], period: number): number {
+   144→  if (closes.length < period) return 0;
+   145→  const k = 2 / (period + 1);
+   146→  let emaVal = sma(closes.slice(0, period), period);
+   147→  for (let i = period; i < closes.length; i++) {
+   148→    emaVal = closes[i] * k + emaVal * (1 - k);
+   149→  }
+   150→  return emaVal;
+   151→}
+   152→
+   153→// ─── Helper: RSI(14) ──────────────────────────────────────────────────────────
+   154→function calcRSI(closes: number[], period: number = 14): number {
+   155→  if (closes.length < period + 1) return 50;
+   156→  let avgGain = 0;
+   157→  let avgLoss = 0;
+   158→  for (let i = 1; i <= period; i++) {
+   159→    const diff = closes[i] - closes[i - 1];
+   160→    if (diff > 0) avgGain += diff;
+   161→    else avgLoss += Math.abs(diff);
+   162→  }
+   163→  avgGain /= period;
+   164→  avgLoss /= period;
+   165→  for (let i = period + 1; i < closes.length; i++) {
+   166→    const diff = closes[i] - closes[i - 1];
+   167→    const gain = diff > 0 ? diff : 0;
+   168→    const loss = diff < 0 ? Math.abs(diff) : 0;
+   169→    avgGain = (avgGain * (period - 1) + gain) / period;
+   170→    avgLoss = (avgLoss * (period - 1) + loss) / period;
+   171→  }
+   172→  if (avgLoss === 0) return 100;
+   173→  const rs = avgGain / avgLoss;
+   174→  return 100 - 100 / (1 + rs);
+   175→}
+   176→
+   177→// ─── Helper: MFI(14) ──────────────────────────────────────────────────────────
+   178→function calcMFI(data: OHLCV[], period: number = 14): number {
+   179→  if (data.length < period + 1) return 50;
+   180→  let posFlow = 0;
+   181→  let negFlow = 0;
+   182→  for (let i = data.length - period; i < data.length; i++) {
+   183→    const tp = (data[i].high + data[i].low + data[i].close) / 3;
+   184→    const mf = tp * data[i].volume;
+   185→    const prevTp = (data[i - 1].high + data[i - 1].low + data[i - 1].close) / 3;
+   186→    if (tp > prevTp) posFlow += mf;
+   187→    else negFlow += mf;
+   188→  }
+   189→  if (negFlow === 0) return 100;
+   190→  const mfr = posFlow / negFlow;
+   191→  return 100 - 100 / (1 + mfr);
+   192→}
+   193→
+   194→// ─── Helper: CCI(20) ──────────────────────────────────────────────────────────
+   195→function calcCCI(data: OHLCV[], period: number = 20): number {
+   196→  if (data.length < period) return 0;
+   197→  const tps: number[] = [];
+   198→  for (let i = data.length - period; i < data.length; i++) {
+   199→    tps.push((data[i].high + data[i].low + data[i].close) / 3);
+   200→  }
+   201→  const meanTP = tps.reduce((a, b) => a + b, 0) / period;
+   202→  const meanDev = tps.reduce((a, b) => a + Math.abs(b - meanTP), 0) / period;
+   203→  if (meanDev === 0) return 0;
+   204→  return (tps[tps.length - 1] - meanTP) / (0.015 * meanDev);
+   205→}
+   206→
+   207→// ─── Helper: Stochastic(14,3,3) ───────────────────────────────────────────────
+   208→function calcStochastic(data: OHLCV[], kPeriod: number = 14, smoothK: number = 3, smoothD: number = 3): { k: number; d: number } {
+   209→  if (data.length < kPeriod) return { k: 50, d: 50 };
+   210→  const rawKs: number[] = [];
+   211→  for (let i = kPeriod - 1; i < data.length; i++) {
+   212→    let lowest = Infinity;
+   213→    let highest = -Infinity;
+   214→    for (let j = i - kPeriod + 1; j <= i; j++) {
+   215→      if (data[j].low < lowest) lowest = data[j].low;
+   216→      if (data[j].high > highest) highest = data[j].high;
+   217→    }
+   218→    const range = highest - lowest;
+   219→    rawKs.push(range === 0 ? 50 : ((data[i].close - lowest) / range) * 100);
+   220→  }
+   221→  const smoothedK: number[] = [];
+   222→  for (let i = smoothK - 1; i < rawKs.length; i++) {
+   223→    const slice = rawKs.slice(i - smoothK + 1, i + 1);
+   224→    smoothedK.push(slice.reduce((a, b) => a + b, 0) / smoothK);
+   225→  }
+   226→  const k = smoothedK[smoothedK.length - 1] ?? 50;
+   227→  const dSlice = smoothedK.slice(-smoothD);
+   228→  const d = dSlice.reduce((a, b) => a + b, 0) / dSlice.length;
+   229→  return { k, d };
+   230→}
+   231→
+   232→// ─── Helper: Williams %R(14) ──────────────────────────────────────────────────
+   233→function calcWilliamsR(data: OHLCV[], period: number = 14): number {
+   234→  if (data.length < period) return -50;
+   235→  const slice = data.slice(-period);
+   236→  let highest = -Infinity;
+   237→  let lowest = Infinity;
+   238→  for (const c of slice) {
+   239→    if (c.high > highest) highest = c.high;
+   240→    if (c.low < lowest) lowest = c.low;
+   241→  }
+   242→  const range = highest - lowest;
+   243→  if (range === 0) return -50;
+   244→  return ((highest - data[data.length - 1].close) / range) * -100;
+   245→}
+   246→
+   247→// ─── Helper: MACD(12,26,9) ────────────────────────────────────────────────────
+   248→function calcMACD(closes: number[], fast: number = 12, slow: number = 26, sig: number = 9): { line: number; signal: number; histogram: number } {
+   249→  if (closes.length < slow + sig) return { line: 0, signal: 0, histogram: 0 };
+   250→  const emaFast = emaCalc(closes, fast);
+   251→  const emaSlow = emaCalc(closes, slow);
+   252→  const macdLine = emaFast - emaSlow;
+   253→  // Calculate signal as EMA of MACD values
+   254→  const macdValues: number[] = [];
+   255→  const kFast = 2 / (fast + 1);
+   256→  const kSlow = 2 / (slow + 1);
+   257→  let eFast = sma(closes.slice(0, fast), fast);
+   258→  let eSlow = sma(closes.slice(0, slow), slow);
+   259→  for (let i = Math.max(fast, slow); i < closes.length; i++) {
+   260→    eFast = closes[i] * kFast + eFast * (1 - kFast);
+   261→    eSlow = closes[i] * kSlow + eSlow * (1 - kSlow);
+   262→    macdValues.push(eFast - eSlow);
+   263→  }
+   264→  if (macdValues.length < sig) return { line: macdLine, signal: 0, histogram: macdLine };
+   265→  const kSig = 2 / (sig + 1);
+   266→  let signalVal = sma(macdValues.slice(0, sig), sig);
+   267→  for (let i = sig; i < macdValues.length; i++) {
+   268→    signalVal = macdValues[i] * kSig + signalVal * (1 - kSig);
+   269→  }
+   270→  return { line: macdLine, signal: signalVal, histogram: macdLine - signalVal };
+   271→}
+   272→
+   273→// ─── Helper: ATR(14) ──────────────────────────────────────────────────────────
+   274→function calcATR(data: OHLCV[], period: number = 14): number {
+   275→  if (data.length < 2) return 0;
+   276→  const trs: number[] = [];
+   277→  for (let i = 1; i < data.length; i++) {
+   278→    const tr = Math.max(
+   279→      data[i].high - data[i].low,
+   280→      Math.abs(data[i].high - data[i - 1].close),
+   281→      Math.abs(data[i].low - data[i - 1].close)
+   282→    );
+   283→    trs.push(tr);
+   284→  }
+   285→  if (trs.length < period) return trs.reduce((a, b) => a + b, 0) / trs.length;
+   286→  let atrVal = trs.slice(0, period).reduce((a, b) => a + b, 0) / period;
+   287→  for (let i = period; i < trs.length; i++) {
+   288→    atrVal = (atrVal * (period - 1) + trs[i]) / period;
+   289→  }
+   290→  return atrVal;
+   291→}
+   292→
+   293→// ─── Helper: ADX(14) + DI+/DI- ────────────────────────────────────────────────
+   294→function calcADX(data: OHLCV[], period: number = 14): { adx: number; diPlus: number; diMinus: number } {
+   295→  if (data.length < period + 1) return { adx: 0, diPlus: 0, diMinus: 0 };
+   296→  const plusDMs: number[] = [];
+   297→  const minusDMs: number[] = [];
+   298→  const trs: number[] = [];
+   299→  for (let i = 1; i < data.length; i++) {
+   300→    const upMove = data[i].high - data[i - 1].high;
+   301→    const downMove = data[i - 1].low - data[i].low;
+   302→    plusDMs.push(upMove > downMove && upMove > 0 ? upMove : 0);
+   303→    minusDMs.push(downMove > upMove && downMove > 0 ? downMove : 0);
+   304→    trs.push(Math.max(
+   305→      data[i].high - data[i].low,
+   306→      Math.abs(data[i].high - data[i - 1].close),
+   307→      Math.abs(data[i].low - data[i - 1].close)
+   308→    ));
+   309→  }
+   310→  if (trs.length < period) return { adx: 0, diPlus: 0, diMinus: 0 };
+   311→  let smoothTR = trs.slice(0, period).reduce((a, b) => a + b, 0);
+   312→  let smoothPlusDM = plusDMs.slice(0, period).reduce((a, b) => a + b, 0);
+   313→  let smoothMinusDM = minusDMs.slice(0, period).reduce((a, b) => a + b, 0);
+   314→  const dxValues: number[] = [];
+   315→  for (let i = period; i < trs.length; i++) {
+   316→    smoothTR = smoothTR - smoothTR / period + trs[i];
+   317→    smoothPlusDM = smoothPlusDM - smoothPlusDM / period + plusDMs[i];
+   318→    smoothMinusDM = smoothMinusDM - smoothMinusDM / period + minusDMs[i];
+   319→    const diPlus = smoothTR === 0 ? 0 : (smoothPlusDM / smoothTR) * 100;
+   320→    const diMinus = smoothTR === 0 ? 0 : (smoothMinusDM / smoothTR) * 100;
+   321→    const diSum = diPlus + diMinus;
+   322→    const dx = diSum === 0 ? 0 : (Math.abs(diPlus - diMinus) / diSum) * 100;
+   323→    dxValues.push(dx);
+   324→  }
+   325→  if (dxValues.length === 0) return { adx: 0, diPlus: 0, diMinus: 0 };
+   326→  let adxVal = dxValues.slice(0, period).reduce((a, b) => a + b, 0) / Math.min(period, dxValues.length);
+   327→  for (let i = period; i < dxValues.length; i++) {
+   328→    adxVal = (adxVal * (period - 1) + dxValues[i]) / period;
+   329→  }
+   330→  const lastDIPlus = smoothTR === 0 ? 0 : (smoothPlusDM / smoothTR) * 100;
+   331→  const lastDIMinus = smoothTR === 0 ? 0 : (smoothMinusDM / smoothTR) * 100;
+   332→  return { adx: adxVal, diPlus: lastDIPlus, diMinus: lastDIMinus };
+   333→}
+   334→
+   335→// ─── Helper: Parabolic SAR ────────────────────────────────────────────────────
+   336→function calcSAR(data: OHLCV[], step: number = 0.02, max: number = 0.2): number {
+   337→  if (data.length < 5) return data[data.length - 1]?.low ?? 0;
+   338→  let isLong = true;
+   339→  let af = step;
+   340→  let ep = data[0].high;
+   341→  let sar = data[0].low;
+   342→  for (let i = 1; i < data.length; i++) {
+   343→    const prevSar = sar;
+   344→    sar = prevSar + af * (ep - prevSar);
+   345→    // Ensure SAR is within bounds
+   346→    if (isLong) {
+   347→      if (i >= 2) sar = Math.min(sar, data[i - 1].low, data[i - 2]?.low ?? Infinity);
+   348→      if (data[i].low < sar) {
+   349→        isLong = false;
+   350→        sar = ep;
+   351→        ep = data[i].low;
+   352→        af = step;
+   353→      } else {
+   354→        if (data[i].high > ep) {
+   355→          ep = data[i].high;
+   356→          af = Math.min(af + step, max);
+   357→        }
+   358→      }
+   359→    } else {
+   360→      if (i >= 2) sar = Math.max(sar, data[i - 1].high, data[i - 2]?.high ?? -Infinity);
+   361→      if (data[i].high > sar) {
+   362→        isLong = true;
+   363→        sar = ep;
+   364→        ep = data[i].high;
+   365→        af = step;
+   366→      } else {
+   367→        if (data[i].low < ep) {
+   368→          ep = data[i].low;
+   369→          af = Math.min(af + step, max);
+   370→        }
+   371→      }
+   372→    }
+   373→  }
+   374→  return sar;
+   375→}
+   376→
+   377→// ─── Helper: Bollinger Bands(20,2) ────────────────────────────────────────────
+   378→function calcBollingerBands(closes: number[], period: number = 20, stdDev: number = 2): { upper: number; middle: number; lower: number } {
+   379→  if (closes.length < period) {
+   380→    const c = closes[closes.length - 1] ?? 0;
+   381→    return { upper: c, middle: c, lower: c };
+   382→  }
+   383→  const slice = closes.slice(-period);
+   384→  const middle = slice.reduce((a, b) => a + b, 0) / period;
+   385→  const variance = slice.reduce((a, b) => a + (b - middle) ** 2, 0) / period;
+   386→  const sd = Math.sqrt(variance);
+   387→  return { upper: middle + stdDev * sd, lower: middle - stdDev * sd, middle };
+   388→}
+   389→
+   390→// ─── Helper: OBV ──────────────────────────────────────────────────────────────
+   391→function calcOBV(data: OHLCV[]): number {
+   392→  let obv = 0;
+   393→  for (let i = 1; i < data.length; i++) {
+   394→    if (data[i].close > data[i - 1].close) obv += data[i].volume;
+   395→    else if (data[i].close < data[i - 1].close) obv -= data[i].volume;
+   396→  }
+   397→  return obv;
+   398→}
+   399→
+   400→// ─── Helper: Linear Regression ────────────────────────────────────────────────
+   401→function linearRegression(values: number[]): { slope: number; intercept: number; r2: number } {
+   402→  const n = values.length;
+   403→  if (n < 2) return { slope: 0, intercept: values[0] ?? 0, r2: 0 };
+   404→  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+   405→  for (let i = 0; i < n; i++) {
+   406→    sumX += i;
+   407→    sumY += values[i];
+   408→    sumXY += i * values[i];
+   409→    sumX2 += i * i;
+   410→    sumY2 += values[i] * values[i];
+   411→  }
+   412→  const denom = n * sumX2 - sumX * sumX;
+   413→  if (denom === 0) return { slope: 0, intercept: sumY / n, r2: 0 };
+   414→  const slope = (n * sumXY - sumX * sumY) / denom;
+   415→  const intercept = (sumY - slope * sumX) / n;
+   416→  const meanY = sumY / n;
+   417→  let ssRes = 0, ssTot = 0;
+   418→  for (let i = 0; i < n; i++) {
+   419→    const predicted = slope * i + intercept;
+   420→    ssRes += (values[i] - predicted) ** 2;
+   421→    ssTot += (values[i] - meanY) ** 2;
+   422→  }
+   423→  const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+   424→  return { slope, intercept, r2 };
+   425→}
+   426→
+   427→// ─── Helper: Round to nice number ─────────────────────────────────────────────
+   428→function roundToNice(price: number): number {
+   429→  const abs = Math.abs(price);
+   430→  let step: number;
+   431→  if (abs >= 100000) step = 100;
+   432→  else if (abs >= 10000) step = 50;
+   433→  else if (abs >= 1000) step = 10;
+   434→  else if (abs >= 100) step = 5;
+   435→  else step = 1;
+   436→  return Math.round(price / step) * step;
+   437→}
+   438→
+   439→// ─── Support / Resistance (ML-based, 6 each, 5-10% gap) ───────────────────────
+   440→// Convert SRLevel → LevelStrength for backward compatibility
+   441→function srToLevelStrength(sr: SRLevel): LevelStrength {
+   442→  return {
+   443→    price: sr.price,
+   444→    strength: sr.score,
+   445→    isTarget: sr.isTarget,
+   446→    grade: sr.grade,
+   447→    overlapCount: sr.overlapCount,
+   448→    touchCount: sr.touchCount,
+   449→    volumeRatio: sr.volumeRatio,
+   450→    daysSinceLastTouch: sr.daysSinceLastTouch,
+   451→    distancePercent: sr.distancePercent,
+   452→  };
+   453→}
+   454→
+   455→function calcSupportResistance(data: OHLCV[], currentPrice: number): {
+   456→  resistances: number[];
+   457→  supports: number[];
+   458→  supportStrengths: LevelStrength[];
+   459→  resistanceStrengths: LevelStrength[];
+   460→  priceTargets: LevelStrength[];
+   461→  srMlWeights: { touch: number; volume: number; overlap: number; freshness: number; distance: number } | null;
+   462→  upwardTargets: LevelStrength[];
+   463→  downwardTargets: LevelStrength[];
+   464→} {
+   465→  const result = analyzeSupportResistance(data, currentPrice);
+   466→
+   467→  return {
+   468→    resistances: result.resistances.map(l => l.price),
+   469→    supports: result.supports.map(l => l.price),
+   470→    supportStrengths: result.supports.map(srToLevelStrength),
+   471→    resistanceStrengths: result.resistances.map(srToLevelStrength),
+   472→    priceTargets: [...result.upwardTargets, ...result.downwardTargets].map(srToLevelStrength),
+   473→    srMlWeights: result.mlWeights,
+   474→    upwardTargets: result.upwardTargets.map(srToLevelStrength),
+   475→    downwardTargets: result.downwardTargets.map(srToLevelStrength),
+   476→  };
+   477→}
+   478→
+   479→
+   480→// ─── Trend Analysis ───────────────────────────────────────────────────────────
+   481→function calcTrend(closes: number[], period: number): TrendResult {
+   482→  const slice = closes.slice(-Math.min(period, closes.length));
+   483→  const { slope, r2 } = linearRegression(slice);
+   484→  const avgPrice = slice.reduce((a, b) => a + b, 0) / slice.length;
+   485→  const angle = avgPrice === 0 ? 0 : Math.atan(slope / avgPrice) * (180 / Math.PI);
+   486→  const priceThreshold = avgPrice * 0.001; // 0.1%
+   487→  const direction = slope > priceThreshold ? 'up' : slope < -priceThreshold ? 'down' : 'flat';
+   488→  return { direction, slope, angle, r2: Math.max(0, Math.min(1, r2)) };
+   489→}
+   490→
+   491→// ═══════════════════════════════════════════════════════════════════════════════
+   492→// MAIN ANALYSIS FUNCTION
+   493→// ═══════════════════════════════════════════════════════════════════════════════
+   494→export async function analyze(data: OHLCV[], symbol?: string): Promise<TAResult> {
+   495→  if (!data || data.length < 2) {
+   496→    const empty = () => 0;
+   497→    const emptyScenario = (): ScenarioResult => ({ name: '', nameEn: '', probability: 20, targetMin: 0, targetMax: 0, description: '' });
+   498→    return {
+   499→      sma: {}, ema: {}, rsi: 50, mfi: 50, cci: 0, stochK: 50, stochD: 50,
+   500→      williamsR: -50, macd: { line: 0, signal: 0, histogram: 0 },
+   501→      adx: 0, diPlus: 0, diMinus: 0, sar: 0, atr: 0,
+   502→      bollingerBands: { upper: 0, middle: 0, lower: 0 }, obv: 0, hasVolume: false,
+   503→      resistances: [], supports: [],
+   504→      supportStrengths: [], resistanceStrengths: [], priceTargets: [],
+   505→      srMlWeights: null, upwardTargets: [], downwardTargets: [],
+   506→      trend: {
+   507→        short: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
+   508→        medium: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
+   509→        long: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
+   510→      },
+   511→      scenarios: { R1: emptyScenario(), R2: emptyScenario(), R3: emptyScenario(), R4: emptyScenario(), R5: emptyScenario(), R6: emptyScenario(), R7: emptyScenario(), R8: emptyScenario(), R9: emptyScenario() },
+   512→      bullScore: 0.5, bearScore: 0.5, overallSignal: 'neutral',
+   513→      edgeWeights: { up: 0.5, down: 0.5, pullback: 0.25, risk: 0.12 },
+   514→      ml: null,
+   515→    };
+   516→  }
+   517→
+   518→  const closes = data.map(d => d.close);
+   519→  const price = closes[closes.length - 1];
+   520→
+   521→  // ── Volume detection ───────────────────────────────────────────────────
+   522→  const hasVolume = data.some(d => d.volume > 0);
+   523→
+   524→  // ── Moving Averages ──────────────────────────────────────────────────────
+   525→  const smaPeriods = [5, 10, 21, 50, 100, 200];
+   526→  const smaResult: Record<string, number> = {};
+   527→  for (const p of smaPeriods) smaResult[`sma${p}`] = sma(closes, p);
+   528→
+   529→  const emaResult: Record<string, number> = {
+   530→    ema12: emaCalc(closes, 12),
+   531→    ema26: emaCalc(closes, 26),
+   532→  };
+   533→
+   534→  // ── Oscillators ──────────────────────────────────────────────────────────
+   535→  const rsi = calcRSI(closes);
+   536→  const mfi = hasVolume ? calcMFI(data) : 50; // neutral when no volume
+   537→  const cci = calcCCI(data);
+   538→  const stoch = calcStochastic(data);
+   539→  const williamsR = calcWilliamsR(data);
+   540→  const macd = calcMACD(closes);
+   541→
+   542→  // ── Trend ────────────────────────────────────────────────────────────────
+   543→  const adxResult = calcADX(data);
+   544→  const sar = calcSAR(data);
+   545→
+   546→  // ── Volatility ───────────────────────────────────────────────────────────
+   547→  const atr = calcATR(data);
+   548→  const bb = calcBollingerBands(closes);
+   549→
+   550→  // ── Volume (only when data has volume) ─────────────────────────────────
+   551→  const obv = hasVolume ? calcOBV(data) : 0;
+   552→
+   553→  // ── Support / Resistance ────────────────────────────────────────────────
+   554→  const { resistances, supports, supportStrengths, resistanceStrengths, priceTargets, srMlWeights, upwardTargets, downwardTargets } = calcSupportResistance(data, price);
+   555→
+   556→  // ── Trend Lines ─────────────────────────────────────────────────────────
+   557→  const trend = {
+   558→    short: calcTrend(closes, 21),
+   559→    medium: calcTrend(closes, 50),
+   560→    long: calcTrend(closes, Math.min(100, closes.length)),
+   561→  };
+   562→
+   563→  // ── S/R Level References ──────────────────────────────────────────────
+   564→  const R1_level = resistances[0] ?? price * 1.05;
+   565→  const R2_level = resistances[1] ?? price * 1.10;
+   566→  const R3_level = resistances[2] ?? price * 1.15;
+   567→  const R4_level = resistances[3] ?? price * 1.20;
+   568→  const R5_level = resistances[4] ?? price * 1.30;
+   569→  const R6_level = resistances[5] ?? price * 1.40;
+   570→  const S1_level = supports[0] ?? price * 0.95;
+   571→  const S2_level = supports[1] ?? price * 0.90;
+   572→  const S3_level = supports[2] ?? price * 0.85;
+   573→  const S4_level = supports[3] ?? price * 0.80;
+   574→  const S5_level = supports[4] ?? price * 0.75;
+   575→  const S6_level = supports[5] ?? price * 0.70;
+   576→
+   577→  // ═══════════════════════════════════════════════════════════════════════════
+   578→  // ENHANCED PROBABILITY ENGINE V2 — 7 Layers (Logistic Regression, No Fixed Weights)
+   579→  // L0: Indicator trends | L1: Raw scores | L2: Momentum-corrected + binary cross signals
+   580→  // L3: Logistic Regression bull consensus | L4: Adaptive scenario distribution
+   581→  // L5: ML-driven edge weights | L6: ML prediction overlay
+   582→  // ═══════════════════════════════════════════════════════════════════════════
+   583→
+   584→  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+   585→
+   586→  // ── LAYER 0: Indicator Trends (current vs 5 bars ago) ──────────────────
+   587→  const TB = 5;
+   588→  const pastData = data.length > TB + 15 ? data.slice(0, -TB) : data;
+   589→  const pastCloses = pastData.map(d => d.close);
+   590→  const rsiPast = calcRSI(pastCloses);
+   591→  const mfiPast = hasVolume ? calcMFI(pastData) : 50;
+   592→  const cciPast = calcCCI(pastData);
+   593→  const macdPast = calcMACD(pastCloses);
+   594→  const stochPast = calcStochastic(pastData);
+   595→
+   596→  const IT = {
+   597→    rsi: clamp((rsi - rsiPast) / 100, -1, 1),
+   598→    mfi: clamp((mfi - mfiPast) / 100, -1, 1),
+   599→    cci: clamp((cci - cciPast) / 300, -1, 1),
+   600→    macd: clamp((macd.histogram - macdPast.histogram) / (Math.abs(macd.histogram) + Math.abs(macdPast.histogram) + 1) * 3, -1, 1),
+   601→    stoch: clamp((stoch.k - stochPast.k) / 50, -1, 1),
+   602→  };
+   603→
+   604→  // ── LAYER 1: Raw Indicator Scores (s_*) ──────────────────────────────────
+   605→  const s_rsi = rsi > 80 ? 0.95 : rsi > 70 ? 0.85 : rsi > 60 ? 0.7 : rsi > 50 ? 0.55
+   606→    : rsi > 40 ? 0.45 : rsi > 30 ? 0.3 : rsi > 20 ? 0.15 : 0.05;
+   607→  const s_mfi = mfi > 80 ? 0.95 : mfi > 70 ? 0.85 : mfi > 60 ? 0.7 : mfi > 50 ? 0.55
+   608→    : mfi > 40 ? 0.45 : mfi > 30 ? 0.3 : mfi > 20 ? 0.15 : 0.05;
+   609→  const s_cci = cci > 200 ? 0.9 : cci > 100 ? 0.75 : cci > 0 ? 0.6
+   610→    : cci > -100 ? 0.4 : cci > -200 ? 0.25 : 0.1;
+   611→  const s_adx = adxResult.diPlus > adxResult.diMinus
+   612→    ? clamp(0.5 + (adxResult.diPlus - adxResult.diMinus) / 100, 0.5, 1)
+   613→    : clamp(0.5 - (adxResult.diMinus - adxResult.diPlus) / 100, 0, 0.5);
+   614→  const s_macd = macd.histogram > 0 && macd.line > macd.signal ? 0.9
+   615→    : macd.histogram > 0 ? 0.7 : macd.line > macd.signal ? 0.55
+   616→    : macd.histogram < 0 && macd.line < macd.signal ? 0.1 : 0.3;
+   617→  const s_stoch = clamp(
+   618→    (stoch.k > 80 ? 0.9 : stoch.k > 70 ? 0.8 : stoch.k > 50 ? 0.6
+   619→      : stoch.k > 30 ? 0.4 : stoch.k > 20 ? 0.2 : 0.1)
+   620→    + (stoch.k > stoch.d ? 0.1 : -0.1), 0, 1);
+   621→  const bbRange = bb.upper - bb.lower;
+   622→  const s_bb = bbRange === 0 ? 0.5 : clamp((price - bb.lower) / bbRange, 0, 1);
+   623→  const ma21 = smaResult.sma21 ?? 0;
+   624→  const s_ma21 = clamp(price > ma21 ? 0.7 + ((price - ma21) / ma21) * 0.5 : 0.3 + ((price - ma21) / ma21) * 0.5, 0, 1);
+   625→  const ma100v = smaResult.sma100 ?? 0;
+   626→  const s_ma100 = clamp(price > ma100v ? 0.65 + ((price - ma100v) / ma100v) * 0.3 : 0.35 + ((price - ma100v) / ma100v) * 0.3, 0, 1);
+   627→  const e12v = emaResult.ema12 ?? 0;
+   628→  const e26v = emaResult.ema26 ?? 0;
+   629→  const emaGap = e12v > 0 && e26v > 0 ? (e12v - e26v) / e26v : 0;
+   630→  const s_ema = clamp(0.5 + emaGap * 5, 0, 1);
+   631→  const s_atr = clamp(1 - (price > 0 ? atr / price : 0) * 10, 0.2, 1);
+   632→  const tStr = trend.medium.r2 * Math.abs(trend.medium.angle) / 45;
+   633→  const s_trend = trend.medium.direction === 'up' ? clamp(0.5 + tStr / 2, 0.5, 1)
+   634→    : trend.medium.direction === 'down' ? clamp(0.5 - tStr / 2, 0, 0.5) : 0.5;
+   635→  const dR1 = R1_level > 0 ? Math.abs(price - R1_level) / R1_level : 1;
+   636→  const dS1 = S1_level > 0 ? Math.abs(price - S1_level) / S1_level : 1;
+   637→  const s_sr = clamp(0.5 - dR1 * 1.5 + dS1 * 1.0, 0, 1);
+   638→
+   639→  // ── LAYER 2: Momentum Correction + Binary Cross Signals ─────────────────
+   640→  const f_rsi = clamp(s_rsi + IT.rsi * 0.08, 0, 1);
+   641→  const f_mfi = clamp(s_mfi + IT.mfi * 0.08, 0, 1);
+   642→  const f_cci = clamp(s_cci + IT.cci * 0.06, 0, 1);
+   643→  const f_macd = clamp(s_macd + IT.macd * 0.08, 0, 1);
+   644→  const f_stoch = clamp(s_stoch + IT.stoch * 0.06, 0, 1);
+   645→
+   646→  // Binary cross signals per spec: 0.9 for bullish cross, 0.1 otherwise
+   647→  const f_stochCross = stochPast.k < stochPast.d && stoch.k > stoch.d ? 0.9 : 0.1;
+   648→  const f_macdCross = macdPast.line < macdPast.signal && macd.line > macd.signal ? 0.9 : 0.1;
+   649→
+   650→  // Divergence detection (binary: 0.85 if detected, 0.15 otherwise)
+   651→  let f_div = 0.15;
+   652→  if (closes.length > 40) {
+   653→    const p20 = closes[closes.length - 21];
+   654→    const rsi20 = calcRSI(closes.slice(0, -20));
+   655→    const pChange = price - p20;
+   656→    const rsiChange = rsi - rsi20;
+   657→    if (pChange !== 0 && rsiChange !== 0) {
+   658→      const isDivergence = (pChange > 0 && rsiChange < 0) || (pChange < 0 && rsiChange > 0);
+   659→      f_div = isDivergence ? 0.85 : 0.15;
+   660→    }
+   661→  }
+   662→
+   663→  // ── LAYER 3: Logistic Regression ML Consensus (NO FIXED WEIGHTS) ─────────
+   664→  // Build 16-feature vector for current candle
+   665→  const currentFeatures = [
+   666→    f_rsi, f_mfi, f_cci, s_adx,
+   667→    f_macd, f_stoch, s_bb, s_ma21, s_ma100, s_ema,
+   668→    s_atr, s_trend, s_sr,
+   669→    f_stochCross, f_macdCross, f_div,
+   670→  ];
+   671→
+   672→  let mlResult: {
+   673→    weightsUsed: boolean;
+   674→    indicatorWeights: Record<string, number>;
+   675→    accuracy: number;
+   676→    isTrained: boolean;
+   677→    sampleCount: number;
+   678→    predictionProb: number | null;
+   679→    predictedReturn5d: number;
+   680→    predictionConfidence: number;
+   681→    mlScore: number;
+   682→    adaptiveParams: { momentumFactor: number; volatilityFactor: number; trendFactor: number };
+   683→    scenarioFactors: { momentum: number; volatility: number; trend: number };
+   684→  } | null = null;
+   685→
+   686→  // Train/Load Adaptive Model
+   687→  let adaptiveResult: import('./ml-engine').AdaptiveModelResult | null = null;
+   688→  if (symbol && data.length >= 70) {
+   689→    try {
+   690→      const { trainAdaptiveModel, getCachedAdaptiveModel, calculateBullConsensus, VDSS_FEATURE_NAMES, predictPrices, evaluatePredictedIndicators } = await import('./ml-engine');
+   691→
+   692→      // Try cache first, then train
+   693→      adaptiveResult = getCachedAdaptiveModel(symbol);
+   694→      if (!adaptiveResult) {
+   695→        adaptiveResult = trainAdaptiveModel(data, symbol);
+   696→      }
+   697→
+   698→      if (adaptiveResult && adaptiveResult.isTrained) {
+   699→        // Build indicator weights map for display
+   700→        const indicatorWeights: Record<string, number> = {};
+   701→        for (let i = 0; i < VDSS_FEATURE_NAMES.length; i++) {
+   702→          indicatorWeights[VDSS_FEATURE_NAMES[i]] = adaptiveResult.weights[i];
+   703→        }
+   704→
+   705→        mlResult = {
+   706→          weightsUsed: true,
+   707→          indicatorWeights,
+   708→          accuracy: adaptiveResult.recentAccuracy,
+   709→          isTrained: true,
+   710→          sampleCount: adaptiveResult.sampleCount,
+   711→          predictionProb: adaptiveResult.predictionProb,
+   712→          predictedReturn5d: 0,
+   713→          predictionConfidence: 0,
+   714→          mlScore: adaptiveResult.predictionProb ?? 0.5,
+   715→          adaptiveParams: adaptiveResult.adaptiveParams,
+   716→          scenarioFactors: {
+   717→            momentum: adaptiveResult.adaptiveParams.momentumFactor,
+   718→            volatility: adaptiveResult.adaptiveParams.volatilityFactor,
+   719→            trend: adaptiveResult.adaptiveParams.trendFactor,
+   720→          },
+   721→        };
+   722→      }
+   723→
+   724→      // ML Price Prediction (L6 overlay)
+   725→      if (data.length >= 40) {
+   726→        const prediction = predictPrices(data);
+   727→        if (prediction) {
+   728→          const { mlScore } = evaluatePredictedIndicators(data, prediction);
+   729→          if (mlResult) {
+   730→            mlResult.predictedReturn5d = prediction.predictedReturn5d;
+   731→            mlResult.predictionConfidence = prediction.confidence;
+   732→            mlResult.mlScore = mlScore;
+   733→          } else {
+   734→            mlResult = {
+   735→              weightsUsed: false,
+   736→              indicatorWeights: {},
+   737→              accuracy: 0.5,
+   738→              isTrained: false,
+   739→              sampleCount: 0,
+   740→              predictionProb: null,
+   741→              predictedReturn5d: prediction.predictedReturn5d,
+   742→              predictionConfidence: prediction.confidence,
+   743→              mlScore,
+   744→              adaptiveParams: { momentumFactor: 0.7, volatilityFactor: 0.5, trendFactor: 0.6 },
+   745→              scenarioFactors: { momentum: 0.7, volatility: 0.5, trend: 0.6 },
+   746→            };
+   747→          }
+   748→        }
+   749→      }
+   750→    } catch {
+   751→      // ML engine failed — use fallback
+   752→    }
+   753→  }
+   754→
+   755→  // Calculate bullConsensus using ML weights or fallback defaults
+   756→  const { calculateBullConsensus: calcBC } = await import('./ml-engine');
+   757→  const { bullConsensus } = calcBC(currentFeatures, adaptiveResult, hasVolume);
+   758→
+   759→  const bullScore = bullConsensus;
+   760→  const bearScore = 1 - bullConsensus;
+   761→
+   762→  // ── LAYER 4: 9-Scenario Probability Distribution (V8 Adaptive) ─────
+   763→  const { calculateScenarioProbabilities: calcSP } = await import('./ml-engine');
+   764→  const scenarioResult = calcSP(
+   765→    bullConsensus, price,
+   766→    R1_level, S1_level, ma100v,
+   767→    rsi, mfi, stoch.k,
+   768→    hasVolume,
+   769→    adaptiveResult,
+   770→  );
+   771→  const { pR1, pR2, pR3, pR4, pR5, pR6, pR7, pR8, pR9 } = scenarioResult;
+   772→
+   773→  // Update mlResult with scenario factors
+   774→  if (mlResult) {
+   775→    mlResult.scenarioFactors = scenarioResult.factors;
+   776→  }
+   777→
+   778→  // ── LAYER 5: Edge Weights for VDss Graph (ML-driven) ────────────────────
+   779→  const { calculateEdgeWeights: calcEW } = await import('./ml-engine');
+   780→  const edgeWeights = calcEW(bullConsensus, adxResult.adx, adaptiveResult);
+   781→
+   782→  // ── Overall Signal ─────────────────────────────────────────────────────
+   783→  const overallSignal: 'bullish' | 'bearish' | 'neutral' =
+   784→    bullScore > 0.58 ? 'bullish' : bullScore < 0.42 ? 'bearish' : 'neutral';
+   785→
+   786→  // ═══════════════════════════════════════════════════════════════════════════
+   787→  // ATR-Based Non-Overlapping Scenario Partitions (V9)
+   788→  // ─────────────────────────────────────────────────────────────────────
+   789→  // Mathematical foundation:
+   790→  //   For P(A₁)+P(A₂)+...+P(A₉)=1 to hold, events must be:
+   791→  //   1) Mutually Exclusive (no two scenarios share any price point)
+   792→  //   2) Collectively Exhaustive (every possible future price is covered)
+   793→  //
+   794→  //   We partition ℝ (price space) into 9 non-overlapping intervals using ATR
+   795→  //   as the natural volatility unit. Each interval is exactly 1×ATR wide
+   796→  //   (except the range interval which is 2×ATR centered on price, and the
+   797→  //   two shock intervals which are open-ended with display caps).
+   798→  // ═══════════════════════════════════════════════════════════════════════════
+   799→
+   800→  const fmt = (n: number) => Math.round(n).toLocaleString('fa-IR');
+   801→
+   802→  // ATR unit — fallback to 2% of price if ATR is zero
+   803→  const u = atr > 0 ? atr : price * 0.02;
+   804→
+   805→  // 9 non-overlapping price zones (from bottom to top)
+   806→  //   Z0: (-∞, price-4u)       Extreme bear shock (open-ended, capped display)
+   807→  //   Z1: [price-4u, price-3u)   Deep decline
+   808→  //   Z2: [price-3u, price-2u)   Moderate decline
+   809→  //   Z3: [price-2u, price-1u)   Mild decline
+   810→  //   Z4: [price-1u, price+1u)   Range (2u wide, centered on price)
+   811→  //   Z5: [price+1u, price+2u)   Mild bull
+   812→  //   Z6: [price+2u, price+3u)   Strong bull
+   813→  //   Z7: [price+3u, price+4u)   Accelerating bull
+   814→  //   Z8: [price+4u, +∞)         Extreme bull shock (open-ended, capped display)
+   815→
+   816→  const Z = [
+   817→    { min: price - 5 * u, max: price - 4 * u },   // Z0 display cap
+   818→    { min: price - 4 * u, max: price - 3 * u },   // Z1
+   819→    { min: price - 3 * u, max: price - 2 * u },   // Z2
+   820→    { min: price - 2 * u, max: price - 1 * u },   // Z3
+   821→    { min: price - 1 * u, max: price + 1 * u },   // Z4
+   822→    { min: price + 1 * u, max: price + 2 * u },   // Z5
+   823→    { min: price + 2 * u, max: price + 3 * u },   // Z6
+   824→    { min: price + 3 * u, max: price + 4 * u },   // Z7
+   825→    { min: price + 4 * u, max: price + 5 * u },   // Z8 display cap
+   826→  ];
+   827→
+   828→  // ── Map R-keys to zones based on signal direction ───────────────
+   829→  // Bullish: R1-R3 = up scenarios, R4-R6 = correction, R7 = range, R8 = bull shock, R9 = bear shock
+   830→  // Bearish: R1-R3 = recovery, R4-R6 = down scenarios, R7 = range, R8 = bear shock, R9 = bull shock
+   831→  // Neutral: R1-R3 = up, R4-R6 = down, R7 = range, R8 = up shock, R9 = down shock
+   832→
+   833→  type ZoneTarget = { min: number; max: number };
+   834→
+   835→  const zoneMap: Record<string, ZoneTarget> =
+   836→    overallSignal === 'bullish'
+   837→      ? {
+   838→          // Bullish context
+   839→          R1: Z[6],   // صعود قوی → [price+2u, price+3u)
+   840→          R2: Z[7],   // صعود شتاب‌دار → [price+3u, price+4u)
+   841→          R3: Z[5],   // صعود با احتیاط → [price+1u, price+2u)
+   842→          R4: Z[2],   // اصلاح متوسط → [price-3u, price-2u)
+   843→          R5: Z[1],   // اصلاح عمیق → [price-4u, price-3u)
+   844→          R6: Z[3],   // نزول خفیف → [price-2u, price-1u)
+   845→          R7: Z[4],   // رنج → [price-1u, price+1u)
+   846→          R8: Z[8],   // شوک صعودی → [price+4u, price+5u)
+   847→          R9: Z[0],   // شوک نزولی → [price-5u, price-4u)
+   848→        }
+   849→      : overallSignal === 'bearish'
+   850→        ? {
+   851→            // Bearish context (mirror: up/down semantics swap)
+   852→            R1: Z[2],   // بازگشت قوی → [price-3u, price-2u)
+   853→            R2: Z[1],   // بازگشت شتاب‌دار → [price-4u, price-3u)
+   854→            R3: Z[3],   // بازگشت خفیف → [price-2u, price-1u)
+   855→            R4: Z[6],   // نزول قوی → [price+2u, price+3u)
+   856→            R5: Z[7],   // نزول شتاب‌دار → [price+3u, price+4u)
+   857→            R6: Z[5],   // نزول خفیف → [price+1u, price+2u)
+   858→            R7: Z[4],   // رنج → [price-1u, price+1u)
+   859→            R8: Z[0],   // شوک نزولی → [price-5u, price-4u)
+   860→            R9: Z[8],   // شوک صعودی → [price+4u, price+5u)
+   861→          }
+   862→        : {
+   863→            // Neutral context
+   864→            R1: Z[6],   // صعود قوی → [price+2u, price+3u)
+   865→            R2: Z[7],   // صعود شتاب‌دار → [price+3u, price+4u)
+   866→            R3: Z[5],   // صعود ضعیف → [price+1u, price+2u)
+   867→            R4: Z[2],   // نزول قوی → [price-3u, price-2u)
+   868→            R5: Z[1],   // نزول شتاب‌دار → [price-4u, price-3u)
+   869→            R6: Z[3],   // نزول ضعیف → [price-2u, price-1u)
+   870→            R7: Z[4],   // رنج → [price-1u, price+1u)
+   871→            R8: Z[8],   // شوک صعودی → [price+4u, price+5u)
+   872→            R9: Z[0],   // شوک نزولی → [price-5u, price-4u)
+   873→          };
+   874→
+   875→  // ── Scenario Names (V9: updated R8/R9 semantics) ──────────────────
+   876→  const scenarioNames: Record<string, { name: string; nameEn: string }> =
+   877→    overallSignal === 'bullish'
+   878→      ? {
+   879→          R1: { name: 'صعود قوی', nameEn: 'Strong Bull' },
+   880→          R2: { name: 'صعود شتاب‌دار', nameEn: 'Accelerating Bull' },
+   881→          R3: { name: 'صعود با احتیاط', nameEn: 'Cautious Bull' },
+   882→          R4: { name: 'اصلاح متوسط', nameEn: 'Moderate Correction' },
+   883→          R5: { name: 'اصلاح عمیق', nameEn: 'Deep Correction' },
+   884→          R6: { name: 'نزول خفیف', nameEn: 'Mild Decline' },
+   885→          R7: { name: 'رنج', nameEn: 'Range' },
+   886→          R8: { name: 'شوک صعودی', nameEn: 'Bull Shock' },
+   887→          R9: { name: 'شوک نزولی', nameEn: 'Bear Shock' },
+   888→        }
+   889→      : overallSignal === 'bearish'
+   890→        ? {
+   891→            R1: { name: 'بازگشت قوی', nameEn: 'Strong Reversal' },
+   892→            R2: { name: 'بازگشت شتاب‌دار', nameEn: 'Accel Reversal' },
+   893→            R3: { name: 'بازگشت خفیف', nameEn: 'Mild Reversal' },
+   894→            R4: { name: 'نزول قوی', nameEn: 'Strong Decline' },
+   895→            R5: { name: 'نزول شتاب‌دار', nameEn: 'Accelerating Decline' },
+   896→            R6: { name: 'نزول خفیف', nameEn: 'Mild Decline' },
+   897→            R7: { name: 'رنج', nameEn: 'Range' },
+   898→            R8: { name: 'شوک نزولی', nameEn: 'Bear Shock' },
+   899→            R9: { name: 'شوک صعودی', nameEn: 'Bull Shock' },
+   900→          }
+   901→        : {
+   902→            R1: { name: 'صعود قوی', nameEn: 'Strong Bull' },
+   903→            R2: { name: 'صعود شتاب‌دار', nameEn: 'Accelerating Bull' },
+   904→            R3: { name: 'صعود ضعیف', nameEn: 'Weak Bull' },
+   905→            R4: { name: 'نزول قوی', nameEn: 'Strong Decline' },
+   906→            R5: { name: 'نزول شتاب‌دار', nameEn: 'Accelerating Decline' },
+   907→            R6: { name: 'نزول ضعیف', nameEn: 'Weak Decline' },
+   908→            R7: { name: 'رنج', nameEn: 'Range' },
+   909→            R8: { name: 'شوک صعودی', nameEn: 'Bull Shock' },
+   910→            R9: { name: 'شوک نزولی', nameEn: 'Bear Shock' },
+   911→          };
+   912→
+   913→  // ── Build scenarios with non-overlapping ATR-based targets ─────────
+   914→  const scenarios = {
+   915→    R1: {
+   916→      ...scenarioNames.R1, probability: pR1,
+   917→      targetMin: zoneMap.R1.min, targetMax: zoneMap.R1.max,
+   918→      description: `${scenarioNames.R1.name}: هدف ${fmt(zoneMap.R1.min)} تا ${fmt(zoneMap.R1.max)}.`,
+   919→    },
+   920→    R2: {
+   921→      ...scenarioNames.R2, probability: pR2,
+   922→      targetMin: zoneMap.R2.min, targetMax: zoneMap.R2.max,
+   923→      description: `${scenarioNames.R2.name}: هدف ${fmt(zoneMap.R2.min)} تا ${fmt(zoneMap.R2.max)}.`,
+   924→    },
+   925→    R3: {
+   926→      ...scenarioNames.R3, probability: pR3,
+   927→      targetMin: zoneMap.R3.min, targetMax: zoneMap.R3.max,
+   928→      description: `${scenarioNames.R3.name}: هدف ${fmt(zoneMap.R3.min)} تا ${fmt(zoneMap.R3.max)}.`,
+   929→    },
+   930→    R4: {
+   931→      ...scenarioNames.R4, probability: pR4,
+   932→      targetMin: zoneMap.R4.min, targetMax: zoneMap.R4.max,
+   933→      description: `${scenarioNames.R4.name}: هدف ${fmt(zoneMap.R4.min)} تا ${fmt(zoneMap.R4.max)}.`,
+   934→    },
+   935→    R5: {
+   936→      ...scenarioNames.R5, probability: pR5,
+   937→      targetMin: zoneMap.R5.min, targetMax: zoneMap.R5.max,
+   938→      description: `${scenarioNames.R5.name}: هدف ${fmt(zoneMap.R5.min)} تا ${fmt(zoneMap.R5.max)}.`,
+   939→    },
+   940→    R6: {
+   941→      ...scenarioNames.R6, probability: pR6,
+   942→      targetMin: zoneMap.R6.min, targetMax: zoneMap.R6.max,
+   943→      description: `${scenarioNames.R6.name}: هدف ${fmt(zoneMap.R6.min)} تا ${fmt(zoneMap.R6.max)}.`,
+   944→    },
+   945→    R7: {
+   946→      ...scenarioNames.R7, probability: pR7,
+   947→      targetMin: zoneMap.R7.min, targetMax: zoneMap.R7.max,
+   948→      description: `رنج: ${fmt(zoneMap.R7.min)} تا ${fmt(zoneMap.R7.max)}.`,
+   949→    },
+   950→    R8: {
+   951→      ...scenarioNames.R8, probability: pR8,
+   952→      targetMin: zoneMap.R8.min, targetMax: zoneMap.R8.max,
+   953→      description: `${scenarioNames.R8.name}: هدف ${fmt(zoneMap.R8.min)} تا ${fmt(zoneMap.R8.max)}.`,
+   954→    },
+   955→    R9: {
+   956→      ...scenarioNames.R9, probability: pR9,
+   957→      targetMin: zoneMap.R9.min, targetMax: zoneMap.R9.max,
+   958→      description: `${scenarioNames.R9.name}: هدف ${fmt(zoneMap.R9.min)} تا ${fmt(zoneMap.R9.max)}.`,
+   959→    },
+   960→  };
+   961→
+   962→  return {
+   963→    sma: smaResult,
+   964→    ema: emaResult,
+   965→    rsi,
+   966→    mfi,
+   967→    cci,
+   968→    stochK: stoch.k,
+   969→    stochD: stoch.d,
+   970→    williamsR,
+   971→    macd,
+   972→    adx: adxResult.adx,
+   973→    diPlus: adxResult.diPlus,
+   974→    diMinus: adxResult.diMinus,
+   975→    sar,
+   976→    atr,
+   977→    bollingerBands: bb,
+   978→    obv,
+   979→    hasVolume,
+   980→    resistances: resistances.length ? resistances : [R1_level, R2_level, R3_level, R4_level, R5_level, R6_level],
+   981→    supports: supports.length ? supports : [S1_level, S2_level, S3_level, S4_level, S5_level, S6_level],
+   982→    supportStrengths,
+   983→    resistanceStrengths,
+   984→    priceTargets,
+   985→    srMlWeights,
+   986→    upwardTargets,
+   987→    downwardTargets,
+   988→    trend,
+   989→    scenarios,
+   990→    bullScore,
+   991→    bearScore,
+   992→    overallSignal,
+   993→    edgeWeights,
+   994→    ml: mlResult,
+   995→  };
+   996→}
+   997→

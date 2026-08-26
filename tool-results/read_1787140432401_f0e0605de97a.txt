@@ -1,0 +1,672 @@
+    95→const TGJU_CATEGORIES = new Set<CategoryKey>([
+    96→  'currency', 'gold', 'silver', 'gold_etf',
+    97→  'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity',
+    98→]);
+    99→
+   100→const CATEGORY_COLORS: Record<string, string> = {
+   101→  stock: 'bg-blue-500/15 text-blue-400',
+   102→  etf: 'bg-purple-500/15 text-purple-400',
+   103→  bond: 'bg-emerald-500/15 text-emerald-400',
+   104→  future: 'bg-orange-500/15 text-orange-400',
+   105→  salaf: 'bg-amber-500/15 text-amber-400',
+   106→  mortgage: 'bg-cyan-500/15 text-cyan-400',
+   107→  index: 'bg-rose-500/15 text-rose-400',
+   108→  tse_index: 'bg-rose-500/15 text-rose-400',
+   109→  currency: 'bg-teal-500/15 text-teal-400',
+   110→  gold: 'bg-yellow-500/15 text-yellow-400',
+   111→  silver: 'bg-gray-400/15 text-gray-300',
+   112→  gold_etf: 'bg-amber-500/15 text-amber-400',
+   113→  crypto: 'bg-orange-500/15 text-orange-400',
+   114→  world_index: 'bg-blue-500/15 text-blue-400',
+   115→  foreign_stock: 'bg-sky-500/15 text-sky-400',
+   116→  forex: 'bg-violet-500/15 text-violet-400',
+   117→  energy: 'bg-red-500/15 text-red-400',
+   118→  metal: 'bg-emerald-500/15 text-emerald-400',
+   119→  commodity: 'bg-lime-500/15 text-lime-400',
+   120→};
+   121→
+   122→const CATEGORY_LABELS: Record<string, string> = {
+   123→  stock: 'سهام',
+   124→  etf: 'صندوق',
+   125→  bond: 'اخزا',
+   126→  future: 'آتی',
+   127→  salaf: 'سلف',
+   128→  mortgage: 'تسه',
+   129→  index: 'شاخص',
+   130→  tse_index: 'شاخص',
+   131→  currency: 'ارز',
+   132→  gold: 'طلا',
+   133→  silver: 'نقره',
+   134→  gold_etf: 'صندوق طلا',
+   135→  crypto: 'کریپتو',
+   136→  world_index: 'شاخص جهانی',
+   137→  foreign_stock: 'سهام خارجی',
+   138→  forex: 'فارکس',
+   139→  energy: 'انرژی',
+   140→  metal: 'فلز',
+   141→  commodity: 'کالا',
+   142→};
+   143→
+   144→/* --─ Helpers -------------------------------------------- */
+   145→
+   146→function formatNum(num: number): string {
+   147→  if (num == null) return '—';
+   148→  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(num);
+   149→}
+   150→
+   151→function formatIdx(num: number): string {
+   152→  if (num == null) return '—';
+   153→  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 2 }).format(num);
+   154→}
+   155→
+   156→function Spinner() {
+   157→  return (
+   158→    <svg className='animate-spin text-gray-400' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' width='16' height='16'>
+   159→      <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
+   160→      <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z' />
+   161→    </svg>
+   162→  );
+   163→}
+   164→
+   165→/* --─ Component ------------------------------------------ */
+   166→
+   167→export default function SymbolSearch({
+   168→  onSelect,
+   169→  placeholder = 'جستجوی ابزار مالی ...',
+   170→  className,
+   171→}: SymbolSearchProps) {
+   172→  const [query, setQuery] = React.useState('');
+   173→  const [open, setOpen] = React.useState(false);
+   174→  const [results, setResults] = React.useState<InstrumentItem[]>([]);
+   175→  const [loading, setLoading] = React.useState(false);
+   176→  const [activeIndex, setActiveIndex] = React.useState(-1);
+   177→  const [totalMatched, setTotalMatched] = React.useState(0);
+   178→  const [activeCategory, setActiveCategory] = React.useState<CategoryKey>('all');
+   179→  const [activeIndustry, setActiveIndustry] = React.useState<string | null>(null);
+   180→  const [showIndustryPicker, setShowIndustryPicker] = React.useState(false);
+   181→  const [indexSubFilter, setIndexSubFilter] = React.useState<'all' | 'main' | 'sector'>('all');
+   182→
+   183→  const cacheRef = React.useRef<InstrumentsData | null>(null);
+   184→  const tgjuCacheRef = React.useRef<TgjuData | null>(null);
+   185→  const fetchRef = React.useRef<Promise<InstrumentsData> | null>(null);
+   186→  const tgjuFetchRef = React.useRef<Promise<TgjuData | null> | null>(null);
+   187→  const inputRef = React.useRef<HTMLInputElement>(null);
+   188→  const dropdownRef = React.useRef<HTMLDivElement>(null);
+   189→  const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+   190→  const industryScrollRef = React.useRef<HTMLDivElement>(null);
+   191→
+   192→  /* -- Data fetching -- */
+   193→  const fetchData = React.useCallback(async (): Promise<InstrumentsData> => {
+   194→    if (cacheRef.current) return cacheRef.current;
+   195→    if (fetchRef.current) return fetchRef.current;
+   196→    const p = async () => {
+   197→      try {
+   198→        const r = await fetch('/api/instruments');
+   199→        if (!r.ok) throw new Error(`${r.status}`);
+   200→        const d: InstrumentsData = await r.json();
+   201→        cacheRef.current = d;
+   202→        return d;
+   203→      } finally {
+   204→        fetchRef.current = null;
+   205→      }
+   206→    };
+   207→    fetchRef.current = p();
+   208→    return fetchRef.current;
+   209→  }, []);
+   210→
+   211→  const fetchTgjuData = React.useCallback(async (): Promise<TgjuData | null> => {
+   212→    if (tgjuCacheRef.current) return tgjuCacheRef.current;
+   213→    if (tgjuFetchRef.current) return tgjuFetchRef.current;
+   214→    const p = async () => {
+   215→      try {
+   216→        const r = await fetch('/api/tgju-instruments');
+   217→        if (!r.ok) return null;
+   218→        const d: TgjuData = await r.json();
+   219→        tgjuCacheRef.current = d;
+   220→        return d;
+   221→      } catch {
+   222→        return null;
+   223→      } finally {
+   224→        tgjuFetchRef.current = null;
+   225→      }
+   226→    };
+   227→    tgjuFetchRef.current = p();
+   228→    return p();
+   229→  }, []);
+   230→
+   231→  /* -- Check if category is TGJU-based -- */
+   232→  const isTgjuCategory = (cat: CategoryKey) => TGJU_CATEGORIES.has(cat);
+   233→
+   234→  /* -- Get all items for current category -- */
+   235→  const getItemsForCategory = React.useCallback(async (cat: CategoryKey): Promise<InstrumentItem[]> => {
+   236→    if (isTgjuCategory(cat)) {
+   237→      const tgju = tgjuCacheRef.current || await fetchTgjuData();
+   238→      if (!tgju) return [];
+   239→      switch (cat) {
+   240→        case 'currency': return tgju.currencies;
+   241→        case 'gold': return [...tgju.gold, ...tgju.silver];
+   242→        case 'gold_etf': return tgju.goldEtfs;
+   243→        case 'silver': return tgju.silver;
+   244→        case 'crypto': return tgju.crypto;
+   245→        case 'world_index': return tgju.worldIndices;
+   246→        case 'foreign_stock': return tgju.foreignStocks;
+   247→        case 'forex': return tgju.forex;
+   248→        case 'energy': return tgju.energy;
+   249→        case 'metal': return tgju.metals;
+   250→        case 'commodity': return tgju.commodities;
+   251→        default: return [];
+   252→      }
+   253→    }
+   254→
+   255→    // TSE categories
+   256→    const data = cacheRef.current || await fetchData();
+   257→    switch (cat) {
+   258→      case 'indices': {
+   259→        let idxItems = data.indices;
+   260→        if (indexSubFilter === 'main') {
+   261→          idxItems = idxItems.filter((i) => i.cs === 'شاخص اصلی');
+   262→        } else if (indexSubFilter === 'sector') {
+   263→          idxItems = idxItems.filter((i) => i.cs === 'صنعت');
+   264→        }
+   265→        return idxItems;
+   266→      }
+   267→      case 'stocks':
+   268→        return activeIndustry
+   269→          ? data.stocks.filter((s) => s.cs === activeIndustry)
+   270→          : data.stocks;
+   271→      case 'etf': return data.etfs;
+   272→      case 'bond': return [...data.bonds, ...data.mortgage];
+   273→      case 'derivative': return [...data.futures, ...data.salaf];
+   274→      case 'all':
+   275→      default: {
+   276→        const tgju = tgjuCacheRef.current;
+   277→        return [
+   278→          ...data.indices,
+   279→          ...data.stocks,
+   280→          ...data.etfs,
+   281→          ...(tgju?.currencies || []),
+   282→          ...(tgju?.forex || []),
+   283→          ...(tgju?.crypto || []),
+   284→          ...(tgju?.gold || []),
+   285→          ...(tgju?.silver || []),
+   286→          ...(tgju?.goldEtfs || []),
+   287→          ...(tgju?.worldIndices || []),
+   288→          ...(tgju?.foreignStocks || []),
+   289→          ...(tgju?.energy || []),
+   290→          ...(tgju?.metals || []),
+   291→          ...(tgju?.commodities || []),
+   292→          ...data.bonds,
+   293→          ...data.futures,
+   294→          ...data.salaf,
+   295→          ...data.mortgage,
+   296→        ];
+   297→      }
+   298→    }
+   299→  }, [activeIndustry, indexSubFilter, fetchData, fetchTgjuData]);
+   300→
+   301→  /* -- Popular items -- */
+   302→  const getPopular = React.useCallback(async () => {
+   303→    const data = cacheRef.current || await fetchData();
+   304→    const tgju = tgjuCacheRef.current;
+   305→    const all = [
+   306→      ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))),
+   307→      ...data.stocks,
+   308→      ...data.etfs,
+   309→      ...(tgju?.currencies || []),
+   310→      ...(tgju?.crypto?.slice(0, 5) || []),
+   311→      ...(tgju?.foreignStocks?.slice(0, 3) || []),
+   312→      ...(tgju?.gold?.slice(0, 3) || []),
+   313→    ];
+   314→    const sorted = [...all].sort((a, b) => (b.tval || 0) - (a.tval || 0)).slice(0, 15);
+   315→    setResults(sorted);
+   316→    setTotalMatched(all.length);
+   317→  }, [fetchData]);
+   318→
+   319→  /* -- Filter by search query -- */
+   320→  const doFilter = React.useCallback((items: InstrumentItem[], q: string) => {
+   321→    const n = q.trim().toLowerCase();
+   322→    const f = items.filter(
+   323→      (s) =>
+   324→        s.l18?.toLowerCase().includes(n) ||
+   325→        s.l30?.toLowerCase().includes(n) ||
+   326→        s.cs?.toLowerCase().includes(n),
+   327→    );
+   328→    setTotalMatched(f.length);
+   329→    setResults(f.slice(0, MAX_RESULTS));
+   330→    setActiveIndex(-1);
+   331→  }, []);
+   332→
+   333→  /* -- Show dropdown with data -- */
+   334→  const showDropdown = React.useCallback(async (q: string) => {
+   335→    setOpen(true);
+   336→    await Promise.all([fetchData(), fetchTgjuData()]);
+   337→    const items = await getItemsForCategory(activeCategory);
+   338→    if (q.trim().length === 0) {
+   339→      if (activeCategory === 'all') {
+   340→        await getPopular();
+   341→      } else {
+   342→        setResults(items.slice(0, MAX_RESULTS));
+   343→        setTotalMatched(items.length);
+   344→      }
+   345→    } else {
+   346→      doFilter(items, q);
+   347→    }
+   348→    setLoading(false);
+   349→  }, [fetchData, fetchTgjuData, getItemsForCategory, activeCategory, getPopular, doFilter]);
+   350→
+   351→  /* -- Category change -- */
+   352→  const handleCategoryChange = React.useCallback(async (cat: CategoryKey) => {
+   353→    setActiveCategory(cat);
+   354→    if (cat !== 'stocks') setActiveIndustry(null);
+   355→    if (cat !== 'indices') setIndexSubFilter('all');
+   356→    setShowIndustryPicker(false);
+   357→
+   358→    const items = await getItemsForCategory(cat);
+   359→    if (query.trim().length > 0) {
+   360→      doFilter(items, query);
+   361→    } else if (cat === 'all') {
+   362→      await getPopular();
+   363→    } else {
+   364→      setResults(items.slice(0, MAX_RESULTS));
+   365→      setTotalMatched(items.length);
+   366→    }
+   367→    setActiveIndex(-1);
+   368→  }, [getItemsForCategory, query, doFilter, getPopular]);
+   369→
+   370→  /* -- Industry change -- */
+   371→  const handleIndustryChange = React.useCallback((industry: string | null) => {
+   372→    setActiveIndustry(industry);
+   373→    setShowIndustryPicker(false);
+   374→    if (cacheRef.current) {
+   375→      const items = industry
+   376→        ? cacheRef.current.stocks.filter((s) => s.cs === industry)
+   377→        : cacheRef.current.stocks;
+   378→      if (query.trim().length > 0) {
+   379→        doFilter(items, query);
+   380→      } else {
+   381→        setResults(items.slice(0, MAX_RESULTS));
+   382→        setTotalMatched(items.length);
+   383→      }
+   384→      setActiveIndex(-1);
+   385→    }
+   386→  }, [query, doFilter]);
+   387→
+   388→  const handleChange = React.useCallback((value: string) => {
+   389→    setQuery(value);
+   390→    getItemsForCategory(activeCategory).then((items) => {
+   391→      if (value.trim().length === 0) {
+   392→        if (activeCategory === 'all') getPopular();
+   393→        else {
+   394→          setResults(items.slice(0, MAX_RESULTS));
+   395→          setTotalMatched(items.length);
+   396→        }
+   397→      } else {
+   398→        doFilter(items, value);
+   399→      }
+   400→    });
+   401→  }, [activeCategory, getItemsForCategory, getPopular, doFilter]);
+   402→
+   403→  const handleFocus = React.useCallback(() => {
+   404→    setLoading(true);
+   405→    showDropdown(query);
+   406→  }, [query, showDropdown]);
+   407→
+   408→  const selectSymbol = React.useCallback((s: InstrumentItem) => {
+   409→    setQuery(s.l18);
+   410→    setOpen(false);
+   411→    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey);
+   412→    inputRef.current?.blur();
+   413→  }, [onSelect]);
+   414→
+   415→  const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+   416→    if (!open || results.length === 0) {
+   417→      if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); handleFocus(); }
+   418→      return;
+   419→    }
+   420→    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex((p) => p < results.length - 1 ? p + 1 : 0); }
+   421→    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((p) => p > 0 ? p - 1 : results.length - 1); }
+   422→    else if (e.key === 'Enter') { e.preventDefault(); if (activeIndex >= 0) selectSymbol(results[activeIndex]); }
+   423→    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); inputRef.current?.blur(); }
+   424→  }, [open, results, activeIndex, selectSymbol, handleFocus]);
+   425→
+   426→  React.useEffect(() => {
+   427→    if (activeIndex >= 0) itemRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' });
+   428→  }, [activeIndex]);
+   429→
+   430→  React.useEffect(() => {
+   431→    if (!open) return;
+   432→    const handler = (e: MouseEvent) => {
+   433→      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+   434→          inputRef.current && !inputRef.current.contains(e.target as Node)) {
+   435→        setOpen(false);
+   436→        setShowIndustryPicker(false);
+   437→      }
+   438→    };
+   439→    document.addEventListener('mousedown', handler);
+   440→    return () => document.removeEventListener('mousedown', handler);
+   441→  }, [open]);
+   442→
+   443→  const clear = () => { setQuery(''); setActiveIndustry(null); setActiveCategory('all'); setResults([]); inputRef.current?.focus(); };
+   444→  const isPopular = query.trim().length === 0 && activeCategory === 'all';
+   445→  const isSearch = query.trim().length > 0;
+   446→
+   447→  /* -- Render instrument price -- */
+   448→  const renderPrice = (item: InstrumentItem) => {
+   449→    const isTgju = isTgjuCategory(item.category as CategoryKey);
+   450→    if (item.category === 'index' || item.category === 'tse_index') {
+   451→      return (
+   452→        <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
+   453→          <span className='text-xs font-semibold text-gray-200'>{formatIdx(item.pl)}</span>
+   454→          <span className={cn(
+   455→            'text-[11px] font-bold px-1.5 py-0.5 rounded',
+   456→            item.pcp > 0 ? 'bg-emerald-500/15 text-emerald-400' :
+   457→            item.pcp < 0 ? 'bg-red-500/15 text-red-400' : 'text-gray-500',
+   458→          )}>
+   459→            {item.pcp > 0 ? '+' : ''}{toPersianDigits(item.pcp?.toFixed(2))}٪
+   460→          </span>
+   461→        </div>
+   462→      );
+   463→    }
+   464→    // For static TGJU items with no live price, show dash
+   465→    if (isTgju && item.pl === 0) {
+   466→      return (
+   467→        <div className='flex shrink-0 flex-col items-end gap-0.5'>
+   468→          <span className='text-xs text-gray-500'>—</span>
+   469→        </div>
+   470→      );
+   471→    }
+   472→    const isUp = item.pcp > 0;
+   473→    const isDown = item.pcp < 0;
+   474→    return (
+   475→      <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
+   476→        <span className='text-xs font-semibold text-gray-200'>{formatNum(item.pl)}</span>
+   477→        <span className={cn(
+   478→          'text-[11px] font-bold px-1.5 py-0.5 rounded',
+   479→          isUp ? 'bg-emerald-500/15 text-emerald-400' :
+   480→          isDown ? 'bg-red-500/15 text-red-400' : 'text-gray-500',
+   481→        )}>
+   482→          {isUp ? '+' : ''}{toPersianDigits(item.pcp?.toFixed(2))}٪
+   483→        </span>
+   484→      </div>
+   485→    );
+   486→  };
+   487→
+   488→  const industries = cacheRef.current?.industries || [];
+   489→
+   490→  return (
+   491→    <div dir='rtl' className={cn('relative', className)}>
+   492→
+   493→      <div className='relative'>
+   494→        <Search className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none' />
+   495→        <Input
+   496→          ref={inputRef}
+   497→          type='text'
+   498→          value={query}
+   499→          onChange={(e) => handleChange(e.target.value)}
+   500→          onFocus={handleFocus}
+   501→          onKeyDown={handleKeyDown}
+   502→          placeholder={placeholder}
+   503→          suppressHydrationWarning
+   504→          className={cn(
+   505→            'h-11 w-full rounded-xl border border-gray-200 bg-white',
+   506→            'text-sm text-gray-900 placeholder:text-gray-400',
+   507→            'transition-all shadow-sm',
+   508→            'focus-visible:border-amber-400 focus-visible:ring-amber-400/20 focus-visible:ring-[3px]',
+   509→            'pr-9',
+   510→          )}
+   511→          autoComplete='off' spellCheck={false}
+   512→        />
+   513→        {query && (
+   514→          <button onClick={clear} className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors' type='button'>
+   515→            <X className='w-4 h-4' />
+   516→          </button>
+   517→        )}
+   518→      </div>
+   519→
+   520→
+   521→      {open && (
+   522→        <div
+   523→          ref={dropdownRef}
+   524→          className='absolute top-full left-0 right-0 mt-1.5 z-50 rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-black/10 overflow-hidden'
+   525→          style={{ width: 'min(720px, 96vw)' }}
+   526→        >
+   527→
+   528→          <div className='flex items-center gap-1 px-3 py-2 border-b border-white/5 overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
+   529→            {CATEGORIES.map((cat) => {
+   530→              const Icon = cat.icon;
+   531→              const isActive = activeCategory === cat.key;
+   532→              const isTgjuCat = isTgjuCategory(cat.key);
+   533→              return (
+   534→                <button
+   535→                  key={cat.key}
+   536→                  onClick={() => handleCategoryChange(cat.key)}
+   537→                  className={cn(
+   538→                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0',
+   539→                    isActive
+   540→                      ? isTgjuCat
+   541→                        ? 'bg-teal-500/20 text-teal-400'
+   542→                        : 'bg-amber-500/20 text-amber-400'
+   543→                      : 'text-gray-400 hover:text-gray-200 hover:bg-white/5',
+   544→                  )}
+   545→                  type='button'
+   546→                >
+   547→                  <Icon className='w-3.5 h-3.5' />
+   548→                  {cat.label}
+   549→                </button>
+   550→              );
+   551→            })}
+   552→          </div>
+   553→
+   554→
+   555→          {activeCategory === 'stocks' && (
+   556→            <div className='relative px-3 py-2 border-b border-white/5'>
+   557→              <div className='flex items-center gap-2 overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
+   558→                <button
+   559→                  onClick={() => handleIndustryChange(null)}
+   560→                  className={cn(
+   561→                    'flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-all shrink-0',
+   562→                    !activeIndustry
+   563→                      ? 'bg-blue-500/20 text-blue-400'
+   564→                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+   565→                  )}
+   566→                  type='button'
+   567→                >
+   568→                  <Layers className='w-3 h-3' />
+   569→                  همه صنایع
+   570→                </button>
+   571→                {industries.slice(0, 8).map((ind) => (
+   572→                  <button
+   573→                    key={ind}
+   574→                    onClick={() => handleIndustryChange(ind)}
+   575→                    className={cn(
+   576→                      'px-3 py-1 rounded-md text-[11px] whitespace-nowrap transition-all shrink-0',
+   577→                      activeIndustry === ind
+   578→                        ? 'bg-blue-500/20 text-blue-400 font-medium'
+   579→                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+   580→                    )}
+   581→                    type='button'
+   582→                  >
+   583→                    {ind}
+   584→                  </button>
+   585→                ))}
+   586→                {industries.length > 8 && (
+   587→                  <div className='relative shrink-0'>
+   588→                    <button
+   589→                      onClick={() => setShowIndustryPicker(!showIndustryPicker)}
+   590→                      className={cn(
+   591→                        'flex items-center gap-1 px-3 py-1 rounded-md text-[11px] transition-all',
+   592→                        showIndustryPicker ? 'bg-blue-500/20 text-blue-400' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5',
+   593→                      )}
+   594→                      type='button'
+   595→                    >
+   596→                      بیشتر
+   597→                      <ChevronDown className={cn('w-3 h-3 transition-transform', showIndustryPicker && 'rotate-180')} />
+   598→                    </button>
+   599→                    {showIndustryPicker && (
+   600→                      <div className='absolute top-full mt-1 left-0 right-0 z-10 rounded-lg border border-gray-700/60 bg-[#111d2e] shadow-xl p-2 max-h-[200px] overflow-y-auto' style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}>
+   601→                        {industries.slice(8).map((ind) => (
+   602→                          <button
+   603→                            key={ind}
+   604→                            onClick={() => handleIndustryChange(ind)}
+   605→                            className={cn(
+   606→                              'block w-full text-right px-3 py-1.5 rounded-md text-[11px] transition-all',
+   607→                              activeIndustry === ind
+   608→                                ? 'bg-blue-500/20 text-blue-400 font-medium'
+   609→                                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5',
+   610→                            )}
+   611→                            type='button'
+   612→                          >
+   613→                            {ind}
+   614→                          </button>
+   615→                        ))}
+   616→                      </div>
+   617→                    )}
+   618→                  </div>
+   619→                )}
+   620→              </div>
+   621→              {activeIndustry && (
+   622→                <div className='mt-1.5 flex items-center gap-1.5 text-[10px] text-blue-400'>
+   623→                  <span>صنعت:</span>
+   624→                  <span className='font-bold'>{activeIndustry}</span>
+   625→                  <button onClick={() => handleIndustryChange(null)} className='mr-1 hover:text-blue-300' type='button'>
+   626→                    <X className='w-3 h-3' />
+   627→                  </button>
+   628→                </div>
+   629→              )}
+   630→            </div>
+   631→          )}
+   632→
+   633→          {activeCategory === 'indices' && (
+   634→            <div className='px-3 py-2 border-b border-white/5'>
+   635→              <div className='flex items-center gap-2'>
+   636→                <button
+   637→                  onClick={() => { setIndexSubFilter('all'); if (cacheRef.current) { const items = cacheRef.current.indices; setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); setActiveIndex(-1); } }}
+   638→                  className={cn(
+   639→                    'flex items-center gap-1 px-3 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-all shrink-0',
+   640→                    indexSubFilter === 'all'
+   641→                      ? 'bg-rose-500/20 text-rose-400'
+   642→                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+   643→                  )}
+   644→                  type='button'
+   645→                >
+   646→                  <BarChart3 className='w-3 h-3' />
+   647→                  همه شاخص‌ها
+   648→                </button>
+   649→                <button
+   650→                  onClick={() => { setIndexSubFilter('main'); if (cacheRef.current) { const items = cacheRef.current.indices.filter(i => i.cs === 'شاخص اصلی'); setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); setActiveIndex(-1); } }}
+   651→                  className={cn(
+   652→                    'px-3 py-1 rounded-md text-[11px] whitespace-nowrap transition-all shrink-0',
+   653→                    indexSubFilter === 'main'
+   654→                      ? 'bg-rose-500/20 text-rose-400 font-medium'
+   655→                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+   656→                  )}
+   657→                  type='button'
+   658→                >
+   659→                  شاخص‌های اصلی
+   660→                </button>
+   661→                <button
+   662→                  onClick={() => { setIndexSubFilter('sector'); if (cacheRef.current) { const items = cacheRef.current.indices.filter(i => i.cs === 'صنعت'); setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); setActiveIndex(-1); } }}
+   663→                  className={cn(
+   664→                    'px-3 py-1 rounded-md text-[11px] whitespace-nowrap transition-all shrink-0',
+   665→                    indexSubFilter === 'sector'
+   666→                      ? 'bg-rose-500/20 text-rose-400 font-medium'
+   667→                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+   668→                  )}
+   669→                  type='button'
+   670→                >
+   671→                  شاخص‌های صنعت
+   672→                </button>
+   673→              </div>
+   674→            </div>
+   675→          )}
+   676→
+   677→          {loading && results.length === 0 && (
+   678→            <div className='flex items-center justify-center gap-2 px-4 py-8 text-sm text-gray-400'>
+   679→              <Spinner /><span>در حال بارگذاری ...</span>
+   680→            </div>
+   681→          )}
+   682→
+   683→          {!loading && results.length === 0 && query.trim().length > 0 && (
+   684→            <div className='px-4 py-8 text-center'>
+   685→              <div className='text-gray-500 text-sm mb-1'>ابزاری با این نام یافت نشد</div>
+   686→              <div className='text-gray-600 text-xs'>نام نماد، شرکت یا صنعت را به فارسی وارد کنید</div>
+   687→            </div>
+   688→          )}
+   689→
+   690→          {results.length > 0 && (
+   691→            <>
+   692→              <div className='flex items-center justify-between px-4 py-2 border-b border-white/5'>
+   693→                <span className='text-xs text-gray-500'>
+   694→                  {isPopular && '🔥 محبوب‌ترین‌ها'}
+   695→                  {!isPopular && !isSearch && activeCategory !== 'all' && `${activeIndustry || CATEGORIES.find(c => c.key === activeCategory)?.label || ''}`}
+   696→                  {isSearch && <>{totalMatched.toLocaleString('fa-IR')} نتیجه</>}
+   697→                </span>
+   698→                {isSearch && (
+   699→                  <span className='text-[10px] text-gray-600'>↑↓ ناوبری &nbsp; Enter انتخاب &nbsp; Esc بستن</span>
+   700→                )}
+   701→              </div>
+   702→
+   703→              <div
+   704→                ref={industryScrollRef}
+   705→                role='listbox'
+   706→                className='max-h-[360px] overflow-y-auto'
+   707→                style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}
+   708→              >
+   709→                {results.map((item, index) => {
+   710→                  const isActive = index === activeIndex;
+   711→                  const isTgjuItem = isTgjuCategory(item.category as CategoryKey);
+   712→                  return (
+   713→                    <div
+   714→                      key={`${item.category}-${item.l18}-${item.tgjuKey || ''}`}
+   715→                      ref={(el) => { itemRefs.current[index] = el; }}
+   716→                      role='option'
+   717→                      aria-selected={isActive}
+   718→                      onMouseEnter={() => setActiveIndex(index)}
+   719→                      onClick={() => selectSymbol(item)}
+   720→                      className={cn(
+   721→                        'flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm transition-all',
+   722→                        'border-b border-white/[0.03] last:border-b-0',
+   723→                        isActive ? (isTgjuItem ? 'bg-teal-500/15 text-gray-100' : 'bg-amber-500/15 text-gray-100') : 'text-gray-300 hover:bg-white/[0.04]',
+   724→                      )}
+   725→                    >
+   726→                      <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+   727→                        <div className='flex items-center gap-2'>
+   728→                          <span className='truncate font-bold text-sm text-gray-100'>{item.l18}</span>
+   729→                          {item.pcp > 0 && <TrendingUp className='w-3 h-3 text-emerald-400 shrink-0' />}
+   730→                          {item.pcp < 0 && <TrendingDown className='w-3 h-3 text-red-400 shrink-0' />}
+   731→                          <span className={cn(
+   732→                            'text-[9px] px-1.5 py-0.5 rounded shrink-0 font-medium',
+   733→                            CATEGORY_COLORS[item.category],
+   734→                          )}>
+   735→                            {CATEGORY_LABELS[item.category]}
+   736→                          </span>
+   737→                        </div>
+   738→                        {item.l30 && item.l30 !== item.l18 && (
+   739→                          <span className='truncate text-[11px] text-gray-500 leading-tight'>{item.l30}</span>
+   740→                        )}
+   741→                        {item.cs && item.category === 'stock' && (
+   742→                          <span className='truncate text-[10px] text-gray-600 leading-tight'>{item.cs}</span>
+   743→                        )}
+   744→                        {item.cs && item.category === 'tse_index' && item.cs === 'صنعت' && (
+   745→                          <span className='truncate text-[10px] text-gray-600 leading-tight'>شاخص صنعت</span>
+   746→                        )}
+   747→                      </div>
+   748→                      {renderPrice(item)}
+   749→                    </div>
+   750→                  );
+   751→                })}
+   752→              </div>
+   753→
+   754→              {!isPopular && totalMatched > MAX_RESULTS && (
+   755→                <div className='px-4 py-2 border-t border-white/5 text-center text-[11px] text-gray-600'>
+   756→                  و {((totalMatched - MAX_RESULTS).toLocaleString('fa-IR'))} مورد دیگر ... عبارت دقیق‌تری وارد کنید
+   757→                </div>
+   758→              )}
+   759→            </>
+   760→          )}
+   761→        </div>
+   762→      )}
+   763→    </div>
+   764→  );
+   765→}
+   766→

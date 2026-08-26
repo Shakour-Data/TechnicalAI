@@ -1,0 +1,1041 @@
+     1→▲ Next.js 16.1.3 (Turbopack)
+     2→- Local:         http://localhost:3000
+     3→- Network:       http://21.0.3.20:3000
+     4→- Environments: .env
+     5→
+     6→✓ Starting...
+     7→Attention: Next.js now collects completely anonymous telemetry regarding usage.
+     8→This information is used to shape Next.js' roadmap and prioritize features.
+     9→You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+    10→https://nextjs.org/telemetry
+    11→
+    12→✓ Ready in 857ms
+    13→○ Compiling / ...
+    14→ GET / 200 in 3.1s (compile: 2.6s, render: 463ms)
+    15→ GET / 200 in 59ms (compile: 3ms, render: 56ms)
+    16→ GET / 200 in 73ms (compile: 8ms, render: 65ms)
+    17→ GET / 200 in 64ms (compile: 5ms, render: 59ms)
+    18→ GET / 200 in 42ms (compile: 3ms, render: 40ms)
+    19→ GET / 200 in 54ms (compile: 3ms, render: 51ms)
+    20→ GET / 200 in 40ms (compile: 3ms, render: 38ms)
+    21→ GET / 200 in 35ms (compile: 3ms, render: 32ms)
+    22→ GET / 200 in 43ms (compile: 5ms, render: 38ms)
+    23→✓ Compiled in 293ms
+    24→ GET / 200 in 370ms (compile: 54ms, render: 317ms)
+    25→✓ Compiled in 196ms
+    26→ GET / 200 in 480ms (compile: 71ms, render: 410ms)
+    27→✓ Compiled in 195ms
+    28→✓ Compiled in 186ms
+    29→ GET / 200 in 623ms (compile: 213ms, render: 409ms)
+    30→ GET /api/tgju-instruments 200 in 2.3s (compile: 1289ms, render: 965ms)
+    31→ GET /api/tgju-instruments 200 in 28ms (compile: 8ms, render: 21ms)
+    32→ GET /api/instruments 200 in 7.5s (compile: 1232ms, render: 6.3s)
+    33→[TGJU] Column map for price_aed: O=3 H=2 L=1 C=0 Date=7
+    34→[TGJU] price_aed: Parsed 3630 candles (1391-06-11 to 1405-05-31)
+    35→ GET /api/tgju-analysis?key=price_aed 200 in 15.3s (compile: 225ms, render: 15.0s)
+    36→[AI v5] درهم امارات: school=تحلیل کندلی و بازگشتی (Candlestick & Reversal), style=اسکالپر, tone=سریع و عملیاتی
+    37→[AI v5] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, الگوهای برگشتی صعودی, واگرایی مثبت RSI/MACD
+    38→ POST /api/ai-analysis 200 in 50s (compile: 246ms, render: 50s)
+    39→[TGJU] Column map for price_dollar_rl: O=3 H=2 L=1 C=0 Date=7
+    40→[TGJU] price_dollar_rl: 8/3932 invalid candles skipped
+    41→[TGJU] price_dollar_rl: Parsed 3924 candles (1390-09-05 to 1405-05-31)
+    42→ GET /api/tgju-analysis?key=price_dollar_rl 200 in 12.7s (compile: 6ms, render: 12.7s)
+    43→[AI v5] دلار: school=تحلیل کندلی و بازگشتی (Candlestick & Reversal), style=اسکالپر, tone=سریع و عملیاتی
+    44→[AI v5] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, الگوهای برگشتی صعودی, واگرایی مثبت RSI/MACD
+    45→ GET /api/tgju-analysis?key=price_aed 200 in 7.1s (compile: 8ms, render: 7.1s)
+    46→ POST /api/ai-analysis 200 in 26.5s (compile: 7ms, render: 26.4s)
+    47→[AI v5] Cache hit for درهم امارات
+    48→ POST /api/ai-analysis 200 in 35ms (compile: 4ms, render: 31ms)
+    49→ GET / 200 in 60ms (compile: 3ms, render: 57ms)
+    50→ GET / 200 in 64ms (compile: 5ms, render: 59ms)
+    51→ GET / 200 in 44ms (compile: 7ms, render: 36ms)
+    52→ GET /api/tgju-instruments 200 in 625ms (compile: 4ms, render: 620ms)
+    53→ GET /api/tgju-instruments 200 in 8ms (compile: 2ms, render: 6ms)
+    54→ GET /api/instruments 200 in 2.4s (compile: 2ms, render: 2.4s)
+    55→ GET /api/analysis?symbol=%D8%B4%D8%B5%D8%AF%D9%81 200 in 2.5s (compile: 104ms, render: 2.4s)
+    56→[AI v5] صنعتی دوده فام: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=اسکالپر, tone=هشداردهنده و ریسک‌محور
+    57→[AI v5] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی صعودی, واگرایی مثبت RSI/MACD
+    58→ POST /api/ai-analysis 200 in 25.4s (compile: 2ms, render: 25.4s)
+    59→ GET / 200 in 53ms (compile: 3ms, render: 50ms)
+    60→ GET / 200 in 41ms (compile: 3ms, render: 39ms)
+    61→ GET / 200 in 44ms (compile: 3ms, render: 41ms)
+    62→ GET / 200 in 37ms (compile: 2ms, render: 35ms)
+    63→ GET / 200 in 37ms (compile: 2ms, render: 35ms)
+    64→ GET / 200 in 38ms (compile: 3ms, render: 35ms)
+    65→ GET / 200 in 42ms (compile: 2ms, render: 40ms)
+    66→ GET / 200 in 36ms (compile: 2ms, render: 33ms)
+    67→ GET / 200 in 36ms (compile: 2ms, render: 34ms)
+    68→ GET / 200 in 39ms (compile: 4ms, render: 35ms)
+    69→ GET / 200 in 47ms (compile: 2ms, render: 45ms)
+    70→✓ Compiled in 267ms
+    71→ GET / 200 in 43ms (compile: 4ms, render: 39ms)
+    72→✓ Compiled in 241ms
+    73→ GET / 200 in 41ms (compile: 3ms, render: 37ms)
+    74→ GET /api/tgju-instruments 200 in 1363ms (compile: 60ms, render: 1303ms)
+    75→ GET /api/instruments 200 in 1922ms (compile: 5ms, render: 1917ms)
+    76→ GET / 200 in 43ms (compile: 3ms, render: 40ms)
+    77→ GET / 200 in 34ms (compile: 3ms, render: 32ms)
+    78→✓ Compiled in 297ms
+    79→ GET / 200 in 44ms (compile: 4ms, render: 40ms)
+    80→ GET / 200 in 41ms (compile: 4ms, render: 37ms)
+    81→ GET / 200 in 43ms (compile: 3ms, render: 40ms)
+    82→ GET / 200 in 40ms (compile: 2ms, render: 38ms)
+    83→ GET / 200 in 35ms (compile: 2ms, render: 33ms)
+    84→ GET / 200 in 37ms (compile: 4ms, render: 33ms)
+    85→ GET / 200 in 43ms (compile: 3ms, render: 40ms)
+    86→ GET / 200 in 37ms (compile: 3ms, render: 34ms)
+    87→✓ Compiled in 529ms
+    88→✓ Compiled in 274ms
+    89→✓ Compiled in 460ms
+    90→ GET / 200 in 715ms (compile: 117ms, render: 598ms)
+    91→ GET /api/tgju-instruments 200 in 1064ms (compile: 66ms, render: 998ms)
+    92→ GET /api/tgju-instruments 200 in 8ms (compile: 3ms, render: 5ms)
+    93→ GET /api/instruments 200 in 2.5s (compile: 74ms, render: 2.4s)
+    94→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 8.2s (compile: 55ms, render: 8.1s)
+    95→[AI v5] ایران‌ خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=عدد‌محور و سخت‌گیر
+    96→[AI v5] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+    97→ POST /api/ai-analysis 200 in 26.8s (compile: 48ms, render: 26.7s)
+    98→ GET / 200 in 49ms (compile: 3ms, render: 46ms)
+    99→ GET / 200 in 40ms (compile: 3ms, render: 37ms)
+   100→ GET / 200 in 43ms (compile: 3ms, render: 41ms)
+   101→ GET / 200 in 480ms (compile: 117ms, render: 364ms)
+   102→ GET / 200 in 482ms (compile: 97ms, render: 385ms)
+   103→ GET / 200 in 34ms (compile: 3ms, render: 31ms)
+   104→ GET / 200 in 48ms (compile: 5ms, render: 42ms)
+   105→ GET / 200 in 37ms (compile: 2ms, render: 35ms)
+   106→ GET / 200 in 36ms (compile: 4ms, render: 32ms)
+   107→ GET / 200 in 32ms (compile: 2ms, render: 30ms)
+   108→ GET / 200 in 36ms (compile: 3ms, render: 33ms)
+   109→ GET / 200 in 41ms (compile: 3ms, render: 38ms)
+   110→ GET / 200 in 38ms (compile: 3ms, render: 35ms)
+   111→ GET / 200 in 515ms (compile: 162ms, render: 353ms)
+   112→ GET / 200 in 45ms (compile: 3ms, render: 42ms)
+   113→✓ Compiled in 197ms
+   114→ GET / 200 in 465ms (compile: 59ms, render: 406ms)
+   115→ GET / 200 in 36ms (compile: 2ms, render: 33ms)
+   116→✓ Compiled in 779ms
+   117→ GET / 200 in 427ms (compile: 53ms, render: 373ms)
+   118→ GET / 200 in 39ms (compile: 3ms, render: 36ms)
+   119→✓ Compiled in 690ms
+   120→ GET / 200 in 80ms (compile: 49ms, render: 31ms)
+   121→ GET / 200 in 21ms (compile: 3ms, render: 18ms)
+   122→ GET / 200 in 32ms (compile: 3ms, render: 29ms)
+   123→ GET / 200 in 17ms (compile: 3ms, render: 15ms)
+   124→ GET / 200 in 16ms (compile: 3ms, render: 14ms)
+   125→ GET / 200 in 15ms (compile: 3ms, render: 13ms)
+   126→ GET / 200 in 17ms (compile: 3ms, render: 15ms)
+   127→ GET / 200 in 29ms (compile: 3ms, render: 26ms)
+   128→ GET / 200 in 18ms (compile: 3ms, render: 15ms)
+   129→ GET / 200 in 16ms (compile: 3ms, render: 13ms)
+   130→ GET / 200 in 17ms (compile: 2ms, render: 15ms)
+   131→ GET / 200 in 16ms (compile: 3ms, render: 13ms)
+   132→ GET / 200 in 22ms (compile: 4ms, render: 18ms)
+   133→ GET / 200 in 18ms (compile: 3ms, render: 16ms)
+   134→ GET / 200 in 15ms (compile: 2ms, render: 12ms)
+   135→ GET / 200 in 14ms (compile: 2ms, render: 12ms)
+   136→ GET / 200 in 20ms (compile: 3ms, render: 17ms)
+   137→ GET / 200 in 17ms (compile: 3ms, render: 14ms)
+   138→ GET / 200 in 15ms (compile: 3ms, render: 12ms)
+   139→ GET / 200 in 17ms (compile: 2ms, render: 15ms)
+   140→ GET / 200 in 16ms (compile: 3ms, render: 13ms)
+   141→ GET / 200 in 17ms (compile: 3ms, render: 15ms)
+   142→ GET / 200 in 291ms (compile: 3ms, render: 287ms)
+   143→ GET / 200 in 50ms (compile: 3ms, render: 47ms)
+   144→ GET / 200 in 36ms (compile: 2ms, render: 34ms)
+   145→ GET / 200 in 42ms (compile: 3ms, render: 39ms)
+   146→ GET / 200 in 51ms (compile: 2ms, render: 49ms)
+   147→✓ Compiled in 185ms
+   148→ GET / 200 in 390ms (compile: 52ms, render: 338ms)
+   149→ GET / 200 in 49ms (compile: 3ms, render: 46ms)
+   150→✓ Compiled in 1200ms
+   151→ GET / 200 in 530ms (compile: 47ms, render: 483ms)
+   152→✓ Compiled in 325ms
+   153→ GET / 200 in 385ms (compile: 50ms, render: 335ms)
+   154→ GET / 200 in 104ms (compile: 5ms, render: 99ms)
+   155→ GET / 200 in 63ms (compile: 13ms, render: 50ms)
+   156→ GET / 200 in 34ms (compile: 2ms, render: 32ms)
+   157→✓ Compiled in 193ms
+   158→ GET / 200 in 385ms (compile: 50ms, render: 335ms)
+   159→ GET / 200 in 43ms (compile: 3ms, render: 40ms)
+   160→✓ Compiled in 176ms
+   161→ GET / 200 in 392ms (compile: 52ms, render: 340ms)
+   162→✓ Compiled in 882ms
+   163→ GET / 200 in 399ms (compile: 52ms, render: 347ms)
+   164→✓ Compiled in 784ms
+   165→ GET / 200 in 327ms (compile: 47ms, render: 280ms)
+   166→ GET / 200 in 34ms (compile: 3ms, render: 32ms)
+   167→✓ Compiled in 780ms
+   168→ GET / 200 in 602ms (compile: 57ms, render: 545ms)
+   169→✓ Compiled in 615ms
+   170→✓ Compiled in 447ms
+   171→✓ Compiled in 756ms
+   172→✓ Compiled in 231ms
+   173→✓ Compiled in 132ms
+   174→✓ Compiled in 178ms
+   175→ GET / 200 in 620ms (compile: 85ms, render: 536ms)
+   176→ GET / 200 in 36ms (compile: 3ms, render: 34ms)
+   177→✓ Compiled in 154ms
+   178→✓ Compiled in 149ms
+   179→ GET / 200 in 556ms (compile: 168ms, render: 387ms)
+   180→ GET /api/tgju-instruments 200 in 3.1s (compile: 52ms, render: 3.1s)
+   181→ GET /api/tgju-instruments 200 in 7ms (compile: 2ms, render: 4ms)
+   182→ GET /api/instruments 200 in 5.9s (compile: 153ms, render: 5.8s)
+   183→[tse-api] BrsApi symbol data failed for خودرو: HTTP 403
+   184→[tse-api] BrsApi candlestick failed for خودرو: HTTP 403
+   185→[tse-api] Using expired candlestick cache for خودرو (5262 candles)
+   186→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 7.4s (compile: 199ms, render: 7.2s)
+   187→[AI v5] خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=هشداردهنده و ریسک‌محور
+   188→[AI v5] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   189→ POST /api/ai-analysis 200 in 34.7s (compile: 89ms, render: 34.6s)
+   190→ GET / 200 in 57ms (compile: 5ms, render: 53ms)
+   191→ GET /?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 49ms (compile: 4ms, render: 45ms)
+   192→ GET /api/tgju-instruments 200 in 954ms (compile: 57ms, render: 897ms)
+   193→ GET /api/tgju-instruments 200 in 12ms (compile: 4ms, render: 8ms)
+   194→ GET /api/instruments 200 in 5.4s (compile: 3ms, render: 5.4s)
+   195→[tse-api] BrsApi symbol data failed for خودرو: HTTP 403
+   196→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 7.5s (compile: 5ms, render: 7.5s)
+   197→[AI v5] خودرو: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=هشداردهنده و ریسک‌محور
+   198→[AI v5] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, OBV تأییدکننده, کندل قوی شکستی
+   199→ POST /api/ai-analysis 200 in 31.9s (compile: 4ms, render: 31.9s)
+   200→ GET / 200 in 31ms (compile: 2ms, render: 29ms)
+   201→ GET / 200 in 33ms (compile: 2ms, render: 30ms)
+   202→ GET / 200 in 38ms (compile: 4ms, render: 35ms)
+   203→ GET /api/tgju-instruments 200 in 920ms (compile: 2ms, render: 918ms)
+   204→ GET /api/tgju-instruments 200 in 6ms (compile: 2ms, render: 4ms)
+   205→ GET /api/instruments 200 in 4.9s (compile: 2ms, render: 4.9s)
+   206→[tse-api] BrsApi candlestick failed for شتران: HTTP 403
+   207→[analysis] Error for symbol=شتران: دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.
+   208→ GET /api/analysis?symbol=%D8%B4%D8%AA%D8%B1%D8%A7%D9%86 502 in 1651ms (compile: 3ms, render: 1648ms)
+   209→ GET /api/instruments 200 in 2.0s (compile: 2ms, render: 2.0s)
+   210→ GET /api/tgju-instruments 200 in 7ms (compile: 2ms, render: 4ms)
+   211→ GET /api/tgju-instruments 200 in 14ms (compile: 8ms, render: 6ms)
+   212→ GET / 200 in 55ms (compile: 2ms, render: 53ms)
+   213→ GET /api/tgju-instruments 200 in 1087ms (compile: 2ms, render: 1084ms)
+   214→ GET /api/tgju-instruments 200 in 8ms (compile: 4ms, render: 3ms)
+   215→ GET /api/instruments 200 in 6.2s (compile: 3ms, render: 6.2s)
+   216→[tse-api] BrsApi candlestick failed for پاسارگاد: HTTP 403
+   217→[analysis] Error for symbol=پاسارگاد: دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.
+   218→ GET /api/analysis?symbol=%D9%BE%D8%A7%D8%B3%D8%A7%D8%B1%DA%AF%D8%A7%D8%AF 502 in 1628ms (compile: 2ms, render: 1626ms)
+   219→[tse-api] BrsApi symbol data failed for پاسارگاد: HTTP 403
+   220→ GET / 200 in 59ms (compile: 5ms, render: 54ms)
+   221→ GET / 200 in 38ms (compile: 2ms, render: 35ms)
+   222→ GET / 200 in 34ms (compile: 2ms, render: 32ms)
+   223→ GET / 200 in 52ms (compile: 4ms, render: 49ms)
+   224→ GET / 200 in 38ms (compile: 3ms, render: 35ms)
+   225→ GET / 200 in 36ms (compile: 1995µs, render: 34ms)
+   226→ GET /api/instruments 200 in 6.4s (compile: 2ms, render: 6.4s)
+   227→[tse-api] BrsApi candlestick failed for شتران: HTTP 403
+   228→[analysis] Error for symbol=شتران: دریافت داده کندل از سرور ممکن نیست. لطفاً بعداً تلاش کنید.
+   229→ GET /api/analysis?symbol=%D8%B4%D8%AA%D8%B1%D8%A7%D9%86 502 in 1596ms (compile: 2ms, render: 1593ms)
+   230→[tse-api] BrsApi symbol data failed for شتران: The operation was aborted due to timeout
+   231→ GET / 200 in 56ms (compile: 6ms, render: 50ms)
+   232→ GET / 200 in 38ms (compile: 3ms, render: 35ms)
+   233→ GET / 200 in 38ms (compile: 2ms, render: 36ms)
+   234→ GET / 200 in 33ms (compile: 2ms, render: 30ms)
+   235→ GET / 200 in 35ms (compile: 3ms, render: 32ms)
+   236→ GET / 200 in 35ms (compile: 3ms, render: 32ms)
+   237→✓ Compiled in 153ms
+   238→✓ Compiled in 172ms
+   239→[tse-api] Using candlestick file cache for خودرو (5263 candles)
+   240→[tse-api] BrsApi symbol data failed for خودرو: HTTP 403
+   241→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.5s (compile: 52ms, render: 6.5s)
+   242→ GET / 200 in 574ms (compile: 205ms, render: 370ms)
+   243→ GET /api/tgju-instruments 200 in 1728ms (compile: 256ms, render: 1473ms)
+   244→ GET /api/tgju-instruments 200 in 10ms (compile: 4ms, render: 7ms)
+   245→[TypeError: fetch failed] {
+   246→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   247→      at ignore-listed frames {
+   248→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   249→  }
+   250→}
+   251→[TypeError: fetch failed] {
+   252→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   253→      at ignore-listed frames {
+   254→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   255→  }
+   256→}
+   257→⨯ Error: failed to pipe response
+   258→    at ignore-listed frames {
+   259→  [cause]: [TypeError: fetch failed] {
+   260→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   261→        at ignore-listed frames {
+   262→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   263→    }
+   264→  }
+   265→}
+   266→ GET /api/instruments 500 in 11.0s (compile: 164ms, render: 10.8s)
+   267→[TypeError: fetch failed] {
+   268→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   269→      at ignore-listed frames {
+   270→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   271→  }
+   272→}
+   273→[tse-api] Using candlestick file cache for خودرو (5263 candles)
+   274→[tse-api] BrsApi symbol data failed for خودرو: The operation was aborted due to timeout
+   275→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 14.4s (compile: 5ms, render: 14.4s)
+   276→[AI v5] Cache hit for خودرو
+   277→ POST /api/ai-analysis 200 in 12ms (compile: 5ms, render: 8ms)
+   278→ GET / 200 in 51ms (compile: 3ms, render: 48ms)
+   279→ GET / 200 in 35ms (compile: 2ms, render: 33ms)
+   280→ GET / 200 in 33ms (compile: 2ms, render: 31ms)
+   281→ GET / 200 in 49ms (compile: 3ms, render: 46ms)
+   282→[TypeError: fetch failed] {
+   283→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   284→      at ignore-listed frames {
+   285→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   286→  }
+   287→}
+   288→[TypeError: fetch failed] {
+   289→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   290→      at ignore-listed frames {
+   291→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   292→  }
+   293→}
+   294→⨯ Error: failed to pipe response
+   295→    at ignore-listed frames {
+   296→  [cause]: [TypeError: fetch failed] {
+   297→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   298→        at ignore-listed frames {
+   299→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   300→    }
+   301→  }
+   302→}
+   303→ GET /api/instruments 500 in 10.6s (compile: 2ms, render: 10.6s)
+   304→[TypeError: fetch failed] {
+   305→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   306→      at ignore-listed frames {
+   307→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   308→  }
+   309→}
+   310→[TypeError: fetch failed] {
+   311→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   312→      at ignore-listed frames {
+   313→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   314→  }
+   315→}
+   316→ GET /api/tgju-instruments 200 in 973ms (compile: 3ms, render: 970ms)
+   317→ GET /api/tgju-instruments 200 in 7ms (compile: 2ms, render: 4ms)
+   318→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   319→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   320→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 13.7s (compile: 2ms, render: 13.7s)
+   321→ GET /api/tgju-instruments 200 in 7ms (compile: 1785µs, render: 5ms)
+   322→ GET /api/tgju-instruments 200 in 8ms (compile: 2ms, render: 6ms)
+   323→ GET /api/instruments 200 in 2.0s (compile: 4ms, render: 2.0s)
+   324→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   325→[tse-api] Using candlestick file cache for فملی (4269 candles)
+   326→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   327→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 13.8s (compile: 2ms, render: 13.8s)
+   328→[tse-api] BrsApi symbol data failed for فملی: The operation was aborted due to timeout
+   329→ GET /api/analysis?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 13.8s (compile: 1973µs, render: 13.8s)
+   330→[AI v5] فملی: school=تحلیل اسیلاتورها و مومنتوم (Oscillators & Momentum), style=تحلیلگر حجم, tone=هشداردهنده و ریسک‌محور
+   331→[AI v5] Methods: EMA 20/50, MACD, فیبوناچی اصلاحی (۳۸.۲ یا ۵۰٪), الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD
+   332→ POST /api/ai-analysis 200 in 26.1s (compile: 3ms, render: 26.1s)
+   333→[AI v5] Cache hit for فملی
+   334→ POST /api/ai-analysis 200 in 10ms (compile: 3ms, render: 8ms)
+   335→ GET / 200 in 60ms (compile: 6ms, render: 54ms)
+   336→⚠ Cross origin request detected from preview-chat-a97a2b0b-c3df-4080-9337-35f40f4aaee7.space-z.ai to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+   337→Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+   338→ GET / 200 in 70ms (compile: 3ms, render: 67ms)
+   339→ GET / 200 in 39ms (compile: 2ms, render: 37ms)
+   340→ GET / 200 in 35ms (compile: 2ms, render: 33ms)
+   341→ GET / 200 in 42ms (compile: 3ms, render: 39ms)
+   342→ GET / 200 in 42ms (compile: 2ms, render: 40ms)
+   343→ GET / 200 in 44ms (compile: 3ms, render: 42ms)
+   344→✓ Compiled in 260ms
+   345→ GET /?symbol=%D9%81%D9%85%D9%84%DB%8C 200 in 860ms (compile: 177ms, render: 682ms)
+   346→ GET / 200 in 47ms (compile: 4ms, render: 43ms)
+   347→ GET / 200 in 42ms (compile: 3ms, render: 39ms)
+   348→ GET / 200 in 41ms (compile: 3ms, render: 39ms)
+   349→ GET / 200 in 38ms (compile: 2ms, render: 36ms)
+   350→ GET / 200 in 66ms (compile: 4ms, render: 62ms)
+   351→ GET / 200 in 37ms (compile: 2ms, render: 35ms)
+   352→ GET / 200 in 80ms (compile: 48ms, render: 31ms)
+   353→ GET / 200 in 17ms (compile: 3ms, render: 14ms)
+   354→ GET / 200 in 18ms (compile: 4ms, render: 15ms)
+   355→ GET / 200 in 14ms (compile: 2ms, render: 12ms)
+   356→ GET / 200 in 19ms (compile: 3ms, render: 16ms)
+   357→ GET / 200 in 13ms (compile: 2ms, render: 11ms)
+   358→ GET / 200 in 14ms (compile: 2ms, render: 12ms)
+   359→ GET / 200 in 20ms (compile: 2ms, render: 18ms)
+   360→ GET / 200 in 37ms (compile: 4ms, render: 33ms)
+   361→ GET / 200 in 15ms (compile: 2ms, render: 13ms)
+   362→ GET / 200 in 23ms (compile: 3ms, render: 20ms)
+   363→ GET / 200 in 34ms (compile: 3ms, render: 31ms)
+   364→ GET / 200 in 14ms (compile: 2ms, render: 12ms)
+   365→ GET / 200 in 18ms (compile: 2ms, render: 16ms)
+   366→ GET / 200 in 18ms (compile: 3ms, render: 15ms)
+   367→ GET / 200 in 11ms (compile: 1638µs, render: 10ms)
+   368→ GET / 200 in 19ms (compile: 2ms, render: 17ms)
+   369→ GET / 200 in 13ms (compile: 2ms, render: 11ms)
+   370→ GET / 200 in 15ms (compile: 3ms, render: 12ms)
+   371→ GET / 200 in 17ms (compile: 2ms, render: 15ms)
+   372→ GET / 200 in 14ms (compile: 2ms, render: 12ms)
+   373→ GET / 200 in 16ms (compile: 3ms, render: 13ms)
+   374→✓ Compiled in 245ms
+   375→✓ Compiled in 1159ms
+   376→ GET / 200 in 515ms (compile: 55ms, render: 460ms)
+   377→ GET /api/ml-predict 200 in 175ms (compile: 159ms, render: 16ms)
+   378→ POST /api/ml-predict 200 in 3.6s (compile: 3ms, render: 3.6s)
+   379→ GET / 200 in 559ms (compile: 30ms, render: 529ms)
+   380→ GET /api/tgju-instruments 200 in 5.9s (compile: 313ms, render: 5.6s)
+   381→ GET /api/tgju-instruments 200 in 16ms (compile: 8ms, render: 8ms)
+   382→[TypeError: fetch failed] {
+   383→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   384→      at ignore-listed frames {
+   385→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   386→  }
+   387→}
+   388→[TypeError: fetch failed] {
+   389→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   390→      at ignore-listed frames {
+   391→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   392→  }
+   393→}
+   394→⨯ Error: failed to pipe response
+   395→    at ignore-listed frames {
+   396→  [cause]: [TypeError: fetch failed] {
+   397→    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   398→        at ignore-listed frames {
+   399→      code: 'UND_ERR_CONNECT_TIMEOUT'
+   400→    }
+   401→  }
+   402→}
+   403→ GET /api/instruments 500 in 11.2s (compile: 95ms, render: 11.1s)
+   404→[TypeError: fetch failed] {
+   405→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   406→      at ignore-listed frames {
+   407→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   408→  }
+   409→}
+   410→[TypeError: fetch failed] {
+   411→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   412→      at ignore-listed frames {
+   413→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   414→  }
+   415→}
+   416→[TypeError: fetch failed] {
+   417→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   418→      at ignore-listed frames {
+   419→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   420→  }
+   421→}
+   422→[TypeError: fetch failed] {
+   423→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   424→      at ignore-listed frames {
+   425→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   426→  }
+   427→}
+   428→[TypeError: fetch failed] {
+   429→  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: api.brsapi.ir:443, timeout: 10000ms)
+   430→      at ignore-listed frames {
+   431→    code: 'UND_ERR_CONNECT_TIMEOUT'
+   432→  }
+   433→}
+   434→[tse-api] Using candlestick file cache for خودرو (5263 candles)
+   435→[tse-api] BrsApi symbol data failed for خودرو: fetch failed
+   436→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 19.1s (compile: 385ms, render: 18.7s)
+   437→[AI v5] خودرو: school=مکتب حجم و عرضه/تقاضا, style=معاملاتی و عملیاتی, tone=محافظه‌کارانه
+   438→[AI v5] Methods: الگوهای برگشتی نزولی, واگرایی منفی RSI/MACD, فیبوناچی گسترشی, الگوهای برگشتی صعودی, واگرایی مثبت RSI/MACD
+   439→ GET /api/ml-predict 200 in 62ms (compile: 3ms, render: 58ms)
+   440→ POST /api/ai-analysis 200 in 9.8s (compile: 222ms, render: 9.6s)
+   441→ GET / 200 in 527ms (compile: 5ms, render: 522ms)
+   442→ POST /api/ml-predict 504 in 2.0min (compile: 8ms, render: 2.0min)
+   443→⚠ ./src/instrumentation.ts:3:1
+   444→Ecmascript file had an error
+   445→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   446→ [90m 2 |[39m
+   447→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   448→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   449→ [90m 4 |[39m
+   450→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   451→ [90m 6 |[39m[0m
+   452→
+   453→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   454→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   455→
+   456→
+   457→⚠ ./src/instrumentation.ts:3:1
+   458→Ecmascript file had an error
+   459→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   460→ [90m 2 |[39m
+   461→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   462→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   463→ [90m 4 |[39m
+   464→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   465→ [90m 6 |[39m[0m
+   466→
+   467→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   468→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   469→
+   470→
+   471→⚠ ./src/instrumentation.ts:3:1
+   472→Ecmascript file had an error
+   473→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   474→ [90m 2 |[39m
+   475→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   476→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   477→ [90m 4 |[39m
+   478→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   479→ [90m 6 |[39m[0m
+   480→
+   481→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   482→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   483→
+   484→
+   485→⚠ ./src/instrumentation.ts:3:1
+   486→Ecmascript file had an error
+   487→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   488→ [90m 2 |[39m
+   489→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   490→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   491→ [90m 4 |[39m
+   492→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   493→ [90m 6 |[39m[0m
+   494→
+   495→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   496→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   497→
+   498→
+   499→⚠ ./src/instrumentation.ts:3:1
+   500→Ecmascript file had an error
+   501→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   502→ [90m 2 |[39m
+   503→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   504→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   505→ [90m 4 |[39m
+   506→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   507→ [90m 6 |[39m[0m
+   508→
+   509→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   510→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   511→
+   512→
+   513→⚠ ./src/instrumentation.ts:3:1
+   514→Ecmascript file had an error
+   515→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   516→ [90m 2 |[39m
+   517→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   518→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   519→ [90m 4 |[39m
+   520→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   521→ [90m 6 |[39m[0m
+   522→
+   523→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   524→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   525→
+   526→
+   527→ GET / 200 in 536ms (compile: 108ms, render: 428ms)
+   528→⚠ ./src/instrumentation.ts:3:1
+   529→Ecmascript file had an error
+   530→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   531→ [90m 2 |[39m
+   532→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   533→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   534→ [90m 4 |[39m
+   535→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   536→ [90m 6 |[39m[0m
+   537→
+   538→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   539→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   540→
+   541→
+   542→ GET / 200 in 457ms (compile: 49ms, render: 408ms)
+   543→ GET / 200 in 427ms (compile: 108ms, render: 319ms)
+   544→ GET / 200 in 367ms (compile: 95ms, render: 272ms)
+   545→ GET / 200 in 284ms (compile: 74ms, render: 210ms)
+   546→ GET / 200 in 224ms (compile: 39ms, render: 184ms)
+   547→⚠ ./src/instrumentation.ts:3:1
+   548→Ecmascript file had an error
+   549→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   550→ [90m 2 |[39m
+   551→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   552→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   553→ [90m 4 |[39m
+   554→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   555→ [90m 6 |[39m[0m
+   556→
+   557→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   558→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   559→
+   560→
+   561→⚠ ./src/instrumentation.ts:3:1
+   562→Ecmascript file had an error
+   563→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   564→ [90m 2 |[39m
+   565→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   566→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   567→ [90m 4 |[39m
+   568→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   569→ [90m 6 |[39m[0m
+   570→
+   571→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   572→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   573→
+   574→
+   575→⚠ ./src/instrumentation.ts:3:1
+   576→Ecmascript file had an error
+   577→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   578→ [90m 2 |[39m
+   579→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   580→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   581→ [90m 4 |[39m
+   582→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   583→ [90m 6 |[39m[0m
+   584→
+   585→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   586→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   587→
+   588→
+   589→⚠ ./src/instrumentation.ts:3:1
+   590→Ecmascript file had an error
+   591→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   592→ [90m 2 |[39m
+   593→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   594→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   595→ [90m 4 |[39m
+   596→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   597→ [90m 6 |[39m[0m
+   598→
+   599→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   600→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   601→
+   602→
+   603→⚠ ./src/instrumentation.ts:3:1
+   604→Ecmascript file had an error
+   605→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   606→ [90m 2 |[39m
+   607→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   608→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   609→ [90m 4 |[39m
+   610→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   611→ [90m 6 |[39m[0m
+   612→
+   613→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   614→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   615→
+   616→
+   617→ GET / 200 in 467ms (compile: 10ms, render: 457ms)
+   618→⚠ ./src/instrumentation.ts:3:1
+   619→Ecmascript file had an error
+   620→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   621→ [90m 2 |[39m
+   622→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   623→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   624→ [90m 4 |[39m
+   625→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   626→ [90m 6 |[39m[0m
+   627→
+   628→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   629→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   630→
+   631→
+   632→ GET / 200 in 418ms (compile: 13ms, render: 405ms)
+   633→ GET / 200 in 414ms (compile: 80ms, render: 334ms)
+   634→ GET / 200 in 378ms (compile: 90ms, render: 288ms)
+   635→ GET / 200 in 305ms (compile: 69ms, render: 236ms)
+   636→ GET / 200 in 249ms (compile: 66ms, render: 183ms)
+   637→⚠ ./src/instrumentation.ts:3:1
+   638→Ecmascript file had an error
+   639→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   640→ [90m 2 |[39m
+   641→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   642→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   643→ [90m 4 |[39m
+   644→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   645→ [90m 6 |[39m[0m
+   646→
+   647→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   648→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   649→
+   650→
+   651→⚠ ./src/instrumentation.ts:3:1
+   652→Ecmascript file had an error
+   653→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   654→ [90m 2 |[39m
+   655→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   656→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   657→ [90m 4 |[39m
+   658→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   659→ [90m 6 |[39m[0m
+   660→
+   661→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   662→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   663→
+   664→
+   665→⚠ ./src/instrumentation.ts:3:1
+   666→Ecmascript file had an error
+   667→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   668→ [90m 2 |[39m
+   669→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   670→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   671→ [90m 4 |[39m
+   672→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   673→ [90m 6 |[39m[0m
+   674→
+   675→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   676→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   677→
+   678→
+   679→⚠ ./src/instrumentation.ts:3:1
+   680→Ecmascript file had an error
+   681→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   682→ [90m 2 |[39m
+   683→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   684→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   685→ [90m 4 |[39m
+   686→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   687→ [90m 6 |[39m[0m
+   688→
+   689→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   690→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   691→
+   692→
+   693→⚠ ./src/instrumentation.ts:3:1
+   694→Ecmascript file had an error
+   695→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   696→ [90m 2 |[39m
+   697→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   698→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   699→ [90m 4 |[39m
+   700→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   701→ [90m 6 |[39m[0m
+   702→
+   703→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   704→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   705→
+   706→
+   707→⚠ ./src/instrumentation.ts:3:1
+   708→Ecmascript file had an error
+   709→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   710→ [90m 2 |[39m
+   711→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   712→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   713→ [90m 4 |[39m
+   714→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   715→ [90m 6 |[39m[0m
+   716→
+   717→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   718→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   719→
+   720→
+   721→ GET / 200 in 324ms (compile: 8ms, render: 316ms)
+   722→⚠ ./src/instrumentation.ts:3:1
+   723→Ecmascript file had an error
+   724→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   725→ [90m 2 |[39m
+   726→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   727→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   728→ [90m 4 |[39m
+   729→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   730→ [90m 6 |[39m[0m
+   731→
+   732→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   733→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   734→
+   735→
+   736→ GET / 200 in 306ms (compile: 15ms, render: 291ms)
+   737→ GET / 200 in 302ms (compile: 28ms, render: 274ms)
+   738→ GET / 200 in 287ms (compile: 26ms, render: 261ms)
+   739→ GET / 200 in 287ms (compile: 82ms, render: 205ms)
+   740→ GET / 200 in 269ms (compile: 88ms, render: 182ms)
+   741→ GET / 200 in 195ms (compile: 27ms, render: 168ms)
+   742→⚠ ./src/instrumentation.ts:3:1
+   743→Ecmascript file had an error
+   744→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   745→ [90m 2 |[39m
+   746→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   747→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   748→ [90m 4 |[39m
+   749→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   750→ [90m 6 |[39m[0m
+   751→
+   752→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   753→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   754→
+   755→
+   756→⚠ ./src/instrumentation.ts:3:1
+   757→Ecmascript file had an error
+   758→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   759→ [90m 2 |[39m
+   760→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   761→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   762→ [90m 4 |[39m
+   763→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   764→ [90m 6 |[39m[0m
+   765→
+   766→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   767→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   768→
+   769→
+   770→⚠ ./src/instrumentation.ts:3:1
+   771→Ecmascript file had an error
+   772→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   773→ [90m 2 |[39m
+   774→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   775→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   776→ [90m 4 |[39m
+   777→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   778→ [90m 6 |[39m[0m
+   779→
+   780→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   781→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   782→
+   783→
+   784→ GET / 200 in 363ms (compile: 9ms, render: 353ms)
+   785→ GET / 200 in 307ms (compile: 13ms, render: 294ms)
+   786→ GET / 200 in 303ms (compile: 57ms, render: 246ms)
+   787→ GET / 200 in 287ms (compile: 104ms, render: 183ms)
+   788→⚠ ./src/instrumentation.ts:3:1
+   789→Ecmascript file had an error
+   790→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   791→ [90m 2 |[39m
+   792→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   793→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   794→ [90m 4 |[39m
+   795→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   796→ [90m 6 |[39m[0m
+   797→
+   798→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   799→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   800→
+   801→
+   802→ GET / 200 in 238ms (compile: 29ms, render: 209ms)
+   803→⚠ ./src/instrumentation.ts:3:1
+   804→Ecmascript file had an error
+   805→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   806→ [90m 2 |[39m
+   807→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   808→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   809→ [90m 4 |[39m
+   810→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   811→ [90m 6 |[39m[0m
+   812→
+   813→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   814→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   815→
+   816→
+   817→ GET / 200 in 124ms (compile: 4ms, render: 120ms)
+   818→⚠ ./src/instrumentation.ts:3:1
+   819→Ecmascript file had an error
+   820→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   821→ [90m 2 |[39m
+   822→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   823→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   824→ [90m 4 |[39m
+   825→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   826→ [90m 6 |[39m[0m
+   827→
+   828→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   829→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   830→
+   831→
+   832→ GET / 200 in 70ms (compile: 6ms, render: 63ms)
+   833→⚠ ./src/instrumentation.ts:3:1
+   834→Ecmascript file had an error
+   835→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   836→ [90m 2 |[39m
+   837→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   838→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   839→ [90m 4 |[39m
+   840→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   841→ [90m 6 |[39m[0m
+   842→
+   843→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   844→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   845→
+   846→
+   847→ GET / 200 in 107ms (compile: 37ms, render: 70ms)
+   848→⚠ ./src/instrumentation.ts:3:1
+   849→Ecmascript file had an error
+   850→[0m [90m 1 |[39m [90m// Next.js Instrumentation — starts ML prediction service alongside Next.js server[39m
+   851→ [90m 2 |[39m
+   852→[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { spawn } [36mfrom[39m [32m'child_process'[39m[33m;[39m
+   853→ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   854→ [90m 4 |[39m
+   855→ [90m 5 |[39m [36mconst[39m [33mML_SERVICE_SCRIPT[39m [33m=[39m [32m'/home/z/my-project/mini-services/ml-prediction-service/start.sh'[39m[33m;[39m
+   856→ [90m 6 |[39m[0m
+   857→
+   858→A Node.js module is loaded ('child_process' at line 3) which is not supported in the Edge Runtime.
+   859→Learn More: https://nextjs.org/docs/messages/node-module-in-edge-runtime
+   860→
+   861→
+   862→ GET / 200 in 51ms (compile: 4ms, render: 47ms)
+   863→▲ Next.js 16.1.3 (Turbopack)
+   864→- Local:         http://localhost:3000
+   865→- Network:       http://21.0.3.20:3000
+   866→- Environments: .env
+   867→
+   868→✓ Starting...
+   869→[ML-Service] Starting ML prediction service on port 3032...
+   870→✓ Ready in 3.2s
+   871→○ Compiling / ...
+   872→[ML-Service] Starting ML Prediction Service on port 3032...
+   873→[ML-Service] 
+   874→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   875→Features: 34
+   876→[ML-Service] * Serving Flask app 'app'
+   877→ * Debug mode: off
+   878→[ML-Service] Address already in use
+   879→Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   880→[ML-Service] [RESTART ML] Sun Aug 23 13:14:58 UTC 2026
+   881→ GET / 200 in 14.1s (compile: 12.7s, render: 1443ms)
+   882→ GET / 200 in 17.0s (compile: 15.7s, render: 1318ms)
+   883→▲ Next.js 16.1.3 (Turbopack)
+   884→- Local:         http://localhost:3000
+   885→- Network:       http://21.0.3.20:3000
+   886→- Environments: .env
+   887→
+   888→✓ Starting...
+   889→[ML-Service] Starting ML prediction service on port 3032...
+   890→✓ Ready in 1089ms
+   891→[ML-Service] Starting ML Prediction Service on port 3032...
+   892→[ML-Service] 
+   893→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   894→[ML-Service] 
+   895→[ML-Service] Features: 34
+   896→[ML-Service] 
+   897→[ML-Service] * Serving Flask app 'app'
+   898→[ML-Service] * Debug mode: off
+   899→[ML-Service] Address already in use
+   900→[ML-Service] 
+   901→[ML-Service] Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   902→[ML-Service] 
+   903→[ML-Service] [RESTART ML] Sun Aug 23 13:19:33 UTC 2026
+   904→○ Compiling / ...
+   905→ GET / 200 in 13.7s (compile: 12.6s, render: 1125ms)
+   906→ GET /api/ml-predict 200 in 444ms (compile: 298ms, render: 146ms)
+   907→▲ Next.js 16.1.3 (Turbopack)
+   908→- Local:         http://localhost:3000
+   909→- Network:       http://21.0.3.20:3000
+   910→- Environments: .env
+   911→
+   912→✓ Starting...
+   913→[ML-Service] Starting ML prediction service on port 3032...
+   914→✓ Ready in 1591ms
+   915→[ML-Service] Starting ML Prediction Service on port 3032...
+   916→[ML-Service] 
+   917→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   918→[ML-Service] 
+   919→[ML-Service] Features: 34
+   920→[ML-Service] 
+   921→[ML-Service] * Serving Flask app 'app'
+   922→[ML-Service] * Debug mode: off
+   923→[ML-Service] Address already in use
+   924→[ML-Service] 
+   925→[ML-Service] Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   926→[ML-Service] 
+   927→[ML-Service] [RESTART ML] Sun Aug 23 13:22:17 UTC 2026
+   928→○ Compiling / ...
+   929→[ML-Service] Starting ML Prediction Service on port 3032...
+   930→[ML-Service] 
+   931→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   932→[ML-Service] 
+   933→[ML-Service] Features: 34
+   934→[ML-Service] * Serving Flask app 'app'
+   935→ * Debug mode: off
+   936→[ML-Service] Address already in use
+   937→Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   938→[ML-Service] [RESTART ML] Sun Aug 23 13:22:36 UTC 2026
+   939→ GET / 200 in 18.3s (compile: 17.3s, render: 983ms)
+   940→ GET /api/ml-predict 200 in 199ms (compile: 135ms, render: 63ms)
+   941→▲ Next.js 16.1.3 (Turbopack)
+   942→- Local:         http://localhost:3000
+   943→- Network:       http://21.0.3.20:3000
+   944→- Environments: .env
+   945→
+   946→✓ Starting...
+   947→[ML-Service] Starting ML prediction service on port 3032...
+   948→✓ Ready in 2s
+   949→[ML-Service] Starting ML Prediction Service on port 3032...
+   950→[ML-Service] 
+   951→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   952→[ML-Service] 
+   953→[ML-Service] Features: 34
+   954→[ML-Service] 
+   955→[ML-Service] * Serving Flask app 'app'
+   956→[ML-Service] * Debug mode: off
+   957→[ML-Service] Address already in use
+   958→[ML-Service] 
+   959→[ML-Service] Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   960→[ML-Service] 
+   961→[ML-Service] [RESTART ML] Sun Aug 23 13:23:39 UTC 2026
+   962→○ Compiling / ...
+   963→[ML-Service] Starting ML Prediction Service on port 3032...
+   964→[ML-Service] 
+   965→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   966→[ML-Service] 
+   967→[ML-Service] Features: 34
+   968→[ML-Service] 
+   969→[ML-Service] * Serving Flask app 'app'
+   970→[ML-Service] * Debug mode: off
+   971→[ML-Service] Address already in use
+   972→[ML-Service] 
+   973→[ML-Service] Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   974→[ML-Service] 
+   975→[ML-Service] [RESTART ML] Sun Aug 23 13:23:58 UTC 2026
+   976→ GET / 200 in 20.1s (compile: 19.2s, render: 917ms)
+   977→ GET /api/ml-predict 200 in 271ms (compile: 176ms, render: 95ms)
+   978→▲ Next.js 16.1.3 (Turbopack)
+   979→- Local:         http://localhost:3000
+   980→- Network:       http://21.0.3.20:3000
+   981→- Environments: .env
+   982→
+   983→✓ Starting...
+   984→[ML-Service] Starting ML prediction service on port 3032...
+   985→✓ Ready in 2.2s
+   986→[ML-Service] Starting ML Prediction Service on port 3032...
+   987→[ML-Service] 
+   988→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+   989→[ML-Service] 
+   990→[ML-Service] Features: 34
+   991→[ML-Service] 
+   992→[ML-Service] * Serving Flask app 'app'
+   993→[ML-Service] * Debug mode: off
+   994→[ML-Service] Address already in use
+   995→[ML-Service] 
+   996→[ML-Service] Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+   997→[ML-Service] 
+   998→[ML-Service] [RESTART ML] Sun Aug 23 13:25:04 UTC 2026
+   999→○ Compiling / ...
+  1000→[ML-Service] Starting ML Prediction Service on port 3032...
+  1001→Models: rf, xgboost, lightgbm, svr, gbr
+  1002→Features: 34
+  1003→[ML-Service] * Serving Flask app 'app'
+  1004→ * Debug mode: off
+  1005→[ML-Service] Address already in use
+  1006→Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+  1007→[ML-Service] [RESTART ML] Sun Aug 23 13:25:24 UTC 2026
+  1008→ GET / 200 in 19.6s (compile: 18.8s, render: 882ms)
+  1009→ GET /api/ml-predict 200 in 185ms (compile: 99ms, render: 87ms)
+  1010→ GET / 200 in 201ms (compile: 6ms, render: 195ms)
+  1011→▲ Next.js 16.1.3 (Turbopack)
+  1012→- Local:         http://localhost:3000
+  1013→- Network:       http://21.0.3.20:3000
+  1014→- Environments: .env
+  1015→
+  1016→✓ Starting...
+  1017→[ML-Service] Starting ML prediction service on port 3032...
+  1018→✓ Ready in 2.1s
+  1019→[ML-Service] Starting ML Prediction Service on port 3032...
+  1020→Models: rf, xgboost, lightgbm, svr, gbr
+  1021→Features: 34
+  1022→[ML-Service] * Serving Flask app 'app'
+  1023→ * Debug mode: off
+  1024→[ML-Service] Address already in use
+  1025→Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+  1026→[ML-Service] [RESTART ML] Sun Aug 23 13:28:30 UTC 2026
+  1027→ GET /api/ml-predict 200 in 702ms (compile: 573ms, render: 129ms)
+  1028→○ Compiling / ...
+  1029→[ML-Service] Starting ML Prediction Service on port 3032...
+  1030→[ML-Service] 
+  1031→[ML-Service] Models: rf, xgboost, lightgbm, svr, gbr
+  1032→[ML-Service] Features: 34
+  1033→[ML-Service] * Serving Flask app 'app'
+  1034→[ML-Service] * Debug mode: off
+  1035→[ML-Service] Address already in use
+  1036→[ML-Service] 
+  1037→[ML-Service] Port 3032 is in use by another program. Either identify and stop that program, or start the server with a different port.
+  1038→[ML-Service] 
+  1039→[ML-Service] [RESTART ML] Sun Aug 23 13:28:51 UTC 2026
+  1040→ GET / 200 in 20.3s (compile: 19.4s, render: 943ms)
+  1041→

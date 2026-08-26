@@ -1,0 +1,766 @@
+   300→
+   301→
+   302→# ─────────────────────────────────────────────────────────────────────────────
+   303→# Model persistence
+   304→# ─────────────────────────────────────────────────────────────────────────────
+   305→
+   306→
+   307→def _save_model_artifact(model: Any, path: str, input_dim: int) -> None:
+   308→    """Save model as ONNX (preferred) or pickle fallback."""
+   309→    os.makedirs(os.path.dirname(path), exist_ok=True)
+   310→    if ONNX_EXPORT_AVAILABLE:
+   311→        try:
+   312→            if isinstance(model, (xgb.XGBModel,)):
+   313→                # XGBoost native ONNX export
+   314→                initial_type = [('float_input', FloatTensorType([None, input_dim]))]
+   315→                onnx_model = xgb.to_onnx(model, initial_types=initial_type)
+   316→                import onnx
+   317→                onnx.save(onnx_model, path)
+   318→                return
+   319→            elif hasattr(model, 'predict_proba') or hasattr(model, 'predict'):
+   320→                # sklearn model
+   321→                initial_type = [('float_input', FloatTensorType([None, input_dim]))]
+   322→                onnx_model = skl2onnx.convert_sklearn(model, initial_types=initial_type)
+   323→                import onnx
+   324→                onnx.save(onnx_model, path)
+   325→                return
+   326→        except Exception as e:
+   327→            log("WARN", f"ONNX export failed for {path}: {e}, falling back to pickle")
+   328→    # Pickle fallback
+   329→    pkl_path = path.replace(".onnx", ".pkl")
+   330→    with open(pkl_path, "wb") as f:
+   331→        pickle.dump(model, f)
+   332→
+   333→
+   334→def _load_model_artifact(path: str) -> Tuple[Any, bool]:
+   335→    """Load model from ONNX or pickle. Returns (model_or_session, is_onnx)."""
+   336→    if os.path.exists(path):
+   337→        try:
+   338→            session = ort.InferenceSession(path)
+   339→            return session, True
+   340→        except Exception:
+   341→            pass
+   342→    pkl_path = path.replace(".onnx", ".pkl")
+   343→    if os.path.exists(pkl_path):
+   344→        with open(pkl_path, "rb") as f:
+   345→            return pickle.load(f), False
+   346→    return None, False
+   347→
+   348→
+   349→def _save_meta(meta: Dict, path: str) -> None:
+   350→    os.makedirs(os.path.dirname(path), exist_ok=True)
+   351→    with open(path, "w") as f:
+   352→        json.dump(meta, f, indent=2, default=str)
+   353→
+   354→
+   355→def _load_meta(path: str) -> Optional[Dict]:
+   356→    if os.path.exists(path):
+   357→        with open(path, "r") as f:
+   358→            return json.load(f)
+   359→    return None
+   360→
+   361→
+   362→def _save_scaler(scaler: StandardScaler, symbol: str) -> None:
+   363→    path = os.path.join(MODELS_DIR, symbol, "scaler.pkl")
+   364→    os.makedirs(os.path.dirname(path), exist_ok=True)
+   365→    with open(path, "wb") as f:
+   366→        pickle.dump(scaler, f)
+   367→
+   368→
+   369→def _load_scaler(symbol: str) -> Optional[StandardScaler]:
+   370→    cached = get_cached_scaler(symbol)
+   371→    if cached is not None:
+   372→        return cached
+   373→    path = os.path.join(MODELS_DIR, symbol, "scaler.pkl")
+   374→    if os.path.exists(path):
+   375→        with open(path, "rb") as f:
+   376→            scaler = pickle.load(f)
+   377→        cache_scaler(symbol, scaler)
+   378→        return scaler
+   379→    return None
+   380→
+   381→
+   382→# ─────────────────────────────────────────────────────────────────────────────
+   383→# Training
+   384→# ─────────────────────────────────────────────────────────────────────────────
+   385→
+   386→
+   387→def train_models(
+   388→    symbol: str,
+   389→    ohlcv: List[List],
+   390→    model_names: Optional[List[str]] = None,
+   391→) -> Dict[str, Any]:
+   392→    """
+   393→    Train requested models for a symbol.
+   394→
+   395→    Returns a dict with metrics and metadata.
+   396→    """
+   397→    if model_names is None:
+   398→        model_names = MODEL_TYPES
+   399→
+   400→    # Validate
+   401→    for mn in model_names:
+   402→        if mn not in MODEL_TYPES:
+   403→            raise ValueError(f"Unknown model type: {mn}")
+   404→
+   405→    df = build_ohlcv_df(ohlcv)
+   406→    if len(df) < MIN_CANDLES:
+   407→        raise ValueError(f"Need at least {MIN_CANDLES} candles, got {len(df)}")
+   408→
+   409→    log("INFO", f"Training {model_names} for {symbol} with {len(df)} candles")
+   410→
+   411→    # Feature engineering
+   412→    features_df = extract_features(df)
+   413→    feature_cols = [c for c in features_df.columns]
+   414→
+   415→    # Drop rows with NaN
+   416→    valid_mask = features_df[feature_cols].notna().all(axis=1)
+   417→    X = features_df.loc[valid_mask, feature_cols].values
+   418→    feature_index = features_df.index[valid_mask]
+   419→
+   420→    # Build targets
+   421→    dir_target = build_direction_target(df).loc[feature_index].values
+   422→    reg_target = build_regression_target(df).loc[feature_index].values
+   423→    vol_target = build_volatility_target(df).loc[feature_index].values
+   424→
+   425→    # Drop rows where targets are NaN
+   426→    valid2 = ~(np.isnan(dir_target) | np.isnan(reg_target) | np.isnan(vol_target))
+   427→    X = X[valid2]
+   428→    dir_target = dir_target[valid2]
+   429→    reg_target = reg_target[valid2]
+   430→    vol_target = vol_target[valid2]
+   431→
+   432→    if len(X) < MIN_CANDLES:
+   433→        raise ValueError(f"After cleaning, only {len(X)} valid samples (need {MIN_CANDLES})")
+   434→
+   435→    # Scale features
+   436→    scaler = StandardScaler()
+   437→    X_scaled = scaler.fit_transform(X)
+   438→    input_dim = X_scaled.shape[1]
+   439→
+   440→    # Save scaler
+   441→    _save_scaler(scaler, symbol)
+   442→    cache_scaler(symbol, scaler)
+   443→
+   444→    # TimeSeriesSplit
+   445→    tscv = TimeSeriesSplit(n_splits=5)
+   446→    metrics: Dict[str, Dict] = {}
+   447→    all_feature_importance: Dict[str, float] = {}
+   448→
+   449→    sym_dir = os.path.join(MODELS_DIR, symbol)
+   450→    os.makedirs(sym_dir, exist_ok=True)
+   451→
+   452→    for mn in model_names:
+   453→        log("INFO", f"  Training model: {mn}")
+   454→
+   455→        if mn == "xgboost_direction":
+   456→            model = xgb.XGBClassifier(
+   457→                n_estimators=200,
+   458→                max_depth=5,
+   459→                learning_rate=0.05,
+   460→                subsample=0.8,
+   461→                colsample_bytree=0.8,
+   462→                use_label_encoder=False,
+   463→                eval_metric="logloss",
+   464→                verbosity=0,
+   465→                n_jobs=-1,
+   466→            )
+   467→            target = dir_target
+   468→            fold_metrics = {"accuracy": [], "f1": [], "auc": []}
+   469→
+   470→            for train_idx, test_idx in tscv.split(X_scaled):
+   471→                model.fit(X_scaled[train_idx], target[train_idx])
+   472→                preds = model.predict(X_scaled[test_idx])
+   473→                proba = model.predict_proba(X_scaled[test_idx])[:, 1]
+   474→                fold_metrics["accuracy"].append(accuracy_score(target[test_idx], preds))
+   475→                fold_metrics["f1"].append(f1_score(target[test_idx], preds, zero_division=0))
+   476→                try:
+   477→                    fold_metrics["auc"].append(roc_auc_score(target[test_idx], proba))
+   478→                except Exception:
+   479→                    fold_metrics["auc"].append(0.5)
+   480→
+   481→            # Final fit on all data
+   482→            model.fit(X_scaled, target)
+   483→            metrics[mn] = {k: round(float(np.mean(v)), 4) for k, v in fold_metrics.items()}
+   484→            imp = model.feature_importances_
+   485→
+   486→        elif mn == "xgboost_regression":
+   487→            model = xgb.XGBRegressor(
+   488→                n_estimators=200,
+   489→                max_depth=5,
+   490→                learning_rate=0.05,
+   491→                subsample=0.8,
+   492→                colsample_bytree=0.8,
+   493→                verbosity=0,
+   494→                n_jobs=-1,
+   495→            )
+   496→            target = reg_target
+   497→            fold_metrics = {"mae": [], "rmse": [], "r2": []}
+   498→
+   499→            for train_idx, test_idx in tscv.split(X_scaled):
+   500→                model.fit(X_scaled[train_idx], target[train_idx])
+   501→                preds = model.predict(X_scaled[test_idx])
+   502→                fold_metrics["mae"].append(mean_absolute_error(target[test_idx], preds))
+   503→                fold_metrics["rmse"].append(np.sqrt(mean_squared_error(target[test_idx], preds)))
+   504→                fold_metrics["r2"].append(r2_score(target[test_idx], preds))
+   505→
+   506→            model.fit(X_scaled, target)
+   507→            metrics[mn] = {k: round(float(np.mean(v)), 4) for k, v in fold_metrics.items()}
+   508→            imp = model.feature_importances_
+   509→
+   510→        elif mn == "ensemble_direction":
+   511→            model = GradientBoostingClassifier(
+   512→                n_estimators=200,
+   513→                max_depth=4,
+   514→                learning_rate=0.05,
+   515→                subsample=0.8,
+   516→                max_features="sqrt",
+   517→                random_state=42,
+   518→            )
+   519→            target = dir_target
+   520→            fold_metrics = {"accuracy": [], "f1": [], "auc": []}
+   521→
+   522→            for train_idx, test_idx in tscv.split(X_scaled):
+   523→                model.fit(X_scaled[train_idx], target[train_idx])
+   524→                preds = model.predict(X_scaled[test_idx])
+   525→                proba = model.predict_proba(X_scaled[test_idx])[:, 1]
+   526→                fold_metrics["accuracy"].append(accuracy_score(target[test_idx], preds))
+   527→                fold_metrics["f1"].append(f1_score(target[test_idx], preds, zero_division=0))
+   528→                try:
+   529→                    fold_metrics["auc"].append(roc_auc_score(target[test_idx], proba))
+   530→                except Exception:
+   531→                    fold_metrics["auc"].append(0.5)
+   532→
+   533→            model.fit(X_scaled, target)
+   534→            metrics[mn] = {k: round(float(np.mean(v)), 4) for k, v in fold_metrics.items()}
+   535→            imp = model.feature_importances_
+   536→
+   537→        elif mn == "ensemble_regression":
+   538→            model = GradientBoostingRegressor(
+   539→                n_estimators=200,
+   540→                max_depth=4,
+   541→                learning_rate=0.05,
+   542→                subsample=0.8,
+   543→                max_features="sqrt",
+   544→                random_state=42,
+   545→            )
+   546→            target = reg_target
+   547→            fold_metrics = {"mae": [], "rmse": [], "r2": []}
+   548→
+   549→            for train_idx, test_idx in tscv.split(X_scaled):
+   550→                model.fit(X_scaled[train_idx], target[train_idx])
+   551→                preds = model.predict(X_scaled[test_idx])
+   552→                fold_metrics["mae"].append(mean_absolute_error(target[test_idx], preds))
+   553→                fold_metrics["rmse"].append(np.sqrt(mean_squared_error(target[test_idx], preds)))
+   554→                fold_metrics["r2"].append(r2_score(target[test_idx], preds))
+   555→
+   556→            model.fit(X_scaled, target)
+   557→            metrics[mn] = {k: round(float(np.mean(v)), 4) for k, v in fold_metrics.items()}
+   558→            imp = model.feature_importances_
+   559→
+   560→        elif mn == "volatility_model":
+   561→            model = RandomForestRegressor(
+   562→                n_estimators=200,
+   563→                max_depth=6,
+   564→                min_samples_leaf=5,
+   565→                random_state=42,
+   566→                n_jobs=-1,
+   567→            )
+   568→            target = vol_target
+   569→            fold_metrics = {"mae": [], "rmse": [], "r2": []}
+   570→
+   571→            for train_idx, test_idx in tscv.split(X_scaled):
+   572→                model.fit(X_scaled[train_idx], target[train_idx])
+   573→                preds = model.predict(X_scaled[test_idx])
+   574→                fold_metrics["mae"].append(mean_absolute_error(target[test_idx], preds))
+   575→                fold_metrics["rmse"].append(np.sqrt(mean_squared_error(target[test_idx], preds)))
+   576→                fold_metrics["r2"].append(r2_score(target[test_idx], preds))
+   577→
+   578→            model.fit(X_scaled, target)
+   579→            metrics[mn] = {k: round(float(np.mean(v)), 4) for k, v in fold_metrics.items()}
+   580→            imp = model.feature_importances_
+   581→
+   582→        else:
+   583→            continue
+   584→
+   585→        # Save model artifact
+   586→        onnx_path = os.path.join(sym_dir, f"{mn}.onnx")
+   587→        _save_model_artifact(model, onnx_path, input_dim)
+   588→
+   589→        # Cache in memory
+   590→        cache_model(symbol, mn, model, metrics.get(mn, {}))
+   591→
+   592→        # Save metadata
+   593→        meta = {
+   594→            "model_type": mn,
+   595→            "symbol": symbol,
+   596→            "metrics": metrics.get(mn, {}),
+   597→            "feature_cols": feature_cols,
+   598→            "input_dim": input_dim,
+   599→            "training_samples": int(len(X)),
+   600→            "date_range": [str(df["date"].iloc[0]), str(df["date"].iloc[-1])],
+   601→            "trained_at": datetime.utcnow().isoformat() + "Z",
+   602→        }
+   603→        _save_meta(meta, os.path.join(sym_dir, f"{mn}_meta.json"))
+   604→
+   605→        # Accumulate feature importance (average across models)
+   606→        for i, col in enumerate(feature_cols):
+   607→            all_feature_importance[col] = all_feature_importance.get(col, 0.0) + float(imp[i])
+   608→
+   609→    # Normalize feature importance
+   610→    total_imp = sum(all_feature_importance.values())
+   611→    if total_imp > 0:
+   612→        all_feature_importance = {k: round(v / total_imp, 4) for k, v in all_feature_importance.items()}
+   613→
+   614→    # Top 10
+   615→    top_features = dict(sorted(all_feature_importance.items(), key=lambda x: x[1], reverse=True)[:10])
+   616→
+   617→    return {
+   618→        "status": "ok",
+   619→        "symbol": symbol,
+   620→        "models_trained": model_names,
+   621→        "metrics": metrics,
+   622→        "feature_importance": top_features,
+   623→        "training_samples": len(X),
+   624→        "date_range": [str(df["date"].iloc[0]), str(df["date"].iloc[-1])],
+   625→    }
+   626→
+   627→
+   628→# ─────────────────────────────────────────────────────────────────────────────
+   629→# Prediction
+   630→# ─────────────────────────────────────────────────────────────────────────────
+   631→
+   632→
+   633→def _predict_with_model(model: Any, features: np.ndarray, is_onnx: bool) -> np.ndarray:
+   634→    """Run prediction on a single row of features."""
+   635→    if is_onnx:
+   636→        session = model  # ONNX Runtime session
+   637→        input_name = session.get_inputs()[0].name
+   638→        result = session.run(None, {input_name: features.astype(np.float32)})
+   639→        # Classification: result[1] is probabilities; Regression: result[0] is values
+   640→        if len(result) == 2 and result[1].shape[1] >= 2:
+   641→            return result[1]  # probabilities
+   642→        return result[0]  # regression
+   643→    else:
+   644→        # sklearn or xgboost native
+   645→        if hasattr(model, "predict_proba"):
+   646→            return model.predict_proba(features)  # type: ignore
+   647→        return model.predict(features)  # type: ignore
+   648→
+   649→
+   650→def predict_sessions(
+   651→    symbol: str,
+   652→    ohlcv: List[List],
+   653→    horizon: int = 30,
+   654→) -> Dict[str, Any]:
+   655→    """
+   656→    Generate multi-session prediction for a symbol.
+   657→
+   658→    Uses iterative prediction: predict 5 sessions, append, re-extract, repeat.
+   659→    """
+   660→    df = build_ohlcv_df(ohlcv)
+   661→    if len(df) < MIN_CANDLES:
+   662→        raise ValueError(f"Need at least {MIN_CANDLES} candles for prediction, got {len(df)}")
+   663→
+   664→    # Load scaler
+   665→    scaler = _load_scaler(symbol)
+   666→    if scaler is None:
+   667→        raise ValueError(f"No trained scaler for symbol {symbol}")
+   668→
+   669→    # Determine which models are available
+   670→    sym_dir = os.path.join(MODELS_DIR, symbol)
+   671→    available_models = []
+   672→    dir_model = None
+   673→    dir_is_onnx = False
+   674→    reg_model = None
+   675→    reg_is_onnx = False
+   676→
+   677→    for mn in ("xgboost_direction", "ensemble_direction"):
+   678→        model, is_onnx = _load_model_artifact(os.path.join(sym_dir, f"{mn}.onnx"))
+   679→        if model is not None:
+   680→            dir_model = model
+   681→            dir_is_onnx = is_onnx
+   682→            available_models.append(mn)
+   683→            break
+   684→
+   685→    for mn in ("xgboost_regression", "ensemble_regression"):
+   686→        model, is_onnx = _load_model_artifact(os.path.join(sym_dir, f"{mn}.onnx"))
+   687→        if model is not None:
+   688→            reg_model = model
+   689→            reg_is_onnx = is_onnx
+   690→            available_models.append(mn)
+   691→            break
+   692→
+   693→    if dir_model is None and reg_model is None:
+   694→        raise ValueError(f"No trained model for symbol {symbol}")
+   695→
+   696→    # Extract current features for the last candle
+   697→    features_df = extract_features(df)
+   698→    feature_cols = list(features_df.columns)
+   699→    last_row = features_df.iloc[-1:].values
+   700→    if np.any(np.isnan(last_row)):
+   701→        # Forward-fill NaNs with column means
+   702→        col_means = features_df.mean().values
+   703→        nan_mask = np.isnan(last_row)
+   704→        last_row[nan_mask] = np.take(col_means, np.where(nan_mask)[1])
+   705→
+   706→    current_features = {}
+   707→    for i, col in enumerate(feature_cols):
+   708→        current_features[col] = round(float(last_row[0, i]), 4)
+   709→
+   710→    # Iterative prediction
+   711→    working_df = df.copy()
+   712→    sessions: List[Dict] = []
+   713→    last_close = float(df["close"].iloc[-1])
+   714→    iterations = (horizon + PREDICTION_STEPS - 1) // PREDICTION_STEPS
+   715→
+   716→    for it in range(iterations):
+   717→        remaining = horizon - len(sessions)
+   718→        steps = min(PREDICTION_STEPS, remaining)
+   719→
+   720→        # Extract features from current working dataframe
+   721→        feat_df = extract_features(working_df)
+   722→        feat_cols = list(feat_df.columns)
+   723→        last_features = feat_df.iloc[-1:].values
+   724→
+   725→        # Handle NaNs
+   726→        if np.any(np.isnan(last_features)):
+   727→            col_means = feat_df.mean().values
+   728→            for j in range(last_features.shape[1]):
+   729→                if np.isnan(last_features[0, j]):
+   730→                    last_features[0, j] = col_means[j]
+   731→
+   732→        scaled = scaler.transform(last_features)
+   733→
+   734→        predicted_change = 0.0
+   735→        direction = "flat"
+   736→        confidence = 0.5
+   737→
+   738→        if reg_model is not None:
+   739→            reg_result = _predict_with_model(reg_model, scaled, reg_is_onnx)
+   740→            predicted_change = float(reg_result[0])
+   741→
+   742→        if dir_model is not None:
+   743→            dir_result = _predict_with_model(dir_model, scaled, dir_is_onnx)
+   744→            # dir_result is probability array [p_down, p_up]
+   745→            if dir_result.ndim == 2 and dir_result.shape[1] >= 2:
+   746→                p_up = float(dir_result[0, 1])
+   747→            else:
+   748→                p_up = float(dir_result[0]) if float(dir_result[0]) > 0.5 else 0.5
+   749→            confidence = p_up if p_up > 0.5 else (1.0 - p_up)
+   750→            direction = "up" if p_up > 0.5 else "down"
+   751→
+   752→        # If only regression model, derive direction from predicted change
+   753→        if dir_model is None and reg_model is not None:
+   754→            if predicted_change > DIRECTION_THRESHOLD * 100:
+   755→                direction = "up"
+   756→                confidence = min(0.9, 0.5 + abs(predicted_change) / 5.0)
+   757→            elif predicted_change < -DIRECTION_THRESHOLD * 100:
+   758→                direction = "down"
+   759→                confidence = min(0.9, 0.5 + abs(predicted_change) / 5.0)
+   760→
+   761→        # Generate steps sessions
+   762→        for s in range(steps):
+   763→            session_num = len(sessions) + 1
+   764→            step_change = predicted_change / steps
+   765→            new_close = last_close * (1.0 + step_change / 100.0)
+   766→            change_pct = round((new_close - last_close) / last_close * 100, 4)
+   767→
+   768→            sessions.append({
+   769→                "session": session_num,
+   770→                "predicted_close": round(new_close, 2),
+   771→                "confidence": round(confidence, 4),
+   772→                "direction": direction,
+   773→                "change_pct": change_pct,
+   774→            })
+   775→            last_close = new_close
+   776→
+   777→        # Append predicted candle to working_df for next iteration
+   778→        avg_change = predicted_change / steps
+   779→        new_close_row = last_close * (1.0 + avg_change / 100.0)
+   780→        new_row = {
+   781→            "date": f"pred_{len(sessions)}",
+   782→            "open": last_close,
+   783→            "high": max(last_close, new_close_row) * (1.0 + abs(avg_change) / 200.0),
+   784→            "low": min(last_close, new_close_row) * (1.0 - abs(avg_change) / 200.0),
+   785→            "close": new_close_row,
+   786→            "volume": 0.0,
+   787→        }
+   788→        working_df = pd.concat([working_df, pd.DataFrame([new_row])], ignore_index=True)
+   789→
+   790→    # Aggregate results
+   791→    closes = [s["predicted_close"] for s in sessions]
+   792→    min_price = min(closes)
+   793→    max_price = max(closes)
+   794→    final_close = closes[-1]
+   795→    initial_close = float(df["close"].iloc[-1])
+   796→    overall_change = (final_close - initial_close) / initial_close * 100
+   797→
+   798→    if overall_change > 1.0:
+   799→        overall_direction = "up"
+   800→    elif overall_change < -1.0:
+   801→        overall_direction = "down"
+   802→    else:
+   803→        overall_direction = "flat"
+   804→
+   805→    avg_confidence = np.mean([s["confidence"] for s in sessions])
+   806→    price_range = max_price - min_price
+   807→    price_range_pct = price_range / initial_close * 100
+   808→
+   809→    if price_range_pct > 5.0:
+   810→        risk_level = "high"
+   811→    elif price_range_pct > 2.5:
+   812→        risk_level = "medium"
+   813→    else:
+   814→        risk_level = "low"
+   815→
+   816→    return {
+   817→        "status": "ok",
+   818→        "symbol": symbol,
+   819→        "prediction": {
+   820→            "sessions": sessions,
+   821→            "overall_direction": overall_direction,
+   822→            "overall_confidence": round(float(avg_confidence), 4),
+   823→            "target_price_min": round(min_price, 2),
+   824→            "target_price_max": round(max_price, 2),
+   825→            "risk_level": risk_level,
+   826→        },
+   827→        "models_used": available_models,
+   828→        "current_features": current_features,
+   829→    }
+   830→
+   831→
+   832→# ─────────────────────────────────────────────────────────────────────────────
+   833→# Model listing
+   834→# ─────────────────────────────────────────────────────────────────────────────
+   835→
+   836→
+   837→def list_all_models() -> Dict[str, Any]:
+   838→    """List all trained models across all symbols."""
+   839→    result: Dict[str, List[Dict]] = {}
+   840→    if not os.path.exists(MODELS_DIR):
+   841→        return {"status": "ok", "models": {}}
+   842→
+   843→    for sym in sorted(os.listdir(MODELS_DIR)):
+   844→        sym_path = os.path.join(MODELS_DIR, sym)
+   845→        if not os.path.isdir(sym_path):
+   846→            continue
+   847→        models = []
+   848→        for mn in MODEL_TYPES:
+   849→            meta_path = os.path.join(sym_path, f"{mn}_meta.json")
+   850→            if os.path.exists(meta_path):
+   851→                meta = _load_meta(meta_path)
+   852→                if meta:
+   853→                    models.append(meta)
+   854→        if models:
+   855→            result[sym] = models
+   856→
+   857→    return {"status": "ok", "models": result}
+   858→
+   859→
+   860→def get_symbol_models(symbol: str) -> Dict[str, Any]:
+   861→    """Get models for a specific symbol."""
+   862→    sym_path = os.path.join(MODELS_DIR, symbol)
+   863→    if not os.path.isdir(sym_path):
+   864→        return {"status": "error", "message": f"No trained model for symbol {symbol}"}
+   865→
+   866→    models = []
+   867→    for mn in MODEL_TYPES:
+   868→        meta_path = os.path.join(sym_path, f"{mn}_meta.json")
+   869→        if os.path.exists(meta_path):
+   870→            meta = _load_meta(meta_path)
+   871→            if meta:
+   872→                models.append(meta)
+   873→
+   874→    if not models:
+   875→        return {"status": "error", "message": f"No trained model for symbol {symbol}"}
+   876→
+   877→    return {"status": "ok", "symbol": symbol, "models": models}
+   878→
+   879→
+   880→# ─────────────────────────────────────────────────────────────────────────────
+   881→# HTTP Handler
+   882→# ─────────────────────────────────────────────────────────────────────────────
+   883→
+   884→
+   885→def _json_response(handler: BaseHTTPRequestHandler, data: Dict, status: int = 200) -> None:
+   886→    """Send a JSON response."""
+   887→    body = json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
+   888→    handler.send_response(status)
+   889→    handler.send_header("Content-Type", "application/json; charset=utf-8")
+   890→    handler.send_header("Content-Length", str(len(body)))
+   891→    handler.end_headers()
+   892→    handler.wfile.write(body)
+   893→
+   894→
+   895→def _read_body(handler: BaseHTTPRequestHandler) -> bytes:
+   896→    """Read request body."""
+   897→    length = int(handler.headers.get("Content-Length", 0))
+   898→    return handler.rfile.read(length) if length > 0 else b""
+   899→
+   900→
+   901→class MLHandler(BaseHTTPRequestHandler):
+   902→    """HTTP request handler for ML Training Service."""
+   903→
+   904→    # Suppress default stderr logging
+   905→    def log_message(self, format: str, *args: Any) -> None:
+   906→        pass
+   907→
+   908→    def _route(self, method: str) -> None:
+   909→        """Route request to appropriate handler."""
+   910→        parsed = urlparse(self.path)
+   911→        path = parsed.path.rstrip("/")
+   912→
+   913→        try:
+   914→            # ── Health ──
+   915→            if path == "/health" and method == "GET":
+   916→                _json_response(self, {
+   917→                    "status": "ok",
+   918→                    "service": "ml-trainer",
+   919→                    "port": PORT,
+   920→                    "version": "1.0.0",
+   921→                    "onnx_export": ONNX_EXPORT_AVAILABLE,
+   922→                    "cached_symbols": list(_model_cache.keys()),
+   923→                })
+   924→                return
+   925→
+   926→            # ── Train ──
+   927→            if path == "/train" and method == "POST":
+   928→                body = json.loads(_read_body(self))
+   929→                symbol = body.get("symbol", "").strip().upper()
+   930→                ohlcv = body.get("ohlcv", [])
+   931→                models = body.get("models", MODEL_TYPES)
+   932→
+   933→                if not symbol:
+   934→                    _json_response(self, {"status": "error", "message": "Missing 'symbol' field"}, 400)
+   935→                    return
+   936→                if not ohlcv or len(ohlcv) < MIN_CANDLES:
+   937→                    _json_response(self, {"status": "error", "message": f"Need at least {MIN_CANDLES} OHLCV candles"}, 400)
+   938→                    return
+   939→
+   940→                result = train_models(symbol, ohlcv, models)
+   941→                _json_response(self, result)
+   942→                return
+   943→
+   944→            # ── Predict ──
+   945→            if path == "/predict" and method == "POST":
+   946→                body = json.loads(_read_body(self))
+   947→                symbol = body.get("symbol", "").strip().upper()
+   948→                ohlcv = body.get("ohlcv", [])
+   949→                horizon = min(body.get("horizon", 30), 90)  # cap at 90
+   950→
+   951→                if not symbol:
+   952→                    _json_response(self, {"status": "error", "message": "Missing 'symbol' field"}, 400)
+   953→                    return
+   954→                if not ohlcv or len(ohlcv) < MIN_CANDLES:
+   955→                    _json_response(self, {"status": "error", "message": f"Need at least {MIN_CANDLES} OHLCV candles"}, 400)
+   956→                    return
+   957→
+   958→                result = predict_sessions(symbol, ohlcv, horizon)
+   959→                _json_response(self, result)
+   960→                return
+   961→
+   962→            # ── List all models ──
+   963→            if path == "/models" and method == "GET":
+   964→                _json_response(self, list_all_models())
+   965→                return
+   966→
+   967→            # ── Get symbol models ──
+   968→            if path.startswith("/models/") and method == "GET":
+   969→                symbol = path[len("/models/"):].strip().upper()
+   970→                if not symbol:
+   971→                    _json_response(self, {"status": "error", "message": "Missing symbol in path"}, 400)
+   972→                    return
+   973→                _json_response(self, get_symbol_models(symbol))
+   974→                return
+   975→
+   976→            # ── Retrain all ──
+   977→            if path == "/retrain-all" and method == "POST":
+   978→                body = json.loads(_read_body(self))
+   979→                ohlcv_data = body.get("ohlcv_data", {})
+   980→
+   981→                if not ohlcv_data:
+   982→                    _json_response(self, {"status": "error", "message": "Missing 'ohlcv_data' field"}, 400)
+   983→                    return
+   984→
+   985→                results = {}
+   986→                errors = []
+   987→                for sym, candles in ohlcv_data.items():
+   988→                    try:
+   989→                        sym_upper = sym.strip().upper()
+   990→                        r = train_models(sym_upper, candles, MODEL_TYPES)
+   991→                        results[sym_upper] = r
+   992→                    except Exception as e:
+   993→                        errors.append({"symbol": sym, "error": str(e)})
+   994→
+   995→                _json_response(self, {
+   996→                    "status": "ok",
+   997→                    "retrained": list(results.keys()),
+   998→                    "results": results,
+   999→                    "errors": errors,
+  1000→                })
+  1001→                return
+  1002→
+  1003→            # ── 404 ──
+  1004→            _json_response(self, {"status": "error", "message": f"Not found: {method} {path}"}, 404)
+  1005→
+  1006→        except json.JSONDecodeError:
+  1007→            _json_response(self, {"status": "error", "message": "Invalid JSON body"}, 400)
+  1008→        except ValueError as e:
+  1009→            _json_response(self, {"status": "error", "message": str(e)}, 400)
+  1010→        except Exception as e:
+  1011→            log("ERROR", f"Unhandled {method} {path}: {traceback.format_exc()}")
+  1012→            _json_response(self, {"status": "error", "message": f"Internal error: {str(e)}"}, 500)
+  1013→
+  1014→    def do_GET(self) -> None:
+  1015→        self._route("GET")
+  1016→
+  1017→    def do_POST(self) -> None:
+  1018→        self._route("POST")
+  1019→
+  1020→    def do_OPTIONS(self) -> None:
+  1021→        """Handle CORS preflight."""
+  1022→        self.send_response(204)
+  1023→        self.send_header("Access-Control-Allow-Origin", "*")
+  1024→        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+  1025→        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+  1026→        self.end_headers()
+  1027→
+  1028→    def end_headers(self) -> None:
+  1029→        """Add CORS headers to all responses."""
+  1030→        self.send_header("Access-Control-Allow-Origin", "*")
+  1031→        super().end_headers()
+  1032→
+  1033→
+  1034→# ─────────────────────────────────────────────────────────────────────────────
+  1035→# Threading Server
+  1036→# ─────────────────────────────────────────────────────────────────────────────
+  1037→
+  1038→
+  1039→class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+  1040→    """Handle requests in separate threads."""
+  1041→    daemon_threads = True
+  1042→    allow_reuse_address = True
+  1043→
+  1044→
+  1045→# ─────────────────────────────────────────────────────────────────────────────
+  1046→# Main
+  1047→# ─────────────────────────────────────────────────────────────────────────────
+  1048→
+  1049→
+  1050→def main() -> None:
+  1051→    os.makedirs(MODELS_DIR, exist_ok=True)
+  1052→    server = ThreadedHTTPServer(("0.0.0.0", PORT), MLHandler)
+  1053→    log("INFO", f"ML Training Service started on port {PORT}")
+  1054→    log("INFO", f"Models directory: {MODELS_DIR}")
+  1055→    log("INFO", f"ONNX export available: {ONNX_EXPORT_AVAILABLE}")
+  1056→    try:
+  1057→        server.serve_forever()
+  1058→    except KeyboardInterrupt:
+  1059→        log("INFO", "Shutting down...")
+  1060→        server.shutdown()
+  1061→
+  1062→
+  1063→if __name__ == "__main__":
+  1064→    main()
+  1065→

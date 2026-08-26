@@ -3,6 +3,7 @@
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
+import { useTheme } from '@/lib/theme-store';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,13 @@ interface IndicatorsPanelProps {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
 
 function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
@@ -83,22 +91,19 @@ function trendDirSignal(dir: string): 'bullish' | 'bearish' | 'neutral' {
   return 'neutral';
 }
 
-function gradeColor(grade: string) {
+function gradeStyle(grade: string, cardSubFg: string): React.CSSProperties {
   switch (grade) {
-    case 'Very Strong': return { bg: 'bg-red-50', text: 'text-red-700' };
-    case 'Strong': return { bg: 'bg-amber-50', text: 'text-amber-700' };
-    case 'Moderate': return { bg: 'bg-sky-50', text: 'text-sky-700' };
-    default: return { bg: 'bg-gray-50', text: 'text-gray-500' };
+    case 'Very Strong': return { background: 'rgba(239,68,68,0.2)', color: '#f87171' };
+    case 'Strong': return { background: 'rgba(245,158,11,0.2)', color: '#fbbf24' };
+    case 'Moderate': return { background: 'rgba(14,165,233,0.2)', color: '#38bdf8' };
+    default: return { background: 'rgba(255,255,255,0.1)', color: cardSubFg };
   }
 }
 
-function signalDot(signal: 'bullish' | 'bearish' | 'neutral') {
-  const colors = {
-    bullish: 'bg-emerald-600',
-    bearish: 'bg-red-600',
-    neutral: 'bg-[#B0A89E]',
-  };
-  return <span className={`inline-block h-2 w-2 rounded-full ${colors[signal]}`} />;
+function SignalDot({ signal }: { signal: 'bullish' | 'bearish' | 'neutral' }) {
+  const { colors: C } = useTheme();
+  const bg = signal === 'bullish' ? C.bullColor : signal === 'bearish' ? C.bearColor : C.cardSubFg;
+  return <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: bg }} />;
 }
 
 // ─── Indicator Card ────────────────────────────────────────────────────────────
@@ -112,15 +117,22 @@ function IndicatorCard({
   value: string;
   signal: 'bullish' | 'bearish' | 'neutral';
 }) {
+  const { colors: C } = useTheme();
   return (
-    <div className="bg-[#ffffff] border border-[#e5e7eb] rounded-xl p-3 flex items-center justify-between gap-2">
+    <div
+      className="rounded-xl p-3 flex items-center justify-between gap-2"
+      style={{
+        background: C.cardBg,
+        border: `1px solid ${C.cardBorder}`,
+      }}
+    >
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-[11px] text-[#6b7280] truncate">{label}</span>
-        <span className="text-sm font-medium text-[#111827] tabular-nums" dir="ltr">
+        <span className="text-[11px] truncate" style={{ color: C.cardSubFg }}>{label}</span>
+        <span className="text-sm font-medium tabular-nums" style={{ color: C.cardFg }} dir="ltr">
           {value}
         </span>
       </div>
-      {signalDot(signal)}
+      <SignalDot signal={signal} />
     </div>
   );
 }
@@ -129,7 +141,7 @@ function IndicatorCard({
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h3 className="col-span-full text-xs font-semibold text-amber-800 uppercase tracking-wider mt-4 mb-1 first:mt-0">
+    <h3 className="col-span-full text-xs font-semibold text-amber-400/80 mt-5 mb-1.5 first:mt-0">
       {title}
     </h3>
   );
@@ -138,14 +150,15 @@ function SectionHeader({ title }: { title: string }) {
 // ─── Loading Skeleton ──────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
+  const { colors: C } = useTheme();
   return (
-    <div className="bg-[#ffffff] rounded-2xl p-4 space-y-4">
+    <div className="rounded-2xl p-4 space-y-4" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-28 bg-[#e5e7eb]" />
+          <Skeleton className="h-4 w-28 bg-white/5" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {Array.from({ length: 3 }).map((_, j) => (
-              <Skeleton key={j} className="h-16 w-full bg-[#e5e7eb] rounded-xl" />
+              <Skeleton key={j} className="h-16 w-full bg-white/5 rounded-xl" />
             ))}
           </div>
         </div>
@@ -157,13 +170,22 @@ function LoadingSkeleton() {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
+  const { colors: C } = useTheme();
+
   if (!ta) return <LoadingSkeleton />;
 
   // Moving averages signal: price relationship not available here, default neutral
   const maSignal = 'neutral' as const;
 
   return (
-    <div className="bg-[#ffffff] rounded-2xl p-4 space-y-1" dir="rtl">
+    <div
+      className="rounded-2xl p-4 space-y-1"
+      dir="rtl"
+      style={{
+        background: C.cardBg,
+        border: `1px solid ${C.cardBorder}`,
+      }}
+    >
       {/* ── میانگین‌های متحرک (Moving Averages) ─────────────────────── */}
       <SectionHeader title="میانگین‌های متحرک" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -239,29 +261,36 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
       <div className="space-y-3">
         {/* Resistances */}
         <div>
-          <p className="text-[11px] text-red-700 mb-1.5 font-medium">مقاومت‌ها</p>
+          <p className="text-[11px] mb-1.5 font-medium" style={{ color: C.bearColor }}>مقاومت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {(ta.resistanceStrengths ?? []).slice(0, 6).map((r, i) => {
-              const gc = gradeColor(r.grade);
+              const gs = gradeStyle(r.grade, C.cardSubFg);
               const faMethods = String(r.methods?.length ?? 0).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
               return (
-                <div key={i} className="bg-red-50 border border-red-200 rounded-xl p-3">
+                <div
+                  key={i}
+                  className="rounded-xl p-3"
+                  style={{
+                    background: hexToRgba(C.bearColor, 0.06),
+                    border: `1px solid ${hexToRgba(C.bearColor, 0.15)}`,
+                  }}
+                >
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[11px] text-red-600 font-medium">
+                    <span className="text-[11px] font-medium" style={{ color: C.bearColor }}>
                       {r.isTarget ? '★ ' : ''}R{toFa(i + 1)}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${gc.bg} ${gc.text}`}>{r.grade}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={gs}>{r.grade}</span>
                   </div>
-                  <p className="text-sm font-medium text-red-700 tabular-nums text-center" dir="ltr">{toFa(r.price)}</p>
+                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{toFa(r.price)}</p>
                   <div className="flex items-center justify-center gap-2 mt-1">
-                    {r.fibLabel && <span className="text-[10px] text-red-400">فیبو {r.fibLabel}</span>}
-                    <span className="text-[10px] text-red-400">({faMethods} روش)</span>
+                    {r.fibLabel && <span className="text-[10px]" style={{ color: hexToRgba(C.bearColor, 0.5) }}>فیبو {r.fibLabel}</span>}
+                    <span className="text-[10px]" style={{ color: hexToRgba(C.bearColor, 0.5) }}>({faMethods} روش)</span>
                   </div>
                   <div className="flex items-center justify-center gap-1.5 mt-1">
-                    <div className="h-1.5 w-12 rounded-full bg-red-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${(r.strength / 10) * 100}%` }} />
+                    <div className="h-1.5 w-12 rounded-full overflow-hidden" style={{ background: hexToRgba(C.bearColor, 0.15) }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${(r.strength / 10) * 100}%`, background: hexToRgba(C.bearColor, 0.6) }} />
                     </div>
-                    <span className="text-[10px] text-red-500 tabular-nums">{toPersianDigits(String(r.strength))}/۱۰</span>
+                    <span className="text-[10px] tabular-nums" style={{ color: C.bearColor }}>{toPersianDigits(String(r.strength))}/۱۰</span>
                   </div>
                 </div>
               );
@@ -270,29 +299,36 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
         </div>
         {/* Supports */}
         <div>
-          <p className="text-[11px] text-emerald-700 mb-1.5 font-medium">حمایت‌ها</p>
+          <p className="text-[11px] mb-1.5 font-medium" style={{ color: C.bullColor }}>حمایت‌ها</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {(ta.supportStrengths ?? []).slice(0, 6).map((s, i) => {
-              const gc = gradeColor(s.grade);
+              const gs = gradeStyle(s.grade, C.cardSubFg);
               const faMethods = String(s.methods?.length ?? 0).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
               return (
-                <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <div
+                  key={i}
+                  className="rounded-xl p-3"
+                  style={{
+                    background: hexToRgba(C.bullColor, 0.06),
+                    border: `1px solid ${hexToRgba(C.bullColor, 0.15)}`,
+                  }}
+                >
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[11px] text-emerald-600 font-medium">
+                    <span className="text-[11px] font-medium" style={{ color: C.bullColor }}>
                       {s.isTarget ? '★ ' : ''}S{toFa(i + 1)}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${gc.bg} ${gc.text}`}>{s.grade}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={gs}>{s.grade}</span>
                   </div>
-                  <p className="text-sm font-medium text-emerald-700 tabular-nums text-center" dir="ltr">{toFa(s.price)}</p>
+                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{toFa(s.price)}</p>
                   <div className="flex items-center justify-center gap-2 mt-1">
-                    {s.fibLabel && <span className="text-[10px] text-emerald-400">فیبو {s.fibLabel}</span>}
-                    <span className="text-[10px] text-emerald-400">({faMethods} روش)</span>
+                    {s.fibLabel && <span className="text-[10px]" style={{ color: hexToRgba(C.bullColor, 0.5) }}>فیبو {s.fibLabel}</span>}
+                    <span className="text-[10px]" style={{ color: hexToRgba(C.bullColor, 0.5) }}>({faMethods} روش)</span>
                   </div>
                   <div className="flex items-center justify-center gap-1.5 mt-1">
-                    <div className="h-1.5 w-12 rounded-full bg-emerald-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(s.strength / 10) * 100}%` }} />
+                    <div className="h-1.5 w-12 rounded-full overflow-hidden" style={{ background: hexToRgba(C.bullColor, 0.15) }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${(s.strength / 10) * 100}%`, background: hexToRgba(C.bullColor, 0.6) }} />
                     </div>
-                    <span className="text-[10px] text-emerald-500 tabular-nums">{toPersianDigits(String(s.strength))}/۱۰</span>
+                    <span className="text-[10px] tabular-nums" style={{ color: C.bullColor }}>{toPersianDigits(String(s.strength))}/۱۰</span>
                   </div>
                 </div>
               );
@@ -308,18 +344,25 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
           const t = ta.trend[period];
           const labels: Record<string, string> = { short: 'کوتاه‌مدت', medium: 'میان‌مدت', long: 'بلندمدت' };
           const arrow = t.direction === 'up' ? '↑' : t.direction === 'down' ? '↓' : '→';
-          const arrowColor = t.direction === 'up' ? 'text-emerald-700' : t.direction === 'down' ? 'text-red-700' : 'text-[#6b7280]';
+          const arrowColor = t.direction === 'up' ? C.bullColor : t.direction === 'down' ? C.bearColor : C.cardSubFg;
           return (
-            <div key={period} className="bg-[#ffffff] border border-[#e5e7eb] rounded-xl p-3 flex items-center justify-between gap-2">
+            <div
+              key={period}
+              className="rounded-xl p-3 flex items-center justify-between gap-2"
+              style={{
+                background: C.cardBg,
+                border: `1px solid ${C.cardBorder}`,
+              }}
+            >
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11px] text-[#6b7280]">{labels[period]}</span>
+                <span className="text-[11px]" style={{ color: C.cardSubFg }}>{labels[period]}</span>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={`text-lg font-bold ${arrowColor}`}>{arrow}</span>
-                  <span className="text-[#374151] tabular-nums" dir="ltr">{toFa(t.angle)}°</span>
+                  <span className="text-lg font-bold" style={{ color: arrowColor }}>{arrow}</span>
+                  <span className="tabular-nums" style={{ color: C.cardFg }} dir="ltr">{toFa(t.angle)}°</span>
                 </div>
-                <span className="text-[11px] text-[#6b7280] tabular-nums" dir="ltr">R²: {toPersianDigits((t.r2 * 100).toFixed(1))}٪</span>
+                <span className="text-[11px] tabular-nums" style={{ color: C.cardSubFg }} dir="ltr">R²: {toPersianDigits((t.r2 * 100).toFixed(1))}٪</span>
               </div>
-              {signalDot(trendDirSignal(t.direction))}
+              <SignalDot signal={trendDirSignal(t.direction)} />
             </div>
           );
         })}
@@ -327,36 +370,43 @@ export default function IndicatorsPanel({ ta }: IndicatorsPanelProps) {
 
       {/* ── امتیاز کلی (Overall Score) ────────────────────────────────── */}
       <SectionHeader title="امتیاز کلی" />
-      <div className="bg-[#ffffff] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
+      <div
+        className="rounded-xl p-4 space-y-3"
+        style={{
+          background: C.cardBg,
+          border: `1px solid ${C.cardBorder}`,
+        }}
+      >
         {/* Progress bar */}
-        <div className="relative h-6 w-full rounded-full overflow-hidden bg-[#e5e7eb]">
+        <div className="relative h-6 w-full rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
           <div
-            className="absolute top-0 right-0 h-full rounded-r-full bg-emerald-600 transition-all duration-500"
-            style={{ width: `${ta.bullScore}%` }}
+            className="absolute top-0 right-0 h-full rounded-r-full transition-all duration-500"
+            style={{ width: `${ta.bullScore}%`, background: hexToRgba(C.bullColor, 0.5) }}
           />
           <div
-            className="absolute top-0 left-0 h-full rounded-l-full bg-red-600 transition-all duration-500"
-            style={{ width: `${ta.bearScore}%` }}
+            className="absolute top-0 left-0 h-full rounded-l-full transition-all duration-500"
+            style={{ width: `${ta.bearScore}%`, background: hexToRgba(C.bearColor, 0.5) }}
           />
           {/* Labels inside bar */}
           <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px] font-medium">
-            <span className="text-emerald-700">خرید {toFa(ta.bullScore)}٪</span>
-            <span className="text-red-700">فروش {toFa(ta.bearScore)}٪</span>
+            <span style={{ color: C.bullColor }}>خرید {toFa(ta.bullScore)}٪</span>
+            <span style={{ color: C.bearColor }}>فروش {toFa(ta.bearScore)}٪</span>
           </div>
         </div>
 
         {/* Signal badge */}
         <div className="flex items-center justify-center">
           <span
-            className={
+            className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold"
+            style={
               ta.overallSignal === 'bullish'
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-sm font-semibold text-emerald-700'
+                ? { background: hexToRgba(C.bullColor, 0.1), border: `1px solid ${hexToRgba(C.bullColor, 0.25)}`, color: C.bullColor }
                 : ta.overallSignal === 'bearish'
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-4 py-1.5 text-sm font-semibold text-red-700'
-                : 'inline-flex items-center gap-1.5 rounded-full bg-[#e5e7eb]/50 border border-[#e5e7eb] px-4 py-1.5 text-sm font-semibold text-[#6b7280]'
+                ? { background: hexToRgba(C.bearColor, 0.1), border: `1px solid ${hexToRgba(C.bearColor, 0.25)}`, color: C.bearColor }
+                : { background: hexToRgba(C.neutralColor, 0.1), border: `1px solid ${hexToRgba(C.neutralColor, 0.25)}`, color: C.neutralColor }
             }
           >
-            {signalDot(ta.overallSignal)}
+            <SignalDot signal={ta.overallSignal} />
             {ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
           </span>
         </div>

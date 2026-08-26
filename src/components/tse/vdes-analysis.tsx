@@ -26,6 +26,7 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import { computeDailyIndicators } from '@/lib/indicator-arrays';
+import { useTheme } from '@/lib/theme-store';
 
 function renderAIText(text: string): string {
   // Normalize zero-width and look-alike characters that may interfere with regex
@@ -132,16 +133,17 @@ const SCENARIO_NUMBER: Record<string, string> = {
   R6: '\u06f6', R7: '\u06f7', R8: '\u06f8', R9: '\u06f9',
 };
 
+// Convention: R1-R4=bearish, R5=neutral, R6-R9=bullish (matches decision-graph.ts & ta-engine.ts)
 const SCENARIO_META: Record<string, { label: string; type: string; border: string; badgeBg: string; badgeColor: string }> = {
-  R1: { label: '\u0635\u0639\u0648\u062f\u06cc \u0628\u0627 \u0627\u062d\u062a\u06cc\u0627\u0637', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
-  R2: { label: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', type: 'up', border: '#059669', badgeBg: 'rgba(5,150,105,0.1)', badgeColor: '#059669' },
-  R3: { label: '\u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u0628\u062f\u0627\u0631', type: 'up', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
-  R4: { label: '\u0634\u0648\u06a9 \u0635\u0639\u0648\u062f\u06cc', type: 'up', border: '#0891b2', badgeBg: 'rgba(8,145,178,0.1)', badgeColor: '#0891b2' },
-  R5: { label: '\u0631\u0646\u062c \u06a9\u0645\u200c\u0646\u0648\u0633\u0627\u0646', type: 'neutral', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
-  R6: { label: '\u0646\u0632\u0648\u0644\u06cc \u0628\u0627 \u0627\u062d\u062a\u06cc\u0627\u0637', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
-  R7: { label: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc', type: 'down', border: '#ea580c', badgeBg: 'rgba(234,88,12,0.1)', badgeColor: '#ea580c' },
-  R8: { label: '\u0646\u0632\u0648\u0644\u06cc \u0634\u062a\u0627\u0628\u200c\u062f\u0627\u0631', type: 'down', border: '#dc2626', badgeBg: 'rgba(220,38,38,0.1)', badgeColor: '#dc2626' },
-  R9: { label: '\u0634\u0648\u06a9 \u0646\u0632\u0648\u0644\u06cc', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
+  R1: { label: '\u0634\u0648\u06a9 \u0646\u0632\u0648\u0644\u06cc', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
+  R2: { label: '\u0646\u0632\u0648\u0644\u06cc \u0634\u062a\u0627\u0628\u200c\u062f\u0627\u0631', type: 'down', border: '#dc2626', badgeBg: 'rgba(220,38,38,0.1)', badgeColor: '#dc2626' },
+  R3: { label: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc', type: 'down', border: '#ea580c', badgeBg: 'rgba(234,88,12,0.1)', badgeColor: '#ea580c' },
+  R4: { label: '\u0646\u0632\u0648\u0644\u06cc \u062e\u0641\u06cc\u0641', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
+  R5: { label: '\u0631\u0646\u062c', type: 'neutral', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
+  R6: { label: '\u0635\u0639\u0648\u062f\u06cc \u062e\u0641\u06cc\u0641', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
+  R7: { label: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', type: 'up', border: '#059669', badgeBg: 'rgba(5,150,105,0.1)', badgeColor: '#059669' },
+  R8: { label: '\u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u0628\u062f\u0627\u0631', type: 'up', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
+  R9: { label: '\u0634\u0648\u06a9 \u0635\u0639\u0648\u062f\u06cc', type: 'up', border: '#0891b2', badgeBg: 'rgba(8,145,178,0.1)', badgeColor: '#0891b2' },
 };
 
 const GRADE_MAP: Record<string, { label: string; color: string }> = {
@@ -161,15 +163,15 @@ function GradeBadge({ grade }: { grade: string }) {
 }
 
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
-  R1: { text: 'سناریوی ۱: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
-  R2: { text: 'سناریوی ۲: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
-  R3: { text: 'سناریوی ۳: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
-  R4: { text: 'سناریوی ۴: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+  R1: { text: 'سناریوی ۱: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+  R2: { text: 'سناریوی ۲: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
+  R3: { text: 'سناریوی ۳: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
+  R4: { text: 'سناریوی ۴: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
   R5: { text: 'سناریوی ۵: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
-  R6: { text: 'سناریوی ۶: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
-  R7: { text: 'سناریوی ۷: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
-  R8: { text: 'سناریوی ۸: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
-  R9: { text: 'سناریوی ۹: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+  R6: { text: 'سناریوی ۶: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+  R7: { text: 'سناریوی ۷: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
+  R8: { text: 'سناریوی ۸: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
+  R9: { text: 'سناریوی ۹: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
 };
 
 const RISK_PROFILE_LABELS: Record<V11Result['riskProfile'], { label: string; color: string; bg: string }> = {
@@ -278,8 +280,8 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const adxColor = adx > 40 ? 'text-emerald-700' : adx > 25 ? 'text-amber-800' : 'text-[#6b7280]';
 
   // Helper: is bullish scenario?
-  const isBull = (k: string) => ['R1','R2','R3','R4'].includes(k);
-  const isBear = (k: string) => ['R6','R7','R8','R9'].includes(k);
+  const isBull = (k: string) => ['R6','R7','R8','R9'].includes(k);
+  const isBear = (k: string) => ['R1','R2','R3','R4'].includes(k);
 
   // ── PARAGRAPH 1: General Trend & Price Position ──
   const p1 = (
@@ -307,13 +309,13 @@ function generateAnalysisText(ctx: AnalysisContext) {
   // ── PARAGRAPH 2: Oscillator & Momentum (scenario-aware) ──
   let p2: React.ReactNode;
   if (isBull(highestKey)) {
-    const isStrongBull = highestKey === 'R3' || highestKey === 'R4';
+    const isStrongBull = highestKey === 'R8' || highestKey === 'R9';
     p2 = (
       <>
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — مومنتوم صعودی{isStrongBull ? ' قوی' : ''}:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
         <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b>
-        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز {highestKey === 'R4' ? 'شوک' : 'شتابدار'} صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
+        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز {highestKey === 'R9' ? 'شوک' : 'شتابدار'} صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
         {' '}قرار دارد.
         {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
@@ -344,7 +346,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       </>
     );
   } else if (isBear(highestKey)) {
-    const isStrongBear = highestKey === 'R8' || highestKey === 'R9';
+    const isStrongBear = highestKey === 'R1' || highestKey === 'R2';
     p2 = (
       <>
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — {isStrongBear ? 'تضعیف شدید ساختار' : 'هشدار اصلاح'}:</strong>{' '}
@@ -495,6 +497,7 @@ function StrengthBar({ strength }: { strength: number }) {
 // ═══════════════════════════════════════════════════════════════════
 
 export default function VdesAnalysis(props: VdesAnalysisProps) {
+  const { colors: C, isDark } = useTheme();
   const {
     symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
     rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
@@ -552,6 +555,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     }
   }
   const strategy = STRATEGY_MAP[highestKey];
+  const strategyType = SCENARIO_META[highestKey]?.type;
   const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + (scenarios[k]?.probability ?? 0), 0);
 
   // ── RSI signal ─────────────────────────────────────────────────
@@ -613,6 +617,36 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(true);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiRetryKey, setAiRetryKey] = useState(0);
+  const [aiRetryCount, setAiRetryCount] = useState(0);
+  const [aiRetryDelay, setAiRetryDelay] = useState(0);
+  const aiAutoRetryRef = useRef(0);
+
+  // Listen for retry events from the retry button
+  useEffect(() => {
+    const handler = () => { setAiRetryKey((k) => k + 1); aiAutoRetryRef.current = 0; setAiRetryCount(0); setAiRetryDelay(0); };
+    window.addEventListener('ai-retry', handler);
+    return () => window.removeEventListener('ai-retry', handler);
+  }, []);
+
+  // Serialize dependencies to stable string to prevent request flooding
+  const aiCacheKey = useMemo(() => {
+    return JSON.stringify({
+      symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+      stochK, stochD, macdLine, macdSignal, macdHist,
+      diPlus, diMinus, sar, atr, obv,
+      bollingerUpper, bollingerMiddle, bollingerLower,
+      trendDirection, trendAngle, trendR2,
+      hasVolume,
+      scenarios: Object.entries(scenarios || {}).map(([k, v]) => [k, v.probability, v.targetMin, v.targetMax]),
+      v11Profile: v11Result.riskProfile,
+    });
+  }, [symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+    stochK, stochD, macdLine, macdSignal, macdHist,
+    diPlus, diMinus, sar, atr, obv,
+    bollingerUpper, bollingerMiddle, bollingerLower,
+    trendDirection, trendAngle, trendR2, hasVolume,
+    scenarios, v11Result]);
 
   useEffect(() => {
     if (!currentPrice) return;
@@ -621,6 +655,12 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 
     (async () => {
       try {
+        setAiLoading(true);
+        setAiError(null);
+        // Combine abort signals: component unmount + 10 min timeout
+        const timeoutSignal = AbortSignal.timeout(580_000);
+        const combinedSignal = controller.signal.aborted ? controller.signal : AbortSignal.any([controller.signal, timeoutSignal]);
+
         const res = await fetch('/api/ai-analysis', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -634,37 +674,84 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             resistanceStrengths, supportStrengths,
             v11Probabilities: v11Result,
           }),
-          signal: controller.signal,
+          signal: combinedSignal,
         });
         if (cancelled) return;
         if (!res.ok) {
           let errMsg = `خطای سرور (${res.status})`;
+          let shouldAutoRetry = false;
+          let retryAfterSec = 0;
           try {
             const errBody = await res.json();
             if (errBody.error) errMsg = errBody.error;
-          } catch { /* non-JSON response (e.g. 502 HTML) */ }
+            if (errBody.retryAfterSec) retryAfterSec = Number(errBody.retryAfterSec) || 0;
+          } catch {
+            if (res.status === 502) { errMsg = 'سرور هوشمند در حال بارگذاری مجدد است...'; shouldAutoRetry = true; }
+            else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست. لطفاً بعداً تلاش کنید.';
+            else if (res.status === 429) { errMsg = 'تعداد درخواست‌ها زیاد است. لطفاً کمی صبر کنید.'; shouldAutoRetry = true; }
+          }
+          // Auto-retry for rate limit / gateway errors (up to 6 times, with increasing delays)
+          const MAX_RETRIES = 6;
+          if (shouldAutoRetry && aiAutoRetryRef.current < MAX_RETRIES) {
+            aiAutoRetryRef.current += 1;
+            const retryNum = aiAutoRetryRef.current;
+            // Use server-suggested delay if available, otherwise use progressive delays
+            const delays = [30_000, 45_000, 60_000, 90_000, 120_000, 150_000];
+            const delay = retryAfterSec > 0
+              ? Math.min(retryAfterSec * 1000 + 5_000, 180_000) // Server suggestion + 5s buffer, max 3min
+              : delays[Math.min(retryNum - 1, delays.length - 1)];
+            console.log(`[AI] Auto-retry ${retryNum}/${MAX_RETRIES} in ${delay / 1000}s...`);
+            setAiRetryCount(retryNum);
+            setAiRetryDelay(Math.round(delay / 1000));
+            setAiLoading(true);
+            setAiError(null);
+            await new Promise(r => setTimeout(r, delay));
+            if (!cancelled) setAiRetryKey(k => k + 1);
+            return;
+          }
           setAiError(errMsg);
+          setAiRetryCount(0);
+          setAiRetryDelay(0);
           return;
         }
         const data = await res.json();
         if (cancelled) return;
         if (data.text) {
           setAiText(data.text);
+          setAiRetryCount(0);
+          setAiRetryDelay(0);
         }
-        else if (data.error) setAiError(data.error);
+        else if (data.error) { setAiError(data.error); setAiRetryCount(0); setAiRetryDelay(0); }
       } catch (err: unknown) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
+        // Network errors may also be transient - auto retry
+        if (aiAutoRetryRef.current < 6) {
+          aiAutoRetryRef.current += 1;
+          const retryNum = aiAutoRetryRef.current;
+          const delays = [30_000, 45_000, 60_000, 90_000, 120_000, 150_000];
+          const delay = delays[Math.min(retryNum - 1, delays.length - 1)];
+          console.log(`[AI] Network error, auto-retry ${retryNum}/4 in ${delay / 1000}s...`);
+          setAiRetryCount(retryNum);
+          setAiRetryDelay(Math.round(delay / 1000));
+          setAiLoading(true);
+          setAiError(null);
+          await new Promise(r => setTimeout(r, delay));
+          if (!cancelled) setAiRetryKey(k => k + 1);
+          return;
+        }
         setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
+        setAiRetryCount(0);
+        setAiRetryDelay(0);
       } finally {
         if (!cancelled) setAiLoading(false);
       }
     })();
 
     return () => { cancelled = true; controller.abort(); };
-  }, [symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist, diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower, trendDirection, trendAngle, trendR2, scenarios, hasVolume, resistanceStrengths, supportStrengths, v11Result]);
+  }, [aiCacheKey, aiRetryKey]);
 
   // ── File name helper ───────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
@@ -680,6 +767,23 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 
   const exportHTML = useCallback(async () => {
     if (!vdesRef.current) return;
+    const analysisHTML = vdesRef.current.querySelector('.vdes-analysis-text')?.innerHTML || '<p>تحلیل در دسترس نیست</p>';
+
+    // Capture chart as base64 image
+    let chartImgTag = '';
+    try {
+      const chartEl = document.getElementById('chart-export-wrapper');
+      if (chartEl && chartEl.isConnected && chartEl.offsetWidth > 0) {
+        const dataUrl = await toPng(chartEl, { backgroundColor: isDark ? '#0a0a1a' : '#ffffff', pixelRatio: 2, cacheBust: true });
+        chartImgTag = `
+<div class="panel" style="padding:12px 8px;overflow-x:auto;">
+  <img src="${dataUrl}" alt="نمودار ${symbolName}" style="width:100%;height:auto;border-radius:12px;display:block;" />
+</div>`;
+      }
+    } catch (err) {
+      console.warn('[HTML Export] Chart capture failed:', err instanceof Error ? err.message : String(err));
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -688,86 +792,131 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 <title>تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Vazirmatn', sans-serif; background: #f3f4f6; color: #111827; padding: 24px; line-height: 1.8; }
-.container { max-width: 960px; margin: 0 auto; }
-.header { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 24px; margin-bottom: 20px; }
-.header h1 { color: #92600A; font-size: 20px; margin-bottom: 8px; }
-.badge { display: inline-block; padding: 4px 12px; border-radius: 20px; border: 1px solid #e5e7eb; background: #f3f4f6; font-size: 12px; margin: 4px; color: #374151; }
-.badge strong { color: #111827; }
-.section { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
-.section h2 { color: #92600A; font-size: 14px; margin-bottom: 12px; }
-.section p { font-size: 13px; color: #374151; margin-bottom: 12px; }
-.section p strong { color: #92600A; }
-.scenario-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px; margin-top: 12px; }
-.scenario-card { border: 1px solid #e5e7eb; border-top: 3px solid; border-radius: 8px; padding: 10px 8px; text-align: center; background: #f3f4f6; font-size: 11px; }
-.scenario-card .prob { font-size: 18px; font-weight: 900; margin: 4px 0; }
-.scenario-card .range { font-size: 9px; color: #6b7280; }
-.scenario-card .cum { font-size: 9px; color: #6b7280; margin-top: 2px; }
-.bar-bg { height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin: 6px 0; }
-.bar-fill { height: 100%; border-radius: 3px; }
-.summary-bar { display: flex; gap: 8px; margin-top: 12px; }
-.summary-item { flex: 1; text-align: center; padding: 8px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px; }
-.level-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.level-box { border-radius: 8px; padding: 12px; border: 1px solid; }
-.level-box h3 { font-size: 13px; margin-bottom: 8px; }
-.level-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 8px; margin-bottom: 6px; background: #f9fafb; border: 1px solid #e5e7eb; }
-.strategy-tag { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid; margin-top: 8px; }
+body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageBg}; color: ${C.cardFg}; padding: 20px 16px 40px; line-height: 1.8; }
+.app { max-width: 1400px; margin: 0 auto; }
+.header { background: ${C.cardBg}; backdrop-filter: blur(14px); border: 1px solid ${C.primary}; border-radius: 32px; padding: 26px 32px; margin-bottom: 28px; ${isDark ? 'box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);' : 'box-shadow: 0 4px 16px rgba(0,0,0,.08);'} }
+.header h1 { font-size: 1.8rem; font-weight: 700; color: #f8e365; margin-bottom: 6px; }
+.header .sub { color: ${C.cardSubFg}; font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 8px; }
+.header .sub span { background: ${C.cardBg}; padding: 4px 14px; border-radius: 40px; border: 1px solid ${C.cardBorder}; }
+.panel { background: ${C.cardBg}; backdrop-filter: blur(8px); border: 1px solid ${C.cardBorder}; border-radius: 28px; padding: 22px 24px; margin-bottom: 24px; ${isDark ? 'box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);' : 'box-shadow: 0 4px 16px rgba(0,0,0,.08);'} }
+.panel h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 16px; color: ${C.cardFg}; display: flex; align-items: center; gap: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+@media (max-width: 950px) { .grid-2 { grid-template-columns: 1fr; } }
+.level-box { background: ${C.cardBg}; border-radius: 16px; padding: 16px 18px; border: 1px solid ${C.cardBorder}; }
+.level-box h3 { font-size: 1.1rem; margin-bottom: 14px; border-bottom: 1px solid ${C.cardBorder}; padding-bottom: 10px; }
+.level-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid ${C.cardBorder}; font-size: 0.95rem; align-items: center; }
+.level-row .badge { font-size: 0.7rem; background: ${C.cardBorder}; padding: 0 10px; border-radius: 30px; margin-left: 8px; color: ${C.cardSubFg}; }
+.level-row .price { font-weight: 700; direction: ltr; }
+.support .price { color: ${C.bullColor}; }
+.resistance .price { color: ${C.bearColor}; }
+.scenario-table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid ${C.cardBorder}; }
+.scenario-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; min-width: 500px; }
+.scenario-table thead { background: ${C.cardBorder}; border-bottom: 2px solid ${C.cardBorder}; }
+.scenario-table th { padding: 12px 14px; text-align: right; font-weight: 600; color: ${C.cardSubFg}; font-size: 0.85rem; }
+.scenario-table td { padding: 10px 14px; border-bottom: 1px solid ${C.cardBorder}; vertical-align: middle; }
+.scenario-table tr:last-child td { border-bottom: none; }
+.scenario-table .s-prob { font-weight: 700; color: #f8e365; background: rgba(248, 227, 101, 0.08); padding: 2px 10px; border-radius: 30px; display: inline-block; text-align: center; min-width: 50px; }
+.scenario-table .s-cum { font-weight: 600; color: ${C.cardFg}; }
+.scenario-table .s-range { direction: ltr; font-weight: 500; color: ${C.cardSubFg}; }
+.scenario-table tr.up { border-right: 4px solid ${C.bullColor}; }
+.scenario-table tr.down { border-right: 4px solid ${C.bearColor}; }
+.scenario-table tr.pullback { border-right: 4px solid ${C.neutralColor}; }
+.scenario-table tr { transition: 0.15s; }
+.scenario-table tr:hover { background: ${C.cardBorder}; }
+.analysis-text { background: ${C.cardBg}; border-radius: 16px; padding: 18px 20px; border: 1px solid ${C.cardBorder}; line-height: 1.8; font-size: 0.95rem; color: ${C.cardFg}; }
+.analysis-text strong { color: #f8e365; }
+.highlight-box { background: rgba(248, 227, 101, 0.06); border-right: 4px solid #f8e365; padding: 12px 16px; border-radius: 12px; margin: 12px 0; }
+.summary-bar { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 0.8rem; flex-wrap: wrap; }
+.strategy-tag { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; border: 1px solid; }
+.footer { margin-top: 18px; color: ${C.cardSubFg}; font-size: 0.75rem; text-align: center; border-top: 1px solid ${C.cardBorder}; padding-top: 16px; }
 </style>
 </head>
 <body>
-<div class="container">
-<div class="header">
-<h1> تحلیل تکنیکال ${symbolName}</h1>
-<div style="margin-top:8px">
-<span class="badge"> قیمت مرجع: <strong>${toFa(currentPrice)} ریال</strong></span>
-<span class="badge"> هدف کوتاه‌مدت: <strong>${toFa(targetMin)} — ${toFa(targetMax)} ریال</strong></span>
-<span class="badge"> روند: <strong>${trendText}</strong></span>
-<span class="badge"> پروفایل ریسک: <strong>${riskInfo.label}</strong></span>
-<span class="badge">RSI: ${toFa(rsi)} (${rsiSignal})</span>
-</div>
-${lastCandleJalali ? `<div style="font-size:11px;color:#6b7280;margin-top:8px"> ${lastCandleJalali}</div>` : ''}
+<div class="app">
+<header class="header">
+  <h1>📈 تحلیل تکنیکال · ${symbolName}</h1>
+  <div class="sub">
+    <span>📍 قیمت مرجع: <b style="color:${C.cardFg}">${toFa(currentPrice)} ریال</b></span>
+    <span>🎯 هدف کوتاه‌مدت: <b style="color:${C.cardFg}">${toFa(targetMin)} – ${toFa(targetMax)} ریال</b></span>
+    ${lastCandleJalali ? `<span>📅 تاریخ: ${lastCandleJalali}</span>` : ''}
+  </div>
+</header>
+
+${chartImgTag}
+
+<div class="grid-2">
+  <div class="level-box resistance">
+    <h3 style="color:${C.bearColor}">⚠️ مقاومت‌ها</h3>
+    ${resistanceStrengths.slice(0, 6).map((r, i) => {
+      const grade = r.grade ? (GRADE_MAP[r.grade]?.label ?? r.grade) : '';
+      return `<div class="level-row"><span>${grade ? `<span class="badge">${grade}</span>` : ''} R${toFa(i + 1)}</span><span class="price">${toFa(r.price)}</span></div>`;
+    }).join('')}
+  </div>
+  <div class="level-box support">
+    <h3 style="color:${C.bullColor}">🛡️ حمایت‌ها</h3>
+    ${supportStrengths.slice(0, 6).map((s, i) => {
+      const grade = s.grade ? (GRADE_MAP[s.grade]?.label ?? s.grade) : '';
+      return `<div class="level-row"><span>${grade ? `<span class="badge">${grade}</span>` : ''} S${toFa(i + 1)}</span><span class="price">${toFa(s.price)}</span></div>`;
+    }).join('')}
+  </div>
 </div>
 
-<div class="section">
-<h2> تحلیل جامع روند و اندیکاتورها</h2>
-<div>${vdesRef.current.querySelector('.vdes-analysis-text')?.innerHTML || '<p>تحلیل در دسترس نیست</p>'}</div>
+<div class="panel">
+  <h2>🎯 <span>سناریوها · احتمال اختصاصی و تجمعی</span></h2>
+  <div class="scenario-table-wrap">
+    <table class="scenario-table">
+      <thead>
+        <tr>
+          <th>سناریو</th>
+          <th style="text-align:center">احتمال اختصاصی</th>
+          <th style="text-align:center">احتمال تجمعی</th>
+          <th style="text-align:left">هدف قیمتی</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${[...SCENARIO_KEYS].reverse().map(key => {
+          const s = scenarios[key];
+          if (!s) return '';
+          const m = SCENARIO_META[key];
+          const v = v11Map.get(key);
+          const rowType = m.type === 'up' ? 'up' : m.type === 'down' ? 'down' : 'pullback';
+          return `<tr class="${rowType}">
+            <td>${m.label}</td>
+            <td style="text-align:center"><span class="s-prob">${toFa(v?.rawProbability ?? s.probability)}٪</span></td>
+            <td style="text-align:center"><span class="s-cum">${toFa(v?.cumulativeProbability ?? 0)}٪</span></td>
+            <td class="s-range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <div class="summary-bar">
+    <span style="color:${C.bullColor}">▲ صعودی: <b>${toFa(v11Result.bullishCumulative)}٪</b></span>
+    <span style="color:${C.neutralColor}">● رنج: <b>${toFa(v11Result.neutralCumulative)}٪</b></span>
+    <span style="color:${C.bearColor}">▼ نزولی: <b>${toFa(v11Result.bearishCumulative)}٪</b></span>
+    <span style="color:${C.cardSubFg}">مجموع: <b style="color:${C.cardFg}">${toFa(totalProb)}٪</b></span>
+  </div>
 </div>
 
-<div class="section">
-<h2> احتمالات سناریوها</h2>
-<div class="scenario-grid">
-${SCENARIO_KEYS.map(k => {
-  const s = scenarios[k];
-  if (!s) return '';
-  const m = SCENARIO_META[k];
-  const v = v11Map.get(k);
-  return `<div class="scenario-card" style="border-top-color:${m.border}">
-    <div style="display:flex;justify-content:space-between"><strong style="color:${m.badgeColor}">${SCENARIO_NUMBER[k]}</strong></div>
-    <div style="font-size:10px;color:#374151;margin:2px 0">${m.label}</div>
-    <div class="prob" style="color:${m.badgeColor}">${toFa(s.probability)}٪</div>
-    <div class="bar-bg"><div class="bar-fill" style="width:${s.probability}%;background:${m.border}"></div></div>
-    <div class="cum">تجمعی: ${toFa(v?.cumulativeProbability ?? 0)}٪</div>
-    <div class="range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال</div>
-  </div>`;
-}).join('')}
-</div>
-<div class="summary-bar">
-  <div class="summary-item" style="background:rgba(4,120,87,0.06)"><div style="font-size:10px;color:#6b7280">مجموع صعودی</div><div style="font-size:16px;font-weight:900;color:#047857">${toFa(v11Result.bullishCumulative)}٪</div></div>
-  <div class="summary-item" style="background:rgba(180,83,9,0.06)"><div style="font-size:10px;color:#6b7280">رنج</div><div style="font-size:16px;font-weight:900;color:#b45309">${toFa(v11Result.neutralCumulative)}٪</div></div>
-  <div class="summary-item" style="background:rgba(185,28,28,0.06)"><div style="font-size:10px;color:#6b7280">مجموع نزولی</div><div style="font-size:16px;font-weight:900;color:#b91c1c">${toFa(v11Result.bearishCumulative)}٪</div></div>
-</div>
-<div style="text-align:center;font-size:11px;color:#6b7280;margin-top:12px">مجموع احتمالات: <strong style="color:#374151">${toFa(totalProb)}٪</strong></div>
+<div class="panel">
+  <h2>🧠 <span>تحلیل جامع</span></h2>
+  <div class="analysis-text">${analysisHTML}</div>
 </div>
 
 <div style="text-align:center;padding:12px">
-<span class="strategy-tag ${strategy.tagCls}">${strategy.text}</span>
+  <span class="strategy-tag" style="color:${strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor};border-color:${strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor};background:${strategyType === 'up' ? C.bullBg : strategyType === 'down' ? C.bearBg : C.neutralBg}">${strategy.text}</span>
 </div>
+
+<footer class="footer">
+  تمامی تحلیل‌ها بر اساس داده‌های تکنیکال، سطوح کلیدی و روندهای گذشته تدوین شده است. این محتوا صرفاً جنبه آموزشی و تحلیلی دارد و توصیه سرمایه‌گذاری محسوب نمی‌شود.
+</footer>
 </div>
 </body>
 </html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     saveAs(blob, `${fileBase}.html`);
-  }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, totalProb, strategy, lastCandleJalali, fileBase, v11Result, v11Map, riskInfo]);
+  }, [symbolName, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark]);
+
 
   const exportText = useCallback(() => {
     const lines: string[] = [];
@@ -816,7 +965,7 @@ ${SCENARIO_KEYS.map(k => {
         el.style.visibility = 'visible';
         await new Promise(r => setTimeout(r, 100));
       }
-      const dataUrl = await toPng(el, { backgroundColor: '#f3f4f6', pixelRatio: 2, cacheBust: true, skipAutoScale: true });
+      const dataUrl = await toPng(el, { backgroundColor: C.pageBg, pixelRatio: 2, cacheBust: true, skipAutoScale: true });
       el.style.display = originalDisplay;
       el.style.visibility = originalVisibility;
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -913,76 +1062,95 @@ ${SCENARIO_KEYS.map(k => {
   }, [fileBase]);
 
   return (
-    <div ref={vdesRef} className="space-y-5" dir="rtl">
+    <div ref={vdesRef} className="space-y-7" dir="rtl" style={{ background: C.pageBg, padding: '20px 16px 40px', borderRadius: '16px' }}>
+
       {/* ═══ HEADER ═══ */}
-      <div className="rounded-2xl px-6 py-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h1 className="text-xl font-bold text-amber-800">
-             تحلیل تکنیکال {symbolName}
-          </h1>
+      <header
+        className="mb-7"
+        style={{
+          background: C.cardBg,
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          border: `1px solid ${C.primary}`,
+          borderRadius: '32px',
+          padding: '26px 32px',
+          boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.6)' : '0 4px 16px rgba(0,0,0,.08)',
+        }}
+      >
+        <h1 style={{ fontSize: '1.8rem', fontWeight: 700, color: C.primary, marginBottom: '6px' }}>
+          📈 تحلیل تکنیکال · {symbolName}
+        </h1>
+        <div className="flex flex-wrap gap-3" style={{ marginTop: '8px' }}>
+          <span style={{
+            background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
+            border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
+          }}>
+            📍 قیمت مرجع: <b style={{ color: C.cardFg }}>{toFa(currentPrice)} ریال</b>
+          </span>
+          <span style={{
+            background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
+            border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
+          }}>
+            🎯 هدف کوتاه‌مدت: <b style={{ color: C.cardFg }}>{toFa(targetMin)} – {toFa(targetMax)} ریال</b>
+          </span>
           {lastCandleJalali && (
-            <span className="text-xs text-[#6b7280]"> {lastCandleJalali}</span>
+            <span style={{
+              background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
+              border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
+            }}>
+              📅 تاریخ: {lastCandleJalali}
+            </span>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 mt-3">
-          <span className="px-3.5 py-1 rounded-full border border-[#e5e7eb] bg-[#f3f4f6] text-xs text-[#374151]">
-             قیمت مرجع: <b className="text-[#111827]">{toFa(currentPrice)} ریال</b>
-          </span>
-          <span className="px-3.5 py-1 rounded-full border border-[#e5e7eb] bg-[#f3f4f6] text-xs text-[#374151]">
-             محدوده سناریوی صعودی غالب: <b className="text-[#111827]">{toFa(targetMin)} — {toFa(targetMax)} ریال</b>
-          </span>
-          <span className="px-3.5 py-1 rounded-full border border-[#e5e7eb] bg-[#f3f4f6] text-xs text-[#374151]">
-             روند: <b className="text-[#111827]">{trendText}</b>
-          </span>
-          <span className={`px-3.5 py-1 rounded-full border text-xs font-medium`} style={{ borderColor: riskInfo.color + '33', color: riskInfo.color, background: riskInfo.bg }}>
-            پروفایل ریسک: {riskInfo.label}
-          </span>
-          <span className={`px-3.5 py-1 rounded-full border text-xs font-medium ${
-            rsi > 70 ? 'bg-red-100 text-red-700 border-red-200'
-            : rsi > 60 ? 'bg-orange-100 text-orange-700 border-orange-200'
-            : rsi > 40 ? 'bg-amber-50 text-amber-800 border-amber-200'
-            : rsi > 30 ? 'bg-sky-100 text-sky-700 border-sky-200'
-            : 'bg-emerald-100 text-emerald-700 border-emerald-200'
-          }`}>
-            RSI: {toFa(rsi)} ({rsiSignal})
-          </span>
-        </div>
-      </div>
+      </header>
 
       {/* ═══ EXPORT TOOLBAR ═══ */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-[#374151]">خروجی تحلیل</span>
+        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: C.cardFg }}>خروجی تحلیل</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[#e5e7eb] bg-[#ffffff] shadow-sm text-xs font-medium text-[#111827] hover:bg-[#f3f4f6] transition-colors cursor-pointer">
+            <button
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-colors"
+              style={{
+                background: C.cardBg,
+                border: `1px solid ${C.cardBorder}`,
+                color: C.cardFg,
+                fontSize: '0.75rem',
+                fontWeight: 500,
+              }}
+            >
               <Download className="w-4 h-4" />
               <span>دانلود / خروجی</span>
-              <ChevronDown className="w-3.5 h-3.5 text-[#6b7280]" />
+              <ChevronDown className="w-3.5 h-3.5" style={{ color: C.cardSubFg }} />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 bg-[#ffffff] border-[#e5e7eb]">
-            <DropdownMenuItem onClick={exportHTML} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <FileCode className="w-4 h-4 text-amber-800" />
+          <DropdownMenuContent
+            align="end"
+            className=""
+            style={{ background: C.cardBg, borderColor: C.cardBorder }}
+          >
+            <DropdownMenuItem onClick={exportHTML} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <FileCode className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">HTML+CSS+JS</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportText} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <FileText className="w-4 h-4 text-amber-800" />
+            <DropdownMenuItem onClick={exportText} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <FileText className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">متن (Text)</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportPDF} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <FileDown className="w-4 h-4 text-amber-800" />
+            <DropdownMenuItem onClick={exportPDF} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <FileDown className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">PDF</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportExcel} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <Table className="w-4 h-4 text-amber-800" />
+            <DropdownMenuItem onClick={exportExcel} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <Table className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">اکسل (Excel)</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportCSV} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <FileSpreadsheet className="w-4 h-4 text-amber-800" />
+            <DropdownMenuItem onClick={exportCSV} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <FileSpreadsheet className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">CSV</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 text-[#111827] focus:bg-[#f3f4f6] cursor-pointer">
-              <ImageIcon className="w-4 h-4 text-amber-800" />
+            <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <ImageIcon className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">عکس نمودار (PNG)</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -992,241 +1160,252 @@ ${SCENARIO_KEYS.map(k => {
       {/* ═══ CHART ═══ */}
       {/* Chart is rendered above this component in page.tsx (v3.0) */}
 
-      {/* ═══ KEY LEVELS ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* ═══ KEY LEVELS (Support/Resistance) ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ marginBottom: '24px' }}>
         {/* ── Resistances ── */}
-        <div className="rounded-2xl border border-orange-200 overflow-hidden bg-[#ffffff] shadow-sm">
-          <div className="px-5 py-3 flex items-center gap-2 border-b border-orange-200 bg-orange-50">
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-600" />
-            <h3 className="text-sm font-bold text-orange-700">سطوح مقاومت</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">حمایت و مقاومت هوشمند</span>
-          </div>
-          <div className="p-4 space-y-2.5">
-            {resistanceStrengths.slice(0, 6).map((r, i) => (
-              <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-bold text-red-600 w-6">R{toFa(i + 1)}</span>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(r.price)}</span>
-                      <span className="text-[10px] text-[#6b7280]">ریال</span>
-                      {r.grade && <GradeBadge grade={r.grade} />}
-                      {r.methods?.length ? <span className="text-[9px] text-[#6b7280]">({toPersianDigits(String(r.methods.length))} روش)</span> : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {r.fibLabel && <span className="text-[9px] text-red-400">فیبو {r.fibLabel}</span>}
-                      {r.overlapCount > 0 && <span className="text-[9px] text-[#6b7280]">هم‌پوشانی: {toPersianDigits(String(r.overlapCount))}</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StrengthBar strength={r.strength} />
-                  {r.isTarget && <span className="text-[10px]"></span>}
-                </div>
+        <div style={{
+          background: C.cardBg, borderRadius: '16px', padding: '16px 18px',
+          border: `1px solid ${C.cardBorder}`, height: '100%',
+        }}>
+          <h3 style={{
+            fontSize: '1.1rem', color: C.bearColor, marginBottom: '14px',
+            borderBottom: `1px solid ${C.cardBorder}`, paddingBottom: '10px',
+          }}>
+            ⚠️ مقاومت‌ها
+          </h3>
+          {resistanceStrengths.slice(0, 6).map((r, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 0', borderBottom: `1px solid ${C.cardBorder}`, fontSize: '0.95rem',
+            }}>
+              <div className="flex items-center gap-2">
+                {r.grade && (
+                  <span style={{
+                    fontSize: '0.7rem', background: C.cardBorder,
+                    padding: '0 10px', borderRadius: '30px', color: C.cardSubFg,
+                  }}>
+                    {GRADE_MAP[r.grade]?.label ?? r.grade}
+                  </span>
+                )}
+                <span style={{ fontSize: '0.8rem', color: C.cardSubFg }}>R{toFa(i + 1)}</span>
               </div>
-            ))}
-          </div>
+              <span style={{ fontWeight: 700, color: C.bearColor, direction: 'ltr' as const }}>
+                {toFa(r.price)}
+              </span>
+            </div>
+          ))}
         </div>
 
         {/* ── Supports ── */}
-        <div className="rounded-2xl border border-blue-200 overflow-hidden bg-[#ffffff] shadow-sm">
-          <div className="px-5 py-3 flex items-center gap-2 border-b border-blue-200 bg-blue-50">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-            <h3 className="text-sm font-bold text-blue-700">سطوح حمایت</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">حمایت و مقاومت هوشمند</span>
-          </div>
-          <div className="p-4 space-y-2.5">
-            {supportStrengths.slice(0, 6).map((s, i) => (
-              <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 border border-[#e5e7eb] bg-[#f3f4f6]/50">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-bold text-emerald-600 w-6">S{toFa(i + 1)}</span>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold text-[#111827] tabular-nums" dir="ltr">{toFa(s.price)}</span>
-                      <span className="text-[10px] text-[#6b7280]">ریال</span>
-                      {s.grade && <GradeBadge grade={s.grade} />}
-                      {s.methods?.length ? <span className="text-[9px] text-[#6b7280]">({toPersianDigits(String(s.methods.length))} روش)</span> : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {s.fibLabel && <span className="text-[9px] text-emerald-400">فیبو {s.fibLabel}</span>}
-                      {s.overlapCount > 0 && <span className="text-[9px] text-[#6b7280]">هم‌پوشانی: {toPersianDigits(String(s.overlapCount))}</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StrengthBar strength={s.strength} />
-                  {s.isTarget && <span className="text-[10px]"></span>}
-                </div>
+        <div style={{
+          background: C.cardBg, borderRadius: '16px', padding: '16px 18px',
+          border: `1px solid ${C.cardBorder}`, height: '100%',
+        }}>
+          <h3 style={{
+            fontSize: '1.1rem', color: C.bullColor, marginBottom: '14px',
+            borderBottom: `1px solid ${C.cardBorder}`, paddingBottom: '10px',
+          }}>
+            🛡️ حمایت‌ها
+          </h3>
+          {supportStrengths.slice(0, 6).map((s, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 0', borderBottom: `1px solid ${C.cardBorder}`, fontSize: '0.95rem',
+            }}>
+              <div className="flex items-center gap-2">
+                {s.grade && (
+                  <span style={{
+                    fontSize: '0.7rem', background: C.cardBorder,
+                    padding: '0 10px', borderRadius: '30px', color: C.cardSubFg,
+                  }}>
+                    {GRADE_MAP[s.grade]?.label ?? s.grade}
+                  </span>
+                )}
+                <span style={{ fontSize: '0.8rem', color: C.cardSubFg }}>S{toFa(i + 1)}</span>
               </div>
-            ))}
-          </div>
+              <span style={{ fontWeight: 700, color: C.bullColor, direction: 'ltr' as const }}>
+                {toFa(s.price)}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ═══ PRICE TARGETS ═══ */}
-      {priceTargets && priceTargets.length > 0 && (
-        <div className="rounded-2xl border border-amber-800/15 overflow-hidden bg-[#ffffff] shadow-sm">
-          <div className="px-5 py-3 flex items-center gap-2 border-b border-amber-800/10 bg-amber-50">
-            <div className="w-2.5 h-2.5 rounded-full bg-amber-700" />
-            <h3 className="text-sm font-bold text-amber-800">اهداف قیمتی</h3>
-            <span className="text-[10px] text-[#6b7280] mr-auto">سطوح با قدرت بالا</span>
-          </div>
-          <div className="p-4 flex flex-wrap gap-3">
-            {priceTargets.map((t, i) => (
-              <div key={i} className="flex-1 min-w-[160px] rounded-xl p-4 border border-amber-800/10 bg-amber-50/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] text-[#6b7280]">هدف {toFa(i + 1)}</span>
-                  <span className="text-[10px]"></span>
-                </div>
-                <p className="text-base font-black text-amber-800 tabular-nums" dir="ltr">{toFa(t.price)}</p>
-                <span className="text-[10px] text-[#6b7280]">ریال</span>
-                <div className="mt-3">
-                  <StrengthBar strength={t.strength} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ═══ ANALYSIS TEXT (full width) ═══ */}
-      <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
-        <h2 className="text-sm font-semibold mb-3 text-amber-800 flex items-center gap-2">
-          <span className="w-1.5 h-5 rounded-full bg-amber-700 inline-block" />
-          تحلیل هوشمند بازار
+      {/* ═══ SCENARIO PROBABILITIES (V11) — TABLE FORMAT ═══ */}
+      <div style={{
+        background: C.cardBg, backdropFilter: 'blur(8px)',
+        border: `1px solid ${C.cardBorder}`, borderRadius: '28px',
+        padding: '22px 24px', boxShadow: isDark ? '0 20px 40px -12px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0,0,0,.08)',
+      }}>
+        <h2 style={{
+          fontSize: '1.2rem', fontWeight: 600, marginBottom: '16px',
+          color: C.cardFg, display: 'flex', alignItems: 'center', gap: '12px',
+        }}>
+          <span>🎯</span> <span>سناریوها · احتمال اختصاصی و تجمعی</span>
         </h2>
-        <div className="max-h-[400px] overflow-y-auto pr-1">
+        <div style={{ overflowX: 'auto', borderRadius: '16px', border: `1px solid ${C.cardBorder}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.95rem', minWidth: '500px' }}>
+            <thead>
+              <tr style={{ background: C.cardBorder, borderBottom: `2px solid ${C.cardBorder}` }}>
+                <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>سناریو</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>احتمال اختصاصی</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>احتمال تجمعی</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>هدف قیمتی</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...SCENARIO_KEYS].reverse().map((key, idx, arr) => {
+                const s = scenarios[key];
+                if (!s) return null;
+                const meta = SCENARIO_META[key];
+                const v11 = v11Map.get(key);
+                const rowType = meta.type === 'up' ? 'up' : meta.type === 'down' ? 'down' : 'pullback';
+                const borderColor = rowType === 'up' ? C.bullColor : rowType === 'down' ? C.bearColor : C.neutralColor;
+                const isLast = idx === arr.length - 1;
+                return (
+                  <tr key={key} style={{
+                    borderRight: `4px solid ${borderColor}`,
+                    borderBottom: isLast ? 'none' : `1px solid ${C.cardBorder}`,
+                    transition: '0.15s',
+                  }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 500, color: C.cardFg }}>{meta.label}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      <span style={{
+                        fontWeight: 700, color: C.primary, background: C.primaryBg,
+                        padding: '2px 10px', borderRadius: '30px', display: 'inline-block',
+                        textAlign: 'center', minWidth: '50px',
+                      }}>
+                        {toFa(v11?.rawProbability ?? s.probability)}٪
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      <span style={{ fontWeight: 600, color: C.cardFg }}>
+                        {toFa(v11?.cumulativeProbability ?? 0)}٪
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', direction: 'ltr', textAlign: 'left', fontWeight: 500, color: C.cardSubFg }}>
+                      {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: '12px', display: 'flex', gap: '16px', justifyContent: 'center', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+          <span style={{ color: C.bullColor }}>▲ صعودی: <b>{toFa(v11Result.bullishCumulative)}٪</b></span>
+          <span style={{ color: C.neutralColor }}>● رنج: <b>{toFa(v11Result.neutralCumulative)}٪</b></span>
+          <span style={{ color: C.bearColor }}>▼ نزولی: <b>{toFa(v11Result.bearishCumulative)}٪</b></span>
+          <span style={{ color: C.cardSubFg }}>مجموع: <b style={{ color: C.cardFg }}>{toFa(totalProb)}٪</b></span>
+        </div>
+      </div>
+
+      {/* ═══ ANALYSIS TEXT ═══ */}
+      <div style={{
+        background: C.cardBg, backdropFilter: 'blur(8px)',
+        border: `1px solid ${C.cardBorder}`, borderRadius: '28px',
+        padding: '22px 24px', boxShadow: isDark ? '0 20px 40px -12px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0,0,0,.08)',
+      }}>
+        <h2 style={{
+          fontSize: '1.2rem', fontWeight: 600, marginBottom: '16px',
+          color: C.cardFg, display: 'flex', alignItems: 'center', gap: '12px',
+        }}>
+          <span>🧠</span> <span>تحلیل جامع</span>
+        </h2>
+        <div
+          className="vdes-analysis-text max-h-[400px] overflow-y-auto pr-1 [&_strong]:font-bold"
+          style={{
+            background: C.cardBg, borderRadius: '16px',
+            padding: '18px 20px', border: `1px solid ${C.cardBorder}`,
+            lineHeight: 1.8, fontSize: '0.95rem', color: C.cardFg,
+          }}
+          dir="rtl"
+        >
           {aiLoading && (
-            <div className="flex items-center gap-3 py-8 justify-center">
-              <div className="w-4 h-4 border-2 border-amber-300 border-t-amber-700 rounded-full animate-spin" />
-              <span className="text-sm text-amber-800">در حال تولید تحلیل هوشمند ...</span>
+            <div className="flex flex-col items-center gap-3 py-8 justify-center">
+              <div className="w-5 h-5 border-2 border-[rgba(37,99,235,0.3)] border-t-[#2563eb] rounded-full animate-spin" />
+              <span style={{ fontSize: '0.875rem', color: C.primary }}>
+                {aiRetryCount > 0
+                  ? `در حال تولید تحلیل هوشمند ... (تلاش ${toFa(aiRetryCount)} از ${toFa(8)})`
+                  : 'در حال تولید تحلیل هوشمند ... (حدود ۳۰ ثانیه تا ۲ دقیقه)'
+                }
+              </span>
+              {aiRetryDelay > 0 && (
+                <span style={{ fontSize: '0.75rem', color: C.cardSubFg }}>
+                  منتظر رفع محدودیت سرور ... {toFa(aiRetryDelay)} ثانیه دیگر
+                </span>
+              )}
             </div>
           )}
           {aiError && (
-            <div className="rounded-xl p-4 bg-red-50 border border-red-200">
-              <p className="text-xs text-red-700 mb-1">خطا در تولید تحلیل هوشمند:</p>
-              <p className="text-xs text-red-600">{aiError.length > 100 ? aiError.slice(0, 100) + '...' : aiError}</p>
+            <div style={{ borderRadius: '12px', padding: '16px', background: 'rgba(255,117,138,0.08)', border: '1px solid rgba(255,117,138,0.2)' }}>
+              <p style={{ fontSize: '0.75rem', color: C.bearColor, marginBottom: '4px' }}>خطا در تولید تحلیل هوشمند:</p>
+              <p style={{ fontSize: '0.75rem', color: C.bearColor, marginBottom: '8px', opacity: 0.8 }}>{aiError.length > 150 ? aiError.slice(0, 150) + '...' : aiError}</p>
+              <button
+                onClick={() => {
+                  setAiError(null);
+                  setAiText(null);
+                  aiAutoRetryRef.current = 0;
+                  setTimeout(() => window.dispatchEvent(new Event('ai-retry')), 1000);
+                  setAiLoading(true);
+                }}
+                style={{ fontSize: '0.75rem', fontWeight: 500, color: C.bearColor, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
+              >تلاش مجدد</button>
             </div>
           )}
           {!aiLoading && aiText && (
-          <div
-            className="text-sm text-[#374151] leading-[1.85]"
-            dir="rtl"
-            dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }}
-          />
+            <div dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }} />
           )}
           {!aiLoading && !aiText && !aiError && analysisParagraphs.length > 0 && (
             <div className="space-y-4">
               {analysisParagraphs.map((p, i) => (
-                <p key={i} className="text-sm text-[#374151] leading-[1.85]">{p}</p>
+                <p key={i} style={{ color: C.cardFg }}>{p}</p>
               ))}
-              <div className="rounded-xl px-4 py-3 border-r-4 border-amber-700 bg-amber-50/60">
-                <strong className="text-amber-800 text-sm">استراتژی پیشنهادی:</strong>
-                <p className="text-xs text-[#374151] leading-[1.85] mt-1.5">{strategyText}</p>
+              <div style={{
+                background: C.primaryBg, borderRight: '4px solid ' + C.primary,
+                padding: '12px 16px', borderRadius: '12px', marginTop: '12px',
+              }}>
+                <strong style={{ color: C.primary, fontSize: '0.875rem' }}>استراتژی پیشنهادی:</strong>
+                <p style={{ color: C.cardFg, fontSize: '0.75rem', lineHeight: 1.85, marginTop: '6px' }}>{strategyText}</p>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* ═══ SCENARIO PROBABILITIES (V11) ═══ */}
-      <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-            <span></span>
-            احتمالات سناریوها
-            <span className="text-[10px] font-normal text-[#6b7280] bg-[#f3f4f6] px-2 py-0.5 rounded-full">v11</span>
-          </h2>
-          <div className="flex items-center gap-3 text-[10px]">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-700" />
-              <span className="text-[#6b7280]">صعودی: <b className="text-[#111827]">{toFa(v11Result.bullishCumulative)}٪</b></span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
-              <span className="text-[#6b7280]">نزولی: <b className="text-[#111827]">{toFa(v11Result.bearishCumulative)}٪</b></span>
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {SCENARIO_KEYS.map(key => {
-            const s = scenarios[key];
-            const meta = SCENARIO_META[key];
-            const v11 = v11Map.get(key);
-            return (
-              <div
-                key={key}
-                className="rounded-xl p-3.5 bg-[#f3f4f6]/60 border border-[#e5e7eb]"
-                style={{ borderTop: `3px solid ${meta.border}` }}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold" style={{ color: meta.badgeColor }}>{SCENARIO_NUMBER[key]}</span>
-                  <span className="text-[10px] text-[#6b7280]">{meta.label}</span>
-                </div>
-                <div className="text-center my-1.5">
-                  <span
-                    className="inline-block text-2xl font-black tabular-nums"
-                    style={{ color: meta.badgeColor }}
-                  >
-                    {toFa(s.probability)}٪
-                  </span>
-                </div>
-                {/* V11: احتمال اختصاصی and تجمعی */}
-                <div className="flex justify-between text-[9px] text-[#6b7280] mb-2 px-1">
-                  <span>اختصاصی: <b style={{ color: meta.badgeColor }}>{v11 ? toFa(v11.rawProbability) : toFa(s.probability)}٪</b></span>
-                  <span>تجمعی: <b className="text-[#374151]">{v11 ? toFa(v11.cumulativeProbability) : '—'}٪</b></span>
-                </div>
-                <div className="h-1.5 w-full rounded-full bg-[#e5e7eb] overflow-hidden mb-2">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${s.probability}%`, backgroundColor: meta.border }}
-                  />
-                </div>
-                <div className="text-[10px] text-[#6b7280] text-center" dir="ltr">
-                  {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 text-center text-xs text-[#6b7280]">
-          مجموع احتمالات: <b className="text-[#374151]">{toFa(totalProb)}٪</b> (برابر ۱۰۰٪)
-          {v11Result.riskProfile !== 'neutral' && (
-            <span className="mr-3">
-              پروفایل ریسک: <b className={
-                v11Result.riskProfile === 'very_bullish' || v11Result.riskProfile === 'bullish'
-                  ? 'text-emerald-700'
-                  : 'text-red-700'
-              }>{
-                v11Result.riskProfile === 'very_bullish' ? 'صعودی قوی' :
-                v11Result.riskProfile === 'bullish' ? 'صعودی' :
-                v11Result.riskProfile === 'bearish' ? 'نزولی' : 'نزولی قوی'
-              }</b>
-            </span>
           )}
         </div>
       </div>
 
       {/* ═══ STRATEGY TAG ═══ */}
-      <div className="flex flex-wrap items-center gap-3 px-4">
-        <span className="text-xs text-[#6b7280]">سیگنال غالب:</span>
-        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold ${strategy.tagCls}`}>
+      <div style={{ textAlign: 'center', padding: '12px' }}>
+        <span style={{
+          display: 'inline-block', padding: '6px 16px', borderRadius: '20px',
+          fontSize: '0.75rem', fontWeight: 700,
+          border: `1px solid ${strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor}`,
+          background: strategyType === 'up' ? C.bullBg : strategyType === 'down' ? C.bearBg : C.neutralBg,
+          color: strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor,
+        }}>
           {strategy.text}
         </span>
       </div>
+
+      {/* ═══ FOOTER ═══ */}
+      <footer style={{
+        marginTop: '18px', color: C.cardSubFg, fontSize: '0.75rem', textAlign: 'center',
+        borderTop: `1px solid ${C.cardBorder}`, paddingTop: '16px',
+      }}>
+        تمامی تحلیل‌ها بر اساس داده‌های تکنیکال، سطوح کلیدی و روندهای گذشته تدوین شده است. این محتوا صرفاً جنبه آموزشی و تحلیلی دارد و توصیه سرمایه‌گذاری محسوب نمی‌شود.
+      </footer>
     </div>
   );
+
 }
 
 // ── Loading ────────────────────────────────────────────────────────────────────
 
 export function VdesAnalysisSkeleton() {
+  const { colors: C } = useTheme(); // eslint-disable-line
   return (
-    <div className="space-y-5">
-      <Skeleton className="h-28 w-full bg-[#e5e7eb] rounded-2xl" />
-      <Skeleton className="h-[650px] w-full bg-[#e5e7eb] rounded-2xl" />
+    <div className="space-y-7" style={{ background: C.pageBg, padding: '20px 16px 40px', borderRadius: '16px' }}>
+      <Skeleton className="h-28 w-full rounded-[32px]" style={{ background: C.cardBg }} />
+      <Skeleton className="h-[500px] w-full rounded-[28px]" style={{ background: C.cardBg }} />
     </div>
   );
 }

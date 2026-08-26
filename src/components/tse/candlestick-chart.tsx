@@ -33,6 +33,7 @@ import {
   Spline,
 } from 'lucide-react';
 import { formatJalaliString, candleDateToJalali, isGregorianDate, toPersianDigits } from '@/lib/jalali';
+import { useTheme } from '@/lib/theme-store';
 
 /* ----------------------------- TYPES ----- */
 
@@ -91,17 +92,13 @@ interface CandlestickChartProps {
 
 /* ----------------------------- CONSTANTS -- */
 
-const BULL = '#22a366';   // Candle up — green
-const BEAR = '#e04060';   // Candle down — red
+const BULL = '#22c55e';   // Candle up — vivid green
+const BEAR = '#ef4444';   // Candle down — vivid red
 const SUPPORT_COLOR = '#2563eb';  // Support lines — blue
 const RESIST_COLOR = '#ea580c'; // Resistance lines — orange
-const BG = '#ffffff';
-const TXT = '#374151';
-const GRID = 'rgba(0,0,0,0.06)';
-const TOOLBAR_BG = '#ffffff';
-const TOOLBAR_BORDER = '#e5e7eb';
 
-const PALETTE = ['#22a366', '#e04060', '#d97706', '#0891b2', '#7c3aed', '#374151'];
+
+const PALETTE = ['#22c55e', '#ef4444', '#d97706', '#0891b2', '#7c3aed', '#374151'];
 
 const SMA_CFG = [
   { key: 'sma9', color: '#8b5cf6', title: 'SMA 9' },
@@ -185,10 +182,11 @@ const TOOLS: ToolDef[] = [
 /* ----------------------------- SKELETON ---- */
 
 export function CandlestickChartSkeleton() {
+  const { colors: C } = useTheme();
   return (
     <div className="w-full">
-      <div className="h-10 bg-white border-b border-gray-200 rounded-t-lg" />
-      <div className="w-full bg-gray-200 rounded-b-lg" style={{ height: 520 }} />
+      <div className="h-10 rounded-t-lg" style={{ background: C.cardBg, borderBottom: `1px solid ${C.cardBorder}` }} />
+      <div className="w-full rounded-b-lg" style={{ height: 520, background: C.cardBg, opacity: 0.5 }} />
     </div>
   );
 }
@@ -196,6 +194,7 @@ export function CandlestickChartSkeleton() {
 /* ----------------------------- COMPONENT --- */
 
 export default function CandlestickChart({ data, ta, height = 520 }: CandlestickChartProps) {
+  const { colors: C, isDark } = useTheme();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -321,7 +320,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             const y = csRef.current?.priceToCoordinate(price);
             if (y == null) continue;
             html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
-            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="2" />`;
+            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
             html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
           }
           break;
@@ -348,7 +347,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const x = chart.timeScale().timeToCoordinate(p.time as Time);
           const y = csRef.current?.priceToCoordinate(p.price);
           if (x == null || y == null) break;
-          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
           html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
           break;
         }
@@ -383,7 +382,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const midX = (x0 + x1) / 2;
           const midY = (y0 + y1) / 2;
           const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(0))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
-          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
           html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
           break;
         }
@@ -447,7 +446,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             const xStart = isExt ? Math.max(x0, x1) : Math.min(x0, x1) - 10;
             const xEnd = isExt ? Math.max(x0, x1) + Math.abs(x1 - x0) * 1.5 : Math.max(x0, x1) + 10;
             html += `<line x1="${xStart}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="${col}" stroke-width="1" opacity="${isExt ? '0.4' : '0.6'}" ${isExt ? 'stroke-dasharray="4,3"' : ''} />`;
-            html += `<rect x="${xEnd + 2}" y="${y - 8}" width="64" height="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="2" />`;
+            html += `<rect x="${xEnd + 2}" y="${y - 8}" width="64" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
             html += `<text x="${xEnd + 4}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
           }
           break;
@@ -501,7 +500,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const boxY = y - boxH - 8;
           // Arrow from box to point
           html += `<line x1="${boxX}" y1="${boxY + boxH}" x2="${x}" y2="${y}" stroke="${col}" stroke-width="1" />`;
-          html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="#ffffff" stroke="${col}" stroke-width="1" rx="4" />`;
+          html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="${C.cardBg}" stroke="${col}" stroke-width="1" rx="4" />`;
           html += `<text x="${boxX + 6}" y="${boxY + boxH / 2 + 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
           break;
         }
@@ -575,7 +574,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const midX = (x0 + x1) / 2;
           const midY = (y0 + y1) / 2 - 14;
           const label = `رگرسیون: ${diff >= 0 ? '+' : ''}${toPersianDigits(pct.toFixed(1))}%`;
-          html += `<rect x="${midX - 50}" y="${midY - 10}" width="100" height="18" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="3" />`;
+          html += `<rect x="${midX - 50}" y="${midY - 10}" width="100" height="18" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
           html += `<text x="${midX - 46}" y="${midY + 3}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
           break;
         }
@@ -610,15 +609,15 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     };
 
     const chart = createChart(chartEl, {
-      layout: { background: { type: ColorType.Solid, color: BG }, textColor: TXT, fontSize: 11 },
-      grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
-      crosshair: { mode: CrosshairMode.Normal },
+      layout: { background: { type: ColorType.Solid, color: C.chartBg }, textColor: C.chartText, fontSize: 11 },
+      grid: { vertLines: { color: C.chartGrid }, horzLines: { color: C.chartGrid } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: C.chartCrosshair, labelBackgroundColor: C.chartBg }, horzLine: { color: C.chartCrosshair, labelBackgroundColor: C.chartBg } },
       rightPriceScale: {
-        borderColor: '#e5e7eb',
+        borderColor: C.cardBorder,
         scaleMargins: { top: 0.05, bottom: 0.3 },
       },
       timeScale: {
-        borderColor: '#e5e7eb',
+        borderColor: C.cardBorder,
         rightOffset: 5,
         barSpacing: 6,
         tickMarkFormatter: (time: Time) => {
@@ -838,7 +837,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         setChartSize({ w: chartContainerRef.current.clientWidth, h: height });
       }
     });
-  }, [data, ta, height, jalaliDates]);
+  }, [data, ta, height, jalaliDates, isDark]);
 
   /* - Re-render SVG when renderKey changes --------- */
   useEffect(() => {
@@ -1061,17 +1060,17 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     <div className="w-full">
       {/* - CROSSHAIR LEGEND (Shamsi date + OHLC) ---------- */}
       {hoverInfo && (
-        <div className="flex items-center gap-3 px-3 py-1.5 border border-[#e5e7eb] rounded-t-lg bg-[#ffffff] text-[11px]" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
-          <span className="text-gray-500 font-medium">{hoverInfo.date}</span>
-          <div className="w-px h-3.5 bg-gray-200" />
-          <span className="text-gray-500">باز: <span className={chgColor(hoverInfo.o, hoverInfo.c) === BULL ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{fmt(hoverInfo.o)}</span></span>
-          <span className="text-gray-500">بالا: <span className="text-emerald-700 font-bold">{fmt(hoverInfo.h)}</span></span>
-          <span className="text-gray-500">پایین: <span className="text-red-700 font-bold">{fmt(hoverInfo.l)}</span></span>
-          <span className="text-gray-500">بسته: <span className={chgColor(hoverInfo.o, hoverInfo.c) === BULL ? 'text-emerald-700 font-bold' : 'text-red-700 font-bold'}>{fmt(hoverInfo.c)}</span></span>
+        <div className="flex items-center gap-3 px-3 py-1.5 rounded-t-lg text-[11px]" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif', background: C.cardBg, borderBottom: `1px solid ${C.cardBorder}` }}>
+          <span style={{ color: C.chartText, fontWeight: 500 }}>{hoverInfo.date}</span>
+          <div style={{ width: 1, height: 14, background: C.cardBorder }} />
+          <span style={{ color: C.chartText }}>باز: <span style={{ fontWeight: 700, color: chgColor(hoverInfo.o, hoverInfo.c) === BULL ? C.bullColor : C.bearColor }}>{fmt(hoverInfo.o)}</span></span>
+          <span style={{ color: C.chartText }}>بالا: <span style={{ fontWeight: 700, color: C.bullColor }}>{fmt(hoverInfo.h)}</span></span>
+          <span style={{ color: C.chartText }}>پایین: <span style={{ fontWeight: 700, color: C.bearColor }}>{fmt(hoverInfo.l)}</span></span>
+          <span style={{ color: C.chartText }}>بسته: <span style={{ fontWeight: 700, color: chgColor(hoverInfo.o, hoverInfo.c) === BULL ? C.bullColor : C.bearColor }}>{fmt(hoverInfo.c)}</span></span>
           {hoverInfo.v > 0 && (
-            <span className="text-gray-500">حجم: <span className="text-gray-900 font-bold">{toPersianDigits((hoverInfo.v / 1e6).toFixed(1))}M</span></span>
+            <span style={{ color: C.chartText }}>حجم: <span style={{ fontWeight: 700, color: C.cardFg }}>{toPersianDigits((hoverInfo.v / 1e6).toFixed(1))}M</span></span>
           )}
-          <span className={`font-bold ${hoverInfo.chg >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+          <span style={{ fontWeight: 700, color: hoverInfo.chg >= 0 ? C.bullColor : C.bearColor }}>
             {hoverInfo.chg >= 0 ? '▲' : '▼'} {toPersianDigits(Math.abs(hoverInfo.chg).toFixed(2))}٪
           </span>
         </div>
@@ -1079,7 +1078,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
       {/* - TOOLBAR --------------------- */}
       <div
         className={`flex items-center gap-1 px-2 py-1.5 overflow-x-auto flex-nowrap border ${hoverInfo ? 'border-t-0 rounded-b-lg' : 'rounded-t-lg border-b-0'}`}
-        style={{ backgroundColor: TOOLBAR_BG, borderColor: TOOLBAR_BORDER }}
+        style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
       >
         {TOOLS.map((tool) => (
           <button
@@ -1095,15 +1094,16 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             title={tool.label}
             className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all cursor-pointer ${
               activeTool === tool.id
-                ? 'bg-amber-500/20 text-amber-800 ring-1 ring-amber-500/30'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
+                : ''
             }`}
+            style={activeTool !== tool.id ? { color: C.cardSubFg } : undefined}
           >
             {tool.icon}
           </button>
         ))}
 
-        <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
+        <div className="w-px h-6 mx-1 shrink-0" style={{ background: C.cardBorder }} />
 
         {PALETTE.map((c) => (
           <button
@@ -1111,18 +1111,19 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             onClick={() => setActiveColor(c)}
             title={c}
             className={`shrink-0 w-6 h-6 rounded-full border-2 transition-all cursor-pointer ${
-              activeColor === c ? 'border-gray-900 scale-110' : 'border-transparent hover:scale-105'
+              activeColor === c ? 'scale-110' : 'border-transparent hover:scale-105'
             }`}
-            style={{ backgroundColor: c }}
+            style={{ backgroundColor: c, borderColor: activeColor === c ? C.cardFg : undefined }}
           />
         ))}
 
-        <div className="w-px h-6 bg-gray-200 mx-1 shrink-0" />
+        <div className="w-px h-6 mx-1 shrink-0" style={{ background: C.cardBorder }} />
 
         <button
           onClick={handleDeleteLast}
           title="حذف آخر"
-          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md hover:bg-[rgba(255,117,138,0.1)] hover:text-[#ff758a] transition-all cursor-pointer"
+          style={{ color: C.cardSubFg }}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -1130,19 +1131,20 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
         <button
           onClick={handleClearAll}
           title="پاک کردن همه"
-          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-700 transition-all cursor-pointer"
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md hover:bg-[rgba(255,117,138,0.1)] hover:text-[#ff758a] transition-all cursor-pointer"
+          style={{ color: C.cardSubFg }}
         >
           <X className="w-3.5 h-3.5" />
         </button>
 
-        <div className="mr-auto shrink-0 text-xs text-gray-500 font-medium" dir="rtl">
+        <div className="mr-auto shrink-0 text-xs font-medium" style={{ color: C.cardSubFg }} dir="rtl">
           {TOOLS.find((t) => t.id === activeTool)?.label}
         </div>
       </div>
 
       <div
-        className="relative rounded-b-lg overflow-hidden border border-gray-200"
-        style={{ height }}
+        className="relative rounded-b-lg overflow-hidden"
+        style={{ height, border: `1px solid ${C.cardBorder}` }}
       >
         <div
           ref={chartContainerRef}
@@ -1184,7 +1186,8 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
               placeholder="متن..."
               autoFocus
               dir="rtl"
-              className="bg-white border border-gray-200 rounded px-2 py-1 text-sm text-gray-900 outline-none focus:border-amber-500 w-32"
+              className="border rounded px-2 py-1 text-sm outline-none focus:border-amber-500 w-32"
+              style={{ background: C.cardBg, borderColor: C.inputBorder, color: C.cardFg }}
               onBlur={handleTextSubmit}
             />
           </div>

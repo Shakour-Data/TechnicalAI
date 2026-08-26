@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getZai } from '@/lib/zai-shared';
+import { rateLimitedChatCompletion, getCooldownRemainingMs } from '@/lib/zai-shared';
+import { db } from '@/lib/db';
 import {
   selectMLCombination,
   selectMethods,
@@ -13,130 +14,13 @@ import {
 } from '@/lib/msl-v4';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
-// --- 1-hour in-memory cache ---
-interface CacheEntry {
-  text: string;
-  ml: { school: string; style: string; tone: string; reasoning: string; methods: string[] };
-  ts: number;
-}
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 3_600_000;
-
-function cacheKey(body: Record<string, unknown>): string {
-  const k = { v: 11, s: body.symbolName, p: body.currentPrice, t: body.trendDirection, r: body.rsi, a: body.adx };
-  return JSON.stringify(k);
-}
-
-// --- Global rate limiter (serial queue) ---
-let lastAITime = 0;
-const AI_MIN_INTERVAL = 20_000;
-let cooldownUntil = 0;
-let activeCall = false;
-const pendingQueue: Array<{
-  resolve: (text: string) => void;
-  reject: (err: Error) => void;
-  messages: { role: string; content: string }[];
-}> = [];
-
-function processAIQueue() {
-  if (activeCall || pendingQueue.length === 0) return;
-  const now = Date.now();
-
-  if (cooldownUntil > now) {
-    setTimeout(processAIQueue, Math.min(cooldownUntil - now, 5000));
-    return;
-  }
-
-  const elapsed = now - lastAITime;
-  if (elapsed < AI_MIN_INTERVAL) {
-    setTimeout(processAIQueue, AI_MIN_INTERVAL - elapsed);
-    return;
-  }
-
-  const item = pendingQueue.shift()!;
-  activeCall = true;
-
-  callZaiSDK(item.messages)
-    .then(text => {
-      lastAITime = Date.now();
-      cooldownUntil = 0;
-      item.resolve(text);
-    })
-    .catch(err => {
-      const msg = err.message || '';
-      if (msg.includes('429')) {
-        const cd = Math.max(cooldownUntil - Date.now(), 0) + 90_000;
-        cooldownUntil = Date.now() + Math.min(cd, 300_000);
-        console.warn(`[AI v5] 429, cooldown ${Math.min(cd, 300_000) / 1000}s`);
-      }
-      item.reject(err);
-    })
-    .finally(() => {
-      activeCall = false;
-      setTimeout(processAIQueue, 2000);
-    });
-}
-
-function queueAI(messages: { role: string; content: string }[], timeoutMs = 90_000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const idx = pendingQueue.findIndex(q => q.messages === messages);
-      if (idx >= 0) pendingQueue.splice(idx, 1);
-      reject(new Error('AI request timeout'));
-    }, timeoutMs);
-
-    pendingQueue.push({
-      messages,
-      resolve: (text) => { clearTimeout(timer); resolve(text); },
-      reject: (err) => { clearTimeout(timer); reject(err); },
-    });
-
-    processAIQueue();
-  });
-}
-
-// --- Z.ai SDK call with retry ---
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
-function jitter(base: number): number { return base + Math.random() * base * 0.5; }
-
-async function callZaiSDK(messages: { role: string; content: string }[], maxRetries = 4): Promise<string> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const zai = await getZai();
-      const completion = await zai.chat.completions.create({
-        messages,
-        thinking: { type: 'disabled' },
-      });
-      const raw = completion.choices[0]?.message?.content;
-      if (!raw || raw.trim().length === 0) {
-        throw new Error('Empty AI response');
-      }
-      const text = raw.trim();
-      if (text.length < 10) {
-        throw new Error('AI response too short: ' + text.slice(0, 100));
-      }
-      return text;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('429') && attempt < maxRetries) {
-        const waitMs = Math.round(jitter(20_000 * Math.pow(2, attempt - 1)));
-        console.warn(`[AI v5] 429 retry ${attempt}/${maxRetries}, waiting ${Math.round(waitMs / 1000)}s...`);
-        await sleep(waitMs);
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error('Max retries exceeded');
-}
-
-// --- Helpers ---
+// ─── Helpers ──────────────────────────────────────────────────────
 function toPersianNum(n: number): string {
   if (!isFinite(n) || isNaN(n)) return '\u06f0';
   return Math.round(n).toLocaleString('fa-IR');
 }
-
 function srGrade(strength: number): string {
   if (strength >= 8.5) return '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc';
   if (strength >= 7) return '\u0642\u0648\u06cc';
@@ -145,7 +29,14 @@ function srGrade(strength: number): string {
   return '\u0628\u0633\u06cc\u0627\u0631 \u0636\u0639\u06cc\u0641';
 }
 
-// --- Build ML Selector Input ---
+function getTodayDateStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+
+
+// ─── Build ML Selector Input ──────────────────────────────────────
 function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   const price = (body.currentPrice as number) || 0;
   const trendDir = (body.trendDirection as string) || 'range';
@@ -161,23 +52,32 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   const atr = (body.atr as number) || 0;
   const bbRange = bollingerUpper - bollingerLower;
   const bbPosition = bbRange > 0 ? Math.min(100, Math.max(0, Math.round((price - bollingerLower) / bbRange * 100))) : 50;
+
+  // Find dominant scenario across ALL R1-R9
   const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
-  let dominantKey = 'R3';
+  let dominantKey = 'R5';
   let dominantProb = 0;
-  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5'] as const) {
+  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const) {
     const p = scenarios?.[k]?.probability ?? 0;
     if (p > dominantProb) { dominantProb = p; dominantKey = k; }
   }
-  return { price, trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range', adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0, rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr, scenarioDominant: dominantKey, hasVolume: (body.hasVolume as boolean) ?? false };
+
+  return {
+    price,
+    trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range',
+    adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0,
+    rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr,
+    scenarioDominant: dominantKey,
+    hasVolume: (body.hasVolume as boolean) ?? false,
+  };
 }
 
-// --- Build MSL v4 Context ---
+// ─── Build MSL v4 Context ────────────────────────────────────────
 function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
   const price = (body.currentPrice as number) || 0;
   const atr = (body.atr as number) || 0;
   const atrRatio = price > 0 ? atr / price : 0;
 
-  // Dominant scenario from v11 or legacy scenarios
   const v11Probs = body.v11Probabilities as {
     scenarios: Array<{ key: string; name: string; rawProbability: number }>;
   } | undefined;
@@ -206,41 +106,26 @@ function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
   else if (isBear && trendStrength > 0.6) regime = 'Strong Bear';
   else if (isBear) regime = 'Weak Bear';
 
-  const instrumentType = (body.instrumentType as string) ||
-    (body.symbolName as string) || 'stock';
-
+  const instrumentType = (body.instrumentType as string) || (body.symbolName as string) || 'stock';
   const ta = body.technicalAnalysis as {
-    classicPatternCount?: number;
-    harmonicPatternCount?: number;
-    elliottWaveCount?: number;
-    divergenceCount?: number;
+    classicPatternCount?: number; harmonicPatternCount?: number;
+    elliottWaveCount?: number; divergenceCount?: number;
   } | undefined;
-
-  const overallConfidence = (body.overallConfidence as number) ??
-    (body.confidence as number) ?? 0.6;
+  const overallConfidence = (body.overallConfidence as number) ?? (body.confidence as number) ?? 0.6;
 
   return {
-    asset: instrumentType,
-    timeframe: (body.timeframe as string) || 'daily',
-    regime,
-    confidence: Math.max(0, Math.min(1, overallConfidence)),
-    volatility: atrRatio,
-    trend_strength: trendStrength,
-    dominantScenario,
-    pattern_counts: {
-      classical: ta?.classicPatternCount ?? 0,
-      harmonic: ta?.harmonicPatternCount ?? 0,
-      elliott: ta?.elliottWaveCount ?? 0,
-    },
+    asset: instrumentType, timeframe: (body.timeframe as string) || 'daily',
+    regime, confidence: Math.max(0, Math.min(1, overallConfidence)),
+    volatility: atrRatio, trend_strength: trendStrength, dominantScenario,
+    pattern_counts: { classical: ta?.classicPatternCount ?? 0, harmonic: ta?.harmonicPatternCount ?? 0, elliott: ta?.elliottWaveCount ?? 0 },
     divergence_present: (ta?.divergenceCount ?? 0) > 0,
     hasVolume: (body.hasVolume as boolean) ?? false,
-    rsi: (body.rsi as number) || 50,
-    adx,
+    rsi: (body.rsi as number) || 50, adx,
     audience_level: (body.audienceLevel as string) || 'pro',
   };
 }
 
-// --- Build Prompt ---
+// ─── Build Prompt (optimized, concise) ────────────────────────────
 function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
   const {
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -263,18 +148,9 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   };
 
   const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
-  const r2Pct = (trendR2 * 100).toFixed(1);
   const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
   const rsiSignal = rsi > 70 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0634\u062f\u06cc\u062f' : rsi > 60 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : rsi > 40 ? '\u062e\u0646\u062b\u06cc' : rsi > 30 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634 \u0634\u062f\u06cc\u062f';
-  const stochSignal = stochK > 80 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : stochK < 20 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : stochK > stochD ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
-
-  const bbRange = bollingerUpper - bollingerLower;
-  const bbPos = bbRange > 0 ? Math.round((currentPrice - bollingerLower) / bbRange * 100) : 50;
-  const bbSignal = currentPrice > bollingerUpper
-    ? '\u0628\u0627\u0644\u0627\u06cc \u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc'
-    : currentPrice < bollingerLower
-    ? '\u0632\u06cc\u0631 \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc'
-    : `\u062f\u0627\u062e\u0644 \u0628\u0627\u0646\u062f\u0647\u0627 (${toPersianNum(bbPos)}\u066a)`;
+  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
 
   const R1 = resistanceStrengths?.[0];
   const S1 = supportStrengths?.[0];
@@ -282,106 +158,67 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
   const R1Grade = R1?.strength ? srGrade(R1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
   const S1Grade = S1?.strength ? srGrade(S1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
-  const R1Confirm = R1?.methods?.length ? `(${toPersianNum(R1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
-  const S1Confirm = S1?.methods?.length ? `(${toPersianNum(S1.methods.length)} \u0631\u0648\u0634 \u062a\u0623\u06cc\u06cc\u062f)` : '';
 
   const obvDesc = hasVolume
-    ? (obv > 0
-      ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u0648\u0631\u0648\u062f \u067e\u0648\u0644`
-      : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M) \u2014 \u062c\u0631\u06cc\u0627\u0646 \u062e\u0631\u0648\u062c \u067e\u0648\u0644`)
+    ? (obv > 0 ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M)` : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M)`)
     : '\u0628\u062f\u0648\u0646 \u062f\u0627\u062f\u0647 \u062d\u062c\u0645';
 
   const macdDesc = macdHist > 0 && macdLine > macdSignal
-    ? '\u0635\u0639\u0648\u062f\u06cc (\u062e\u0637 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644)'
-    : macdHist > 0
-    ? '\u0635\u0639\u0648\u062f\u06cc \u0628\u0627 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u062b\u0628\u062a'
-    : '\u0646\u0632\u0648\u0644\u06cc (\u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645 \u0645\u0646\u0641\u06cc)';
-
-  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
+    ? '\u0635\u0639\u0648\u062f\u06cc \u062c\u0647\u062a \u0628\u0627\u0644\u0627'
+    : macdHist > 0 ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
 
   const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
 
-  // Dynamic scenario list sorted by probability
-  const scenarioList = (['R1', 'R2', 'R3', 'R4', 'R5'] as const)
+  // V11 probabilities
+  let v11Block = '';
+  const v11Probs = body.v11Probabilities as {
+    scenarios: Array<{ key: string; name: string; rawProbability: number; cumulativeProbability: number }>;
+    bullishCumulative: number; bearishCumulative: number; neutralCumulative: number; riskProfile: string;
+  } | undefined;
+  if (v11Probs?.scenarios) {
+    const v11Lines = v11Probs.scenarios.map((s, i) =>
+      `- R${i + 1} (${s.name}): \u0627\u062e\u062a\u0635\u0627\u0635\u06cc ${toPersianNum(s.rawProbability)}\u066a | \u062a\u062c\u0645\u0639\u06cc ${toPersianNum(s.cumulativeProbability)}\u066a`
+    ).join('\n');
+    const riskLabels: Record<string, string> = {
+      very_bullish: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', bullish: '\u0635\u0639\u0648\u062f\u06cc', neutral: '\u062e\u0646\u062b\u06cc', bearish: '\u0646\u0632\u0648\u0644\u06cc', very_bearish: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc',
+    };
+    v11Block = `\n**\u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a v11:**\n${v11Lines}\n- \u0645\u062c\u0645\u0648\u0639 \u0635\u0639\u0648\u062f\u06cc: ${toPersianNum(v11Probs.bullishCumulative)}\u066a | \u0646\u0632\u0648\u0644\u06cc: ${toPersianNum(v11Probs.bearishCumulative)}\u066a | \u067e\u0631\u0648\u0641\u0627\u06cc\u0644: ${riskLabels[v11Probs.riskProfile] || v11Probs.riskProfile}`;
+  }
+
+  // Top 5 scenarios by probability
+  const allScenarios = (['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const)
     .map((k, i) => ({
-      label: `\u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)}`,
+      key: k,
       name: scenarios?.[k]?.name || getScenarioName(k),
       prob: scenarios?.[k]?.probability ?? 0,
       min: scenarios?.[k]?.targetMin ?? 0,
       max: scenarios?.[k]?.targetMax ?? 0,
     }))
-    .sort((a, b) => b.prob - a.prob);
+    .sort((a, b) => b.prob - a.prob)
+    .slice(0, 5);
 
-  const scenarioBlock = scenarioList
-    .map(s => `- **${s.label} (${s.name}):** ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f (\u0645\u062d\u062f\u0648\u062f\u0647 ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)} \u0631\u06cc\u0627\u0644)`)
+  const scenarioBlock = allScenarios
+    .map(s => `- ${s.name} (${s.key}): ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)}`)
     .join('\n');
 
-  // V11 probabilities section
-  let v11Block = '';
-  const v11Probs = body.v11Probabilities as {
-    scenarios: Array<{ key: string; name: string; rawProbability: number; cumulativeProbability: number }>;
-    bullishCumulative: number;
-    bearishCumulative: number;
-    neutralCumulative: number;
-    riskProfile: string;
-  } | undefined;
-  if (v11Probs?.scenarios) {
-    const v11Lines = v11Probs.scenarios.map((s, i) =>
-      `- \u0633\u0646\u0627\u0631\u06cc\u0648\u06cc ${toPersianNum(i + 1)} (${s.name}): \u0627\u062d\u062a\u0645\u0627\u0644 \u0627\u062e\u062a\u0635\u0627\u0635\u06cc ${toPersianNum(s.rawProbability)}\u066a | \u0627\u062d\u062a\u0645\u0627\u0644 \u062a\u062c\u0645\u0639\u06cc ${toPersianNum(s.cumulativeProbability)}\u066a`
-    ).join('\n');
-    const riskLabels: Record<string, string> = {
-      very_bullish: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc',
-      bullish: '\u0635\u0639\u0648\u062f\u06cc',
-      neutral: '\u062e\u0646\u062b\u06cc',
-      bearish: '\u0646\u0632\u0648\u0644\u06cc',
-      very_bearish: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc',
-    };
-    v11Block = `
-
-**\u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a v11:**
-${v11Lines}
-- \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0635\u0639\u0648\u062f\u06cc: ${toPersianNum(v11Probs.bullishCumulative)}\u066a
-- \u0645\u062c\u0645\u0648\u0639 \u0627\u062d\u062a\u0645\u0627\u0644 \u0646\u0632\u0648\u0644\u06cc: ${toPersianNum(v11Probs.bearishCumulative)}\u066a
-- \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0631\u06cc\u0633\u06a9: ${riskLabels[v11Probs.riskProfile] || v11Probs.riskProfile}`;
-  }
-
   return `
-**\u062f\u0633\u062a\u0648\u0631\u0627\u0644\u0639\u0645\u0644:**
-\u0634\u0645\u0627 \u06cc\u06a9 **\u062a\u062d\u0644\u06cc\u0644\u06af\u0631 \u0627\u0631\u0634\u062f \u0628\u0627\u0632\u0627\u0631\u0647\u0627\u06cc \u0645\u0627\u0644\u06cc \u0628\u0627 20 \u0633\u0627\u0644 \u062a\u062c\u0631\u0628\u0647** \u0647\u0633\u062a\u06cc\u062f.
+**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647:**
+- \u0646\u0627\u0645: **${symbolName}** | \u0642\u06cc\u0645\u062a: **${toPersianNum(currentPrice)}** | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0, R\u00b2=${(trendR2 * 100).toFixed(1)}%)
+- MA21=${toPersianNum(ma21)} | MA100=${toPersianNum(ma100)} | ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632'} MA21, ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632'} MA100
+- RSI=${toPersianNum(rsi)} (${rsiSignal}) | ADX=${toPersianNum(adx)} (${adxStrength}) | DI+/DI-: ${toPersianNum(diPlus)}/${toPersianNum(diMinus)} (${diPressure})
+- \u0627\u0633\u062a\u0648\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)} | CCI=${toPersianNum(cci)}${mfi > 0 ? ` | MFI=${toPersianNum(mfi)}` : ''}
+- MACD: ${macdDesc} (${toPersianNum(macdLine)}/${toPersianNum(macdSignal)}/${toPersianNum(macdHist)}) | OBV: ${obvDesc}
+- \u0628\u0627\u0646\u062f: ${toPersianNum(bollingerLower)} \u2014 ${toPersianNum(bollingerUpper)} | SAR: ${toPersianNum(sar)} | ATR: ${toPersianNum(atr)}
+- \u0645\u0642\u0627\u0648\u0645\u062a: ${toPersianNum(R1Price)} (${R1Grade}) | \u062d\u0645\u0627\u06cc\u062a: ${toPersianNum(S1Price)} (${S1Grade})
 
-\u0648\u0638\u06cc\u0641\u0647 \u0634\u0645\u0627 \u0627\u06cc\u0646 \u0627\u0633\u062a \u06a9\u0647 \u0628\u0631\u0627\u06cc **\u00ab${symbolName}\u00bb** \u062f\u0631 **\u062a\u0627\u06cc\u0645\u0641\u0631\u06cc\u0645 \u0631\u0648\u0632\u0627\u0646\u0647**\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 **\u0686\u0646\u062f\u0644\u0627\u06cc\u0647 \u0648 \u06a9\u0627\u0645\u0644\u0627\u064b \u0627\u0633\u062a\u062f\u0644\u0627\u0644\u06cc** \u0627\u0631\u0627\u0626\u0647 \u062f\u0647\u06cc\u062f.
-
-
----
-**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647 (\u0648\u0627\u0642\u0639\u06cc \u0648 \u063a\u06cc\u0631\u0642\u0627\u0628\u0644 \u062a\u063a\u06cc\u06cc\u0631):**
-- \u0646\u0627\u0645 \u0627\u0628\u0632\u0627\u0631: **${symbolName}**
-- \u0642\u06cc\u0645\u062a \u0645\u0631\u062c\u0639: **${toPersianNum(currentPrice)} \u0631\u06cc\u0627\u0644**
-- \u0631\u0648\u0646\u062f \u0645\u06cc\u0627\u0646\u200c\u0645\u062f\u062a: **${trendLabel}** (\u0632\u0627\u0648\u06cc\u0647 ${toPersianNum(Math.abs(trendAngle))}\u00b0\u060c R\u00b2=${r2Pct} \u062f\u0631\u0635\u062f)
-- \u0645\u0648\u0642\u0639\u06cc\u062a \u0646\u0633\u0628\u062a \u0628\u0647 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646\u200c\u0647\u0627: ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA21 (${toPersianNum(ma21)})** \u0648 ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631'} \u0627\u0632 **MA100 (${toPersianNum(ma100)})**
-- **ADX=${toPersianNum(adx)}** (${adxStrength})\u060c **DI+ (${toPersianNum(diPlus)}) ${diPlus > diMinus ? '>' : '<'} DI- (${toPersianNum(diMinus)})** \u2190 ${diPressure}
-- **RSI=${toPersianNum(rsi)}** (${rsiSignal})\u060c **\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)}** (${stochSignal})
-- **CCI=${toPersianNum(cci)}**${mfi > 0 ? `\u060c **MFI=${toPersianNum(mfi)}**` : ''}
-- **MACD** ${macdDesc} (\u062e\u0637=${toPersianNum(macdLine)}\u060c \u0633\u06cc\u06af\u0646\u0627\u0644=${toPersianNum(macdSignal)}\u060c \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645=${toPersianNum(macdHist)})
-- **OBV** ${obvDesc}
-- \u0642\u06cc\u0645\u062a **${bbSignal}** (\u0628\u0627\u0646\u062f \u0628\u0627\u0644\u0627\u06cc\u06cc ${toPersianNum(bollingerUpper)}\u060c \u0628\u0627\u0646\u062f \u067e\u0627\u06cc\u06cc\u0646\u06cc ${toPersianNum(bollingerLower)})
-- **SAR (\u067e\u0627\u0631\u0627\u0628\u0648\u0644\u06cc\u06a9):** ${toPersianNum(sar)} \u0631\u06cc\u0627\u0644
-- \u0645\u0642\u0627\u0648\u0645\u062a **R1** \u062f\u0631 ${toPersianNum(R1Price)} \u0631\u06cc\u0627\u0644 (${R1Grade} ${R1Confirm})
-- \u062d\u0645\u0627\u06cc\u062a **S1** \u062f\u0631 ${toPersianNum(S1Price)} \u0631\u06cc\u0627\u0644 (${S1Grade} ${S1Confirm})
-- \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0646\u0648\u0633\u0627\u0646 \u0631\u0648\u0632\u0627\u0646\u0647 (ATR): ${toPersianNum(atr)} \u0631\u06cc\u0627\u0644
-
-**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u067e\u0648\u06cc\u0627\u06cc \u0645\u062d\u062a\u0645\u0644 (\u0645\u0631\u062a\u0628\u200c\u0634\u062f\u0647 \u0628\u0631 \u0627\u0633\u0627\u0633 \u0627\u062d\u062a\u0645\u0627\u0644):**
+**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631 (\u0645\u0631\u062a\u0628 \u0628\u0631 \u0627\u062d\u062a\u0645\u0627\u0644):**
 ${scenarioBlock}
 ${v11Block}
-**\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0645\u0648\u0631\u062f \u0627\u0633\u062a\u0641\u0627\u062f\u0647:**
-${methodsStr}
-
-
----
-\u0628\u0631 \u0627\u0633\u0627\u0633 \u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u0628\u0627\u0644\u0627\u060c \u06cc\u06a9 \u062a\u062d\u0644\u06cc\u0644 \u062c\u0627\u0645\u0639 \u0648 \u062d\u0631\u0641\u0647\u0627\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f. \u062a\u062d\u0644\u06cc\u0644 \u0628\u0627\u06cc\u062f \u0645\u0633\u062a\u0642\u06cc\u0645 \u0634\u0631\u0648\u0639 \u0634\u0648\u062f \u0628\u062f\u0648\u0646 \u0647\u06cc\u0686 \u0633\u0631\u0641\u0635\u0644 \u06cc\u0627 \u0639\u0646\u0648\u0627\u0646 \u062f\u0627\u062e\u0644\u06cc. \u0641\u0642\u0637 \u067e\u0627\u0631\u0627\u06af\u0631\u0627\u0641\u200c\u0647\u0627\u06cc \u062a\u062d\u0644\u06cc\u0644\u06cc \u0628\u0646\u0648\u06cc\u0633\u06cc\u062f.
+**\u0631\u0648\u0634\u200c\u0647\u0627:**\n${methodsStr}
 `;
 }
 
-// System prompt (SDK uses role 'assistant' for system instructions)
+// ─── System prompt ────────────────────────────────────────────────
 const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.
 یک تحلیل حرفه‌ای و کاربردی بنویسید.
 
@@ -404,73 +241,124 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 16. برای رنگی کلمات مهم از دستور {color:COLOR}متن{/color} استفاده کنید. رنگهای مجاز: red, green, amber, blue, orange, purple, emerald. مثال: {color:red}**خطر شکست سطح مقاومت**{/color}. حداکثر 8 مورد رنگی در کل متن.
 17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.`;
 
-// --- POST Handler ---
+// ─── POST Handler ────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await req.json();
     if (!body.currentPrice) {
       return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
     }
 
-    // Check cache
-    const key = cacheKey(body);
-    const cached = cache.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      console.log(`[AI v5] Cache hit for ${body.symbolName}`);
-      return NextResponse.json({ text: cached.text, ml: cached.ml, cached: true });
+    const symbolName = String(body.symbolName || 'unknown');
+    const today = getTodayDateStr();
+
+    // 1. Check daily persistent cache (Prisma/SQLite)
+    try {
+      const cached = await db.aiAnalysisCache.findUnique({
+        where: { symbol_date: { symbol: symbolName, date: today } },
+      });
+      if (cached && cached.text) {
+        console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+        return NextResponse.json({
+          text: cached.text,
+          ml: cached.ml ? JSON.parse(cached.ml) : undefined,
+          cached: true,
+          cachedDate: cached.date,
+        });
+      }
+    } catch (dbErr) {
+      console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
     }
 
-    // ML selection (base)
+    // 2. ML selection
     const mlInput = buildMLInput(body);
     const mlSelection = selectMLCombination(mlInput);
     const methods = selectMethods(mlInput);
 
-    // MSL v4 selection
+    // 3. MSL v4 selection
     const mslCtx = buildMSLV4Context(body);
     const mslResult = selectMSLV4(mslCtx);
     mlSelection.school = mslResult.school_of_analysis.primary.id as typeof mlSelection.school;
     mlSelection.style = mslResult.analysis_style.primary.id as typeof mlSelection.style;
     mlSelection.tone = mslResult.analysis_tone.primary.id as typeof mlSelection.tone;
     mlSelection.reasoning = `MSLv4: ${mslResult.school_of_analysis.primary.id}/${mslResult.analysis_style.primary.id}/${mslResult.analysis_tone.primary.id}`;
-    console.log(`[AI v5] ${body.symbolName}: MSLv4 school=${mslResult.school_of_analysis.primary.id} w=${mslResult.school_of_analysis.primary.weight}, style=${mslResult.analysis_style.primary.id}, tone=${mslResult.analysis_tone.primary.id}`);
-    console.log(`[AI v5] Methods: ${methods.join(', ')}`);
 
-    // Build system prompt with MSL v4 instructions
+    // 4. Build prompt
     const mslSystemPrompt = buildMSLV4PromptSection(mslResult);
-
-    // Build prompt (with MSL v4 context)
     const userMessage = buildPrompt(body, mlSelection, methods);
+    const dynamicSystemPrompt = `${SYSTEM_PROMPT}\n\n${mslSystemPrompt}`;
 
-    // Call AI via SDK (v3 approach with queue + retry)
-    const dynamicSystemPrompt = `${SYSTEM_PROMPT}
+    console.log(`[AI] Generating for ${symbolName} (daily cache miss) [${Date.now() - startTime}ms]`);
 
-${mslSystemPrompt}`;
-    const content = await queueAI([
-      { role: 'assistant', content: dynamicSystemPrompt },
-      { role: 'user', content: userMessage },
-    ], 90_000);
-
-    const result = {
-      text: content,
-      ml: { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods },
-    };
-
-    // Cache result
-    cache.set(key, { text: content, ml: result.ml, ts: Date.now() });
-    for (const [k, v] of cache.entries()) {
-      if (Date.now() - v.ts > CACHE_TTL) cache.delete(k);
+    // 5. Pre-check: if ZAI is heavily rate-limited, return immediately
+    const cooldownMs = getCooldownRemainingMs();
+    if (cooldownMs > 60_000) {
+      const waitSec = Math.ceil(cooldownMs / 1000);
+      console.log(`[AI] Rate limited, returning immediately. Cooldown: ${waitSec}s`);
+      return NextResponse.json({
+        error: `سرور هوشمند در حال حاضر شارژ دارد. لطفاً ${waitSec} ثانیه دیگر تلاش کنید.`,
+        text: '',
+        retryAfterSec: waitSec,
+      }, { status: 429 });
     }
 
-    return NextResponse.json(result);
+    // 6. Call AI through unified rate-limited queue
+    const content = await rateLimitedChatCompletion(
+      [
+        { role: 'system', content: dynamicSystemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      {
+        timeoutMs: 180_000,  // 3 min max total (queue wait + generation)
+        maxRetries: 3,
+        maxQueueWaitMs: 60_000,  // Fail fast if queue wait > 60s
+      }
+    );
+
+    const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
+
+    // 7. Save to daily persistent cache
+    try {
+      await db.aiAnalysisCache.upsert({
+        where: { symbol_date: { symbol: symbolName, date: today } },
+        create: {
+          symbol: symbolName,
+          date: today,
+          text: content,
+          ml: JSON.stringify(mlData),
+          price: Number(body.currentPrice) || 0,
+        },
+        update: {
+          text: content,
+          ml: JSON.stringify(mlData),
+          price: Number(body.currentPrice) || 0,
+        },
+      });
+      console.log(`[AI] Saved to daily cache: ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+    } catch (dbErr) {
+      console.warn('[AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
+    }
+
+    console.log(`[AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
+    return NextResponse.json({ text: content, ml: mlData });
+
   } catch (err) {
-    console.error('[AI v5] error:', err);
+    console.error(`[AI] Error [${Date.now() - startTime}ms]:`, err);
     return NextResponse.json({ error: userFriendlyError(err), text: '' }, { status: 500 });
   }
 }
 
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes('429')) return '\u0633\u0631\u0648\u0631 \u0647\u0648\u0634\u0645\u0646\u062f \u062f\u0631 \u062d\u0627\u0644 \u062d\u0627\u0636\u0631 \u0634\u0627\u0631\u0698 \u062f\u0627\u0631\u062f. \u0644\u0637\u0641\u0627\u064b \u0686\u0646\u062f \u062f\u0642\u06cc\u0642\u0647 \u062f\u06cc\u06af\u0631 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
-  if (msg.includes('timeout') || msg.includes('\u0632\u0645\u0627\u0646')) return '\u0632\u0645\u0627\u0646 \u067e\u0627\u0633\u062e\u062f\u0647\u06cc \u0647\u0648\u0634\u0645\u0646\u062f \u0628\u0647 \u067e\u0627\u06cc\u0627\u0646 \u0631\u0633\u06cc\u062f. \u0644\u0637\u0641\u0627\u064b \u0628\u0627\u0632 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+  if (msg.includes('ZAI_RATE_LIMITED')) {
+    const match = msg.match(/Try after (\d+)s/);
+    const sec = match ? match[1] : '۲ الی ۳ دقیقه';
+    return `سرور هوشمند در حال حاضر شارژ دارد. لطفاً ${sec} ثانیه دیگر تلاش کنید.`;
+  }
+  if (msg.includes('429') || msg.includes('Rate limited')) return 'سرور هوشمند در حال حاضر شارژ دارد. لطفاً ۲ الی ۳ دقیقه دیگر تلاش کنید.';
+  if (msg.includes('Timed out in queue')) return 'صف درخواست‌ها شلوغ است. لطفاً ۱ دقیقه دیگر تلاش کنید.';
+  if (msg.includes('timeout') || msg.includes('زمان') || msg.includes('Max retries')) return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً ۲ الی ۳ دقیقه بعد دوباره تلاش کنید.';
+  if (msg.includes('اتصال') || msg.includes('SDK')) return msg;
   return '\u062e\u0637\u0627\u06cc\u06cc \u062f\u0631 \u062a\u0648\u0644\u06cc\u062f \u062a\u062d\u0644\u06cc\u0644 \u0631\u062e \u062f\u0627\u062f. \u0644\u0637\u0641\u0627\u064b \u062f\u0648\u0628\u0627\u0631\u0647 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
 }

@@ -1,0 +1,943 @@
+     1→'use client';
+     2→
+     3→import React, { useMemo, useRef, useCallback, useState } from 'react';
+     4→import { Skeleton } from '@/components/ui/skeleton';
+     5→import TVWidgetInner, { TVWidgetSkeleton, type CandleData } from '@/components/tse/tv-widget';
+     6→import { toPersianDigits, toShamsi, toFaGrouped } from '@/lib/jalali';
+     7→import { Download, FileText, Type, Loader2, Shield, ShieldAlert, Target } from 'lucide-react';
+     8→import { calcEdgeProbabilities, findAllPaths, getDynamicScenarioMeta } from '@/lib/vdss-algorithms';
+     9→import type { PathInfo, ScenarioMeta } from '@/lib/vdss-algorithms';
+    10→
+    11→// ═══════════════════════════════════════════════════════════════════════════════
+    12→// Types
+    13→// ═══════════════════════════════════════════════════════════════════════════════
+    14→
+    15→interface Scenario {
+    16→  name: string;
+    17→  nameEn: string;
+    18→  probability: number;
+    19→  targetMin: number;
+    20→  targetMax: number;
+    21→  description: string;
+    22→}
+    23→
+    24→export interface VdesAnalysisProps {
+    25→  symbolName: string;
+    26→  candles: CandleData[];
+    27→  currentPrice: number;
+    28→  resistances: number[];
+    29→  supports: number[];
+    30→  ma21: number;
+    31→  ma100: number;
+    32→  /** Whether this is a TSE index (شاخص) */
+    33→  isIndex?: boolean;
+    34→  /** Whether data comes from TGJU (ارز/طلا/کریپتو) */
+    35→  isTgju?: boolean;
+    36→  /** TGJU category if applicable */
+    37→  tgjuCategory?: string;
+    38→  /** Dynamic currency unit (ریال, تومان, تتر, دلار, واحد) */
+    39→  currencyUnit?: string;
+    40→  rsi: number;
+    41→  mfi: number;
+    42→  cci: number;
+    43→  adx: number;
+    44→  stochK: number;
+    45→  stochD: number;
+    46→  macdLine: number;
+    47→  macdSignal: number;
+    48→  macdHist: number;
+    49→  diPlus: number;
+    50→  diMinus: number;
+    51→  sar: number;
+    52→  atr: number;
+    53→  obv: number;
+    54→  hasVolume: boolean;
+    55→  bollingerUpper: number;
+    56→  bollingerMiddle: number;
+    57→  bollingerLower: number;
+    58→  trendDirection: string;
+    59→  trendAngle: number;
+    60→  trendR2: number;
+    61→  overallSignal: string;
+    62→  scenarios: {
+    63→    R1: Scenario;
+    64→    R2: Scenario;
+    65→    R3: Scenario;
+    66→    R4: Scenario;
+    67→    R5: Scenario;
+    68→  };
+    69→  supportStrengths: { price: number; strength: number; isTarget: boolean; grade?: string; overlapCount?: number; touchCount?: number; volumeRatio?: number }[];
+    70→  resistanceStrengths: { price: number; strength: number; isTarget: boolean; grade?: string; overlapCount?: number; touchCount?: number; volumeRatio?: number }[];
+    71→  priceTargets: { price: number; strength: number; isTarget: boolean; grade?: string; overlapCount?: number; touchCount?: number; volumeRatio?: number }[];
+    72→  /** ML weights for S/R analysis */
+    73→  srMlWeights?: { touch: number; volume: number; overlap: number; freshness: number; distance: number } | null;
+    74→  /** Directional targets */
+    75→  upwardTargets?: { price: number; strength: number; isTarget: boolean; grade?: string }[];
+    76→  downwardTargets?: { price: number; strength: number; isTarget: boolean; grade?: string }[];
+    77→  /** VDss edge weights for path probability calculation */
+    78→  edgeWeights?: { up: number; down: number; pullback: number; risk: number };
+    79→  /** Bull score from TA engine */
+    80→  bullScore?: number;
+    81→}
+    82→
+    83→// ═══════════════════════════════════════════════════════════════════════════════
+    84→// Constants
+    85→// ═══════════════════════════════════════════════════════════════════════════════
+    86→
+    87→const toFa = (n: number) => {
+    88→  const rounded = Math.round(n);
+    89→  if (!isFinite(rounded) || isNaN(rounded)) return '۰';
+    90→  return rounded.toLocaleString('fa-IR');
+    91→};
+    92→const toFaD = (n: number, d: number = 1) => toPersianDigits(n.toFixed(d));
+    93→// Grouped Persian digits with controlled decimal places
+    94→const toFaG = (n: number | null | undefined, d: number = 0) => n != null ? toFaGrouped(Number(n.toFixed(d))) : '—';
+    95→
+    96→const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;
+    97→
+    98→// Static VDes color/border config per scenario (colors stay fixed, labels change)
+    99→const SCENARIO_COLORS: Record<string, { border: string; badgeBg: string; badgeColor: string }> = {
+   100→  R1: { border: '#59e39b', badgeBg: 'rgba(89,227,155,0.2)', badgeColor: '#59e39b' },
+   101→  R2: { border: '#ffb25f', badgeBg: 'rgba(255,178,95,0.2)', badgeColor: '#ffb25f' },
+   102→  R3: { border: '#ff758a', badgeBg: 'rgba(255,117,138,0.2)', badgeColor: '#ff758a' },
+   103→  R4: { border: '#ffb11b', badgeBg: 'rgba(255,177,27,0.2)', badgeColor: '#ffb11b' },
+   104→  R5: { border: '#ef4d62', badgeBg: 'rgba(239,77,98,0.2)', badgeColor: '#ef4d62' },
+   105→};
+   106→
+   107→// ═══════════════════════════════════════════════════════════════════════════════
+   108→// Component
+   109→// ═══════════════════════════════════════════════════════════════════════════════
+   110→
+   111→export default function VdesAnalysis(props: VdesAnalysisProps) {
+   112→  const {
+   113→    symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
+   114→    rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
+   115→    diPlus, diMinus, sar, atr, obv, hasVolume, bollingerUpper, bollingerMiddle, bollingerLower,
+   116→    trendDirection, trendAngle, trendR2, overallSignal, scenarios,
+   117→    supportStrengths, resistanceStrengths, priceTargets,
+   118→    isIndex, isTgju, currencyUnit,
+   119→    edgeWeights,
+   120→  } = props;
+   121→
+   122→  const unit = currencyUnit || 'ریال';
+   123→
+   124→  // ── Instrument Context (for intelligent naming) ─────────────────
+   125→  const instrumentLabel = useMemo(() => {
+   126→    if (isIndex) return { name: `شاخص ${symbolName}`, type: 'index' as const, verb: 'قرار دارد' };
+   127→    if (isTgju) return { name: symbolName, type: 'tgju' as const, verb: 'قرار دارد' };
+   128→    return { name: `سهم ${symbolName}`, type: 'stock' as const, verb: 'قرار دارد' };
+   129→  }, [symbolName, isIndex, isTgju]);
+   130→
+   131→  const IL = instrumentLabel;
+   132→
+   133→  const containerRef = useRef<HTMLDivElement>(null);
+   134→  const textAnalysisRef = useRef<HTMLDivElement>(null);
+   135→  const [exporting, setExporting] = useState(false);
+   136→
+   137→  const R1_level = resistances[0] ?? currentPrice * 1.05;
+   138→  const R2_level = resistances[1] ?? currentPrice * 1.10;
+   139→  const S1_level = supports[0] ?? currentPrice * 0.95;
+   140→  const S2_level = supports[1] ?? currentPrice * 0.90;
+   141→  const S3_level = supports[2] ?? currentPrice * 0.85;
+   142→
+   143→  const targetMin = Math.round(R1_level + (R2_level - R1_level) * 0.5);
+   144→  const targetMax = Math.round(R2_level + (R2_level - R1_level) * 0.8);
+   145→
+   146→  // ── Dominant scenario ──────────────────────────────────────────
+   147→  let highestKey = 'R3';
+   148→  let highestProb = 0;
+   149→  for (const key of SCENARIO_KEYS) {
+   150→    if (scenarios[key].probability > highestProb) {
+   151→      highestProb = scenarios[key].probability;
+   152→      highestKey = key;
+   153→    }
+   154→  }
+   155→  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + scenarios[k].probability, 0);
+   156→
+   157→  // ── Dynamic scenario labels (context-aware based on overallSignal) ─
+   158→  const dynamicMeta = useMemo(() => getDynamicScenarioMeta(overallSignal), [overallSignal]);
+   159→  const strategy = dynamicMeta[highestKey];
+   160→
+   161→  // ── Text variety: hash-based selector for varied language ──────────
+   162→  const varietySeed = useMemo(() => {
+   163→    const raw = `${rsi}${macdHist}${cci}${adx}${stochK}${trendAngle}${Math.round(currentPrice)}`;
+   164→    let hash = 0;
+   165→    for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+   166→    return Math.abs(hash);
+   167→  }, [rsi, macdHist, cci, adx, stochK, trendAngle, currentPrice]);
+   168→
+   169→  // ── RSI signal ─────────────────────────────────────────────────
+   170→  const rsiZone = rsi > 70 ? 'overbought' : rsi > 60 ? 'weak_ob' : rsi > 40 ? 'neutral' : rsi > 30 ? 'weak_os' : 'oversold';
+   171→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   172→  const rsiColor = rsi > 70 ? 'text-red-700' : rsi > 60 ? 'text-amber-800' : rsi > 40 ? 'text-gray-600' : rsi > 30 ? 'text-amber-800' : 'text-emerald-700';
+   173→
+   174→  // ── Stochastic signal ──────────────────────────────────────────
+   175→  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+   176→
+   177→  // ── Trend text ─────────────────────────────────────────────────
+   178→  const isUp = trendDirection === 'up';
+   179→  const isDown = trendDirection === 'down';
+   180→  const trendLabel = isUp ? 'صعودی' : isDown ? 'نزولی' : 'خنثی';
+   181→  const trendColorCls = isUp ? 'text-emerald-700' : isDown ? 'text-red-700' : 'text-amber-800';
+   182→  const adxStrength = adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف';
+   183→  const adxColor = adx > 40 ? 'text-emerald-700' : adx > 25 ? 'text-amber-800' : 'text-gray-500';
+   184→  const r2Pct = (trendR2 * 100).toFixed(1);
+   185→
+   186→  // ── Bollinger position ─────────────────────────────────────────
+   187→  const bbRange = bollingerUpper - bollingerLower;
+   188→  const bbPos = bbRange > 0 ? toPersianDigits(((currentPrice - bollingerLower) / bbRange * 100).toFixed(0)) : '۵۰';
+   189→  const bbAbove = currentPrice > bollingerUpper;
+   190→  const bbBelow = currentPrice < bollingerLower;
+   191→  const bbSignal = bbAbove ? 'بالای باند بالایی' : bbBelow ? 'زیر باند پایینی' : `داخل باندها (${bbPos}٪)`;
+   192→
+   193→  // ── Distance to MA ─────────────────────────────────────────────
+   194→  const distMa21 = ((currentPrice - ma21) / ma21 * 100).toFixed(1);
+   195→  const distMa100 = ((currentPrice - ma100) / ma100 * 100).toFixed(1);
+   196→
+   197→  // ── TradingView scenario colors ────────────────────────────────
+   198→  const chartCandles = useMemo(() => {
+   199→    if (candles.length <= 2000) return candles;
+   200→    return candles.slice(-2000);
+   201→  }, [candles]);
+   202→
+   203→  const tvScenarios = useMemo(() => {
+   204→    const colors: Record<string, string> = { R1: '#34c98b', R2: '#3ad5db', R3: '#ff7b32', R4: '#ffb11b', R5: '#ef4d62' };
+   205→    return Object.fromEntries(
+   206→      SCENARIO_KEYS.map(k => [k, { targetMin: scenarios[k].targetMin, targetMax: scenarios[k].targetMax, name: scenarios[k].name, probability: scenarios[k].probability, color: colors[k] }])
+   207→    );
+   208→  }, [scenarios]);
+   209→
+   210→  // ── VDss path probabilities (for result nodes section) ──────────
+   211→  const VDSS_COLORS: Record<string, string> = {
+   212→    R1: '#34c98b', R2: '#3ad5db', R3: '#ff7b32', R4: '#ffb11b', R5: '#ef4d62',
+   213→  };
+   214→
+   215→  const vdssPathsInfo = useMemo(() => {
+   216→    if (!edgeWeights) return null;
+   217→
+   218→    const edgeProbs = calcEdgeProbabilities(edgeWeights);
+   219→    const allPathsRaw = findAllPaths(edgeProbs);
+   220→
+   221→    // Calibrate path probabilities to match TA engine scenario probabilities
+   222→    const rawSums: Record<string, number> = {};
+   223→    for (const key of SCENARIO_KEYS) rawSums[key] = 0;
+   224→    for (const p of allPathsRaw) rawSums[p.target] += p.prob;
+   225→
+   226→    const allPaths: PathInfo[] = allPathsRaw.map(p => {
+   227→      const rawSum = rawSums[p.target] || 0.0001;
+   228→      const targetProb = scenarios[p.target as keyof typeof scenarios].probability / 100;
+   229→      const scale = targetProb / rawSum;
+   230→      return { ...p, prob: p.prob * scale };
+   231→    });
+   232→
+   233→    // Find top path per scenario
+   234→    const topPaths: Record<string, PathInfo | null> = {};
+   235→    for (const key of SCENARIO_KEYS) {
+   236→      const best = allPaths.filter(p => p.target === key).sort((a, b) => b.prob - a.prob)[0] ?? null;
+   237→      topPaths[key] = best;
+   238→    }
+   239→
+   240→    return { topPaths };
+   241→  }, [edgeWeights, scenarios]);
+   242→
+   243→  // ── Strategy recommendation text (intelligent) ────────────────────
+   244→  const mfiWarning = hasVolume ? ` (مقدار ${toFa(mfi)})` : '';
+   245→  const strategyText = useMemo(() => {
+   246→    const v = varietySeed % 3; // 3 variants per signal type
+   247→    if (rsi > 70 || (hasVolume && mfi > 80)) {
+   248→      const variants = [
+   249→        `هشدار اشباع خرید فعال است (RSI: ${toFaG(rsi, 1)}${mfiWarning}). فاصله تا مقاومت اول ${toFaG(R1_level)} ${unit} است. بهترین استراتژی در این شرایط، صبر برای اصلاح قیمت تا محدوده حمایت ${toFaG(S1_level)} تا ${toFaG(S2_level)} و ورود در نقطه بهینه‌تر می‌باشد.`,
+   250→        `با توجه به ورود به منطقه اشباع خرید (RSI=${toFaG(rsi, 1)}${mfiWarning}) و نزدیکی به مقاومت ${toFaG(R1_level)}، ریسک اصلاح کوتاه‌مدت بالا ارزیابی می‌شود. پیشنهاد: انتظار برای بازگشت قیمت به ${toFaG(S1_level)}-${toFaG(S2_level)} و سپس بررسی مجدد سیگنال‌ها.`,
+   251→        `${IL.name} در محدوده اشباع خرید (RSI: ${toFaG(rsi, 1)}${mfiWarning}) ${IL.verb}. با در نظر گرفتن مقاومت ${toFaG(R1_level)} در بالا و حمایت ${toFaG(S1_level)} در پایین، ورود جدید در این نقطه توصیه نمی‌شود. بهتر است منتظر عقبنشینی به ${toFaG(S2_level)} بمانید.`,
+   252→      ];
+   253→      return variants[v];
+   254→    }
+   255→    if (rsi < 30 || (hasVolume && mfi < 20)) {
+   256→      const variants = [
+   257→        `اشباع فروش قابل توجه (RSI: ${toFaG(rsi, 1)}${mfiWarning}) در محدوده حمایت ${toFaG(S1_level)} شناسایی شد. این شرایط می‌تواند فرصت مناسبی برای ورود باشد، با حد ضرر ${toFaG(S2_level)}. هدف اول ${toFaG(R1_level)} و هدف دوم ${toFaG(R2_level)} ${unit}.`,
+   258→        `${IL.name} به منطقه اشباع فروش رسیده (RSI=${toFaG(rsi, 1)}${mfiWarning}). فاصله تا حمایت کلیدی ${toFaG(S1_level)} کم است. اگر واکنش مثبت به این حمایت مشاهده شود، بازگشت به ${toFaG(R1_level)} محتمل خواهد بود.`,
+   259→        `شاخص قدرت نسبی در محدوده اشباع فروش (مقدار ${toFaG(rsi, 1)}${mfiWarning}) ${IL.verb}. نزدیکی به حمایت ${toFaG(S1_level)} و سیگنال فروش بیش از حد، احتمال بازگشت کوتاه‌مدت را تقویت می‌کند. حد ضرر پیشنهادی: ${toFaG(S2_level)}.`,
+   260→      ];
+   261→      return variants[v];
+   262→    }
+   263→    const variants = [
+   264→      `سیگنال‌ها در محدوده خنثی قرار دارند (RSI: ${toFaG(rsi, 1)}، قدرت روند: ${adxStrength}). محدوده رنج فعلی بین ${toFaG(S1_level)} و ${toFaG(R1_level)} است. تا خروج قیمت از این کانال، بهترین اقدام نظاره و عدم ورود است.`,
+   265→      `وضعیت فعلی ${IL.name} نشان‌دهنده عدم قطعیت (RSI=${toFaG(rsi, 1)}، ADX=${toFaG(adx, 1)}). ${IL.name} در بازه ${toFaG(S1_level)} تا ${toFaG(R1_level)} در نوسان است. شکست معتبر یکی از این سطوح، مسیر آینده را مشخص خواهد کرد.`,
+   266→      `شاخص‌ها هم‌جهت نیستند (RSI: ${toFaG(rsi, 1)}) و قدرت روند ${adxStrength} ارزیابی می‌شود. تا زمانی که ${IL.name} از محدوده ${toFaG(S1_level)}-${toFaG(R1_level)} خارج نشود، ورود با ریسک بالا همراه خواهد بود.`,
+   267→    ];
+   268→    return variants[v];
+   269→  }, [rsi, mfi, hasVolume, R1_level, R2_level, S1_level, S2_level, varietySeed, IL.name, IL.verb, unit]);
+   270→
+   271→  // ═══════════════════════════════════════════════════════════════════
+   272→  // Export handlers
+   273→  // ═══════════════════════════════════════════════════════════════════
+   274→
+   275→  // ── Helper: capture container as high-res image (hides toolbar) ──
+   276→  const captureContainer = useCallback(async (): Promise<string | null> => {
+   277→    const el = containerRef.current;
+   278→    if (!el) return null;
+   279→    // Hide export buttons before capturing
+   280→    const toolbar = el.querySelector('[data-export-toolbar]') as HTMLElement | null;
+   281→    if (toolbar) toolbar.style.visibility = 'hidden';
+   282→    try {
+   283→      const { toPng } = await import('html-to-image');
+   284→      return await toPng(el, { backgroundColor: '#ffffff', pixelRatio: 2, quality: 0.95 });
+   285→    } finally {
+   286→      if (toolbar) toolbar.style.visibility = '';
+   287→    }
+   288→  }, []);
+   289→
+   290→  // ── Export PDF (full page) ─────────────────────────────────────
+   291→  const handleExportPDF = useCallback(async () => {
+   292→    setExporting(true);
+   293→    try {
+   294→      const dataUrl = await captureContainer();
+   295→      if (!dataUrl) return;
+   296→      const { jsPDF } = await import('jspdf');
+   297→      const img = new Image();
+   298→      img.src = dataUrl;
+   299→      await new Promise((resolve) => { img.onload = resolve; });
+   300→      const pdfWidth = 595.28;
+   301→      const pdfHeight = (img.height * pdfWidth) / img.width;
+   302→      const pdf = new jsPDF({ orientation: pdfHeight > pdfWidth ? 'portrait' : 'landscape', unit: 'pt', format: [pdfWidth, Math.min(pdfHeight, 841.89)] });
+   303→      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+   304→      pdf.save(`${IL.name}-تحلیل-تکنیکال.pdf`);
+   305→    } catch (err) { console.error('PDF export failed:', err); }
+   306→    finally { setExporting(false); }
+   307→  }, [IL.name, captureContainer]);
+   308→
+   309→  // ── Export HTML (pixel-perfect image of the full توضیح‌دهنده تصویری page) ──
+   310→  const handleExportHTML = useCallback(async () => {
+   311→    setExporting(true);
+   312→    try {
+   313→      const dataUrl = await captureContainer();
+   314→      if (!dataUrl) return;
+   315→      const now = new Date();
+   316→      const dateStr = toShamsi(now, 'long');
+   317→      const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+   318→      const html = `<!DOCTYPE html>
+   319→<html lang="fa" dir="rtl">
+   320→<head>
+   321→<meta charset="UTF-8">
+   322→<meta name="viewport" content="width=device-width, initial-scale=1.0">
+   323→<title>تحلیل تکنیکال ${IL.name}</title>
+   324→<style>
+   325→  * { margin: 0; padding: 0; box-sizing: border-box; }
+   326→  body {
+   327→    background: #ffffff;
+   328→    display: flex;
+   329→    justify-content: center;
+   330→    padding: 20px;
+   331→    min-height: 100vh;
+   332→  }
+   333→  .page-wrapper {
+   334→    width: 100%;
+   335→    max-width: 960px;
+   336→  }
+   337→  .page-wrapper img {
+   338→    width: 100%;
+   339→    height: auto;
+   340→    display: block;
+   341→    border-radius: 16px;
+   342→  }
+   343→  .footer {
+   344→    text-align: center;
+   345→    font-family: Tahoma, Arial, sans-serif;
+   346→    font-size: 11px;
+   347→    color: #6b7280;
+   348→    margin-top: 16px;
+   349→    padding-top: 12px;
+   350→    border-top: 1px solid rgba(0,0,0,0.1);
+   351→  }
+   352→  @media print {
+   353→    body { padding: 0; background: white; }
+   354→    .footer { color: #999; }
+   355→  }
+   356→</style>
+   357→</head>
+   358→<body>
+   359→<div class="page-wrapper">
+   360→  <img src="data:image/png;base64,${base64}" alt="تحلیل تکنیکال ${IL.name}" />
+   361→  <div class="footer">تاریخ تهیه: ${dateStr} — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست.</div>
+   362→</div>
+   363→</body>
+   364→</html>`;
+   365→      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+   366→      const url = URL.createObjectURL(blob);
+   367→      const a = document.createElement('a'); a.href = url; a.download = `${IL.name}-تحلیل-تکنیکال.html`; a.click();
+   368→      URL.revokeObjectURL(url);
+   369→    } catch (err) { console.error('HTML export failed:', err); }
+   370→    finally { setExporting(false); }
+   371→  }, [IL.name, captureContainer]);
+   372→
+   373→  // ── Export Plain Text ──────────────────────────────────────────
+   374→  const handleExportText = useCallback(() => {
+   375→    const el = textAnalysisRef.current;
+   376→    if (!el) return;
+   377→    setExporting(true);
+   378→    try {
+   379→      const now = new Date();
+   380→      const dateStr = toShamsi(now, 'long');
+   381→      // Extract text content, clean up whitespace
+   382→      const rawText = el.innerText || el.textContent || '';
+   383→      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+   384→      const text = `تحلیل تکنیکال ${IL.name}
+   385→${'═'.repeat(50)}
+   386→تاریخ تهیه: ${dateStr}
+   387→
+   388→${lines.join('\n')}
+   389→
+   390→${'─'.repeat(50)}
+   391→صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست.`;
+   392→      const blob = new Blob([`\uFEFF${text}`], { type: 'text/plain;charset=utf-8' });
+   393→      const url = URL.createObjectURL(blob);
+   394→      const a = document.createElement('a'); a.href = url; a.download = `${IL.name}-تحلیل-متنی.txt`; a.click();
+   395→      URL.revokeObjectURL(url);
+   396→    } catch (err) { console.error('Text export failed:', err); }
+   397→    finally { setExporting(false); }
+   398→  }, [IL.name]);
+   399→
+   400→  return (
+   401→    <div ref={containerRef} className="space-y-5" dir="rtl">
+   402→      {/* ═══ HEADER ═══ */}
+   403→      <div className="rounded-[32px] px-6 py-5 border border-amber-200"
+   404→        style={{ background: 'rgba(255,251,235,0.7)', backdropFilter: 'blur(14px)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.08)' }}>
+   405→        <div className="flex items-center justify-between flex-wrap gap-3">
+   406→          <h1 className="text-xl font-bold" style={{ color: '#92400e' }}>
+   407→            📈 تحلیل تکنیکال {IL.name}
+   408→          </h1>
+   409→          {/* ── Export Buttons (hidden during image capture) ── */}
+   410→          <div className="flex items-center gap-2" data-export-toolbar>
+   411→            <ExportBtn icon={<Type className="w-3.5 h-3.5" />} label="خروجی متنی" onClick={handleExportText} disabled={exporting} loading={exporting} />
+   412→            <ExportBtn icon={<FileText className="w-3.5 h-3.5" />} label="خروجی HTML" onClick={handleExportHTML} disabled={exporting} loading={exporting} />
+   413→            <ExportBtn icon={<Download className="w-3.5 h-3.5" />} label="خروجی PDF" onClick={handleExportPDF} disabled={exporting} loading={exporting} />
+   414→          </div>
+   415→        </div>
+   416→        <div className="flex flex-wrap gap-3 mt-3">
+   417→          <span className="px-3.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-500">
+   418→            📍 قیمت مرجع: <b className="text-gray-900">{toFaG(currentPrice)} {unit}</b>
+   419→          </span>
+   420→          <span className="px-3.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-500">
+   421→            🎯 هدف کوتاه‌مدت: <b className="text-gray-900">{toFaG(targetMin)} — {toFaG(targetMax)} {unit}</b>
+   422→          </span>
+   423→          <span className="px-3.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-500">
+   424→            📊 روند: <b className="text-gray-900">{trendLabel} (R²={toPersianDigits(r2Pct)}٪)</b>
+   425→          </span>
+   426→          <span className={`px-3.5 py-1 rounded-full border text-xs font-medium ${
+   427→            rsi > 70 ? 'bg-red-50 text-red-700 border-red-200'
+   428→            : rsi < 30 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+   429→            : 'bg-amber-50 text-amber-800 border-amber-200'
+   430→          }`}>
+   431→            قدرت نسبی: {toFa(rsi)} ({rsiSignal})
+   432→          </span>
+   433→        </div>
+   434→      </div>
+   435→
+   436→      {/* ═══ TRADINGVIEW CHART ═══ */}
+   437→      <div className="rounded-[28px] p-4 border border-gray-100"
+   438→        style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   439→        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-3 mb-3">
+   440→          <span style={{ color: '#92400e' }}>📊</span>
+   441→          نمودار قیمتی سهم (روزانه) — به همراه MA21، MA100، سطوح حمایت/مقاومت و اهداف قیمتی
+   442→        </h2>
+   443→        <TVWidgetInner
+   444→          symbolName={symbolName}
+   445→          candles={chartCandles}
+   446→          supports={supports}
+   447→          resistances={resistances}
+   448→          supportStrengths={supportStrengths}
+   449→          resistanceStrengths={resistanceStrengths}
+   450→          ma21={ma21}
+   451→          ma100={ma100}
+   452→          scenarios={tvScenarios}
+   453→          height={580}
+   454→        />
+   455→      </div>
+   456→
+   457→      {/* ═══ SUPPORT / RESISTANCE LEVELS BOXES ═══ */}
+   458→      <div className="rounded-[28px] p-5 border border-gray-100"
+   459→        style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   460→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   461→          {/* ── Resistance Levels ── */}
+   462→          <div>
+   463→            <div className="flex items-center gap-2 mb-3">
+   464→              <ShieldAlert className="w-4 h-4 text-red-700" />
+   465→              <h3 className="text-sm font-bold text-red-700">سطوح مقاومت</h3>
+   466→            </div>
+   467→            <div className="space-y-2">
+   468→              {resistanceStrengths.filter(r => r.price > 0).map((r, i) => (
+   469→                <LevelBox key={`r-${i}`} index={i} label={`R${i + 1}`} price={r.price} strength={r.strength} isTarget={r.isTarget} type="resistance" unit={unit} grade={(r as {grade?:string}).grade} overlapCount={(r as {overlapCount?:number}).overlapCount} touchCount={(r as {touchCount?:number}).touchCount} />
+   470→              ))}
+   471→            </div>
+   472→          </div>
+   473→
+   474→          {/* ── Support Levels ── */}
+   475→          <div>
+   476→            <div className="flex items-center gap-2 mb-3">
+   477→              <Shield className="w-4 h-4 text-emerald-700" />
+   478→              <h3 className="text-sm font-bold text-emerald-700">سطوح حمایت</h3>
+   479→            </div>
+   480→            <div className="space-y-2">
+   481→              {supportStrengths.filter(s => s.price > 0).map((s, i) => (
+   482→                <LevelBox key={`s-${i}`} index={i} label={`S${i + 1}`} price={s.price} strength={s.strength} isTarget={s.isTarget} type="support" unit={unit} grade={(s as {grade?:string}).grade} overlapCount={(s as {overlapCount?:number}).overlapCount} touchCount={(s as {touchCount?:number}).touchCount} />
+   483→              ))}
+   484→            </div>
+   485→          </div>
+   486→        </div>
+   487→
+   488→        {/* ── Price Targets ── */}
+   489→        {priceTargets && priceTargets.length > 0 && (
+   490→          <div className="mt-5 pt-4 border-t border-gray-100">
+   491→            <div className="flex items-center gap-2 mb-3">
+   492→              <Target className="w-4 h-4 text-amber-800" />
+   493→              <h3 className="text-sm font-bold text-amber-800">اهداف قیمتی</h3>
+   494→            </div>
+   495→            <div className="flex flex-wrap gap-2">
+   496→              {priceTargets.filter(t => t.price > 0).map((t, i) => (
+   497→                <LevelBox key={`t-${i}`} index={i} label={`هدف ${i + 1}`} price={t.price} strength={t.strength} isTarget={true} type="target" unit={unit} grade={(t as {grade?:string}).grade} overlapCount={(t as {overlapCount?:number}).overlapCount} touchCount={(t as {touchCount?:number}).touchCount} />
+   498→              ))}
+   499→            </div>
+   500→          </div>
+   501→        )}
+   502→      </div>
+   503→
+   504→      {/* ═══ توضیح‌دهنده تصویری Result Nodes & Cumulative Path Probabilities ═══ */}
+   505→      {vdssPathsInfo && (
+   506→        <div className="mt-4 rounded-[28px] p-5 border border-gray-100"
+   507→          style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   508→          <h2 className="text-sm font-semibold mb-4 text-gray-900 flex items-center gap-3">
+   509→            <span style={{ color: '#92400e' }}>🔗</span>
+   510→            گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی (توضیح‌دهنده تصویری)
+   511→          </h2>
+   512→
+   513→          {/* 5 result node cards */}
+   514→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+   515→            {SCENARIO_KEYS.map(key => {
+   516→              const s = scenarios[key];
+   517→              const meta = dynamicMeta[key];
+   518→              const color = VDSS_COLORS[key];
+   519→              return (
+   520→                <div
+   521→                  key={key}
+   522→                  className="rounded-xl p-3"
+   523→                  style={{
+   524→                    border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+   525→                    background: `linear-gradient(160deg, color-mix(in srgb, ${color} 12%, transparent), rgba(249,250,251,.65))`,
+   526→                  }}
+   527→                >
+   528→                  <strong className="block text-xl font-black" style={{ color }}>{toFa(s.probability)}٪</strong>
+   529→                  <span className="text-xs font-bold text-gray-600">{key} | {meta.label}</span>
+   530→                  <small className="block text-[10px] text-gray-500 leading-relaxed mt-2" dir="ltr">
+   531→                    {toFa(s.targetMin)} — {toFa(s.targetMax)} {unit}
+   532→                  </small>
+   533→                </div>
+   534→              );
+   535→            })}
+   536→          </div>
+   537→
+   538→          {/* Top 5 contributing paths */}
+   539→          <div className="mt-4 space-y-1.5">
+   540→            <h3 className="text-xs font-bold text-gray-500 mb-2">مسیر اصلی هر سناریو (بالاترین احتمال)</h3>
+   541→            {SCENARIO_KEYS.map(key => {
+   542→              const topPath = vdssPathsInfo.topPaths[key];
+   543→              const color = VDSS_COLORS[key];
+   544→              return (
+   545→                <div
+   546→                  key={key}
+   547→                  className="flex items-center gap-2 text-[11px] rounded-lg px-3 py-2"
+   548→                  style={{ background: `${color}08`, borderRight: `3px solid ${color}` }}
+   549→                >
+   550→                  <span className="w-6 font-bold shrink-0" style={{ color }}>{key}</span>
+   551→                  {topPath ? (
+   552→                    <>
+   553→                      <span className="flex-1 text-gray-500" dir="ltr">
+   554→                        {topPath.nodes.join(' → ')}
+   555→                      </span>
+   556→                      <span className="font-bold min-w-[50px] text-left shrink-0" style={{ color }}>
+   557→                        {toPersianDigits((topPath.prob * 100).toFixed(1))}٪
+   558→                      </span>
+   559→                    </>
+   560→                  ) : (
+   561→                    <span className="text-gray-400">مسیری یافت نشد</span>
+   562→                  )}
+   563→                </div>
+   564→              );
+   565→            })}
+   566→          </div>
+   567→        </div>
+   568→      )}
+   569→
+   570→      {/* ═══ DUAL ANALYSIS LAYOUT ═══ */}
+   571→      <div className="rounded-[28px] p-5 border border-gray-100"
+   572→        style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', boxShadow: '0 20px 40px -12px rgba(0,0,0,0.06)' }}>
+   573→        <h2 className="text-sm font-semibold mb-4 text-gray-900 flex items-center gap-3">
+   574→          <span style={{ color: '#92400e' }}>🧠</span>
+   575→          تحلیل جامع روند و سطوح کلیدی
+   576→        </h2>
+   577→
+   578→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+   579→          {/* ── Text Analysis (Right in RTL) ── */}
+   580→          <div ref={textAnalysisRef} className="rounded-2xl p-4 border border-gray-100 space-y-4 flex flex-col" style={{ background: 'rgba(249,250,251,0.5)' }}>
+   581→
+   582→            {/* ── PARAGRAPH 1: Trend & Price Position ── */}
+   583→            <p className="text-sm text-gray-600 leading-[1.85]">
+   584→              <strong style={{ color: '#92400e' }}>وضعیت روند و موقعیت فعلی قیمت:</strong>{' '}
+   585→              {varietySeed % 2 === 0 ? (
+   586→                <>{IL.name} در سطح <b className="text-gray-900">{toFaG(currentPrice)} {unit}</b> معامله می‌شود. </>
+   587→              ) : (
+   588→                <>در حال حاضر قیمت <b className="text-gray-900">{IL.name}</b> برابر <b className="text-gray-900">{toFaG(currentPrice)} {unit}</b> {IL.verb}. </>
+   589→              )}
+   590→              روند میان‌مدت <b className={trendColorCls}>{trendLabel}</b>
+   591→              {trendDirection !== 'neutral' ? (
+   592→                <> است (زاویه {toFaG(Math.abs(trendAngle), 1)}°، R²={toPersianDigits(r2Pct)}٪)</>
+   593→              ) : ' ارزیابی می‌شود.'}
+   594→              {' '}قیمت{' '}
+   595→              {currentPrice > ma21
+   596→                ? <><b className="text-emerald-700">{toPersianDigits(distMa21)}٪</b> بالاتر از MA21 ({toFaG(ma21)})</>
+   597→                : <><b className="text-red-700">{toPersianDigits(Math.abs(Number(distMa21)))}٪</b> پایین‌تر از MA21 ({toFaG(ma21)})</>
+   598→              }
+   599→              {' '}و{' '}
+   600→              {currentPrice > ma100
+   601→                ? <><b className="text-emerald-700">{toPersianDigits(distMa100)}٪</b> بالاتر از MA100 ({toFaG(ma100)})</>
+   602→                : <><b className="text-red-700">{toPersianDigits(Math.abs(Number(distMa100)))}٪</b> پایین‌تر از MA100 ({toFaG(ma100)})</>
+   603→              }
+   604→              {' '}قرار دارد.{' '}
+   605→              {sar < currentPrice
+   606→                ? <span>SAR در سطح <b className="text-emerald-700">{toFaG(sar)}</b> (زیر قیمت) قراردارد دارد و روند صعودی را تأیید می‌کند.</span>
+   607→                : <span>SAR در سطح <b className="text-red-700">{toFaG(sar)}</b> (بالای قیمت) قرار گرفته و هشدار نزولی صادر شده.</span>
+   608→              }
+   609→              {' '}قدرت روند بر اساس ADX <b className={adxColor}>{adxStrength}</b> است (مقدار {toFaG(adx, 1)}).{' '}
+   610→              {diPlus > diMinus
+   611→                ? <span>+DI ({toFaG(diPlus, 1)}) بر -DI ({toFaG(diMinus, 1)}) غلبه دارد؛ فشار خریداری مسلط است.</span>
+   612→                : <span>-DI ({toFaG(diMinus, 1)}) بر +DI ({toFaG(diPlus, 1)}) غلبه دارد؛ فشار فروشندگان چیره است.</span>
+   613→              }
+   614→            </p>
+   615→
+   616→            {/* ── PARAGRAPH 2: Momentum & Oscillators ── */}
+   617→            <p className="text-sm text-gray-600 leading-[1.85]">
+   618→              <strong style={{ color: '#92400e' }}>مومنتوم و شاخص‌های نوسان‌نما:</strong>{' '}
+   619→              {varietySeed % 3 === 0 ? (
+   620→                <>{IL.name} از نظر شاخص قدرت نسبی در ناحیه </>
+   621→              ) : varietySeed % 3 === 1 ? (
+   622→                <span>بررسی RSI نشان می‌دهد که </span>
+   623→              ) : (
+   624→                <span>شاخص RSI مقدار </span>
+   625→              )}
+   626→              <b className={rsiColor}>{rsiSignal}</b>{' '}
+   627→              {varietySeed % 3 !== 2 ? 'قرار دارد' : ''} ({toFaG(rsi, 1)}).
+   628→              {hasVolume && <>
+   629→                {' '}جریان نقدینگی (MFI={toFaG(mfi, 1)}){' '}
+   630→                {mfi > 80
+   631→                  ? <span className="text-red-700">اشباع خرید را تأیید می‌کند</span>
+   632→                  : mfi < 20
+   633→                  ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span>
+   634→                  : <span>در بازه عادی قرار دارد</span>
+   635→                }.
+   636→              </>}
+   637→              {' '}CCI با مقدار {toFaG(cci, 1)}{' '}
+   638→              {cci > 100
+   639→                ? <span className="text-red-700">فراتر از محدوده معمول (فشار خریداری شدید)</span>
+   640→                : cci < -100
+   641→                ? <span className="text-emerald-700">زیر حد نرمال (فشار فروشندگان)</span>
+   642→                : <span>در محدوده عادی</span>
+   643→              }
+   644→              {' '}ارزیابی می‌شود.{' '}
+   645→              نوسان‌نمای استوکاستیک در وضعیت <b className={stochK > 80 ? 'text-red-700' : stochK < 20 ? 'text-emerald-700' : 'text-gray-600'}>{stochSignal}</b> {' '}
+   646→              (K={toFaG(stochK, 1)}، D={toFaG(stochD, 1)}){' '}
+   647→              {stochK > 80 ? 'که هشدار واکنش منفی را تقویت می‌کند.' : stochK < 20 ? 'و سیگنال بازگشت صعودی محتمل است.' : 'بدون سیگنال خاص.'}
+   648→              {' '}هیستوگرام MACD{' '}
+   649→              {macdHist > 0 && macdLine > macdSignal
+   650→                ? <span className="text-emerald-700">مثبت و در حال تقویت است — مومنتوم صعودی</span>
+   651→                : macdHist > 0
+   652→                ? <span className="text-amber-800">مثبت ولی رو به ضعف (تقاطع نزولی محتمل)</span>
+   653→                : macdLine < macdSignal
+   654→                ? <span className="text-red-700">منفی و نزولی — فشار فروش فعال</span>
+   655→                : <span className="text-gray-500">منفی ولی سیگنال بهبود مشاهده می‌شود</span>
+   656→              }
+   657→              {' '}({toFaD(macdHist)}).
+   658→            </p>
+   659→
+   660→            {/* ── PARAGRAPH 3: Volatility ── */}
+   661→            <p className="text-sm text-gray-600 leading-[1.85]">
+   662→              <strong style={{ color: '#92400e' }}>تحلیل نوسانات و باندهای بولینگر:</strong>{' '}
+   663→              {varietySeed % 2 === 0 ? (
+   664→                <>{IL.name} نسبت به باندهای بولینگر </>
+   665→              ) : (
+   666→                <>بررسی باندهای نوسان نشان می‌دهد {IL.name} </>
+   667→              )}
+   668→              <b className="text-gray-900">{bbSignal}</b> {varietySeed % 2 === 0 ? 'قرار دارد.' : ''}
+   669→              {bbAbove
+   670→                ? ' عبور از باند بالایی معمولاً یا نشان‌دهنده ادامه شتاب صعودی کوتاه‌مدت است یا واکنش به باند و بازگشت.'
+   671→                : bbBelow
+   672→                ? ' قرارگیری زیر باند پایینی می‌تواند نشانه بازگشت به سمت میانگین باند باشد.'
+   673→                : ' موقعیت داخل باندها حاکی از عدم وجود سیگنال افراطی از نوسانات است.'
+   674→              }
+   675→              {' '}میانگین نوسان روزانه (ATR={toFaG(atr)} {unit}){' '}
+   676→              {atr > currentPrice * 0.03
+   677→                ? <span>معادل بیش از ۳٪ قیمت است که <b className="text-amber-800">نوسان بالا</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
+   678→                : <span>در محدوده قابل قبول بوده و <b className="text-gray-500">ثبات نسبی</b> قیمت را تأیید می‌کند.</span>
+   679→              }
+   680→            </p>
+   681→
+   682→            {/* ── PARAGRAPH 4: Volume ── */}
+   683→            {hasVolume && (
+   684→            <p className="text-sm text-gray-600 leading-[1.85]">
+   685→              <strong style={{ color: '#92400e' }}>تحلیل حجم و جریان نقدینگی:</strong>{' '}
+   686→              شاخص OBV در سطح <b className="text-gray-900">{obv > 0 ? '+' : ''}{toFaD(obv / 1e6)}M</b> {' '}
+   687→              {obv > 0
+   688→                ? varietySeed % 2 === 0
+   689→                  ? <span>قراردارد که <b className="text-emerald-700">ورود پول هوشمند</b> و تجمع مثبت حجم را نشان می‌دهد. این الگو معمولاً تأیید‌کننده ادامه روند صعودی است.</span>
+   690→                  : <span>قراردارد و حاکی از <b className="text-emerald-700">تجمع مثبت حجم</b> است. ورود پول هوشمند می‌تواند محرک حرکت بعدی قیمت باشد.</span>
+   691→                : varietySeed % 2 === 0
+   692→                ? <span>قراردارد که <b className="text-red-700">خروج پول</b> را تأیید می‌کند. ضعف خریداران و احتمال ادامه فشار فروش وجود دارد.</span>
+   693→                : <span>قراردارد و نشان‌دهنده <b className="text-red-700">خروج نقدینگی</b> است. این وضعیت معمولاً با اصلاح قیمت همراه می‌شود.</span>
+   694→              }
+   695→            </p>
+   696→            )}
+   697→
+   698→            {/* ── PARAGRAPH 5: Confluence & Risk/Reward ── */}
+   699→            <p className="text-sm text-gray-600 leading-[1.85]">
+   700→              <strong style={{ color: '#92400e' }}>تلاقی سیگنال‌ها و ارزیابی ریسک/بازده:</strong>{' '}
+   701→              {overallSignal === 'bullish' ? (
+   702→                <span>
+   703→                  اکثر اندیکاتورها <b className="text-emerald-700">الگوی صعودی</b> را تأیید می‌کنند.
+   704→                  {varietySeed % 3 === 0
+   705→                    ? <> نسبت ریسک به بازده با حد ضرر {toFaG(S1_level)} و هدف {toFaG(R1_level)} برابر <b className="text-emerald-700">{toFaD(Math.abs((R1_level - currentPrice) / (currentPrice - S1_level)))}:۱</b> محاسبه شده</>
+   706→                    : varietySeed % 3 === 1
+   707→                    ? <> با در نظر گرفتن حمایت {toFaG(S1_level)} به عنوان حد ضرر و هدف {toFaG(R1_level)}، نسبت ریسک/بازده <b className="text-emerald-700">{toFaD(Math.abs((R1_level - currentPrice) / (currentPrice - S1_level)))}:۱</b> است</>
+   708→                    : <> حد ضرر پیشنهادی {toFaG(S1_level)} و هدف اول {toFaG(R1_level)}، نسبت ریسک/بازده <b className="text-emerald-700">{toFaD(Math.abs((R1_level - currentPrice) / (currentPrice - S1_level)))}:۱</b> را نشان می‌دهد</>
+   709→                  }
+   710→                  {Math.abs((R1_level - currentPrice) / (currentPrice - S1_level)) > 2
+   711→                    ? ' که نسبت بسیار مطلوبی محسوب می‌شود.'
+   712→                    : Math.abs((R1_level - currentPrice) / (currentPrice - S1_level)) > 1
+   713→                    ? ' و نسبت قابل قبولی است.'
+   714→                    : ' اما نسبت ریسک/بازده نامطلوب ارزیابی می‌شود.'
+   715→                  }
+   716→                </span>
+   717→              ) : overallSignal === 'bearish' ? (
+   718→                <span>اکثر شاخص‌ها <b className="text-red-700">الگوی نزولی</b> را نشان می‌دهند. ورود به معامله خرید در این شرایط <b className="text-red-700">ریسک بالایی</b> دارد و صبر تا بازگشت سیگنال‌ها منطقی‌تر است.</span>
+   719→              ) : (
+   720→                <span>سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بازار در فاز تردید {IL.verb}. تا زمان روشن شدن جهت، <b className="text-amber-800">انتظار و نظاره</b> بهترین استراتژی است.</span>
+   721→              )}
+   722→              {' '}تلاقی میانگین‌های متحرک{' '}
+   723→              {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   724→                ? <span className="text-amber-800">بسیار نزدیک به هم (تقاطع در حال شکل‌گیری)</span>
+   725→                : ma21 > ma100
+   726→                ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+   727→                : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>
+   728→              }
+   729→              {' '}است.
+   730→            </p>
+   731→
+   732→            {/* ── PARAGRAPH 6: S/R Confluence ── */}
+   733→            <p className="text-sm text-gray-600 leading-[1.85]">
+   734→              <strong style={{ color: '#92400e' }}>تحلیل تلاقی سطوح حمایت و مقاومت:</strong>{' '}
+   735→              {varietySeed % 2 === 0 ? (
+   736→                <>{IL.name} در نزدیکی چندین سطح کلیدی {IL.verb}. </>
+   737→              ) : (
+   738→                <>بررسی تلاقی سطوح قیمتی نشان می‌دهد: </>
+   739→              )}
+   740→              {resistances.length >= 2
+   741→                ? <>مقاومت اول در {toFaG(R1_level)} و مقاومت دوم در {toFaG(R2_level)} {unit} قرار دارد. فاصله بین این دو مقاومت حدود {toFaG(R2_level - R1_level)} {unit} است که نشان‌دهنده </>
+   742→                : <>مقاومت اصلی در {toFaG(R1_level)} {unit} قرار دارد و </>
+   743→              }
+   744→              {(R2_level - R1_level) / currentPrice > 0.05
+   745→                ? <b className="text-amber-800">فضای قیمتی نسبتاً وسیع</b>
+   746→                : <b className="text-gray-500">فضای قیمتی محدود</b>
+   747→              }
+   748→              {' '}بین سطوح مقاومتی است.{' '}
+   749→              {supports.length >= 2
+   750→                ? <>از سمت پایین، حمایت اول {toFaG(S1_level)} و حمایت دوم {toFaG(S2_level)} {unit} نقش حائل را ایفا می‌کنند. </>
+   751→                : <>حمایت اصلی در {toFaG(S1_level)} {unit} تعریف شده است. </>
+   752→              }
+   753→              {currentPrice - S1_level < R1_level - currentPrice
+   754→                ? <>قیمت فعلی به حمایت {toFaG(S1_level)} نزدیک‌تر است و در صورت واکنش مثبت، احتمال بازگشت به سمت {toFaG(R1_level)} وجود دارد. این وضعیت از نظر مدیریت ریسک، حد ضرر کوتاه‌تری را امکان‌پذیر می‌سازد.</>
+   755→                : <>فاصله قیمت تا مقاومت {toFaG(R1_level)} کمتر از فاصله تا حمایت {toFaG(S1_level)} است. این یعنی قیمت در نیمه بالایی بازه نوسانی قرار دارد و احتیاط بیشتری لازم است.</>
+   756→              }
+   757→            </p>
+   758→
+   759→            {/* ── PARAGRAPH 7: MACD Detailed ── */}
+   760→            <p className="text-sm text-gray-600 leading-[1.85]">
+   761→              <strong style={{ color: '#92400e' }}>بررسی تفصیلی MACD و تقاطع‌های آن:</strong>{' '}
+   762→              خط MACD در سطح {toFaG(macdLine, 2)} و خط سیگنال در {toFaG(macdSignal, 2)} {unit} قرار دارد.{' '}
+   763→              {macdLine > macdSignal
+   764→                ? <span>فاصله مثبت بین خط MACD و سیگنال ({toFaG(Math.abs(macdLine - macdSignal), 1)}) {' '}
+   765→                  {macdHist > 0 && macdHist > (macdLine - macdSignal)
+   766→                    ? <span>و افزایش هیستوگرام، <b className="text-emerald-700">تقویت مومنتوم صعودی</b> را تأیید می‌کند.</span>
+   767→                    : <span>ولی کاهش هیستوگرام نشان‌دهنده <b className="text-amber-800">کاهش شتاب صعودی</b> است.</span>
+   768→                  }
+   769→                </span>
+   770→                : <span>فاصله منفی بین خط MACD و سیگنال ({toFaG(Math.abs(macdLine - macdSignal), 1)}) {' '}
+   771→                  {macdHist < 0 && macdHist < (macdLine - macdSignal)
+   772→                    ? <span>و ادامه کاهش هیستوگرام، <b className="text-red-700">تشدید فشار نزولی</b> را نشان می‌دهد.</span>
+   773→                    : <span>ولی کاهش قدرت منفی هیستوگرام، <b className="text-emerald-700">احتمال تقاطع صعودی</b> را تقویت می‌کند.</span>
+   774→                  }
+   775→                </span>
+   776→              }
+   777→              {' '}مقدار مطلق هیستوگرام ({toFaG(Math.abs(macdHist), 2)}) {' '}
+   778→              {Math.abs(macdHist) > Math.abs(macdLine) * 0.1
+   779→                ? <span>نسبت به خط MACD قابل توجه است و <b className="text-amber-800">تغییرات قیمتی شدید</b> را پیش‌بینی می‌کند.</span>
+   780→                : <span>در محدوده عادی قرار دارد.</span>
+   781→              }
+   782→            </p>
+   783→
+   784→            {/* ── Scenario Analysis ── */}
+   785→            <p className="text-sm text-gray-600 leading-[1.85]">
+   786→              <strong style={{ color: '#92400e' }}>تحلیل سناریوها:</strong>{' '}
+   787→              {varietySeed % 2 === 0 ? (
+   788→                <>{IL.name} پنج سناریوی محتمل پیش رو دارد. </>
+   789→              ) : (
+   790→                <span>بر اساس تلفیق داده‌ها، سناریوهای زیر برای {IL.name} قابل تصور است: </span>
+   791→              )}
+   792→              سناریوی <b className="text-emerald-700">صعود هیجانی (R1)</b> با احتمال <b>{toFaG(scenarios.R1.probability)}٪</b>{' '}
+   793→              {varietySeed % 2 === 0
+   794→                ? `— در صورت عبور از ${toFaG(R1_level)} و تثبیت بالای آن، هدف ${toFaG(targetMin)} تا ${toFaG(targetMax)} ${unit} دیده می‌شود.`
+   795→                : `— هدف قیمتی در صورت تحقق: ${toFaG(targetMin)} تا ${toFaG(targetMax)} ${unit} (پس از عبور از مقاومت ${toFaG(R1_level)}).`
+   796→              }
+   797→              {' '}سناریوی <b className="text-cyan-700">پولبک سالم (R2)</b> ({toFaG(scenarios.R2.probability)}٪){' '}
+   798→              {`شامل بازگشت به ${toFaG(S1_level)} و دوباره تلاش برای فتح ${toFaG(R1_level)} است.`}
+   799→              {' '}مجموع سناریوهای اصلاحی{' '}
+   800→              <b className="text-red-700">{toFaG(scenarios.R3.probability + scenarios.R4.probability + scenarios.R5.probability)}٪</b>
+   801→              {`احتمال دارد که در صورت از دست رفتن ${toFaG(S1_level)} فعال می‌شود و قیمت به سمت ${toFaG(S2_level)} و ${toFaG(S3_level)} حرکت خواهد کرد.`}
+   802→            </p>
+   803→
+   804→            {/* ── Strategy ── */}
+   805→            <div className="rounded-xl px-4 py-3 border-r-4" style={{ background: 'rgba(255,178,95,0.06)', borderRightColor: '#ffb25f' }}>
+   806→              <strong className="text-amber-800 text-sm">🟡 استراتژی پیشنهادی:</strong>
+   807→              <p className="text-xs text-gray-600 leading-[1.85] mt-1.5">{strategyText}</p>
+   808→            </div>
+   809→          </div>
+   810→
+   811→          {/* ── Scenario Summary (Left in RTL) ── */}
+   812→          <div className="rounded-2xl p-4 border border-gray-100 flex flex-col" style={{ background: 'rgba(249,250,251,0.5)' }}>
+   813→            <h3 className="text-sm font-bold mb-3 pb-2 border-b border-gray-200" style={{ color: '#0891b2' }}>
+   814→              🏛️ خلاصه سناریوها و احتمالات
+   815→            </h3>
+   816→            <div className="space-y-3 flex-1">
+   817→              {SCENARIO_KEYS.map(key => {
+   818→                const s = scenarios[key];
+   819→                const meta = dynamicMeta[key];
+   820→                const colorCfg = SCENARIO_COLORS[key];
+   821→                return (
+   822→                  <div key={key} className="rounded-xl p-3" style={{ background: 'rgba(249,250,251,1)', border: '1px solid rgba(229,231,235,1)', borderRight: `4px solid ${colorCfg.border}` }}>
+   823→                    <div className="text-sm font-bold text-gray-900 mb-1">سناریو {key} | {meta.label}</div>
+   824→                    <div className="text-xs text-gray-600 leading-relaxed">{s.description}</div>
+   825→                    <div className="flex items-center justify-between mt-2">
+   826→                      <span className="inline-block px-3.5 py-0.5 rounded-full text-lg font-black" style={{ background: colorCfg.badgeBg, color: colorCfg.badgeColor }}>
+   827→                        {toFa(s.probability)}٪
+   828→                      </span>
+   829→                      <span className="text-[10px] text-gray-500" dir="ltr">هدف: {toFa(s.targetMin)} — {toFa(s.targetMax)}</span>
+   830→                    </div>
+   831→                  </div>
+   832→                );
+   833→              })}
+   834→            </div>
+   835→            <div className="mt-3 pt-3 border-t border-gray-200 text-left text-xs text-gray-500 leading-relaxed">
+   836→              <strong>📌 قانون احتمالات:</strong> مجموع احتمالات پنج سناریوی پیش رو برابر <strong>۱۰۰٪</strong> است.
+   837→              (مجموع فعلی: <b className="text-gray-600">{toFa(totalProb)}٪</b>)
+   838→            </div>
+   839→          </div>
+   840→        </div>
+   841→      </div>
+   842→
+   843→      {/* ── Strategy Tag ── */}
+   844→      <div className="flex flex-wrap items-center gap-3 px-4">
+   845→        <span className="text-xs text-gray-500">سیگنال غالب:</span>
+   846→        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold border ${strategy.strategyTag}`}>
+   847→          {strategy.strategyText}
+   848→        </span>
+   849→      </div>
+   850→    </div>
+   851→  );
+   852→}
+   853→
+   854→// ═══════════════════════════════════════════════════════════════════════════════
+   855→// Sub-components
+   856→// ═══════════════════════════════════════════════════════════════════════════════
+   857→
+   858→// ── Export Button ─────────────────────────────────────────────────────────────
+   859→function ExportBtn({ icon, label, onClick, disabled, loading }: {
+   860→  icon: React.ReactNode; label: string; onClick: () => void; disabled: boolean; loading: boolean;
+   861→}) {
+   862→  return (
+   863→    <button onClick={onClick} disabled={disabled}
+   864→      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-300 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-all disabled:opacity-50 cursor-pointer">
+   865→      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}
+   866→      {label}
+   867→    </button>
+   868→  );
+   869→}
+   870→
+   871→// ── Level Box (Support / Resistance / Target) ────────────────────────────────
+   872→function LevelBox({ index, label, price, strength, isTarget, type, unit, grade, overlapCount, touchCount }: {
+   873→  index: number; label: string; price: number; strength: number; isTarget: boolean; type: 'support' | 'resistance' | 'target'; unit?: string;
+   874→  grade?: string; overlapCount?: number; touchCount?: number;
+   875→}) {
+   876→  const isSupport = type === 'support';
+   877→  const isTargetType = type === 'target';
+   878→
+   879→  const accentColor = isTargetType ? '#ffb11b' : isSupport ? '#34c98b' : '#ef4d62';
+   880→  const bgAccent = isTargetType ? 'rgba(255,177,27,0.06)' : isSupport ? 'rgba(52,201,139,0.06)' : 'rgba(239,77,98,0.06)';
+   881→  const borderAccent = isTargetType ? 'rgba(255,177,27,0.3)' : isSupport ? 'rgba(52,201,139,0.3)' : 'rgba(239,77,98,0.3)';
+   882→
+   883→  const strengthPct = Math.min(100, Math.max(0, strength * 10));
+   884→  const displayGrade = grade || (strength >= 8.5 ? 'بسیار قوی' : strength >= 7 ? 'قوی' : strength >= 5 ? 'متوسط' : strength >= 3 ? 'ضعیف' : 'بسیار ضعیف');
+   885→  const strengthColor = strength >= 8.5 ? '#34c98b' : strength >= 7 ? '#3ad5db' : strength >= 5 ? '#ffb11b' : strength >= 3 ? '#ff7b32' : '#ef4d62';
+   886→
+   887→  return (
+   888→    <div
+   889→      className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border transition-all hover:scale-[1.01]"
+   890→      style={{
+   891→        background: bgAccent,
+   892→        border: `1px solid ${borderAccent}`,
+   893→        borderRight: `3px solid ${accentColor}`,
+   894→      }}
+   895→    >
+   896→      {/* Label + Price */}
+   897→      <div className="flex-1 min-w-0">
+   898→        <div className="flex items-center gap-2">
+   899→          <span className="text-[11px] font-bold" style={{ color: accentColor }}>{label}</span>
+   900→          {isTarget && <span className="text-[9px]">🎯</span>}
+   901→          {overlapCount !== undefined && overlapCount > 0 && (
+   902→            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+   903→              {toPersianDigits(overlapCount)} هم‌پوشانی
+   904→            </span>
+   905→          )}
+   906→        </div>
+   907→        <div className="flex items-baseline gap-1">
+   908→          <span className="text-sm font-black text-gray-900 tabular-nums" dir="ltr">{toPersianDigits(Math.round(price).toLocaleString('en-US'))}</span>
+   909→          <span className="text-[10px] text-gray-500">{unit || 'ریال'}</span>
+   910→        </div>
+   911→      </div>
+   912→
+   913→      {/* Strength + Grade */}
+   914→      <div className="flex flex-col items-end gap-1 min-w-[100px]">
+   915→        <div className="flex items-center gap-1.5">
+   916→          <span className="text-[9px] font-bold" style={{ color: strengthColor }}>{displayGrade}</span>
+   917→          <span className="text-[10px] font-black tabular-nums" style={{ color: strengthColor }}>{toPersianDigits(Math.round(strength * 10) / 10)}</span>
+   918→          <span className="text-[9px] text-gray-500">/۱۰</span>
+   919→        </div>
+   920→        <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+   921→          <div
+   922→            className="h-full rounded-full transition-all duration-500"
+   923→            style={{ width: `${strengthPct}%`, backgroundColor: strengthColor }}
+   924→          />
+   925→        </div>
+   926→        {touchCount !== undefined && touchCount > 0 && (
+   927→          <span className="text-[8px] text-gray-400">{toPersianDigits(touchCount)} برخورد</span>
+   928→        )}
+   929→      </div>
+   930→    </div>
+   931→  );
+   932→}
+   933→
+   934→// ── Loading ────────────────────────────────────────────────────────────────────
+   935→
+   936→export function VdesAnalysisSkeleton() {
+   937→  return (
+   938→    <div className="space-y-5">
+   939→      <Skeleton className="h-28 w-full bg-gray-200 rounded-[32px]" />
+   940→      <Skeleton className="h-[650px] w-full bg-gray-200 rounded-[28px]" />
+   941→    </div>
+   942→  );
+   943→}

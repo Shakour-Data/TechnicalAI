@@ -30,3 +30,17 @@ model Post {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model AiAnalysisCache {
+  id        String   @id @default(cuid())
+  symbol    String
+  date      String   // YYYY-MM-DD
+  text      String
+  ml        String   // JSON string of ML selection metadata
+  price     Float
+  createdAt DateTime @default(now())
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+}

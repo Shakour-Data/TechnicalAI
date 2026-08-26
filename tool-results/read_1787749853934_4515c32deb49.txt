@@ -1,0 +1,794 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import {
+     4→     4→  Card,
+     5→     5→  CardContent,
+     6→     6→  CardDescription,
+     7→     7→  CardHeader,
+     8→     8→  CardTitle,
+     9→     9→} from '@/components/ui/card';
+    10→    10→import {
+    11→    11→  Search,
+    12→    12→  LineChart,
+    13→    13→  Brain,
+    14→    14→  Download,
+    15→    15→  BarChart3,
+    16→    16→  TrendingUp,
+    17→    17→  Activity,
+    18→    18→  BookOpen,
+    19→    19→  MousePointerClick,
+    20→    20→  Layers,
+    21→    21→  FileText,
+    22→    22→  Table,
+    23→    23→  Image,
+    24→    24→  Code,
+    25→    25→  ChevronLeft,
+    26→    26→  Gauge,
+    27→    27→  Zap,
+    28→    28→  ArrowUpDown,
+    29→    29→  CandlestickChart,
+    30→    30→  PenTool,
+    31→    31→  Cpu,
+    32→    32→  CircleDot,
+    33→    33→  Target,
+    34→    34→  Lightbulb,
+    35→    35→  HelpCircle,
+    36→    36→} from 'lucide-react';
+    37→    37→
+    38→    38→type SectionId =
+    39→    39→  | 'getting-started'
+    40→    40→  | 'chart-features'
+    41→    41→  | 'analysis-panels'
+    42→    42→  | 'indicators'
+    43→    43→  | 'scenario-analysis'
+    44→    44→  | 'export-options';
+    45→    45→
+    46→    46→const sections: { id: SectionId; title: string; icon: React.ReactNode }[] = [
+    47→    47→  {
+    48→    48→    id: 'getting-started',
+    49→    49→    title: 'شروع کار',
+    50→    50→    icon: <Search className="h-4 w-4" />,
+    51→    51→  },
+    52→    52→  {
+    53→    53→    id: 'chart-features',
+    54→    54→    title: 'ویژگی‌های نمودار',
+    55→    55→    icon: <LineChart className="h-4 w-4" />,
+    56→    56→  },
+    57→    57→  {
+    58→    58→    id: 'analysis-panels',
+    59→    59→    title: 'پنل‌های تحلیلی',
+    60→    60→    icon: <Brain className="h-4 w-4" />,
+    61→    61→  },
+    62→    62→  {
+    63→    63→    id: 'indicators',
+    64→    64→    title: 'آشنایی با اندیکاتورها',
+    65→    65→    icon: <BarChart3 className="h-4 w-4" />,
+    66→    66→  },
+    67→    67→  {
+    68→    68→    id: 'scenario-analysis',
+    69→    69→    title: 'تحلیل سناریوها',
+    70→    70→    icon: <Target className="h-4 w-4" />,
+    71→    71→  },
+    72→    72→  {
+    73→    73→    id: 'export-options',
+    74→    74→    title: 'گزینه‌های خروجی',
+    75→    75→    icon: <Download className="h-4 w-4" />,
+    76→    76→  },
+    77→    77→];
+    78→    78→
+    79→    79→function PlaceholderImage({
+    80→    80→  src,
+    81→    81→  alt,
+    82→    82→}: {
+    83→    83→  src: string;
+    84→    84→  alt: string;
+    85→    85→}) {
+    86→    86→  return (
+    87→    87→    <div className="my-4 flex items-center justify-center overflow-hidden rounded-lg border border-dashed border-amber-300 bg-gray-100 p-6">
+    88→    88→      <img
+    89→    89→        src={src}
+    90→    90→        alt={alt}
+    91→    91→        className="max-h-64 w-full rounded-md object-contain"
+    92→    92→      />
+    93→    93→    </div>
+    94→    94→  );
+    95→    95→}
+    96→    96→
+    97→    97→export default function HelpPage() {
+    98→    98→  const scrollToSection = (id: SectionId) => {
+    99→    99→    const element = document.getElementById(id);
+   100→   100→    if (element) {
+   101→   101→      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+   102→   102→    }
+   103→   103→  };
+   104→   104→
+   105→   105→  return (
+   106→   106→    <div
+   107→   107→      dir="rtl"
+   108→   108→      className="max-h-[calc(100vh-140px)] overflow-y-auto px-1"
+   109→   109→    >
+   110→   110→      {/* Header */}
+   111→   111→      <div className="mb-6 flex items-center gap-3 px-2 pt-2">
+   112→   112→        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   113→   113→          <HelpCircle className="h-5 w-5 text-amber-800" />
+   114→   114→        </div>
+   115→   115→        <div>
+   116→   116→          <h1 className="text-xl font-bold text-amber-900">
+   117→   117→            راهنمای استفاده از تحلیل تکنیکال بازار
+   118→   118→          </h1>
+   119→   119→          <p className="text-sm text-amber-700">
+   120→   120→            راهنمای جامع برای استفاده از تمام امکانات پلتفرم
+   121→   121→          </p>
+   122→   122→        </div>
+   123→   123→      </div>
+   124→   124→
+   125→   125→      {/* Table of Contents */}
+   126→   126→      <Card className="mb-6 border-amber-200 bg-amber-50/50">
+   127→   127→        <CardHeader className="pb-3">
+   128→   128→          <CardTitle className="flex items-center gap-2 text-amber-900">
+   129→   129→            <BookOpen className="h-5 w-5" />
+   130→   130→            فهرست مطالب
+   131→   131→          </CardTitle>
+   132→   132→          <CardDescription className="text-amber-700">
+   133→   133→            روی هر بخش کلیک کنید تا به آن منتقل شوید
+   134→   134→          </CardDescription>
+   135→   135→        </CardHeader>
+   136→   136→        <CardContent>
+   137→   137→          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+   138→   138→            {sections.map((section) => (
+   139→   139→              <button
+   140→   140→                key={section.id}
+   141→   141→                onClick={() => scrollToSection(section.id)}
+   142→   142→                className="flex items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-3 text-right transition-all hover:border-amber-400 hover:bg-amber-50 hover:shadow-sm"
+   143→   143→              >
+   144→   144→                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+   145→   145→                  {section.icon}
+   146→   146→                </span>
+   147→   147→                <span className="font-medium text-amber-900">
+   148→   148→                  {section.title}
+   149→   149→                </span>
+   150→   150→                <ChevronLeft className="mr-auto h-4 w-4 text-amber-400" />
+   151→   151→              </button>
+   152→   152→            ))}
+   153→   153→          </div>
+   154→   154→        </CardContent>
+   155→   155→      </Card>
+   156→   156→
+   157→   157→      {/* Section 1: Getting Started */}
+   158→   158→      <div id="getting-started" className="mb-6 scroll-mt-4">
+   159→   159→        <Card className="border-amber-200">
+   160→   160→          <CardHeader>
+   161→   161→            <div className="flex items-center gap-3">
+   162→   162→              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   163→   163→                <Search className="h-5 w-5 text-amber-800" />
+   164→   164→              </span>
+   165→   165→              <div>
+   166→   166→                <CardTitle className="text-amber-900">شروع کار</CardTitle>
+   167→   167→                <CardDescription className="text-amber-700">
+   168→   168→                  جستجو و انتخاب نماد بورسی
+   169→   169→                </CardDescription>
+   170→   170→              </div>
+   171→   171→            </div>
+   172→   172→          </CardHeader>
+   173→   173→          <CardContent className="space-y-5">
+   174→   174→            <div className="space-y-3">
+   175→   175→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   176→   176→                <MousePointerClick className="h-4 w-4" />
+   177→   177→                جستجوی نماد
+   178→   178→              </h3>
+   179→   179→              <p className="leading-7 text-gray-700">
+   180→   180→                برای شروع تحلیل، نام نماد مورد نظر خود را در نوار جستجو وارد کنید.
+   181→   181→                به‌محض تایپ، لیست نتایج مرتبط به‌صورت خودکار نمایش داده می‌شود. شما
+   182→   182→                می‌توانید با نام فارسی نماد (مانند «خودرو»)، نام لاتین (مانند
+   183→   183→                «KHRD1») یا کد نماد جستجو نمایید.
+   184→   184→              </p>
+   185→   185→              <ul className="mr-6 list-disc space-y-2 text-gray-700">
+   186→   186→                <li>
+   187→   187→                  حداقل یک حرف وارد کنید تا نتایج جستجو نمایش داده شوند.
+   188→   188→                </li>
+   189→   189→                <li>
+   190→   190→                  از کلیدهای بالا و پایین کیبورد برای حرکت بین نتایج استفاده
+   191→   191→                  کنید.
+   192→   192→                </li>
+   193→   193→                <li>
+   194→   194→                  با زدن کلید Enter یا کلیک روی نماد مورد نظر، آن را انتخاب کنید.
+   195→   195→                </li>
+   196→   196→              </ul>
+   197→   197→            </div>
+   198→   198→
+   199→   199→            <div className="space-y-3">
+   200→   200→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   201→   201→                <Layers className="h-4 w-4" />
+   202→   202→                انتخاب از نتایج جستجو
+   203→   203→              </h3>
+   204→   204→              <p className="leading-7 text-gray-700">
+   205→   205→                پس از نمایش نتایج جستجو، هر ردیف شامل نام نماد، نام شرکت و گروه
+   206→   206→                صنعتی آن است. با کلیک روی هر نماد، نمودار و اطلاعات تحلیلی آن
+   207→   207→                به‌صورت کامل بارگذاری می‌شود. همچنین تاریخچه جستجو‌های اخیر شما در
+   208→   208→                دسترس است تا بتوانید سریع‌تر به نمادهای پرکاربرد دسترسی پیدا کنید.
+   209→   209→              </p>
+   210→   210→            </div>
+   211→   211→
+   212→   212→            <PlaceholderImage
+   213→   213→              src="/placeholder-help-1.png"
+   214→   214→              alt="نمایش نوار جستجو و لیست نتایج نمادهای بورسی"
+   215→   215→            />
+   216→   216→          </CardContent>
+   217→   217→        </Card>
+   218→   218→      </div>
+   219→   219→
+   220→   220→      {/* Section 2: Chart Features */}
+   221→   221→      <div id="chart-features" className="mb-6 scroll-mt-4">
+   222→   222→        <Card className="border-amber-200">
+   223→   223→          <CardHeader>
+   224→   224→            <div className="flex items-center gap-3">
+   225→   225→              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   226→   226→                <LineChart className="h-5 w-5 text-amber-800" />
+   227→   227→              </span>
+   228→   228→              <div>
+   229→   229→                <CardTitle className="text-amber-900">
+   230→   230→                  ویژگی‌های نمودار
+   231→   231→                </CardTitle>
+   232→   232→                <CardDescription className="text-amber-700">
+   233→   233→                  ابزارهای رسم، اندیکاتورها و انواع نمودار
+   234→   234→                </CardDescription>
+   235→   235→              </div>
+   236→   236→            </div>
+   237→   237→          </CardHeader>
+   238→   238→          <CardContent className="space-y-5">
+   239→   239→            {/* Chart Types */}
+   240→   240→            <div className="space-y-3">
+   241→   241→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   242→   242→                <CandlestickChart className="h-4 w-4" />
+   243→   243→                انواع نمودار
+   244→   244→              </h3>
+   245→   245→              <p className="leading-7 text-gray-700">
+   246→   246→                پلتفرم از انواع مختلف نمودار پشتیبانی می‌کند. با استفاده از منوی
+   247→   247→                انتخاب نوع نمودار، می‌توانید بین نمودارهای زیر جابجا شوید:
+   248→   248→              </p>
+   249→   249→              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+   250→   250→                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+   251→   251→                  <p className="mb-1 font-semibold text-amber-800">
+   252→   252→                    نمودار شمعی (کندل‌استیک)
+   253→   253→                  </p>
+   254→   254→                  <p className="text-sm text-gray-600">
+   255→   255→                    نمایش قیمت باز شدن، بسته شدن، بالاترین و پایین‌ترین قیمت در هر
+   256→   256→                    دوره زمانی
+   257→   257→                  </p>
+   258→   258→                </div>
+   259→   259→                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+   260→   260→                  <p className="mb-1 font-semibold text-amber-800">
+   261→   261→                    نمودار خطی
+   262→   262→                  </p>
+   263→   263→                  <p className="text-sm text-gray-600">
+   264→   264→                    نمایش پیوسته قیمت‌های بسته شدن به‌صورت یک خط منحنی
+   265→   265→                  </p>
+   266→   266→                </div>
+   267→   267→                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+   268→   268→                  <p className="mb-1 font-semibold text-amber-800">
+   269→   269→                    نمودار میله‌ای
+   270→   270→                  </p>
+   271→   271→                  <p className="text-sm text-gray-600">
+   272→   272→                    نمایش محدوده قیمتی هر دوره با میله‌های عمودی
+   273→   273→                  </p>
+   274→   274→                </div>
+   275→   275→                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+   276→   276→                  <p className="mb-1 font-semibold text-amber-800">
+   277→   277→                    نمودار سطحی (Area)
+   278→   278→                  </p>
+   279→   279→                  <p className="text-sm text-gray-600">
+   280→   280→                    نمایش نمودار خطی با پر کردن فضای زیر نمودار
+   281→   281→                  </p>
+   282→   282→                </div>
+   283→   283→              </div>
+   284→   284→            </div>
+   285→   285→
+   286→   286→            {/* Drawing Tools */}
+   287→   287→            <div className="space-y-3">
+   288→   288→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   289→   289→                <PenTool className="h-4 w-4" />
+   290→   290→                ابزارهای رسم
+   291→   291→              </h3>
+   292→   292→              <p className="leading-7 text-gray-700">
+   293→   293→                با استفاده از نوار ابزار رسم، می‌توانید خطوط روند، کانال‌ها،
+   294→   294→                فیبوناچی، سطوح حمایت و مقاومت و سایر ابزارهای تحلیلی را روی
+   295→   295→                نمودار رسم کنید. برای رسم یک ابزار، ابتدا آن را از نوار ابزار
+   296→   296→                انتخاب کرده و سپس روی نمودار کلیک و بکشید. برای حذف ابزار رسم شده،
+   297→   297→                روی آن کلیک راست کرده و گزینه «حذف» را انتخاب کنید.
+   298→   298→              </p>
+   299→   299→            </div>
+   300→   300→
+   301→   301→            {/* Indicators on Chart */}
+   302→   302→            <div className="space-y-3">
+   303→   303→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   304→   304→                <Activity className="h-4 w-4" />
+   305→   305→                اندیکاتورهای نمودار
+   306→   306→              </h3>
+   307→   307→              <p className="leading-7 text-gray-700">
+   308→   308→                می‌توانید اندیکاتورهای مختلفی را به نمودار اصلی یا زیرنمودارها
+   309→   309→                اضافه کنید. با کلیک روی آیکون اندیکاتورها، لیست تمام اندیکاتورهای
+   310→   310→                موجود نمایش داده می‌شود. هر اندیکاتور را می‌توان با تنظیم پارامترها
+   311→   311→                شخصی‌سازی کرد. برای حذف یک اندیکاتور از نمودار، روی نام آن کلیک
+   312→   312→                کرده و گزینه «حذف» را انتخاب نمایید.
+   313→   313→              </p>
+   314→   314→            </div>
+   315→   315→
+   316→   316→            <PlaceholderImage
+   317→   317→              src="/placeholder-help-2.png"
+   318→   318→              alt="نمایش انواع نمودار و ابزارهای رسم روی نمودار تکنیکال"
+   319→   319→            />
+   320→   320→          </CardContent>
+   321→   321→        </Card>
+   322→   322→      </div>
+   323→   323→
+   324→   324→      {/* Section 3: Analysis Panels */}
+   325→   325→      <div id="analysis-panels" className="mb-6 scroll-mt-4">
+   326→   326→        <Card className="border-amber-200">
+   327→   327→          <CardHeader>
+   328→   328→            <div className="flex items-center gap-3">
+   329→   329→              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   330→   330→                <Brain className="h-5 w-5 text-amber-800" />
+   331→   331→              </span>
+   332→   332→              <div>
+   333→   333→                <CardTitle className="text-amber-900">
+   334→   334→                  پنل‌های تحلیلی
+   335→   335→                </CardTitle>
+   336→   336→                <CardDescription className="text-amber-700">
+   337→   337→                  پنل اندیکاتورها، نمودار تصمیم و توصیف‌گر تصویری
+   338→   338→                </CardDescription>
+   339→   339→              </div>
+   340→   340→            </div>
+   341→   341→          </CardHeader>
+   342→   342→          <CardContent className="space-y-5">
+   343→   343→            {/* Indicators Panel */}
+   344→   344→            <div className="space-y-3">
+   345→   345→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   346→   346→                <Gauge className="h-4 w-4" />
+   347→   347→                پنل اندیکاتورها
+   348→   348→              </h3>
+   349→   349→              <p className="leading-7 text-gray-700">
+   350→   350→                این پنل خلاصه‌ای از وضعیت تمام اندیکاتورهای فعال را در یک نگاه
+   351→   351→                نمایش می‌دهد. هر اندیکاتور با یک رنگ مشخص نشان داده می‌شود: سبز
+   352→   352→                برای سیگنال خرید، قرمز برای سیگنال فروش و خاکستری برای حالت خنثی.
+   353→   353→                با قرار دادن نشانگر ماوس روی هر اندیکاتور، جزئیات بیشتر و مقادیر
+   354→   354→                عددی آن نمایش داده می‌شود.
+   355→   355→              </p>
+   356→   356→            </div>
+   357→   357→
+   358→   358→            {/* Decision Graph */}
+   359→   359→            <div className="space-y-3">
+   360→   360→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   361→   361→                <Activity className="h-4 w-4" />
+   362→   362→                نمودار تصمیم (VDSS)
+   363→   363→              </h3>
+   364→   364→              <p className="leading-7 text-gray-700">
+   365→   365→                نمودار تصمیم، تصویر کلی از قدرت و جهت سیگنال‌های تحلیلی را
+   366→   366→                ارائه می‌دهد. این نمودار بر اساس ترکیب سیگنال‌های چندین اندیکاتور
+   367→   367→                ساخته می‌شود و به شما کمک می‌کند تا در یک نگاه بفهمید وضعیت کلی
+   368→   368→                نماد چگونه است. بخش‌های سبز رنگ نشان‌دهنده فشار خرید و بخش‌های
+   369→   369→                قرمز رنگ نشان‌دهنده فشار فروش هستند.
+   370→   370→              </p>
+   371→   371→            </div>
+   372→   372→
+   373→   373→            {/* AI Visual Describer */}
+   374→   374→            <div className="space-y-3">
+   375→   375→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   376→   376→                <Cpu className="h-4 w-4" />
+   377→   377→                توصیف‌گر تصویری (هوش مصنوعی)
+   378→   378→              </h3>
+   379→   379→              <p className="leading-7 text-gray-700">
+   380→   380→                توصیف‌گر تصویری با استفاده از هوش مصنوعی، نمودار تکنیکال را تحلیل
+   381→   381→                کرده و توصیف متنی از الگوها، روندها و نقاط کلیدی ارائه می‌دهد.
+   382→   382→                این ابزار به‌ویژه برای تحلیلگران مبتدی مفید است و می‌تواند نقاط ورود
+   383→   383→                و خروج احتمالی را شناسایی کند. برای استفاده، کافی است روی دکمه
+   384→   384→                «توصیف تصویری» کلیک کنید و منتظر بمانید تا تحلیل هوش مصنوعی تولید
+   385→   385→                شود.
+   386→   386→              </p>
+   387→   387→            </div>
+   388→   388→
+   389→   389→            <PlaceholderImage
+   390→   390→              src="/placeholder-help-3.png"
+   391→   391→              alt="نمایش پنل‌های تحلیلی شامل اندیکاتورها، نمودار تصمیم و توصیف‌گر تصویری"
+   392→   392→            />
+   393→   393→          </CardContent>
+   394→   394→        </Card>
+   395→   395→      </div>
+   396→   396→
+   397→   397→      {/* Section 4: Understanding Indicators */}
+   398→   398→      <div id="indicators" className="mb-6 scroll-mt-4">
+   399→   399→        <Card className="border-amber-200">
+   400→   400→          <CardHeader>
+   401→   401→            <div className="flex items-center gap-3">
+   402→   402→              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   403→   403→                <BarChart3 className="h-5 w-5 text-amber-800" />
+   404→   404→              </span>
+   405→   405→              <div>
+   406→   406→                <CardTitle className="text-amber-900">
+   407→   407→                  آشنایی با اندیکاتورها
+   408→   408→                </CardTitle>
+   409→   409→                <CardDescription className="text-amber-700">
+   410→   410→                  توضیح اندیکاتورهای کلیدی و نحوه تفسیر آنها
+   411→   411→                </CardDescription>
+   412→   412→              </div>
+   413→   413→            </div>
+   414→   414→          </CardHeader>
+   415→   415→          <CardContent className="space-y-4">
+   416→   416→            <p className="leading-7 text-gray-700">
+   417→   417→              در این بخش، مهم‌ترین اندیکاتورهای مورد استفاده در پلتفرم معرفی و
+   418→   418→              نحوه تفسیر آنها توضیح داده شده است.
+   419→   419→            </p>
+   420→   420→
+   421→   421→            {/* RSI */}
+   422→   422→            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+   423→   423→              <h4 className="mb-2 flex items-center gap-2 font-bold text-amber-900">
+   424→   424→                <Zap className="h-4 w-4" />
+   425→   425→                شاخص قدرت نسبی (RSI)
+   426→   426→              </h4>
+   427→   427→              <p className="mb-2 leading-7 text-gray-700">
+   428→   428→                شاخص قدرت نسبی یک نوسان‌نما (اکسیلاتور) است که سرعت و تغییرات
+   429→   429→                حرکات قیمت را اندازه‌گیری می‌کند. مقدار RSI بین صفر تا صد متغیر است.
+   430→   430→              </p>
+   431→   431→              <ul className="mr-6 list-disc space-y-1 text-gray-600">
+   432→   432→                <li>
+   433→   433→                  <strong>RSI بالای ۷۰:</strong> منطقه اشباع خرید – احتمال اصلاح
+   434→   434→                  قیمت
+   435→   435→                </li>
+   436→   436→                <li>
+   437→   437→                  <strong>RSI زیر ۳۰:</strong> منطقه اشباع فروش – احتمال بازگشت
+   438→   438→                  قیمت
+   439→   439→                </li>
+   440→   440→                <li>
+   441→   441→                  <strong>خط میانی ۵۰:</strong> تقسیم‌کننده روند صعودی و نزولی
+   442→   442→                </li>
+   443→   443→              </ul>
+   444→   444→            </div>
+   445→   445→
+   446→   446→            {/* MACD */}
+   447→   447→            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+   448→   448→              <h4 className="mb-2 flex items-center gap-2 font-bold text-amber-900">
+   449→   449→                <TrendingUp className="h-4 w-4" />
+   450→   450→                میانگین متحرک همگرا-واگرا (MACD)
+   451→   451→              </h4>
+   452→   452→              <p className="mb-2 leading-7 text-gray-700">
+   453→   453→                MACD یکی از محبوب‌ترین اندیکاتورهای دنباله‌رو روند است و از سه
+   454→   454→                component تشکیل شده: خط MACD، خط سیگنال و هیستوگرام.
+   455→   455→              </p>
+   456→   456→              <ul className="mr-6 list-disc space-y-1 text-gray-600">
+   457→   457→                <li>
+   458→   458→                  <strong>تقاطع صعودی:</strong> وقتی خط MACD خط سیگنال را به سمت
+   459→   459→                  بالا بشکند – سیگنال خرید
+   460→   460→                </li>
+   461→   461→                <li>
+   462→   462→                  <strong>تقاطع نزولی:</strong> وقتی خط MACD خط سیگنال را به سمت
+   463→   463→                  پایین بشکند – سیگنال فروش
+   464→   464→                </li>
+   465→   465→                <li>
+   466→   466→                  <strong>هیستوگرام:</strong> فاصله بین خط MACD و خط سیگنال را
+   467→   467→                  نشان می‌دهد
+   468→   468→                </li>
+   469→   469→              </ul>
+   470→   470→            </div>
+   471→   471→
+   472→   472→            {/* Bollinger Bands */}
+   473→   473→            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+   474→   474→              <h4 className="mb-2 flex items-center gap-2 font-bold text-amber-900">
+   475→   475→                <ArrowUpDown className="h-4 w-4" />
+   476→   476→                باندهای بولینگر (Bollinger Bands)
+   477→   477→              </h4>
+   478→   478→              <p className="mb-2 leading-7 text-gray-700">
+   479→   479→                باندهای بولینگر از سه خط تشکیل شده: باند بالایی، باند پایینی و
+   480→   480→                خط میانی (میانگین متحرک ۲۰ دوره‌ای). عرض باندها نشان‌دهنده نوسان‌پذیری
+   481→   481→                بازار است.
+   482→   482→              </p>
+   483→   483→              <ul className="mr-6 list-disc space-y-1 text-gray-600">
+   484→   484→                <li>
+   485→   485→                  <strong>تماس با باند بالایی:</strong> قیمت نسبتاً بالاست –
+   486→   486→                  احتمال نزدیک بودن به مقاومت
+   487→   487→                </li>
+   488→   488→                <li>
+   489→   489→                  <strong>تماس با باند پایینی:</strong> قیمت نسبتاً پایین است –
+   490→   490→                  احتمال نزدیک بودن به حمایت
+   491→   491→                </li>
+   492→   492→                <li>
+   493→   493→                  <strong>باریک شدن باندها:</strong> نشانه کاهش نوسان و احتمال
+   494→   494→                  حرکت شارپ قیمت در آینده نزدیک
+   495→   495→                </li>
+   496→   496→              </ul>
+   497→   497→            </div>
+   498→   498→
+   499→   499→            {/* ADX */}
+   500→   500→            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+   501→   501→              <h4 className="mb-2 flex items-center gap-2 font-bold text-amber-900">
+   502→   502→                <Activity className="h-4 w-4" />
+   503→   503→                شاخص میانگین جهت‌دار (ADX)
+   504→   504→              </h4>
+   505→   505→              <p className="mb-2 leading-7 text-gray-700">
+   506→   506→                ADX قدرت روند را بدون توجه به جهت آن اندازه‌گیری می‌کند. مقدار
+   507→   507→                آن بین صفر تا صد متغیر است.
+   508→   508→              </p>
+   509→   509→              <ul className="mr-6 list-disc space-y-1 text-gray-600">
+   510→   510→                <li>
+   511→   511→                  <strong>ADX بالای ۲۵:</strong> وجود یک روند قوی (صعودی یا نزولی)
+   512→   512→                </li>
+   513→   513→                <li>
+   514→   514→                  <strong>ADX زیر ۲۰:</strong> بازار فاقد روند مشخص است یا در حال
+   515→   515→                  رنج زدن است
+   516→   516→                </li>
+   517→   517→                <li>
+   518→   518→                  <strong>خط +DI و -DI:</strong> جهت روند را مشخص می‌کنند؛ تقاطع
+   519→   519→                  آنها سیگنال تغییر جهت است
+   520→   520→                </li>
+   521→   521→              </ul>
+   522→   522→            </div>
+   523→   523→
+   524→   524→            <PlaceholderImage
+   525→   525→              src="/placeholder-help-4.png"
+   526→   526→              alt="نمایش اندیکاتورهای RSI، MACD، باندهای بولینگر و ADX روی نمودار"
+   527→   527→            />
+   528→   528→          </CardContent>
+   529→   529→        </Card>
+   530→   530→      </div>
+   531→   531→
+   532→   532→      {/* Section 5: Scenario Analysis */}
+   533→   533→      <div id="scenario-analysis" className="mb-6 scroll-mt-4">
+   534→   534→        <Card className="border-amber-200">
+   535→   535→          <CardHeader>
+   536→   536→            <div className="flex items-center gap-3">
+   537→   537→              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   538→   538→                <Target className="h-5 w-5 text-amber-800" />
+   539→   539→              </span>
+   540→   540→              <div>
+   541→   541→                <CardTitle className="text-amber-900">
+   542→   542→                  تحلیل سناریوها
+   543→   543→                </CardTitle>
+   544→   544→                <CardDescription className="text-amber-700">
+   545→   545→                  نحوه خواندن و تفسیر ۵ سناریوی احتمالی
+   546→   546→                </CardDescription>
+   547→   547→              </div>
+   548→   548→            </div>
+   549→   549→          </CardHeader>
+   550→   550→          <CardContent className="space-y-5">
+   551→   551→            <p className="leading-7 text-gray-700">
+   552→   552→              سیستم تحلیل سناریو، بر اساس بررسی همزمان تمام اندیکاتورها و الگوهای
+   553→   553→              نموداری، ۵ سناریوی احتمالی برای آینده قیمت ارائه می‌دهد. هر سناریو
+   554→   554→              همراه با درصد احتمال وقوع است.
+   555→   555→            </p>
+   556→   556→
+   557→   557→            <div className="space-y-3">
+   558→   558→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   559→   559→                <CircleDot className="h-4 w-4" />
+   560→   560→                انواع سناریوها
+   561→   561→              </h3>
+   562→   562→              <div className="space-y-3">
+   563→   563→                <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
+   564→   564→                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-xs font-bold text-white">
+   565→   565→                    ۱
+   566→   566→                  </div>
+   567→   567→                  <div>
+   568→   568→                    <p className="font-semibold text-green-800">صعودی قوی</p>
+   569→   569→                    <p className="text-sm text-green-700">
+   570→   570→                      اکثر اندیکاتورها سیگنال خرید صادر کرده‌اند. احتمال ادامه روند
+   571→   571→                      صعودی بالا است. مناسب برای موقعیت‌های خرید.
+   572→   572→                    </p>
+   573→   573→                  </div>
+   574→   574→                </div>
+   575→   575→
+   576→   576→                <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+   577→   577→                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-xs font-bold text-white">
+   578→   578→                    ۲
+   579→   579→                  </div>
+   580→   580→                  <div>
+   581→   581→                    <p className="font-semibold text-emerald-800">صعودی ضعیف</p>
+   582→   582→                    <p className="text-sm text-emerald-700">
+   583→   583→                      بخشی از اندیکاتورها سیگنال خرید و بخشی خنثی هستند. روند
+   584→   584→                      صعودی احتمالی اما با قدرت کمتر.
+   585→   585→                    </p>
+   586→   586→                  </div>
+   587→   587→                </div>
+   588→   588→
+   589→   589→                <div className="flex items-start gap-3 rounded-lg border border-gray-300 bg-gray-50 p-3">
+   590→   590→                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-400 text-xs font-bold text-white">
+   591→   591→                    ۳
+   592→   592→                  </div>
+   593→   593→                  <div>
+   594→   594→                    <p className="font-semibold text-gray-700">خنثی</p>
+   595→   595→                    <p className="text-sm text-gray-600">
+   596→   596→                      سیگنال‌های متناقض وجود دارد. بازار در حالت تردید است و
+   597→   597→                      توصیه می‌شود تا روشن‌شدن جهت بازار، از معامله خودداری کنید.
+   598→   598→                    </p>
+   599→   599→                  </div>
+   600→   600→                </div>
+   601→   601→
+   602→   602→                <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
+   603→   603→                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-400 text-xs font-bold text-white">
+   604→   604→                    ۴
+   605→   605→                  </div>
+   606→   606→                  <div>
+   607→   607→                    <p className="font-semibold text-orange-800">نزولی ضعیف</p>
+   608→   608→                    <p className="text-sm text-orange-700">
+   609→   609→                      بخشی از اندیکاتورها سیگنال فروش صادر کرده‌اند. احتمال اصلاح
+   610→   610→                      قیمت وجود دارد اما روند نزولی قاطع نیست.
+   611→   611→                    </p>
+   612→   612→                  </div>
+   613→   613→                </div>
+   614→   614→
+   615→   615→                <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+   616→   616→                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+   617→   617→                    ۵
+   618→   618→                  </div>
+   619→   619→                  <div>
+   620→   620→                    <p className="font-semibold text-red-800">نزولی قوی</p>
+   621→   621→                    <p className="text-sm text-red-700">
+   622→   622→                      اکثر اندیکاتورها سیگنال فروش صادر کرده‌اند. احتمال ادامه روند
+   623→   623→                      نزولی بالاست. مناسب برای خروج از موقعیت‌ها یا فروش استقراضی.
+   624→   624→                    </p>
+   625→   625→                  </div>
+   626→   626→                </div>
+   627→   627→              </div>
+   628→   628→            </div>
+   629→   629→
+   630→   630→            <div className="space-y-3">
+   631→   631→              <h3 className="flex items-center gap-2 text-base font-semibold text-amber-800">
+   632→   632→                <Lightbulb className="h-4 w-4" />
+   633→   633→                نکات مهم درباره احتمالات
+   634→   634→              </h3>
+   635→   635→              <ul className="mr-6 list-disc space-y-2 text-gray-700">
+   636→   636→                <li>
+   637→   637→                  مجموع احتمالات ۵ سناریو همیشه ۱۰۰ درصد است.
+   638→   638→                </li>
+   639→   639→                <li>
+   640→   640→                  سناریویی با بالاترین احتمال، محتمل‌ترین جهت آینده بازار را نشان
+   641→   641→                  می‌دهد.
+   642→   642→                </li>
+   643→   643→                <li>
+   644→   644→                  سناریوها بر اساس داده‌های تاریخی محاسبه می‌شوند و تضمینی برای
+   645→   645→                  آینده نیستند.
+   646→   646→                </li>
+   647→   647→                <li>
+   648→   648→                  همیشه از مدیریت ریسک استفاده کنید و بیش از مبلغ قابل تحمل
+   649→   649→                  معامله نکنید.
+   650→   650→                </li>
+   651→   651→              </ul>
+   652→   652→            </div>
+   653→   653→
+   654→   654→            <PlaceholderImage
+   655→   655→              src="/placeholder-help-5.png"
+   656→   656→              alt="نمایش ۵ سناریوی تحلیلی با درصدهای احتمال برای یک نماد بورسی"
+   657→   657→            />
+   658→   658→          </CardContent>
+   659→   659→        </Card>
+   660→   660→      </div>
+   661→   661→
+   662→   662→      {/* Section 6: Export Options */}
+   663→   663→      <div id="export-options" className="mb-6 scroll-mt-4">
+   664→   664→        <Card className="border-amber-200">
+   665→   665→          <CardHeader>
+   666→   666→            <div className="flex items-center gap-3">
+   667→   667→              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+   668→   668→                <Download className="h-5 w-5 text-amber-800" />
+   669→   669→              </span>
+   670→   670→              <div>
+   671→   671→                <CardTitle className="text-amber-900">
+   672→   672→                  گزینه‌های خروجی
+   673→   673→                </CardTitle>
+   674→   674→                <CardDescription className="text-amber-700">
+   675→   675→                  دانلود و ذخیره تحلیل‌ها در قالب‌های مختلف
+   676→   676→                </CardDescription>
+   677→   677→              </div>
+   678→   678→            </div>
+   679→   679→          </CardHeader>
+   680→   680→          <CardContent className="space-y-5">
+   681→   681→            <p className="leading-7 text-gray-700">
+   682→   682→              شما می‌توانید نتایج تحلیل خود را در قالب‌های مختلف دانلود و ذخیره
+   683→   683→              کنید. برای این کار، از دکمه خروجی در نوار ابزار بالا استفاده کنید و
+   684→   684→              فرمت مورد نظر را انتخاب نمایید.
+   685→   685→            </p>
+   686→   686→
+   687→   687→            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   688→   688→              {/* PDF */}
+   689→   689→              <div className="rounded-lg border border-amber-200 bg-white p-4 transition-shadow hover:shadow-md">
+   690→   690→                <div className="mb-3 flex items-center gap-3">
+   691→   691→                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
+   692→   692→                    <FileText className="h-5 w-5 text-red-600" />
+   693→   693→                  </div>
+   694→   694→                  <div>
+   695→   695→                    <p className="font-bold text-amber-900">فرمت PDF</p>
+   696→   696→                    <p className="text-xs text-gray-500">گزارش تحلیلی</p>
+   697→   697→                  </div>
+   698→   698→                </div>
+   699→   699→                <p className="text-sm leading-6 text-gray-600">
+   700→   700→                  خروجی PDF شامل نمودارها، اندیکاتورها، سناریوها و توضیحات تحلیلی
+   701→   701→                  است. مناسب برای چاپ و اشتراک‌گذاری.
+   702→   702→                </p>
+   703→   703→              </div>
+   704→   704→
+   705→   705→              {/* Excel */}
+   706→   706→              <div className="rounded-lg border border-amber-200 bg-white p-4 transition-shadow hover:shadow-md">
+   707→   707→                <div className="mb-3 flex items-center gap-3">
+   708→   708→                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
+   709→   709→                    <Table className="h-5 w-5 text-green-600" />
+   710→   710→                  </div>
+   711→   711→                  <div>
+   712→   712→                    <p className="font-bold text-amber-900">فرمت Excel</p>
+   713→   713→                    <p className="text-xs text-gray-500">داده‌های جدولی</p>
+   714→   714→                  </div>
+   715→   715→                </div>
+   716→   716→                <p className="text-sm leading-6 text-gray-600">
+   717→   717→                  داده‌های عددی اندیکاتورها و قیمت‌ها در قالب فایل اکسل قابل
+   718→   718→                  دانلود است. مناسب برای تحلیل‌های بیشتر و ایجاد نمودارهای سفارشی.
+   719→   719→                </p>
+   720→   720→              </div>
+   721→   721→
+   722→   722→              {/* CSV */}
+   723→   723→              <div className="rounded-lg border border-amber-200 bg-white p-4 transition-shadow hover:shadow-md">
+   724→   724→                <div className="mb-3 flex items-center gap-3">
+   725→   725→                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
+   726→   726→                    <FileText className="h-5 w-5 text-blue-600" />
+   727→   727→                  </div>
+   728→   728→                  <div>
+   729→   729→                    <p className="font-bold text-amber-900">فرمت CSV</p>
+   730→   730→                    <p className="text-xs text-gray-500">داده‌های خام</p>
+   731→   731→                  </div>
+   732→   732→                </div>
+   733→   733→                <p className="text-sm leading-6 text-gray-600">
+   734→   734→                  داده‌های خام قیمتی و اندیکاتوری در قالب CSV قابل دریافت است.
+   735→   735→                  مناسب برای وارد کردن در نرم‌افزارهای تحلیلی دیگر.
+   736→   736→                </p>
+   737→   737→              </div>
+   738→   738→
+   739→   739→              {/* Image */}
+   740→   740→              <div className="rounded-lg border border-amber-200 bg-white p-4 transition-shadow hover:shadow-md">
+   741→   741→                <div className="mb-3 flex items-center gap-3">
+   742→   742→                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
+   743→   743→                    <Image className="h-5 w-5 text-purple-600" role="img" aria-label="آیکون تصویر" />
+   744→   744→                  </div>
+   745→   745→                  <div>
+   746→   746→                    <p className="font-bold text-amber-900">فرمت تصویر</p>
+   747→   747→                    <p className="text-xs text-gray-500">PNG / JPG</p>
+   748→   748→                  </div>
+   749→   749→                </div>
+   750→   750→                <p className="text-sm leading-6 text-gray-600">
+   751→   751→                  نمودار فعلی با تمام اندیکاتورها و ابزارهای رسم شده، به‌صورت تصویر
+   752→   752→                  با کیفیت بالا ذخیره می‌شود.
+   753→   753→                </p>
+   754→   754→              </div>
+   755→   755→
+   756→   756→              {/* HTML */}
+   757→   757→              <div className="rounded-lg border border-amber-200 bg-white p-4 transition-shadow hover:shadow-md">
+   758→   758→                <div className="mb-3 flex items-center gap-3">
+   759→   759→                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100">
+   760→   760→                    <Code className="h-5 w-5 text-orange-600" />
+   761→   761→                  </div>
+   762→   762→                  <div>
+   763→   763→                    <p className="font-bold text-amber-900">فرمت HTML</p>
+   764→   764→                    <p className="text-xs text-gray-500">صفحه وب</p>
+   765→   765→                  </div>
+   766→   766→                </div>
+   767→   767→                <p className="text-sm leading-6 text-gray-600">
+   768→   768→                  گزارش کامل تحلیل در قالب یک صفحه وب مستقل تولید می‌شود که می‌توانید
+   769→   769→                  آن را در مرورگر باز کرده یا در وب‌سایت خود منتشر کنید.
+   770→   770→                </p>
+   771→   771→              </div>
+   772→   772→            </div>
+   773→   773→
+   774→   774→            <PlaceholderImage
+   775→   775→              src="/placeholder-help-6.png"
+   776→   776→              alt="نمایش منوی خروجی و فرمت‌های مختلف دانلود گزارش تحلیلی"
+   777→   777→            />
+   778→   778→          </CardContent>
+   779→   779→        </Card>
+   780→   780→      </div>
+   781→   781→
+   782→   782→      {/* Footer */}
+   783→   783→      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 px-6 py-4 text-center">
+   784→   784→        <p className="text-sm text-amber-800">
+   785→   785→          برای سوالات بیشتر و پشتیبانی، با ما تماس بگیرید.
+   786→   786→        </p>
+   787→   787→        <p className="mt-1 text-xs text-amber-600">
+   788→   788→          تحلیل تکنیکال بازار – نسخه {new Date().getFullYear()}
+   789→   789→        </p>
+   790→   790→      </div>
+   791→   791→    </div>
+   792→   792→  );
+   793→   793→}
+   794→   794→

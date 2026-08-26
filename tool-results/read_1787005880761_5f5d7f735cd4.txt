@@ -1,0 +1,778 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useRef, useEffect, useCallback, useState } from 'react';
+     4→     4→import {
+     5→     5→  createChart,
+     6→     6→  CandlestickSeries,
+     7→     7→  LineSeries,
+     8→     8→  HistogramSeries,
+     9→     9→  ColorType,
+    10→    10→  CrosshairMode,
+    11→    11→  type IChartApi,
+    12→    12→  type Time,
+    13→    13→  TickMarkType,
+    14→    14→} from 'lightweight-charts';
+    15→    15→import type { Time as LwTime } from 'lightweight-charts';
+    16→    16→import { shamsiTickFormatter, toPersianDigits } from '@/lib/jalali';
+    17→    17→import {
+    18→    18→  MousePointer2,
+    19→    19→  Minus,
+    20→    20→  ArrowLeftRight,
+    21→    21→  MoveVertical,
+    22→    22→  Layers,
+    23→    23→  RectangleHorizontal,
+    24→    24→  Type,
+    25→    25→  Pencil,
+    26→    26→  Ruler,
+    27→    27→  ArrowUpRight,
+    28→    28→  Trash2,
+    29→    29→  X,
+    30→    30→} from 'lucide-react';
+    31→    31→
+    32→    32→/* ────────────────────────────────────────────────────────── TYPES ────────── */
+    33→    33→
+    34→    34→interface DrawingPoint {
+    35→    35→  time: LwTime;
+    36→    36→  price: number;
+    37→    37→}
+    38→    38→
+    39→    39→interface Drawing {
+    40→    40→  id: string;
+    41→    41→  type: string;
+    42→    42→  points: DrawingPoint[];
+    43→    43→  color: string;
+    44→    44→  lineWidth: number;
+    45→    45→  text?: string;
+    46→    46→  completed: boolean;
+    47→    47→}
+    48→    48→
+    49→    49→interface LevelStrength {
+    50→    50→  price: number;
+    51→    51→  strength: number;
+    52→    52→  isTarget: boolean;
+    53→    53→}
+    54→    54→
+    55→    55→interface CandlestickChartProps {
+    56→    56→  data: Array<{
+    57→    57→    date: string;
+    58→    58→    open: number;
+    59→    59→    high: number;
+    60→    60→    low: number;
+    61→    61→    close: number;
+    62→    62→    volume: number;
+    63→    63→  }>;
+    64→    64→  ta: {
+    65→    65→    sma: Record<string, number>;
+    66→    66→    bollingerBands: { upper: number; middle: number; lower: number };
+    67→    67→    resistances: number[];
+    68→    68→    supports: number[];
+    69→    69→    supportStrengths: LevelStrength[];
+    70→    70→    resistanceStrengths: LevelStrength[];
+    71→    71→    sar: number;
+    72→    72→  } | null;
+    73→    73→  height?: number;
+    74→    74→}
+    75→    75→
+    76→    76→/* ────────────────────────────────────────────────────────── CONSTANTS ──── */
+    77→    77→
+    78→    78→const BULL = '#34c98b';
+    79→    79→const BEAR = '#ef4d62';
+    80→    80→const BG = '#0b0f1a';
+    81→    81→const TXT = '#9db4c2';
+    82→    82→const GRID = 'rgba(255,255,255,0.04)';
+    83→    83→const TOOLBAR_BG = '#111827';
+    84→    84→const TOOLBAR_BORDER = 'rgba(255,255,255,0.08)';
+    85→    85→
+    86→    86→const PALETTE = ['#34c98b', '#ef4d62', '#ffb11b', '#3ad5db', '#a04ac5', '#ffffff'];
+    87→    87→
+    88→    88→const SMA_CFG = [
+    89→    89→  { key: 'sma21', color: '#3ad5db', title: 'SMA 21' },
+    90→    90→  { key: 'sma50', color: '#ffb11b', title: 'SMA 50' },
+    91→    91→  { key: 'sma100', color: '#ff7b32', title: 'SMA 100' },
+    92→    92→];
+    93→    93→
+    94→    94→const FIB_LEVELS = [
+    95→    95→  { pct: 0, label: '0%' },
+    96→    96→  { pct: 0.236, label: '23.6%' },
+    97→    97→  { pct: 0.382, label: '38.2%' },
+    98→    98→  { pct: 0.5, label: '50%' },
+    99→    99→  { pct: 0.618, label: '61.8%' },
+   100→   100→  { pct: 0.786, label: '78.6%' },
+   101→   101→  { pct: 1, label: '100%' },
+   102→   102→];
+   103→   103→
+   104→   104→type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'fibonacci' | 'rectangle' | 'text' | 'brush' | 'measure' | 'arrow';
+   105→   105→
+   106→   106→interface ToolDef {
+   107→   107→  id: ToolType;
+   108→   108→  label: string;
+   109→   109→  icon: React.ReactNode;
+   110→   110→}
+   111→   111→
+   112→   112→const TOOLS: ToolDef[] = [
+   113→   113→  { id: 'cursor', label: 'مؤشر', icon: <MousePointer2 className="w-3.5 h-3.5" /> },
+   114→   114→  { id: 'trendline', label: 'خط روند', icon: <Minus className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+   115→   115→  { id: 'hline', label: 'خط افقی', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+   116→   116→  { id: 'vline', label: 'خط عمودی', icon: <MoveVertical className="w-3.5 h-3.5" /> },
+   117→   117→  { id: 'fibonacci', label: 'فیبوناچی', icon: <Layers className="w-3.5 h-3.5" /> },
+   118→   118→  { id: 'rectangle', label: 'مستطیل', icon: <RectangleHorizontal className="w-3.5 h-3.5" /> },
+   119→   119→  { id: 'text', label: 'متن', icon: <Type className="w-3.5 h-3.5" /> },
+   120→   120→  { id: 'brush', label: 'قلم', icon: <Pencil className="w-3.5 h-3.5" /> },
+   121→   121→  { id: 'measure', label: 'اندازه‌گیری', icon: <Ruler className="w-3.5 h-3.5" /> },
+   122→   122→  { id: 'arrow', label: 'پیکان', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
+   123→   123→];
+   124→   124→
+   125→   125→/* ────────────────────────────────────────────────────────── SKELETON ─────── */
+   126→   126→
+   127→   127→export function CandlestickChartSkeleton() {
+   128→   128→  return (
+   129→   129→    <div className="w-full">
+   130→   130→      <div className="h-10 bg-white/5 rounded-t-lg" />
+   131→   131→      <div className="w-full bg-white/5 rounded-b-lg" style={{ height: 520 }} />
+   132→   132→    </div>
+   133→   133→  );
+   134→   134→}
+   135→   135→
+   136→   136→/* ────────────────────────────────────────────────────────── COMPONENT ───── */
+   137→   137→
+   138→   138→export default function CandlestickChart({ data, ta, height = 520 }: CandlestickChartProps) {
+   139→   139→  const chartContainerRef = useRef<HTMLDivElement>(null);
+   140→   140→  const svgRef = useRef<SVGSVGElement>(null);
+   141→   141→  const chartRef = useRef<IChartApi | null>(null);
+   142→   142→  const subscriberRef = useRef<{ dispose: () => void } | null>(null);
+   143→   143→
+   144→   144→  const [drawings, setDrawings] = useState<Drawing[]>([]);
+   145→   145→  const [activeTool, setActiveTool] = useState<ToolType>('cursor');
+   146→   146→  const [activeColor, setActiveColor] = useState(PALETTE[0]);
+   147→   147→  const [isDrawing, setIsDrawing] = useState(false);
+   148→   148→  const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
+   149→   149→  const [textInput, setTextInput] = useState<{ x: number; y: number; drawingId: string } | null>(null);
+   150→   150→  const [textValue, setTextValue] = useState('');
+   151→   151→  const [renderKey, setRenderKey] = useState(0);
+   152→   152→  const [chartSize, setChartSize] = useState({ w: 0, h: 0 });
+   153→   153→
+   154→   154→  /* ── Helper: coordinate conversion ─────────────────────────── */
+   155→   155→  const getChartPoint = useCallback((clientX: number, clientY: number): DrawingPoint | null => {
+   156→   156→    const chart = chartRef.current;
+   157→   157→    const container = chartContainerRef.current;
+   158→   158→    if (!chart || !container) return null;
+   159→   159→    const rect = container.getBoundingClientRect();
+   160→   160→    const x = clientX - rect.left;
+   161→   161→    const y = clientY - rect.top;
+   162→   162→    const price = chart.priceScale('right').coordinateToPrice(y);
+   163→   163→    const time = chart.timeScale().coordinateToTime(x);
+   164→   164→    if (price === null || time === null) return null;
+   165→   165→    return { time, price };
+   166→   166→  }, []);
+   167→   167→
+   168→   168→  /* ── SVG Rendering ────────────────────────────────────────── */
+   169→   169→  const renderDrawings = useCallback(() => {
+   170→   170→    const chart = chartRef.current;
+   171→   171→    const svg = svgRef.current;
+   172→   172→    const container = chartContainerRef.current;
+   173→   173→    if (!chart || !svg || !container || drawings.length === 0) {
+   174→   174→      if (svg) svg.innerHTML = '';
+   175→   175→      return;
+   176→   176→    }
+   177→   177→
+   178→   178→    const rect = container.getBoundingClientRect();
+   179→   179→    const w = rect.width;
+   180→   180→    const h = rect.height;
+   181→   181→    if (w === 0 || h === 0) return;
+   182→   182→
+   183→   183→    let html = '';
+   184→   184→
+   185→   185→    // Defs for arrow markers
+   186→   186→    html += `<defs>`;
+   187→   187→    PALETTE.forEach((c, i) => {
+   188→   188→      html += `<marker id="arrow-${c.replace('#','')}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="${c}" /></marker>`;
+   189→   189→    });
+   190→   190→    html += `</defs>`;
+   191→   191→
+   192→   192→    const allDrawings = [...drawings];
+   193→   193→    if (currentDrawing) allDrawings.push(currentDrawing);
+   194→   194→
+   195→   195→    for (const d of allDrawings) {
+   196→   196→      if (!d.completed && d.points.length === 0) continue;
+   197→   197→      const col = d.color;
+   198→   198→      const lw = d.lineWidth;
+   199→   199→
+   200→   200→      switch (d.type) {
+   201→   201→        case 'trendline': {
+   202→   202→          if (d.points.length < 1) break;
+   203→   203→          const p0 = d.points[0];
+   204→   204→          const p1 = d.points.length > 1 ? d.points[d.points.length - 1] : p0;
+   205→   205→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   206→   206→          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+   207→   207→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   208→   208→          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+   209→   209→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   210→   210→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" />`;
+   211→   211→          break;
+   212→   212→        }
+   213→   213→        case 'hline': {
+   214→   214→          if (d.points.length < 1) break;
+   215→   215→          const p = d.points[0];
+   216→   216→          const y = chart.priceScale('right').priceToCoordinate(p.price);
+   217→   217→          if (y == null) break;
+   218→   218→          html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   219→   219→          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="sans-serif">${p.price.toFixed(0)}</text>`;
+   220→   220→          break;
+   221→   221→        }
+   222→   222→        case 'vline': {
+   223→   223→          if (d.points.length < 1) break;
+   224→   224→          const p = d.points[0];
+   225→   225→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   226→   226→          if (x == null) break;
+   227→   227→          html += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   228→   228→          break;
+   229→   229→        }
+   230→   230→        case 'fibonacci': {
+   231→   231→          if (d.points.length < 2) break;
+   232→   232→          const p0 = d.points[0];
+   233→   233→          const p1 = d.points[1];
+   234→   234→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   235→   235→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   236→   236→          if (x0 == null || x1 == null) break;
+   237→   237→          const priceHigh = Math.max(p0.price, p1.price);
+   238→   238→          const priceLow = Math.min(p0.price, p1.price);
+   239→   239→          const priceRange = priceHigh - priceLow;
+   240→   240→          if (priceRange === 0) break;
+   241→   241→
+   242→   242→          // Filled background
+   243→   243→          const yTop = chart.priceScale('right').priceToCoordinate(priceHigh);
+   244→   244→          const yBottom = chart.priceScale('right').priceToCoordinate(priceLow);
+   245→   245→          if (yTop == null || yBottom == null) break;
+   246→   246→          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBottom - yTop}" fill="${col}" opacity="0.04" />`;
+   247→   247→
+   248→   248→          for (const level of FIB_LEVELS) {
+   249→   249→            const price = priceHigh - level.pct * priceRange;
+   250→   250→            const y = chart.priceScale('right').priceToCoordinate(price);
+   251→   251→            if (y == null) continue;
+   252→   252→            html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
+   253→   253→            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="#0b0f1a" rx="2" />`;
+   254→   254→            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="sans-serif">${level.label} ${price.toFixed(0)}</text>`;
+   255→   255→          }
+   256→   256→          break;
+   257→   257→        }
+   258→   258→        case 'rectangle': {
+   259→   259→          if (d.points.length < 2) break;
+   260→   260→          const p0 = d.points[0];
+   261→   261→          const p1 = d.points[d.points.length - 1];
+   262→   262→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   263→   263→          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+   264→   264→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   265→   265→          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+   266→   266→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   267→   267→          const rx = Math.min(x0, x1);
+   268→   268→          const ry = Math.min(y0, y1);
+   269→   269→          const rw = Math.abs(x1 - x0);
+   270→   270→          const rh = Math.abs(y1 - y0);
+   271→   271→          html += `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${col}" fill-opacity="0.08" stroke="${col}" stroke-width="${lw}" rx="2" />`;
+   272→   272→          break;
+   273→   273→        }
+   274→   274→        case 'text': {
+   275→   275→          if (d.points.length < 1 || !d.text) break;
+   276→   276→          const p = d.points[0];
+   277→   277→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   278→   278→          const y = chart.priceScale('right').priceToCoordinate(p.price);
+   279→   279→          if (x == null || y == null) break;
+   280→   280→          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="#0b0f1a" stroke="${col}" stroke-width="1" rx="3" />`;
+   281→   281→          html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="sans-serif">${d.text}</text>`;
+   282→   282→          break;
+   283→   283→        }
+   284→   284→        case 'brush': {
+   285→   285→          if (d.points.length < 2) break;
+   286→   286→          let pts = '';
+   287→   287→          let valid = true;
+   288→   288→          for (const p of d.points) {
+   289→   289→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   290→   290→            const y = chart.priceScale('right').priceToCoordinate(p.price);
+   291→   291→            if (x == null || y == null) { valid = false; break; }
+   292→   292→            pts += `${x},${y} `;
+   293→   293→          }
+   294→   294→          if (!valid || pts.length === 0) break;
+   295→   295→          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+   296→   296→          break;
+   297→   297→        }
+   298→   298→        case 'measure': {
+   299→   299→          if (d.points.length < 2) break;
+   300→   300→          const p0 = d.points[0];
+   301→   301→          const p1 = d.points[d.points.length - 1];
+   302→   302→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   303→   303→          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+   304→   304→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   305→   305→          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+   306→   306→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   307→   307→
+   308→   308→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   309→   309→          // Price difference
+   310→   310→          const diff = p1.price - p0.price;
+   311→   311→          const pctChg = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+   312→   312→          const bars = Math.abs(typeof p1.time === 'number' && typeof p0.time === 'number' ? Math.round(p1.time - p0.time) : 0);
+   313→   313→          const midX = (x0 + x1) / 2;
+   314→   314→          const midY = (y0 + y1) / 2;
+   315→   315→          const label = `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} (${pctChg >= 0 ? '+' : ''}${pctChg.toFixed(1)}%) ${bars}bar`;
+   316→   316→          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="#0b0f1a" stroke="${col}" stroke-width="1" rx="3" />`;
+   317→   317→          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="sans-serif">${label}</text>`;
+   318→   318→          break;
+   319→   319→        }
+   320→   320→        case 'arrow': {
+   321→   321→          if (d.points.length < 2) break;
+   322→   322→          const p0 = d.points[0];
+   323→   323→          const p1 = d.points[d.points.length - 1];
+   324→   324→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   325→   325→          const y0 = chart.priceScale('right').priceToCoordinate(p0.price);
+   326→   326→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   327→   327→          const y1 = chart.priceScale('right').priceToCoordinate(p1.price);
+   328→   328→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   329→   329→          const markerId = `arrow-${col.replace('#','')}`;
+   330→   330→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
+   331→   331→          break;
+   332→   332→        }
+   333→   333→      }
+   334→   334→    }
+   335→   335→
+   336→   336→    svg.innerHTML = html;
+   337→   337→  }, [drawings, currentDrawing]);
+   338→   338→
+   339→   339→  /* ── Chart Build ──────────────────────────────────────────── */
+   340→   340→  const build = useCallback(() => {
+   341→   341→    const chartEl = chartContainerRef.current;
+   342→   342→    if (!chartEl || data.length === 0) return;
+   343→   343→
+   344→   344→    if (chartRef.current) {
+   345→   345→      chartRef.current.remove();
+   346→   346→      chartRef.current = null;
+   347→   347→    }
+   348→   348→
+   349→   349→    const chart = createChart(chartEl, {
+   350→   350→      layout: { background: { type: ColorType.Solid, color: BG }, textColor: TXT, fontSize: 11 },
+   351→   351→      grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
+   352→   352→      crosshair: { mode: CrosshairMode.Normal },
+   353→   353→      rightPriceScale: {
+   354→   354→        borderColor: 'rgba(255,255,255,0.08)',
+   355→   355→        scaleMargins: { top: 0.05, bottom: 0.3 },
+   356→   356→        priceFormatter: (price: number) => toPersianDigits(Math.round(price).toLocaleString('en-US')),
+   357→   357→      },
+   358→   358→      localization: {
+   359→   359→        priceFormatter: (price: number) => toPersianDigits(Math.round(price).toLocaleString('en-US')),
+   360→   360→      },
+   361→   361→      timeScale: {
+   362→   362→        borderColor: 'rgba(255,255,255,0.08)',
+   363→   363→        rightOffset: 5,
+   364→   364→        barSpacing: 6,
+   365→   365→        timeVisible: false,
+   366→   366→        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType, _locale: string) => {
+   367→   367→          return shamsiTickFormatter(time, tickMarkType as unknown as number);
+   368→   368→        },
+   369→   369→      },
+   370→   370→      width: chartEl.clientWidth,
+   371→   371→      height,
+   372→   372→    });
+   373→   373→    chartRef.current = chart;
+   374→   374→
+   375→   375→    // Use real dates when available, fall back to numeric index
+   376→   376→    const candles = data.map((d, i) => ({
+   377→   377→      time: (d.date && d.date.includes('-') ? d.date : undefined) as Time || (i as Time),
+   378→   378→      open: d.open,
+   379→   379→      high: d.high,
+   380→   380→      low: d.low,
+   381→   381→      close: d.close,
+   382→   382→    }));
+   383→   383→
+   384→   384→    const cs = chart.addSeries(CandlestickSeries, {
+   385→   385→      upColor: BULL,
+   386→   386→      downColor: BEAR,
+   387→   387→      borderUpColor: BULL,
+   388→   388→      borderDownColor: BEAR,
+   389→   389→      wickUpColor: BULL,
+   390→   390→      wickDownColor: BEAR,
+   391→   391→    });
+   392→   392→    cs.setData(candles);
+   393→   393→
+   394→   394→    // Volume
+   395→   395→    const vol = chart.addSeries(HistogramSeries, {
+   396→   396→      priceFormat: { type: 'volume' },
+   397→   397→      priceScaleId: 'vol',
+   398→   398→    });
+   399→   399→    vol.setData(
+   400→   400→      data.map((d, i) => ({
+   401→   401→        time: (d.date && d.date.includes('-') ? d.date : undefined) as Time || (i as Time),
+   402→   402→        value: d.volume,
+   403→   403→        color: d.close >= d.open ? BULL : BEAR,
+   404→   404→      }))
+   405→   405→    );
+   406→   406→    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+   407→   407→
+   408→   408→    // TA overlays
+   409→   409→    if (ta) {
+   410→   410→      for (const cfg of SMA_CFG) {
+   411→   411→        const v = ta.sma[cfg.key];
+   412→   412→        if (v && v > 0)
+   413→   413→          cs.createPriceLine({
+   414→   414→            price: v,
+   415→   415→            color: cfg.color,
+   416→   416→            lineWidth: 1,
+   417→   417→            lineStyle: 0,
+   418→   418→            axisLabelVisible: true,
+   419→   419→            title: cfg.title,
+   420→   420→          });
+   421→   421→      }
+   422→   422→      const bb = ta.bollingerBands;
+   423→   423→      if (bb) {
+   424→   424→        if (bb.upper > 0)
+   425→   425→          cs.createPriceLine({ price: bb.upper, color: 'rgba(161,98,255,0.5)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Upper' });
+   426→   426→        if (bb.middle > 0)
+   427→   427→          cs.createPriceLine({ price: bb.middle, color: 'rgba(161,98,255,0.5)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Mid' });
+   428→   428→        if (bb.lower > 0)
+   429→   429→          cs.createPriceLine({ price: bb.lower, color: 'rgba(161,98,255,0.5)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Lower' });
+   430→   430→      }
+   431→   431→      if (ta.sar > 0)
+   432→   432→        cs.createPriceLine({ price: ta.sar, color: 'rgba(255,255,255,0.35)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
+   433→   433→
+   434→   434→      // S/R with strength
+   435→   435→      const resistanceStrengths = ta.resistanceStrengths || [];
+   436→   436→      const supportStrengths = ta.supportStrengths || [];
+   437→   437→
+   438→   438→      resistanceStrengths.forEach((r, i) => {
+   439→   439→        if (r.price <= 0) return;
+   440→   440→        const lw = r.isTarget ? 3 : Math.max(1, Math.round(r.strength / 3));
+   441→   441→        const ls = r.isTarget ? 0 : 2;
+   442→   442→        const title = `R${i + 1} (${r.strength}/10)`;
+   443→   443→        cs.createPriceLine({
+   444→   444→          price: r.price,
+   445→   445→          color: r.isTarget ? '#ff6b6b' : BEAR,
+   446→   446→          lineWidth: lw,
+   447→   447→          lineStyle: ls as 0 | 1 | 2,
+   448→   448→          axisLabelVisible: i < 6,
+   449→   449→          title,
+   450→   450→        });
+   451→   451→      });
+   452→   452→
+   453→   453→      supportStrengths.forEach((s, i) => {
+   454→   454→        if (s.price <= 0) return;
+   455→   455→        const lw = s.isTarget ? 3 : Math.max(1, Math.round(s.strength / 3));
+   456→   456→        const ls = s.isTarget ? 0 : 2;
+   457→   457→        const title = `S${i + 1} (${s.strength}/10)`;
+   458→   458→        cs.createPriceLine({
+   459→   459→          price: s.price,
+   460→   460→          color: s.isTarget ? '#6bffb8' : BULL,
+   461→   461→          lineWidth: lw,
+   462→   462→          lineStyle: ls as 0 | 1 | 2,
+   463→   463→          axisLabelVisible: i < 6,
+   464→   464→          title,
+   465→   465→        });
+   466→   466→      });
+   467→   467→    }
+   468→   468→
+   469→   469→    chart.timeScale().fitContent();
+   470→   470→
+   471→   471→    // Subscribe to visible range changes to re-render SVG
+   472→   472→    requestAnimationFrame(() => {
+   473→   473→      if (chartRef.current) {
+   474→   474→        subscriberRef.current = chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
+   475→   475→          setRenderKey((k) => k + 1);
+   476→   476→        });
+   477→   477→      }
+   478→   478→    });
+   479→   479→
+   480→   480→    // Set initial chart size (deferred to avoid React batching issue)
+   481→   481→    requestAnimationFrame(() => {
+   482→   482→      if (chartContainerRef.current) {
+   483→   483→        setChartSize({ w: chartContainerRef.current.clientWidth, h: height });
+   484→   484→      }
+   485→   485→    });
+   486→   486→  }, [data, ta, height]);
+   487→   487→
+   488→   488→  /* ── Re-render SVG when renderKey changes ────────────────── */
+   489→   489→  useEffect(() => {
+   490→   490→    renderDrawings();
+   491→   491→  }, [renderKey, renderDrawings]);
+   492→   492→
+   493→   493→  /* ── Init chart ───────────────────────────────────────────── */
+   494→   494→  useEffect(() => {
+   495→   495→    const el = chartContainerRef.current;
+   496→   496→    if (!el) return;
+   497→   497→    const ro = new ResizeObserver((entries) => {
+   498→   498→      for (const e of entries) {
+   499→   499→        const { width: w, height: h } = e.contentRect;
+   500→   500→        if (w > 0 && h > 0) {
+   501→   501→          chartRef.current?.applyOptions({ width: w, height: h });
+   502→   502→          setChartSize({ w, h });
+   503→   503→        }
+   504→   504→      }
+   505→   505→    });
+   506→   506→    ro.observe(el);
+   507→   507→    build();
+   508→   508→    return () => {
+   509→   509→      ro.disconnect();
+   510→   510→      subscriberRef.current?.dispose();
+   511→   511→      subscriberRef.current = null;
+   512→   512→      if (chartRef.current) {
+   513→   513→        chartRef.current.remove();
+   514→   514→        chartRef.current = null;
+   515→   515→      }
+   516→   516→    };
+   517→   517→  }, [build]);
+   518→   518→
+   519→   519→  /* ── Refs for native event handlers (avoid stale closures) ─── */
+   520→   520→  const activeToolRef = useRef<ToolType>('cursor');
+   521→   521→  const activeColorRef = useRef(PALETTE[0]);
+   522→   522→  const isDrawingRef = useRef(false);
+   523→   523→  const currentDrawingRef = useRef<Drawing | null>(null);
+   524→   524→  const textInputRef = useRef<{ x: number; y: number; drawingId: string } | null>(null);
+   525→   525→
+   526→   526→  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+   527→   527→  useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
+   528→   528→  useEffect(() => { isDrawingRef.current = isDrawing; }, [isDrawing]);
+   529→   529→  useEffect(() => { currentDrawingRef.current = currentDrawing; }, [currentDrawing]);
+   530→   530→  useEffect(() => { textInputRef.current = textInput; }, [textInput]);
+   531→   531→
+   532→   532→  /* ── Stable handler functions (read state from refs) ───────── */
+   533→   533→  const handleSvgDown = useCallback((e: MouseEvent) => {
+   534→   534→    const tool = activeToolRef.current;
+   535→   535→    if (tool === 'cursor') return;
+   536→   536→    if (textInputRef.current) return;
+   537→   537→    const point = getChartPoint(e.clientX, e.clientY);
+   538→   538→    if (!point) return;
+   539→   539→
+   540→   540→    if (tool === 'hline') {
+   541→   541→      const drawing: Drawing = { id: Date.now().toString(), type: 'hline', points: [point], color: activeColorRef.current, lineWidth: 1, completed: true };
+   542→   542→      setDrawings((prev) => [...prev, drawing]);
+   543→   543→      setIsDrawing(false);
+   544→   544→      return;
+   545→   545→    }
+   546→   546→    if (tool === 'text') {
+   547→   547→      const container = chartContainerRef.current;
+   548→   548→      if (!container) return;
+   549→   549→      const rect = container.getBoundingClientRect();
+   550→   550→      const tempDrawing: Drawing = { id: Date.now().toString(), type: 'text', points: [point], color: activeColorRef.current, lineWidth: 1, text: '', completed: false };
+   551→   551→      setCurrentDrawing(tempDrawing);
+   552→   552→      setTextInput({ x: e.clientX - rect.left, y: e.clientY - rect.top, drawingId: tempDrawing.id });
+   553→   553→      setTextValue('');
+   554→   554→      setIsDrawing(true);
+   555→   555→      return;
+   556→   556→    }
+   557→   557→    const drawing: Drawing = { id: Date.now().toString(), type: tool, points: [point], color: activeColorRef.current, lineWidth: tool === 'brush' ? 2 : 1, completed: false };
+   558→   558→    setCurrentDrawing(drawing);
+   559→   559→    currentDrawingRef.current = drawing;
+   560→   560→    isDrawingRef.current = true;
+   561→   561→    setIsDrawing(true);
+   562→   562→  }, [getChartPoint]);
+   563→   563→
+   564→   564→  const handleSvgMove = useCallback((e: MouseEvent) => {
+   565→   565→    if (!isDrawingRef.current || !currentDrawingRef.current) return;
+   566→   566→    const point = getChartPoint(e.clientX, e.clientY);
+   567→   567→    if (!point) return;
+   568→   568→    const cd = currentDrawingRef.current;
+   569→   569→    if (cd.type === 'brush') {
+   570→   570→      const updated = { ...cd, points: [...cd.points, point] };
+   571→   571→      currentDrawingRef.current = updated;
+   572→   572→      setCurrentDrawing(updated);
+   573→   573→    } else if (cd.type !== 'text' && cd.type !== 'hline') {
+   574→   574→      const updated = { ...cd, points: [cd.points[0], point] };
+   575→   575→      currentDrawingRef.current = updated;
+   576→   576→      setCurrentDrawing(updated);
+   577→   577→    }
+   578→   578→  }, [getChartPoint]);
+   579→   579→
+   580→   580→  const handleSvgUp = useCallback(() => {
+   581→   581→    if (!isDrawingRef.current || !currentDrawingRef.current) return;
+   582→   582→    const cd = currentDrawingRef.current;
+   583→   583→    if (cd.type === 'text') return;
+   584→   584→    const completed: Drawing = { ...cd, completed: true };
+   585→   585→    if (completed.points.length >= 2) {
+   586→   586→      setDrawings((prev) => [...prev, completed]);
+   587→   587→    }
+   588→   588→    currentDrawingRef.current = null;
+   589→   589→    isDrawingRef.current = false;
+   590→   590→    setCurrentDrawing(null);
+   591→   591→    setIsDrawing(false);
+   592→   592→  }, []);
+   593→   593→
+   594→   594→  /* ── SVG ref callback: attach listeners when element mounts ── */
+   595→   595→  const svgRefCallback = useCallback((node: SVGSVGElement | null) => {
+   596→   596→    // Detach from old element if any
+   597→   597→    if (svgRef.current && svgRef.current !== node) {
+   598→   598→      svgRef.current.removeEventListener('mousedown', handleSvgDown);
+   599→   599→      svgRef.current.removeEventListener('mousemove', handleSvgMove);
+   600→   600→      svgRef.current.removeEventListener('mouseup', handleSvgUp);
+   601→   601→      svgRef.current.removeEventListener('mouseleave', handleSvgUp);
+   602→   602→    }
+   603→   603→    svgRef.current = node;
+   604→   604→    if (!node) return;
+   605→   605→    node.addEventListener('mousedown', handleSvgDown);
+   606→   606→    node.addEventListener('mousemove', handleSvgMove);
+   607→   607→    node.addEventListener('mouseup', handleSvgUp);
+   608→   608→    node.addEventListener('mouseleave', handleSvgUp);
+   609→   609→  }, [handleSvgDown, handleSvgMove, handleSvgUp]);
+   610→   610→
+   611→   611→  /* ── Text input submit ────────────────────────────────────── */
+   612→   612→  const handleTextSubmit = useCallback(() => {
+   613→   613→    if (!textInput || !textValue.trim() || !currentDrawing) {
+   614→   614→      setTextInput(null);
+   615→   615→      setCurrentDrawing(null);
+   616→   616→      setIsDrawing(false);
+   617→   617→      return;
+   618→   618→    }
+   619→   619→
+   620→   620→    const completed: Drawing = {
+   621→   621→      ...currentDrawing,
+   622→   622→      text: textValue.trim(),
+   623→   623→      completed: true,
+   624→   624→    };
+   625→   625→    setDrawings((prev) => [...prev, completed]);
+   626→   626→    setTextInput(null);
+   627→   627→    setTextValue('');
+   628→   628→    setCurrentDrawing(null);
+   629→   629→    setIsDrawing(false);
+   630→   630→  }, [textInput, textValue, currentDrawing]);
+   631→   631→
+   632→   632→  const handleTextCancel = useCallback(() => {
+   633→   633→    setTextInput(null);
+   634→   634→    setTextValue('');
+   635→   635→    setCurrentDrawing(null);
+   636→   636→    setIsDrawing(false);
+   637→   637→  }, []);
+   638→   638→
+   639→   639→  /* ── Delete / Clear ──────────────────────────────────────── */
+   640→   640→  const handleDeleteLast = useCallback(() => {
+   641→   641→    setDrawings((prev) => prev.slice(0, -1));
+   642→   642→  }, []);
+   643→   643→
+   644→   644→  const handleClearAll = useCallback(() => {
+   645→   645→    setDrawings([]);
+   646→   646→  }, []);
+   647→   647→
+   648→   648→
+   649→   649→  /* ── Render ───────────────────────────────────────────────── */
+   650→   650→  return (
+   651→   651→    <div className="w-full">
+   652→   652→      {/* ── TOOLBAR ────────────────────────────────────────── */}
+   653→   653→      <div
+   654→   654→        className="flex items-center gap-1 px-2 py-1.5 rounded-t-lg border border-b-0 overflow-x-auto flex-nowrap"
+   655→   655→        style={{ backgroundColor: TOOLBAR_BG, borderColor: TOOLBAR_BORDER }}
+   656→   656→      >
+   657→   657→        {/* Tool buttons */}
+   658→   658→        {TOOLS.map((tool) => (
+   659→   659→          <button
+   660→   660→            key={tool.id}
+   661→   661→            onClick={() => {
+   662→   662→              setActiveTool(tool.id);
+   663→   663→              // Cancel ongoing drawing when switching tools
+   664→   664→              if (isDrawing) {
+   665→   665→                setIsDrawing(false);
+   666→   666→                setCurrentDrawing(null);
+   667→   667→                setTextInput(null);
+   668→   668→              }
+   669→   669→            }}
+   670→   670→            title={tool.label}
+   671→   671→            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all cursor-pointer ${
+   672→   672→              activeTool === tool.id
+   673→   673→                ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30'
+   674→   674→                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+   675→   675→            }`}
+   676→   676→          >
+   677→   677→            {tool.icon}
+   678→   678→          </button>
+   679→   679→        ))}
+   680→   680→
+   681→   681→        {/* Separator */}
+   682→   682→        <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />
+   683→   683→
+   684→   684→        {/* Color picker */}
+   685→   685→        {PALETTE.map((c) => (
+   686→   686→          <button
+   687→   687→            key={c}
+   688→   688→            onClick={() => setActiveColor(c)}
+   689→   689→            title={c}
+   690→   690→            className={`shrink-0 w-6 h-6 rounded-full border-2 transition-all cursor-pointer ${
+   691→   691→              activeColor === c ? 'border-white scale-110' : 'border-transparent hover:scale-105'
+   692→   692→            }`}
+   693→   693→            style={{ backgroundColor: c }}
+   694→   694→          />
+   695→   695→        ))}
+   696→   696→
+   697→   697→        {/* Separator */}
+   698→   698→        <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />
+   699→   699→
+   700→   700→        {/* Delete last */}
+   701→   701→        <button
+   702→   702→          onClick={handleDeleteLast}
+   703→   703→          title="حذف آخر"
+   704→   704→          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-red-500/15 hover:text-red-400 transition-all cursor-pointer"
+   705→   705→        >
+   706→   706→          <Trash2 className="w-3.5 h-3.5" />
+   707→   707→        </button>
+   708→   708→
+   709→   709→        {/* Clear all */}
+   710→   710→        <button
+   711→   711→          onClick={handleClearAll}
+   712→   712→          title="پاک کردن همه"
+   713→   713→          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:bg-red-500/15 hover:text-red-400 transition-all cursor-pointer"
+   714→   714→        >
+   715→   715→          <X className="w-3.5 h-3.5" />
+   716→   716→        </button>
+   717→   717→
+   718→   718→        {/* Active tool label */}
+   719→   719→        <div className="mr-auto shrink-0 text-xs text-gray-500 font-medium" dir="rtl">
+   720→   720→          {TOOLS.find((t) => t.id === activeTool)?.label}
+   721→   721→        </div>
+   722→   722→      </div>
+   723→   723→
+   724→   724→      {/* ── CHART + SVG OVERLAY ─────────────────────────────── */}
+   725→   725→      <div
+   726→   726→        className="relative rounded-b-lg overflow-hidden border"
+   727→   727→        style={{ borderColor: TOOLBAR_BORDER, height }}
+   728→   728→      >
+   729→   729→        {/* Chart container */}
+   730→   730→        <div
+   731→   731→          ref={chartContainerRef}
+   732→   732→          className="w-full h-full"
+   733→   733→          data-chart
+   734→   734→        />
+   735→   735→
+   736→   736→        {/* SVG overlay for drawings */}
+   737→   737→        <svg
+   738→   738→          ref={svgRefCallback}
+   739→   739→          className="absolute top-0 left-0"
+   740→   740→          style={{
+   741→   741→            width: chartSize.w || '100%',
+   742→   742→            height: chartSize.h || '100%',
+   743→   743→            pointerEvents: activeTool !== 'cursor' ? 'auto' : 'none',
+   744→   744→            zIndex: 10,
+   745→   745→          }}
+   746→   746→        />
+   747→   747→
+   748→   748→        {/* Text input overlay */}
+   749→   749→        {textInput && (
+   750→   750→          <div
+   751→   751→            className="absolute z-20"
+   752→   752→            style={{
+   753→   753→              left: textInput.x,
+   754→   754→              top: textInput.y - 8,
+   755→   755→            }}
+   756→   756→          >
+   757→   757→            <input
+   758→   758→              type="text"
+   759→   759→              value={textValue}
+   760→   760→              onChange={(e) => setTextValue(e.target.value)}
+   761→   761→              onKeyDown={(e) => {
+   762→   762→                if (e.key === 'Enter') handleTextSubmit();
+   763→   763→                if (e.key === 'Escape') handleTextCancel();
+   764→   764→              }}
+   765→   765→              placeholder="متن..."
+   766→   766→              suppressHydrationWarning
+   767→   767→              autoFocus
+   768→   768→              dir="rtl"
+   769→   769→              className="bg-[#0b0f1a] border border-gray-600 rounded px-2 py-1 text-sm text-white outline-none focus:border-amber-500 w-32"
+   770→   770→              onBlur={handleTextSubmit}
+   771→   771→            />
+   772→   772→          </div>
+   773→   773→        )}
+   774→   774→      </div>
+   775→   775→    </div>
+   776→   776→  );
+   777→   777→}
+   778→   778→

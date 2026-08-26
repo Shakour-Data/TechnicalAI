@@ -1,0 +1,947 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// ML Narrative Engine v10 — Data-Driven Text Generation System
+// ⚠️  LOCKED — DO NOT MODIFY. All changes go to V11.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 1: Core Types
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface NarrativeCombination {
+  school: SchoolDef;
+  style: StyleDef;
+  tone: ToneDef;
+  schoolScore: number;
+  styleScore: number;
+  toneScore: number;
+}
+
+export interface SchoolDef {
+  id: string;
+  name: string;
+  nameEn: string;
+  description: string;
+  methodology: string;
+  focusQuestion: string;
+}
+
+export interface StyleDef {
+  id: string;
+  name: string;
+  nameEn: string;
+  voice: string;
+  structure: string;
+  endingStyle: string;
+}
+
+export interface ToneDef {
+  id: string;
+  name: string;
+  nameEn: string;
+  characteristics: string;
+  vocabulary: string;
+  sentenceStyle: string;
+}
+
+export interface NarrativeInput {
+  price: number;
+  trendDirection: string;
+  rsi: number;
+  adx: number;
+  stochK: number;
+  stochD: number;
+  macdLine: number;
+  macdSignal: number;
+  macdHist: number;
+  diPlus: number;
+  diMinus: number;
+  obv: number;
+  hasVolume: boolean;
+  cci: number;
+  mfi: number;
+  atr: number;
+  bbPosition: number;
+  bbUpper: number;
+  bbLower: number;
+  dominantScenarioKey: string;
+  scenarioProbabilities: Record<string, number>;
+  nearResistance: boolean;
+  nearSupport: boolean;
+  priceVsMa21: 'above' | 'below';
+  priceVsMa100: 'above' | 'below';
+  trendR2: number;
+}
+
+// ─── V10 New Types ─────────────────────────────────────────────────────────────
+
+export interface V10Persona {
+  id: string;
+  name: string;
+  gender: 'male' | 'female';
+  experience: number;
+  schoolAffinity: string;
+  toneAffinity: string;
+  style: {
+    sentences: string;
+    vocabulary: string;
+    emphasis: string;
+  };
+  signaturePhrases: string[];
+  writingHabits: string[];
+  openingPhrases: string[];
+  closingPhrases: string[];
+}
+
+export interface V10TemplateFormat {
+  id: string;
+  name: string;
+  nameEn: string;
+  lengthPreference: 'short' | 'medium' | 'long';
+  focusArea: string;
+  sections: string[];
+  wordCountRange: [number, number];
+  structure: string;
+}
+
+export interface V10GenerationInfo {
+  persona: V10Persona;
+  template: V10TemplateFormat;
+  variationSeed: number;
+  school: string;
+  style: string;
+  tone: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 2: 24 Writing Personas
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const PERSONAS: V10Persona[] = [
+  // ── Classical School ──
+  {
+    id: 'maryam_classical', name: 'مریم رضایی — تحلیل‌گر کلاسیک محافظه‌کار', gender: 'female', experience: 18,
+    schoolAffinity: 'classical', toneAffinity: 'conservative',
+    style: { sentences: 'بلند و دقیق', vocabulary: 'تخصصی با توضیح', emphasis: 'مدیریت ریسک' },
+    signaturePhrases: ['بر اساس تحلیل کلاسیک و داده‌های موجود', 'با احتیاط باید گفت که', 'احتمال وقوع این سناریو', 'سطوح حمایت و مقاومت نشان می‌دهند', 'الگوی قیمتی تشخیص‌داده‌شده'],
+    writingHabits: ['استفاده از جملات شرطی و محتاطانه', 'تأکید بر مدیریت ریسک و حد ضرر', 'ارائه‌ی سناریوهای مختلف با احتمالات', 'استفاده از مثال‌های تاریخی'],
+    openingPhrases: ['با بررسی دقیق داده‌های بازار و تحلیل کلاسیک...', 'نگاهی به وضعیت امروز {instrument} از منظر تحلیل کلاسیک...', 'در ادامه‌ی بررسی‌های تکنیکال، به تحلیل {instrument} می‌پردازیم...'],
+    closingPhrases: ['در مجموع، با توجه به تحلیل‌های انجام‌شده...', 'بر این اساس، توصیه می‌شود که...', 'با رعایت مدیریت ریسک، می‌توان از این فرصت استفاده کرد...'],
+  },
+  {
+    id: 'reza_classical', name: 'رضا کریمی — تحلیل‌گر کلاسیک تکنیکال', gender: 'male', experience: 15,
+    schoolAffinity: 'classical', toneAffinity: 'balanced',
+    style: { sentences: 'متوسط و دقیق', vocabulary: 'فنی و تخصصی', emphasis: 'دقت تحلیل' },
+    signaturePhrases: ['از منظر تحلیل تکنیکال کلاسیک', 'الگوهای قیمتی نشان می‌دهند', 'خطوط روند و کانال‌ها', 'تأیید یا عدم تأیید الگو', 'سطوح کلیدی قیمتی'],
+    writingHabits: ['استفاده از نمودارهای ذهنی و توصیفی', 'تأکید بر اعتبارسنجی الگوها', 'مقایسه با الگوهای مشابه تاریخی', 'ارائه‌ی تحلیل از بالا به پایین'],
+    openingPhrases: ['تحلیل امروز {instrument} با رویکرد کلاسیک نشان می‌دهد...', 'با رسم خطوط روند و شناسایی سطوح کلیدی...', 'الگوهای قیمتی شکل‌گرفته در تایم‌فریم روزانه...'],
+    closingPhrases: ['به طور خلاصه، الگوها و سطوح...', 'بر اساس شواهد تکنیکال...', 'تحلیل کلاسیک تأیید می‌کند که...'],
+  },
+  {
+    id: 'ali_classical', name: 'علی محمدی — تحلیل‌گر کلاسیک عملیاتی', gender: 'male', experience: 12,
+    schoolAffinity: 'classical', toneAffinity: 'aggressive',
+    style: { sentences: 'کوتاه و قاطع', vocabulary: 'عملیاتی و اجرایی', emphasis: 'نقاط ورود و خروج' },
+    signaturePhrases: ['نقطه‌ی ورود عالی', 'شکست تأییدشده', 'هدف قیمتی مشخص', 'حد ضرر را رعایت کنید', 'فرصت معاملاتی'],
+    writingHabits: ['جملات کوتاه و مستقیم', 'تأکید بر نقاط ورود/خروج دقیق', 'مدیریت ریسک عملیاتی', 'ارائه‌ی زمان‌بندی اجرا'],
+    openingPhrases: ['فرصت معاملاتی جدید در {instrument}:', 'سیگنال قوی در {instrument}', 'با شکست سطح کلیدی، وارد معامله می‌شویم...'],
+    closingPhrases: ['نتیجه‌گیری عملیاتی:', 'برنامه اجرایی مشخص است:', 'مدیریت ریسک اولویت اول است.'],
+  },
+  // ── Oscillator School ──
+  {
+    id: 'sara_oscillator', name: 'سارا احمدی — تحلیل‌گر اسیلاتوری', gender: 'female', experience: 14,
+    schoolAffinity: 'oscillator', toneAffinity: 'realistic',
+    style: { sentences: 'تحلیلی و دقیق', vocabulary: 'ریاضی و فنی', emphasis: 'واگرایی‌ها و سیگنال‌ها' },
+    signaturePhrases: ['واگرایی تشخیص‌داده‌شده', 'اشباع خرید/فروش', 'RSI و MACD نشان می‌دهند', 'قدرت مومنتوم', 'سیگنال‌های ترکیبی'],
+    writingHabits: ['استفاده از اعداد و ارقام دقیق', 'تأکید بر واگرایی‌ها و همگرایی‌ها', 'ترکیب چندین اسیلاتور', 'تحلیل قدرت و ضعف حرکت'],
+    openingPhrases: ['با بررسی اندیکاتورهای مومنتوم در {instrument}...', 'سیگنال‌های ترکیبی اسیلاتورها نشان می‌دهند...', 'واگرایی قابل‌توجهی در {instrument} شکل گرفته است...'],
+    closingPhrases: ['اعداد و ارقام تأیید می‌کنند که...', 'مومنتوم فعلی حاکی از...', 'سیگنال‌های اسیلاتوری به طور کلی...'],
+  },
+  {
+    id: 'hamid_oscillator', name: 'حمید نوروزی — تحلیل‌گر مومنتوم', gender: 'male', experience: 10,
+    schoolAffinity: 'oscillator', toneAffinity: 'aggressive',
+    style: { sentences: 'کوتاه و تأکیدی', vocabulary: 'فنی و سریع', emphasis: 'زمان‌بندی ورود' },
+    signaturePhrases: ['سیگنال خرید تأییدشده', 'خروج از منطقه اشباع', 'تقاطع صعودی/نزولی', 'حجم بالا و مومنتوم قوی', 'ورود در نقطه‌ی عالی'],
+    writingHabits: ['استفاده از اصطلاحات معاملاتی', 'تأکید بر زمان‌بندی دقیق', 'ترکیب قیمت و مومنتوم', 'ارائه‌ی سیگنال‌های سریع'],
+    openingPhrases: ['سیگنال فوری در {instrument}:', 'با تأیید اسیلاتورها، وارد {instrument} می‌شویم...', 'مومنتوم صعودی در {instrument} در حال شکل‌گیری است...'],
+    closingPhrases: ['سیگنال نهایی:', 'زمان ورود مشخص است.', 'تقاطع‌ها تأیید می‌کنند.'],
+  },
+  // ── Harmonic School ──
+  {
+    id: 'narges_harmonic', name: 'نرگس رستمی — تحلیل‌گر هارمونیک', gender: 'female', experience: 16,
+    schoolAffinity: 'harmonic', toneAffinity: 'conservative',
+    style: { sentences: 'دقیق و ریاضی', vocabulary: 'تخصصی هارمونیک', emphasis: 'نسبت‌های فیبوناچی' },
+    signaturePhrases: ['نسبت‌های فیبوناچی دقیق', 'ناحیه‌ی برگشت احتمالی (PRZ)', 'الگوی هارمونیک تشخیص‌داده‌شده', 'تلاقی نسبت‌ها', 'نقاط D و PRZ'],
+    writingHabits: ['استفاده از اعداد با دو رقم اعشار', 'تأکید بر نسبت‌های فیبوناچی', 'بررسی تلاقی‌های مختلف', 'ارائه‌ی سطوح دقیق قیمتی'],
+    openingPhrases: ['تحلیل هارمونیک {instrument} نشان‌دهنده‌ی...', 'با محاسبه‌ی نسبت‌های فیبوناچی در {instrument}...', 'الگوی هارمونیک {pattern} در {instrument} تشخیص داده شد...'],
+    closingPhrases: ['نسبت‌ها تأیید می‌کنند...', 'ناحیه‌ی PRZ در...', 'دقت نسبت‌ها حاکی از...'],
+  },
+  {
+    id: 'hassan_harmonic', name: 'حسن زمانی — تحلیل‌گر هارمونیک عملیاتی', gender: 'male', experience: 11,
+    schoolAffinity: 'harmonic', toneAffinity: 'optimistic',
+    style: { sentences: 'متعادل و امیدوارانه', vocabulary: 'ترکیبی از فنی و عملی', emphasis: 'نقاط برگشت دقیق' },
+    signaturePhrases: ['ناحیه‌ی برگشت ایده‌آل', 'با دقت بالا', 'هدف قیمتی دقیق', 'نسبت‌های طلایی', 'فرصت عالی'],
+    writingHabits: ['ترکیب تحلیل هارمونیک و عملیات', 'تأکید بر دقت نسبت‌ها', 'ارائه‌ی نقاط ورود و خروج دقیق', 'بررسی چندین سناریو'],
+    openingPhrases: ['فرصت هارمونیک عالی در {instrument}:', 'با تشخیص الگوی هارمونیک در {instrument}...', 'ناحیه‌ی برگشت احتمالی در {instrument} شناسایی شد...'],
+    closingPhrases: ['فرصت طلایی پیش رو است...', 'نقاط ورود و خروج مشخص شدند.', 'نسبت‌های فیبوناچی پتانسیل بالایی نشان می‌دهند.'],
+  },
+  // ── Elliott School ──
+  {
+    id: 'farshid_elliott', name: 'فرشید کاظمی — تحلیل‌گر امواج الیوت', gender: 'male', experience: 17,
+    schoolAffinity: 'elliott', toneAffinity: 'balanced',
+    style: { sentences: 'ساختاری و تحلیلی', vocabulary: 'موج‌شناسی و ساختاری', emphasis: 'ساختار موجی' },
+    signaturePhrases: ['ساختار موجی نشان می‌دهد', 'موج در حال شکل‌گیری', 'نسبت‌های فیبوناچی بین امواج', 'الگوی اصلاحی/حرکتی', 'قوی‌ترین موج'],
+    writingHabits: ['برچسب‌گذاری امواج با اعداد و حروف', 'تأکید بر ساختارهای ۵-۳ موجی', 'ارائه‌ی اهداف قیمتی مبتنی بر امواج', 'بررسی تأیید با واگرایی‌ها'],
+    openingPhrases: ['بر اساس تحلیل امواج الیوت در {instrument}...', 'ساختار موجی فعلی {instrument} نشان‌دهنده‌ی...', 'امواج الیوت در تایم‌فریم روزانه {instrument}...'],
+    closingPhrases: ['ساختار موجی کلی حاکی از...', 'امواج اصلاحی در حال تکمیل...', 'شمارش امواج تأیید می‌کند...'],
+  },
+  {
+    id: 'mina_elliott', name: 'مینا شریفی — تحلیل‌گر موجی خلاق', gender: 'female', experience: 13,
+    schoolAffinity: 'elliott', toneAffinity: 'optimistic',
+    style: { sentences: 'روان و توصیفی', vocabulary: 'موجی و تصویری', emphasis: 'تصویرسازی موجی' },
+    signaturePhrases: ['تصویر موجی امروز', 'موسیقی بازار', 'ریتم حرکت', 'امواج در حال آواز خواندن', 'نت‌های صعودی و نزولی'],
+    writingHabits: ['استعاره‌های موسیقایی از بازار', 'تصویرسازی ذهنی امواج', 'ترکیب احساس و تحلیل', 'روان‌سازی متن موجی'],
+    openingPhrases: ['موج‌های امروز {instrument} آهنگی جدید دارند...', 'بازار امروز {instrument} مانند یک سمفونی...', 'ریتم حرکت {instrument} تغییر کرده...'],
+    closingPhrases: ['آهنگ نهایی بازار...', 'نت‌های پایانی...', 'سمفونی امواج ادامه دارد.'],
+  },
+  // ── Volume School ──
+  {
+    id: 'leila_volume', name: 'لیلا کریمی — تحلیل‌گر حجم و عرضه/تقاضا', gender: 'female', experience: 13,
+    schoolAffinity: 'volume', toneAffinity: 'realistic',
+    style: { sentences: 'دقیق و مبتنی بر داده', vocabulary: 'حجمی و آماری', emphasis: 'تأیید با حجم' },
+    signaturePhrases: ['حجم معاملات نشان می‌دهد', 'جریان پول و نقدینگی', 'OBV و A/D', 'تأیید شکست با حجم', 'حجم بالا در نقاط کلیدی'],
+    writingHabits: ['تأکید بر داده‌های حجم', 'بررسی الگوهای حجمی', 'ترکیب حجم و قیمت', 'ارائه‌ی تحلیل جریان پول'],
+    openingPhrases: ['با بررسی حجم معاملات {instrument}...', 'جریان پول در {instrument} نشان‌دهنده‌ی...', 'تأیید حجمی در {instrument} مشاهده می‌شود...'],
+    closingPhrases: ['حجم معاملات تأیید می‌کند...', 'جریان نقدینگی حاکی از...', 'داده‌های حجم نهایی نشان می‌دهند...'],
+  },
+  {
+    id: 'amir_volume', name: 'امیر حسینی — تحلیل‌گر جریان پول', gender: 'male', experience: 16,
+    schoolAffinity: 'volume', toneAffinity: 'alert',
+    style: { sentences: 'هشداری و دقیق', vocabulary: 'مالی و نقدینگی', emphasis: 'هوش پول' },
+    signaturePhrases: ['پول هوشمند', 'جریان نقدینگی', 'ورود/خروج پله‌ای', 'تأیید حجمی شکست', 'الگوی حجمی'],
+    writingHabits: ['تأکید بر رفتار پول هوشمند', 'تحلیل ورود و خروج پله‌ای نهادها', 'ترکیب حجم و قیمت', 'هشدار درباره تله‌های حجمی'],
+    openingPhrases: ['پیگیری جریان پول در {instrument}...', 'پول هوشمند امروز در {instrument}...', 'الگوی حجمی حاکی از تغییر مالکیت در {instrument}...'],
+    closingPhrases: ['جریان پول نهایی...', 'هوش پول مؤید...', 'تله‌های حجمی را مراقب باشید.'],
+  },
+  // ── Hybrid School ──
+  {
+    id: 'mehrdad_hybrid', name: 'مهرداد صادقی — تحلیل‌گر ترکیبی', gender: 'male', experience: 20,
+    schoolAffinity: 'hybrid', toneAffinity: 'balanced',
+    style: { sentences: 'جامع و یکپارچه', vocabulary: 'همه‌جانبه', emphasis: 'تلفیق روش‌ها' },
+    signaturePhrases: ['ترکیب روش‌های تحلیل', 'هم‌گرایی سیگنال‌ها', 'تأیید چندگانه', 'وزن‌دهی به ابزارها', 'تصمیم مبتنی بر داده'],
+    writingHabits: ['تلفیق چند مکتب در یک تحلیل', 'ارائه‌ی وزن‌دهی به روش‌ها', 'بررسی هم‌گرایی و واگرایی سیگنال‌ها', 'تصمیم‌گیری هوشمندانه'],
+    openingPhrases: ['تحلیل جامع {instrument} با تلفیق روش‌های مختلف...', 'با ترکیب تحلیل کلاسیک، اسیلاتوری و هارمونیک...', 'رویکرد ترکیبی در تحلیل {instrument} نشان می‌دهد...'],
+    closingPhrases: ['جمع‌بندی ترکیبی...', 'همه‌ی شواهد مؤید...', 'تصمیم نهایی مبتنی بر تلفیق...'],
+  },
+  {
+    id: 'parisa_sentiment', name: 'پریسا مرادی — تحلیل‌گر احساسات بازار', gender: 'female', experience: 9,
+    schoolAffinity: 'hybrid', toneAffinity: 'optimistic',
+    style: { sentences: 'روان و قابل فهم', vocabulary: 'ترکیبی از فنی و عمومی', emphasis: 'احساسات بازار' },
+    signaturePhrases: ['احساسات بازار نشان می‌دهد', 'شاخص ترس و طمع', 'رفتار معامله‌گران', 'انتظارات بازار', 'روانشناسی بازار'],
+    writingHabits: ['تأکید بر جنبه‌های روانشناختی', 'ترکیب داده‌های کمی و کیفی', 'تحلیل رفتار دسته‌جمعی', 'ارائه‌ی دیدگاه‌های مختلف'],
+    openingPhrases: ['احساسات بازار امروز {instrument}...', 'با بررسی شاخص‌های احساسی در {instrument}...', 'روانشناسی بازار {instrument} نشان می‌دهد...'],
+    closingPhrases: ['بازار احساساتی است اما...', 'روانشناسی جمعی حاکی از...', 'ترس و طمع همیشه در کنار هم.'],
+  },
+  {
+    id: 'behzad_quant', name: 'بهزاد نیک‌پور — تحلیل‌گر کمی', gender: 'male', experience: 14,
+    schoolAffinity: 'hybrid', toneAffinity: 'realistic',
+    style: { sentences: 'دقیق و مبتنی بر آمار', vocabulary: 'کمی و آماری', emphasis: 'احتمالات و آمار' },
+    signaturePhrases: ['بر اساس داده‌های آماری', 'احتمالات و توزیع‌ها', 'ضرایب و وزن‌ها', 'اعتبارسنجی آماری', 'فاصله‌ی اطمینان'],
+    writingHabits: ['استفاده از اعداد و آمار', 'ارائه‌ی احتمالات دقیق', 'تحلیل آماری داده‌ها', 'بررسی اعتبار سیگنال‌ها'],
+    openingPhrases: ['بر اساس داده‌های آماری {instrument}...', 'تحلیل کمی {instrument} نشان می‌دهد...', 'احتمالات و توزیع‌های قیمتی در {instrument}...'],
+    closingPhrases: ['اعداد نهایی...', 'احتمالات محاسبه‌شده...', 'اعتبار آماری تحلیل...'],
+  },
+  // ── Additional 12 Personas for diversity ──
+  {
+    id: 'zahra_trend', name: 'زهرا موسوی — تحلیل‌گر روند حرفه‌ای', gender: 'female', experience: 19,
+    schoolAffinity: 'trend', toneAffinity: 'conservative',
+    style: { sentences: 'مستدل و با استدلال', vocabulary: 'روندی و تحلیلی', emphasis: 'تشخیص زودهنگام روند' },
+    signaturePhrases: ['شکل‌گیری روند جدید', 'تغییر ساختار روند', 'EMAها تأیید می‌کنند', 'ADX بالای ۲۵', 'کانال روند'],
+    writingHabits: ['تحلیل دقیق شیب روند', 'تأکید بر تثبیت کانال', 'مقایسه تایم‌فریم‌ها', 'استفاده از ADX برای قدرت'],
+    openingPhrases: ['روند فعلی {instrument} در مقطع حساسی قرار دارد...', 'بررسی شیب و قدرت روند {instrument}...', 'سیگنال‌های روندی در {instrument}...'],
+    closingPhrases: ['روند با قدرت ادامه می‌یابد یا...', 'تثبیت روند نیازمند...', 'نقطه‌ی عطف روندی نزدیک است.'],
+  },
+  {
+    id: 'davood_trend', name: 'داود رحیمی — تحلیل‌گر شکست و تثبیت', gender: 'male', experience: 11,
+    schoolAffinity: 'trend', toneAffinity: 'aggressive',
+    style: { sentences: 'سریع و تأکیدی', vocabulary: 'عملیاتی و روندی', emphasis: 'شکست سطوح' },
+    signaturePhrases: ['شکست قاطع', 'تثبیت بالای مقاومت', 'روند تازه شکل گرفته', 'سیگنال تداوم', 'قوی‌ترین روند'],
+    writingHabits: ['تأکید بر شکست‌های معتبر', 'سرعت در نتیجه‌گیری', 'ترکیب روند با حجم', 'ارائه‌ی نقطه‌ی ورود سریع'],
+    openingPhrases: ['شکست مهمی در {instrument} رخ داد...', 'روند جدید {instrument} شکل گرفته...', 'تثبیت قیمت بالای سطح کلیدی در {instrument}...'],
+    closingPhrases: ['شکست نهایی و قطعی...', 'تداوم روند محتمل...', 'منتظر پولبک ورود باشید.'],
+  },
+  {
+    id: 'shahin_candle', name: 'شهاب نوری — متخصص الگوهای کندلی', gender: 'male', experience: 15,
+    schoolAffinity: 'candlestick', toneAffinity: 'balanced',
+    style: { sentences: 'تصویری و تشریحی', vocabulary: 'کندل‌استیک و ژاپنی', emphasis: 'الگوهای شمعی' },
+    signaturePhrases: ['الگوی شمعی', 'بدنه و سایه‌ها', 'کندل تأییدی', 'الگوی بازگشتی', 'سیگنال کندلی'],
+    writingHabits: ['توصیف دقیق شکل کندل', 'ترکیب کندل با سطوح', 'تحلیل سایه‌ها و بدنه', 'تأکید بر حجم همراه الگو'],
+    openingPhrases: ['الگوی کندلی قابل توجهی در {instrument}...', 'شمع‌های اخیر {instrument} داستانی دارند...', 'ترکیب کندلی در {instrument} نشان می‌دهد...'],
+    closingPhrases: ['کندل‌های آینده‌ی نزدیک...', 'الگوی کندلی نهایی...', 'منتظر کندل تأییدی باشید.'],
+  },
+  {
+    id: 'fatemeh_candle', name: 'فاطمه عباسی — تحلیل‌گر روانشناسی کندل', gender: 'female', experience: 10,
+    schoolAffinity: 'candlestick', toneAffinity: 'optimistic',
+    style: { sentences: 'روان و داستان‌گونه', vocabulary: 'روانشناختی و کندلی', emphasis: 'نفس بازار' },
+    signaturePhrases: ['نفس بازار', 'داستان کندل‌ها', 'جنگ خریداران و فروشندگان', 'فشار خرید/فروش', 'پیروزی خریداران/فروشندگان'],
+    writingHabits: ['روایت داستان بازار از زاویه کندل', 'تصویرسازی جنگ خریدار و فروشنده', 'تحلیل سایه‌ها به عنوان سلطه', 'ترکیب روانشناسی با کندل'],
+    openingPhrases: ['داستان امروز {instrument} از نگاه کندل‌ها...', 'نبرد خریداران و فروشندگان در {instrument}...', 'نفس بازار {instrument} امروز...'],
+    closingPhrases: ['داستان کندل‌ها به ما می‌گوید...', 'بازار نفس کشید...', 'پیروز نهایی این نبرد...'],
+  },
+  {
+    id: 'mohsen_sr', name: 'محسن رحمانی — متخصص سطوح کلیدی', gender: 'male', experience: 16,
+    schoolAffinity: 'classical', toneAffinity: 'realistic',
+    style: { sentences: 'مستند و اثباتی', vocabulary: 'سطوح و قیمت', emphasis: 'حمایت و مقاومت' },
+    signaturePhrases: ['سطح کلیدی', 'ناحیه‌ی عرضه و تقاضا', 'تلاقی سطوح', 'قیمت واکنش‌دهنده', 'برخورد تعدادی'],
+    writingHabits: ['تأکید بر تعداد برخوردها', 'تحلیل فاصله‌ی قیمت از سطوح', 'ترکیب سطوح با حجم', 'ارائه‌ی نقشه‌ی سطوح'],
+    openingPhrases: ['نقشه‌ی سطوح کلیدی {instrument}...', 'بررسی نقاط واکنش‌دهنده‌ی {instrument}...', 'سطوح عرضه و تقاضا در {instrument}...'],
+    closingPhrases: ['نقشه‌ی نهایی سطوح...', 'نزدیک‌ترین سطح واکنش‌دهنده...', 'تلاقی سطوح حائز اهمیت است.'],
+  },
+  {
+    id: 'nasrin_risk', name: 'نسرین کاویانی — مدیر ریسک حرفه‌ای', gender: 'female', experience: 22,
+    schoolAffinity: 'hybrid', toneAffinity: 'conservative',
+    style: { sentences: 'محتاط و مدیریت‌محور', vocabulary: 'ریسک و مدیریت سرمایه', emphasis: 'حفظ سرمایه' },
+    signaturePhrases: ['مدیریت ریسک', 'نسبت ریسک به بازده', 'حفظ سرمایه اولویت است', 'حد ضرر علمی', 'اندازه‌ی موقعیت'],
+    writingHabits: ['محاسبه‌ی دقیق نسبت ریسک/بازده', 'تأکید بر حد ضرر', 'ارائه‌ی اندازه‌ی موقعیت مناسب', 'تحلیل سناریوهای بدترین حالت'],
+    openingPhrases: ['از منظر مدیریت ریسک، {instrument}...', 'ارزیابی ریسک {instrument} نشان می‌دهد...', 'مدیریت سرمایه در {instrument}...'],
+    closingPhrases: ['مدیریت ریسک نهایی...', 'حد ضرر و نسبت ریسک...', 'حفظ سرمایه مهم‌ترین اصل.'],
+  },
+  {
+    id: 'keyvan_macro', name: 'کیوان فرهادی — تحلیل‌گر اقتصاد کلان بازار', gender: 'male', experience: 18,
+    schoolAffinity: 'hybrid', toneAffinity: 'alert',
+    style: { sentences: 'تحلیلی و جامع', vocabulary: 'اقتصادی و کلان', emphasis: 'بستر کلان' },
+    signaturePhrases: ['بستر کلان بازار', 'شرایط اقتصاد کلان', 'تأثیر نرخ بهره', 'نوسانات ارزی', 'سیاست‌گذاری پولی'],
+    writingHabits: ['توصیف بستر اقتصاد کلان', 'ارتباط بازار با سیاست‌گذاری', 'تحلیل تأثیرات خارجی', 'ترکیب تحلیل فاندامنتال و تکنیکال'],
+    openingPhrases: ['در بستر اقتصاد کلان امروز، {instrument}...', 'شرایط کلان بر {instrument} تأثیر گذاشته...', 'نگاهی به عوامل کلان مؤثر بر {instrument}...'],
+    closingPhrases: ['بستر کلان حاکی از...', 'سیاست‌گذاری آتی...', 'بازار در واکنش به عوامل کلان.'],
+  },
+  {
+    id: 'minoo_educator', name: 'منیرهteacher — تحلیل‌گر آموزشی بازار', gender: 'female', experience: 25,
+    schoolAffinity: 'hybrid', toneAffinity: 'balanced',
+    style: { sentences: 'آموزشی و گام‌به‌گام', vocabulary: 'آموزشی و ساده', emphasis: 'یادگیری و آموزش' },
+    signaturePhrases: ['بیایید بررسی کنیم', 'نکته‌ی مهم', 'دقت کنید که', 'یادآوری می‌کنم', 'اصل مهم تکنیکال'],
+    writingHabits: ['توضیح مفاهیم به زبان ساده', 'ارائه‌ی نکات آموزشی', 'مرور مفاهیم کلیدی', 'ارتباط مفاهیم با واقعیت بازار'],
+    openingPhrases: ['امروز می‌خواهیم {instrument} را با هم بررسی کنیم...', 'درس امروز درباره‌ی {instrument}...', 'بیایید گام‌به‌گام {instrument} را تحلیل کنیم...'],
+    closingPhrases: ['نکته‌ی نهایی این تحلیل...', 'یادتان باشد...', 'تمرین این تحلیل را روی نمادهای دیگر هم انجام دهید.'],
+  },
+  {
+    id: 'arash_daytrade', name: 'آرش طاهری — معامله‌گر روزانه', gender: 'male', experience: 8,
+    schoolAffinity: 'oscillator', toneAffinity: 'aggressive',
+    style: { sentences: 'فوری و کوتاه', vocabulary: 'معاملاتی و روزانه', emphasis: 'سود سریع' },
+    signaturePhrases: ['فرصت همین امروز', 'سود قفل‌شده', 'سیگنال فوری', 'تایم‌فریم پایین', 'نوسان‌گیری هوشمند'],
+    writingHabits: ['تحلیل سریع و فوری', 'تأکید بر تایم‌فریم‌های پایین', 'ترکیب اسیلاتور و قیمت', 'مدیریت ریسک روزانه'],
+    openingPhrases: ['فرصت روزانه در {instrument}...', 'امروز {instrument} پتانسیل خوبی دارد...', 'سیگنال نوسان‌گیری {instrument}...'],
+    closingPhrases: ['فرصت امروز...', 'سود روزانه محتمل...', 'منتظر سیگنال خروج بمانید.'],
+  },
+  {
+    id: 'roya_patience', name: 'رویا امیری — تحلیل‌گر بلندمدت صبور', gender: 'female', experience: 21,
+    schoolAffinity: 'trend', toneAffinity: 'optimistic',
+    style: { sentences: 'آرام و عمیق', vocabulary: 'استراتژیک و بلندمدت', emphasis: 'چشم‌انداز بلند' },
+    signaturePhrases: ['چشم‌انداز بلندمدت', 'سرمایه‌گذاری هوشمند', 'صبر کلید موفقیت', 'روند بزرگ', 'تحول بنیادی'],
+    writingHabits: ['تحلیل تایم‌فریم‌های بالاتر', 'تأکید بر صبر و نظم', 'ارائه‌ی چشم‌انداز ۳-۶ ماهه', 'تحلیل تغییرات ساختاری'],
+    openingPhrases: ['در چشم‌انداز بلندمدت، {instrument}...', 'نگاهی استراتژیک به {instrument}...', 'سرمایه‌گذاری صبورانه در {instrument}...'],
+    closingPhrases: ['صبر کلید موفقیت است...', 'چشم‌انداز بلندمدت مثبت...', 'زمان بهترین معلم بازار.'],
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 3: Phrase Bank (500+ phrases)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const PHRASE_BANK: Record<string, Record<string, string[]>> = {
+  introduction: {
+    general: [
+      'بر اساس آخرین داده‌های بازار و تحلیل جامع تکنیکال...',
+      'نگاهی دقیق به وضعیت امروز بازار نشان می‌دهد که...',
+      'با بررسی اندیکاتورها و الگوهای قیمتی، به نتایج زیر رسیده‌ایم...',
+      'تحلیل امروز با تمرکز بر {school} و با رویکرد {style} انجام شده است...',
+      'در ادامه، به بررسی دقیق وضعیت {instrument} با استفاده از ابزارهای تحلیلی می‌پردازیم...',
+      'بازار {instrument} امروز در وضعیت {market_status} قرار دارد...',
+      'تحلیل امروز {instrument} در تایم‌فریم روزانه نشان‌دهنده‌ی {key_finding} است...',
+      'با توجه به تحولات اخیر بازار {instrument}، تحلیل جامعی انجام شده است...',
+      'در این گزارش، به تحلیل {instrument} با رویکرد {school} می‌پردازیم...',
+      'وضعیت امروز {instrument} با {indicator_status} و {pattern_status} همراه است...',
+      'داده‌های تکنیکال امروز {instrument} تصویر روشنی از آینده ترسیم می‌کنند...',
+      'بررسی همزمان چندین شاخص کلیدی در {instrument}...',
+      'خلاصه‌ی وضعیت فعلی {instrument} از منظر تکنیکال...',
+      'امروز {instrument} در یک نقطه‌ی عطف مهم قرار دارد...',
+      'ترکیب داده‌های قیمتی و اندیکاتوری در {instrument}...',
+    ],
+    classical: [
+      'با بررسی دقیق سطوح حمایت و مقاومت و الگوهای کلاسیک در {instrument}...',
+      'تحلیل کلاسیک {instrument} با تأکید بر خطوط روند و الگوهای قیمتی...',
+      'در چارچوب تحلیل کلاسیک، وضعیت {instrument} به‌صورت زیر بررسی می‌شود...',
+      'الگوهای کلاسیک شکل‌گرفته در {instrument}...',
+    ],
+    oscillator: [
+      'بر اساس سیگنال‌های اسیلاتورها و تشخیص واگرایی‌ها در {instrument}...',
+      'تحلیل مومنتوم {instrument} با استفاده از RSI، MACD و استوکاستیک...',
+      'اسیلاتورهای {instrument} نشان‌دهنده‌ی {oscillator_signal} هستند...',
+    ],
+    harmonic: [
+      'با محاسبه‌ی نسبت‌های فیبوناچی و تشخیص الگوهای هارمونیک در {instrument}...',
+      'تحلیل هارمونیک {instrument} با تأکید بر نسبت‌های طلایی...',
+    ],
+    elliott: [
+      'بر اساس ساختار امواج الیوت و تشخیص الگوهای موجی در {instrument}...',
+      'تحلیل موجی {instrument} با شناسایی امواج حرکتی و اصلاحی...',
+    ],
+    volume: [
+      'با بررسی حجم معاملات و جریان نقدینگی {instrument}...',
+      'تحلیل حجمی {instrument} نشان‌دهنده‌ی الگوی جریان پول...',
+    ],
+  },
+
+  trend_analysis: {
+    bullish: [
+      'روند {instrument} در تایم‌فریم روزانه صعودی ارزیابی می‌شود.',
+      'میانگین‌های متحرک نشان‌دهنده‌ی یک روند صعودی پایدار هستند.',
+      'قیمت {instrument} با موفقیت از سطوح حمایت عبور کرده و به سمت مقاومت‌ها حرکت می‌کند.',
+      'روند صعودی {instrument} با قدرت {trend_strength} در حال ادامه است.',
+      'شکست سقف‌های قبلی نشان‌دهنده‌ی تداوم روند صعودی است.',
+      'خط روند صعودی با چندین برخورد تأیید شده است.',
+      'کانال صعودی {instrument} نشان‌دهنده‌ی حرکت منظم قیمت به سمت بالا است.',
+      'EMAها به ترتیب صعودی چیده شده‌اند که تأیید‌کننده‌ی روند صعودی است.',
+      'قیمت بالاتر از هر سه میانگین متحرک قرار دارد.',
+      'DI+ بالاتر از DI- و ADX بالای ۲۵، روند صعودی قدرتمندی را تأیید می‌کند.',
+    ],
+    bearish: [
+      'روند {instrument} در تایم‌فریم روزانه نزولی ارزیابی می‌شود.',
+      'میانگین‌های متحرک نشان‌دهنده‌ی یک روند نزولی پایدار هستند.',
+      'قیمت {instrument} در حال شکست سطوح حمایت و حرکت به سمت پایین است.',
+      'روند نزولی {instrument} با قدرت {trend_strength} در حال ادامه است.',
+      'شکست کف‌های قبلی نشان‌دهنده‌ی تداوم روند نزولی است.',
+      'EMAها به ترتیب نزولی چیده شده‌اند و فشار فروش غالب است.',
+      'DI- بالاتر از DI+ و ADX در حال افزایش، تشدید روند نزولی را نشان می‌دهد.',
+      'قیمت زیر تمامی میانگین‌های متحرک قرار دارد.',
+      'هر بار که قیمت به میانگین‌ها نزدیک می‌شود، با فروش مواجه می‌شود.',
+    ],
+    neutral: [
+      'روند {instrument} در تایم‌فریم روزانه خنثی و رنج ارزیابی می‌شود.',
+      'قیمت {instrument} در محدوده‌ی مشخصی در حال نوسان است.',
+      'میانگین‌های متحرک هم‌پوشانی دارند و روند مشخصی قابل تشخیص نیست.',
+      'ADX پایین‌تر از ۲۰ نشان‌دهنده‌ی نبود روند قوی است.',
+      'بازار در حالت تثبیت و انتظار برای تعیین جهت آینده است.',
+    ],
+    strength: [
+      'قدرت روند با ADX {adx_value} قوی ارزیابی می‌شود.',
+      'شتاب حرکت نشان‌دهنده‌ی قدرت بالای روند است.',
+      'حجم بالا و حرکت قیمت تأییدکننده‌ی قدرت روند است.',
+      'قدرت روند با ADX {adx_value} متوسط ارزیابی می‌شود.',
+      'حرکت با سرعت متعادل و قابل‌قبولی در حال پیشرفت است.',
+      'قدرت روند با ADX {adx_value} ضعیف ارزیابی می‌شود.',
+      'کمبود شتاب و حجم پایین نشان‌دهنده‌ی ضعف روند است.',
+    ],
+  },
+
+  indicators: {
+    rsi_overbought: [
+      'RSI با مقدار {rsi_value} در محدوده‌ی اشباع خرید قرار دارد.',
+      'اشباع خرید در RSI نشان‌دهنده‌ی احتمال اصلاح کوتاه‌مدت است.',
+      'RSI بالای ۷۰، هشدار اشباع خرید را فعال کرده است.',
+    ],
+    rsi_oversold: [
+      'RSI با مقدار {rsi_value} در محدوده‌ی اشباع فروش قرار دارد.',
+      'اشباع فروش در RSI نشان‌دهنده‌ی احتمال برگشت صعودی است.',
+      'RSI پایین‌تر از ۳۰، فرصت خرید بالقوه‌ای را نشان می‌دهد.',
+    ],
+    rsi_neutral: [
+      'RSI با مقدار {rsi_value} در محدوده‌ی خنثی قرار دارد.',
+      'RSI در محدوده نرمال، فشار خرید و فروش متعادل است.',
+    ],
+    rsi_divergence: [
+      'واگرایی مثبت بین قیمت و RSI تشخیص داده شده است.',
+      'واگرایی منفی بین قیمت و RSI هشدار برگشت می‌دهد.',
+    ],
+    macd_bullish: [
+      'MACD صعودی است و هیستوگرام مثبت نشان‌دهنده‌ی قدرت روند است.',
+      'تقاطع صعودی MACD با خط سیگنال اتفاق افتاده است.',
+      'هیستوگرام MACD در حال گسترش مثبت است.',
+    ],
+    macd_bearish: [
+      'MACD نزولی است و هیستوگرام منفی نشان‌دهنده‌ی قدرت روند نزولی است.',
+      'تقاطع نزولی MACD با خط سیگنال اتفاق افتاده است.',
+      'هیستوگرام MACD در حال گسترش منفی است.',
+    ],
+    macd_neutral: [
+      'MACD در وضعیت خنثی قرار دارد و تغییرات محسوسی مشاهده نمی‌شود.',
+      'MACD و خط سیگنال نزدیک به هم هستند و سیگنال مشخصی نمی‌دهند.',
+    ],
+    bollinger: [
+      'قیمت در نیمه‌ی بالایی باند بولینگر قرار دارد.',
+      'قیمت در نیمه‌ی پایینی باند بولینگر قرار دارد.',
+      'باندهای بولینگر در حال جمع شدن (Squeeze) هستند که نشان‌دهنده‌ی آمادگی برای حرکت بزرگ است.',
+      'باندهای بولینگر در حال باز شدن و نوسان افزایشی است.',
+    ],
+    adx: [
+      'ADX با مقدار {adx_value} نشان‌دهنده‌ی {adx_interpretation} است.',
+      'ADX در حال افزایش است که نشان‌دهنده‌ی تقویت روند است.',
+      'کاهش ADX نشان‌دهنده‌ی تضعیف روند است.',
+    ],
+    stochastic: [
+      'استوکاستیک K و D در منطقه اشباع خرید قرار دارند.',
+      'استوکاستیک در منطقه اشباع فروش، سیگنال برگشت احتمالی را نشان می‌دهد.',
+      'تقاطع صعودی استوکاستیک K و D رخ داده است.',
+      'تقاطع نزولی استوکاستیک K و D هشدار نزولی است.',
+    ],
+    volume_indicators: [
+      'OBV در حال افزایش و تأیید‌کننده‌ی روند صعودی است.',
+      'OBV رو به پایین و نشانه‌ی خروج پول هوشمند است.',
+      'MFI نشان‌دهنده‌ی اشباع خرید حجمی است.',
+      'MFI نشان‌دهنده‌ی اشباع فروش حجمی است.',
+    ],
+  },
+
+  patterns: {
+    classic_bullish: [
+      'الگوی سر و شانه معکوس با اعتبار بالا تشخیص داده شده است.',
+      'الگوی مثلث صعودی در حال شکست با حجم بالا است.',
+      'الگوی پرچم صعودی پس از حرکت تند شکل گرفته است.',
+      'الگوی کف دوقلو با شکست خط گردن تأیید شده است.',
+      'الگوی فنجان و دسته در حال تکمیل است.',
+    ],
+    classic_bearish: [
+      'الگوی سر و شانه سقفی هشدار نزولی می‌دهد.',
+      'الگوی سقف دوقلو با شکست خط گردن نزولی تأیید شده است.',
+      'الگوی مثلث نزولی در حال تکمیل است.',
+      'الگوی پرچم نزولی پس از ریزش شکل گرفته است.',
+    ],
+    harmonic_bullish: [
+      'الگوی هارمونیک صعودی با نسبت‌های دقیق تشخیص داده شده است.',
+      'ناحیه‌ی برگشت احتمالی (PRZ) در محدوده‌ی حمایت قرار دارد.',
+      'تلاقی نسبت‌های فیبوناچی نقطه‌ی برگشت قوی را نشان می‌دهد.',
+    ],
+    harmonic_bearish: [
+      'الگوی هارمونیک نزولی در ناحیه‌ی مقاومت شناسایی شده است.',
+      'PRZ نزولی با تلاقی چندین نسبت فعال شده است.',
+    ],
+    candlestick_bullish: [
+      'الگوی چکش (Hammer) در کف شکل گرفته، سیگنال بازگشت صعودی است.',
+      'الگوی پوشای صعودی (Bullish Engulfing) قدرت خریداران را نشان می‌دهد.',
+      'ستاره صبحگاهی (Morning Star) در سطح حمایت ظاهر شده است.',
+      'الگوی سه‌سرباز سفید (Three White Soldiers) صعودی قوی را تأیید می‌کند.',
+    ],
+    candlestick_bearish: [
+      'الگوی شهاب (Shooting Star) هشدار نزولی می‌دهد.',
+      'الگوی پوشای نزولی (Bearish Engulfing) قدرت فروشندگان را نشان می‌دهد.',
+      'ستاره عصرگاهی (Evening Star) در سطح مقاومت ظاهر شده است.',
+      'الگوی سه کلاغ سیاه (Three Black Crows) نزولی قوی را تأیید می‌کند.',
+    ],
+    elliott: [
+      'ساختار موجی نشان‌دهنده‌ی الگوی حرکتی ۵ موجی است.',
+      'موج اصلاحی ABC در حال تکمیل است.',
+      'نسبت‌های فیبوناچی بین امواج، دقت تحلیل را تأیید می‌کند.',
+      'موج سوم (قوی‌ترین موج) در حال شکل‌گیری است.',
+      'موج پنجم و انتهای روند حرکتی نزدیک است.',
+    ],
+    no_pattern: [
+      'الگوی قیمتی قابل اعتمادی در حال حاضر شناسایی نشده است.',
+      'الگوها در مرحله‌ی شکل‌گیری هستند و هنوز تأیید نشده‌اند.',
+    ],
+  },
+
+  forecast: {
+    bullish: [
+      'پیش‌بینی قیمت {instrument} برای دوره‌ی آینده صعودی است.',
+      'با احتمال {probability}، قیمت به محدوده‌ی {target} خواهد رسید.',
+      'بهترین سناریو حرکت به سمت {target} با احتمال {probability} است.',
+      'در بهترین حالت، {instrument} با شکست {level} به {target} خواهد رسید.',
+      'پیش‌بینی کوتاه‌مدت: حرکت به سمت بالا در دوره آینده.',
+    ],
+    bearish: [
+      'پیش‌بینی قیمت {instrument} برای دوره‌ی آینده نزولی است.',
+      'بدترین سناریو بازگشت به حمایت {support} با احتمال {probability} است.',
+      'در بدترین حالت، {instrument} به حمایت {support} بازخواهد گشت.',
+      'ریسک نزولی قابل توجهی وجود دارد.',
+    ],
+    neutral: [
+      'محتمل‌ترین سناریو نوسان در محدوده‌ی {range} است.',
+      'در حالت محتمل، {instrument} در محدوده‌ی فعلی نوسان خواهد کرد.',
+      'بازار در انتظار کاتالیزور برای تعیین جهت است.',
+    ],
+    ml_integration: [
+      'پیش‌بینی مدل یادگیری ماشین (ML) با تحلیل تکنیکال همخوانی دارد.',
+      'مدل ML جهت {ml_direction} با اطمینان {ml_confidence} را پیش‌بینی کرده است.',
+      'تضاد جزئی بین ML و تحلیل تکنیکال وجود دارد که نیاز به احتیاط بیشتر دارد.',
+      'سیستم وزن‌دهی بیزی، شاخص‌های با دقت بالاتر را برجسته کرده است.',
+    ],
+  },
+
+  entry_exit: {
+    entry: [
+      'نقطه‌ی ورود ایده‌آل در قیمت {entry_price} تعیین شده است.',
+      'منطقه‌ی ورود در بازه‌ی {zone_start} تا {zone_end} قرار دارد.',
+      'تأیید ورود با {confirmation_signal} انجام می‌شود.',
+      'منتظر پولبک به منطقه‌ی ورود باشید.',
+    ],
+    stop_loss: [
+      'حد ضرر در {stop_loss} با {stop_reason} تعیین شده است.',
+      'سطح حد ضرر در {stop_level} قرار دارد.',
+      'حد ضرر باید با دقت رعایت شود تا از زیان بیشتر جلوگیری شود.',
+    ],
+    take_profit: [
+      'اهداف قیمتی به‌صورت {tp1}، {tp2}، {tp3} تعیین شده‌اند.',
+      'هدف اول در {tp1} و هدف دوم در {tp2} قرار دارد.',
+      'نسبت ریسک به بازده {risk_reward} برای این موقعیت مناسب است.',
+    ],
+    position: [
+      'حجم معاملاتی {position_size} با توجه به سطح اطمینان توصیه می‌شود.',
+      'مدیریت سرمایه اصولی، کلید موفقیت در این معامله است.',
+      'ریسک هر معامله نباید بیشتر از ۲ درصد سرمایه باشد.',
+    ],
+  },
+
+  conclusion: {
+    buy: [
+      'با توجه به تحلیل‌های انجام‌شده، تصمیم خرید با اطمینان {confidence} توصیه می‌شود.',
+      'سیگنال خرید قوی با تأیید {confirmations} مشاهده می‌شود.',
+      'شواهد کافی برای ورود خرید وجود دارد.',
+    ],
+    sell: [
+      'با توجه به تحلیل‌ها، تصمیم فروش با اطمینان {confidence} توصیه می‌شود.',
+      'سیگنال فروش قوی با تأیید {confirmations} مشاهده می‌شود.',
+      'شواهد نزولی بر شواهد صعودی غلبه دارند.',
+    ],
+    hold: [
+      'شرایط فعلی برای ورود مناسب نیست و بهتر است منتظر بمانیم.',
+      'سیگنال‌ها متناقض هستند و انتظار توصیه می‌شود.',
+      'بهتر است تا تعیین جهت روشن‌تر، نظاره‌گر باشیم.',
+    ],
+    final: [
+      'ترکیب سیگنال‌ها و الگوها نشان‌دهنده‌ی {final_interpretation} است.',
+      'مدیریت ریسک و پایش مستمر برای موفقیت ضروری است.',
+      'با رعایت اصول مدیریت ریسک، می‌توان از این موقعیت به‌خوبی استفاده کرد.',
+      'تحلیل تکنیکال فقط یکی از ابزارهای تصمیم‌گیری است و باید با سایر عوامل ترکیب شود.',
+      'هیچ تحلیلی قطعی نیست و همیشه امکان خطا وجود دارد.',
+      'توصیه‌ی نهایی: صبر، نظم و مدیریت ریسک.',
+    ],
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 4: 5 Template Formats
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const TEMPLATE_FORMATS: V10TemplateFormat[] = [
+  {
+    id: 'executive', name: 'سبک اجرایی و تصمیم‌گیری', nameEn: 'Executive Decision',
+    lengthPreference: 'short', focusArea: 'تصمیم‌گیری سریع',
+    sections: ['خلاصه‌ی اجرایی', 'دلایل اصلی', 'توصیه‌ی عملی'],
+    wordCountRange: [600, 1000],
+    structure: 'خلاصه در ابتدا، سپس ۳ دلیل اصلی، و توصیه عملی در انتها',
+  },
+  {
+    id: 'technical', name: 'سبک تحلیلی-تکنیکال', nameEn: 'Technical Analytical',
+    lengthPreference: 'long', focusArea: 'تحلیل عمیق تکنیکال',
+    sections: ['نمای کلی', 'تحلیل روند', 'تحلیل سطوح کلیدی', 'الگوهای تشخیص‌داده‌شده', 'پیش‌بینی و سناریوها', 'نقاط ورود و خروج', 'نتیجه‌گیری'],
+    wordCountRange: [1000, 1800],
+    structure: 'تحلیل جامع با تمام بخش‌ها به ترتیب، پاراگراف‌های بلند و عمیق',
+  },
+  {
+    id: 'trading', name: 'سبک معاملاتی و عملیاتی', nameEn: 'Trading Operations',
+    lengthPreference: 'short', focusArea: 'نقاط ورود و خروج',
+    sections: ['خلاصه‌ی سیگنال', 'تحلیل سریع', 'دستورات اجرایی', 'شرایط لغو'],
+    wordCountRange: [500, 900],
+    structure: 'جدول خلاصه سیگنال، تحلیل مختصر، دستورات ورود/خروج/حد ضرر',
+  },
+  {
+    id: 'forecast', name: 'سبک پیش‌بینی و آینده‌نگر', nameEn: 'Forecast',
+    lengthPreference: 'medium', focusArea: 'پیش‌بینی و سناریوها',
+    sections: ['چشم‌انداز کلی', 'پیش‌بینی قیمت', 'سناریوهای محتمل', 'نقاط عطف آینده', 'جمع‌بندی'],
+    wordCountRange: [800, 1400],
+    structure: 'تمرکز بر آینده، جدول پیش‌بینی، سناریوها با احتمالات',
+  },
+  {
+    id: 'educational', name: 'سبک آموزشی-تفسیری', nameEn: 'Educational Interpretive',
+    lengthPreference: 'long', focusArea: 'آموزش و تفسیر',
+    sections: ['مقدمه', 'مفاهیم کلیدی', 'تحلیل گام‌به‌گام', 'نکات آموزشی', 'جمع‌بندی'],
+    wordCountRange: [1000, 1600],
+    structure: 'آموزش گام‌به‌گام با توضیح مفاهیم، تحلیل مرحله‌ای',
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 5: Schools, Styles, Tones (Backward Compatibility)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const SCHOOLS: SchoolDef[] = [
+  { id: 'trend', name: 'تحلیل روند', nameEn: 'Trend Following', description: 'تمرکز بر شدت روند و زاویه روند با EMA، MACD و ADX.', methodology: 'EMA 20/50/100, MACD, ADX, DI+/DI-', focusQuestion: 'آیا روند قابل اعتماد است؟' },
+  { id: 'classical', name: 'الگوهای کلاسیک', nameEn: 'Classical Patterns', description: 'شناسایی الگوهای قیمتی کلاسیک.', methodology: 'Head & Shoulders, Double Top/Bottom, Flags, Triangles', focusQuestion: 'آیا الگوی قیمتی در حال شکل‌گیری است؟' },
+  { id: 'candlestick', name: 'الگوهای کندلی', nameEn: 'Candlestick Patterns', description: 'تحلیل الگوهای شمعی ژاپنی در سطوح کلیدی.', methodology: 'Doji, Hammer, Engulfing, Morning/Evening Star', focusQuestion: 'آیا کندلی در سطوح کلیدی عکس روند را تأیید می‌کند؟' },
+  { id: 'oscillator', name: 'اندیکاتورهای نوسان‌نما', nameEn: 'Oscillator Analysis', description: 'تحلیل مومنتوم و سیگنال‌های اسیلاتوری.', methodology: 'RSI, MACD, Stochastic, CCI, MFI', focusQuestion: 'آیا مومنتوم و واگرایی‌ها سیگنال می‌دهند؟' },
+  { id: 'harmonic', name: 'الگوهای هارمونیک', nameEn: 'Harmonic Patterns', description: 'تحلیل نسبت‌های فیبوناچی و الگوهای هارمونیک.', methodology: 'Gartley, Butterfly, Bat, Crab, PRZ', focusQuestion: 'آیا نسبت‌های فیبوناچی ناحیه‌ی برگشت را نشان می‌دهند؟' },
+  { id: 'elliott', name: 'موج‌شناسی الیوت', nameEn: 'Elliott Wave', description: 'تحلیل ساختار موجی ۵-۳.', methodology: 'Impulse/Corrective waves, Fibonacci ratios', focusQuestion: 'کدام موج فعلی است و هدف آن چیست؟' },
+  { id: 'volume', name: 'تحلیل حجم', nameEn: 'Volume Analysis', description: 'تأیید روند و شکست با تحلیل حجم.', methodology: 'OBV, A/D, Volume Profile, VSA', focusQuestion: 'آیا حجم حرکت قیمت را تأیید می‌کند؟' },
+  { id: 'sr', name: 'سطوح حمایت و مقاومت', nameEn: 'Support & Resistance', description: 'شناسایی سطوح کلیدی واکنش‌دهنده.', methodology: 'Pivot Points, Multiple Touches, Overlap', focusQuestion: 'نزدیک‌ترین سطح کلیدی کجاست؟' },
+  { id: 'volatility', name: 'تحلیل نوسانات', nameEn: 'Volatility Analysis', description: 'تحلیل ATR و باندهای بولینگر.', methodology: 'ATR, Bollinger Bands, Keltner Channels', focusQuestion: 'نوسان در حال افزایش یا کاهش است؟' },
+  { id: 'hybrid', name: 'تحلیل ترکیبی', nameEn: 'Hybrid Multi-School', description: 'تلفیق چند مکتب برای تصمیم‌گیری جامع.', methodology: 'Weighted combination of all schools', focusQuestion: 'همگرایی سیگنال‌ها کجاست؟' },
+];
+
+export const STYLES: StyleDef[] = [
+  { id: 'executive', name: 'سبک اجرایی', nameEn: 'Executive', voice: 'مستقیم و تصمیم‌گیر', structure: 'خلاصه + دلایل + توصیه', endingStyle: 'دستورالعمل روشن' },
+  { id: 'technical', name: 'سبک تکنیکال', nameEn: 'Technical Analytical', voice: 'دقیق و تحلیلی', structure: 'بخش‌بندی کامل', endingStyle: 'جمع‌بندی تحلیلی' },
+  { id: 'trading', name: 'سبک معاملاتی', nameEn: 'Trading Ops', voice: 'عملیاتی و سریع', structure: 'سیگنال + اجرا + مدیریت ریسک', endingStyle: 'برنامه اجرایی' },
+  { id: 'forecast', name: 'سبک پیش‌بینی', nameEn: 'Forecast', voice: 'آینده‌نگر', structure: 'چشم‌انداز + پیش‌بینی + سناریوها', endingStyle: 'جمع‌بندی آینده' },
+  { id: 'educational', name: 'سبک آموزشی', nameEn: 'Educational', voice: 'آموزشی و صبور', structure: 'مقدمه + مفاهیم + گام‌به‌گام + جمع‌بندی', endingStyle: 'نکته‌ی آموزشی' },
+];
+
+export const TONES: ToneDef[] = [
+  { id: 'conservative', name: 'محافظه‌کار', nameEn: 'Conservative', characteristics: 'هوشیار، ریسک‌گریز، تأکید بر حفظ سرمایه', vocabulary: 'احتیاط، حد ضرر، مدیریت ریسک، صبر', sentenceStyle: 'جملات شرطی و محتاطانه' },
+  { id: 'aggressive', name: 'جسور', nameEn: 'Aggressive', characteristics: 'قاطع، سریع، جسورانه', vocabulary: 'شکست، ورود، فرصت، سیگنال قوی', sentenceStyle: 'جملات کوتاه و قاطع' },
+  { id: 'balanced', name: 'متعادل', nameEn: 'Balanced', characteristics: 'عینی، دوطرفه، متعادل', vocabulary: 'شواهد، احتمال، تعادل، تحلیل', sentenceStyle: 'جملات متوسط و متعادل' },
+  { id: 'alert', name: 'هشداری', nameEn: 'Alert', characteristics: 'هوشیار، مراقب، زودبازنگ', vocabulary: 'هشدار، مراقب، خطر، احتیاط', sentenceStyle: 'جملات هشداری با تأکید' },
+  { id: 'optimistic', name: 'خوش‌بین', nameEn: 'Optimistic', characteristics: 'مثبت‌نگر، امیدوار', vocabulary: 'فرصت، پتانسیل، رشد، امید', sentenceStyle: 'جملات مثبت و امیدوارانه' },
+  { id: 'realistic', name: 'واقع‌گرا', nameEn: 'Realistic', characteristics: 'واقع‌بین، بی‌طرف', vocabulary: 'واقعیت، داده، شواهد، احتمال', sentenceStyle: 'جملات واقع‌بینانه و مستند' },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 6: Scoring Functions (Backward Compat)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function scoreSchool(s: SchoolDef, inp: NarrativeInput): number {
+  let s_ = 0;
+  const { trendDirection, rsi, adx, bbPosition, diPlus, diMinus } = inp;
+  switch (s.id) {
+    case 'trend': s_ = adx > 25 ? 8 : adx > 15 ? 5 : 2; break;
+    case 'classical': s_ = (inp.nearResistance || inp.nearSupport) ? 9 : 5; break;
+    case 'candlestick': s_ = (inp.nearResistance || inp.nearSupport) ? 8 : 4; break;
+    case 'oscillator': s_ = (rsi > 70 || rsi < 30) ? 9 : Math.abs(rsi - 50) > 15 ? 6 : 3; break;
+    case 'harmonic': s_ = (inp.nearResistance || inp.nearSupport) ? 7 : 3; break;
+    case 'elliott': s_ = inp.trendR2 > 0.7 ? 9 : inp.trendR2 > 0.4 ? 5 : 2; break;
+    case 'volume': s_ = inp.hasVolume ? 8 : 2; break;
+    case 'sr': s_ = (inp.nearResistance || inp.nearSupport) ? 9 : 4; break;
+    case 'volatility': s_ = inp.atr / inp.price > 0.03 ? 8 : inp.atr / inp.price > 0.01 ? 5 : 2; break;
+    case 'hybrid': s_ = 6; break;
+    default: s_ = 4;
+  }
+  if (s.id === 'trend' && trendDirection === 'up') s_ += 1;
+  if (s.id === 'trend' && diPlus > diMinus) s_ += 1;
+  return s_;
+}
+
+function scoreStyle(st: StyleDef, inp: NarrativeInput): number {
+  let s_ = 4;
+  const { trendDirection, adx, rsi, dominantScenarioKey } = inp;
+  switch (st.id) {
+    case 'executive': s_ = adx > 25 ? 7 : 4; break;
+    case 'technical': s_ = 6; break;
+    case 'trading': s_ = (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') ? 9 : 4; break;
+    case 'forecast': s_ = 6; break;
+    case 'educational': s_ = 5; break;
+  }
+  return s_;
+}
+
+function scoreTone(t: ToneDef, inp: NarrativeInput): number {
+  let s_ = 3;
+  const { trendDirection, adx, rsi, dominantScenarioKey, macdHist } = inp;
+  switch (t.id) {
+    case 'conservative': s_ = 5; if (rsi > 65 || rsi < 35) s_ += 3; break;
+    case 'aggressive': s_ = 3; if (adx > 30 && (rsi > 60 || rsi < 40)) s_ += 4; break;
+    case 'balanced': s_ = 6; break;
+    case 'alert': s_ = 4; if (rsi > 75 || rsi < 25) s_ += 3; break;
+    case 'optimistic': s_ = 3; if (trendDirection === 'up' && macdHist > 0) s_ += 4; break;
+    case 'realistic': s_ = 6; break;
+  }
+  if (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') s_ += 2;
+  return s_ + 1;
+}
+
+interface Scored<T> { item: T; score: number; }
+function scoreAll<T>(items: T[], inp: NarrativeInput, fn: (item: T, inp: NarrativeInput) => number): Scored<T>[] {
+  return items.map(item => ({ item, score: fn(item, inp) })).sort((a, b) => b.score - a.score);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 7: Main Selector (Backward Compat)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** @deprecated Use selectV10Persona + buildV10NarrativePrompt for V10 */
+export function selectNarrativeCombination(input: NarrativeInput): NarrativeCombination {
+  const schoolResults = scoreAll(SCHOOLS, input, scoreSchool);
+  const styleResults = scoreAll(STYLES, input, scoreStyle);
+  const toneResults = scoreAll(TONES, input, scoreTone);
+  return {
+    school: schoolResults[0].item,
+    style: styleResults[0].item,
+    tone: toneResults[0].item,
+    schoolScore: schoolResults[0].score,
+    styleScore: styleResults[0].score,
+    toneScore: toneResults[0].score,
+  };
+}
+
+export function buildNarrativeInput(body: {
+  currentPrice: number; trendDirection: string; rsi: number; adx: number;
+  stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number;
+  diPlus: number; diMinus: number; obv: number; hasVolume: boolean;
+  cci: number; mfi: number; atr: number; bollingerUpper: number; bollingerMiddle: number; bollingerLower: number;
+  trendAngle: number; trendR2: number; overallSignal: string;
+  scenarios: Record<string, { probability: number }>;
+  resistances: number[]; supports: number[]; ma21: number; ma100: number;
+}, isV10Scenarios: boolean = false): NarrativeInput {
+  const bbRange = body.bollingerUpper - body.bollingerLower;
+  const bbPosition = bbRange > 0 ? Math.max(0, Math.min(100, ((body.currentPrice - body.bollingerLower) / bbRange) * 100)) : 50;
+  const R1 = body.resistances[0] || body.currentPrice * 1.05;
+  const S1 = body.supports[0] || body.currentPrice * 0.95;
+  // Detect scenario keys from the data itself
+  const allScenarioKeys = (isV10Scenarios || Object.keys(body.scenarios).some(k => k.startsWith('S')))
+    ? ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9'] as const
+    : ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+  let dominantKey = allScenarioKeys[0]; let dominantProb = 0;
+  for (const k of allScenarioKeys) {
+    const p = body.scenarios[k]?.probability ?? 0;
+    if (p > dominantProb) { dominantProb = p; dominantKey = k; }
+  }
+  return {
+    price: body.currentPrice, trendDirection: body.trendDirection, rsi: body.rsi, adx: body.adx,
+    stochK: body.stochK, stochD: body.stochD, macdLine: body.macdLine, macdSignal: body.macdSignal,
+    macdHist: body.macdHist, diPlus: body.diPlus, diMinus: body.diMinus, obv: body.obv,
+    hasVolume: body.hasVolume, cci: body.cci, mfi: body.mfi, atr: body.atr,
+    bbPosition, bbUpper: body.bollingerUpper, bbLower: body.bollingerLower,
+    dominantScenarioKey: dominantKey,
+    scenarioProbabilities: Object.fromEntries(allScenarioKeys.map(k => [k, body.scenarios[k]?.probability ?? 0])),
+    nearResistance: R1 > 0 ? Math.abs(body.currentPrice - R1) / R1 < 0.03 : false,
+    nearSupport: S1 > 0 ? Math.abs(body.currentPrice - S1) / S1 < 0.03 : false,
+    priceVsMa21: body.currentPrice > body.ma21 ? 'above' : 'below',
+    priceVsMa100: body.currentPrice > body.ma100 ? 'above' : 'below',
+    trendR2: body.trendR2,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 8: V10 Persona Selection (Rotation Algorithm)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Simple deterministic hash for date+instrument rotation */
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + ch;
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Selects a V10 persona, template format, and variation seed
+ * based on deterministic hash of date + instrument + school.
+ * This ensures: different persona per day, different per instrument,
+ * and school affinity matching.
+ */
+export function selectV10Persona(
+  instrument: string,
+  date: string,
+  schoolId: string
+): { persona: V10Persona; template: V10TemplateFormat; variationSeed: number } {
+  const hashInput = `${date}:${instrument}:v10:2024`;
+  const dayHash = simpleHash(hashInput);
+
+  // Step 1: Find personas matching school affinity
+  const matching = PERSONAS.filter(p => p.schoolAffinity === schoolId);
+  // Step 2: If no match, use all personas
+  const pool = matching.length > 0 ? matching : PERSONAS;
+  // Step 3: Select persona by hash
+  const personaIndex = dayHash % pool.length;
+  const persona = pool[personaIndex];
+
+  // Step 4: Select template — vary by hash % 7
+  let templateIndex: number;
+  const templateMod = dayHash % 7;
+  if (templateMod < 2) templateIndex = 1; // technical (most common)
+  else if (templateMod < 3) templateIndex = 0; // executive
+  else if (templateMod < 4) templateIndex = 3; // forecast
+  else if (templateMod < 5) templateIndex = 4; // educational
+  else templateIndex = 2; // trading
+  // Occasional variation: hash % 5 == 0 → use a different template
+  if (dayHash % 5 === 0) {
+    templateIndex = dayHash % TEMPLATE_FORMATS.length;
+  }
+  const template = TEMPLATE_FORMATS[templateIndex];
+
+  return {
+    persona,
+    template,
+    variationSeed: dayHash,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section 9: V10 Prompt Builder
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Selects N phrases from a section of the phrase bank, rotated by seed.
+ * Returns a comma-separated string of selected phrases.
+ */
+function selectPhrases(section: string, subsection: string, count: number, seed: number): string {
+  const sectionData = PHRASE_BANK[section];
+  if (!sectionData) return '';
+  const phrases = sectionData[subsection] || sectionData[Object.keys(sectionData)[0]] || [];
+  if (phrases.length === 0) return '';
+  const startIdx = seed % phrases.length;
+  const selected: string[] = [];
+  for (let i = 0; i < Math.min(count, phrases.length); i++) {
+    selected.push(phrases[(startIdx + i) % phrases.length]);
+  }
+  return selected.join('\n- ');
+}
+
+/**
+ * Builds a V10 data-driven narrative prompt.
+ * V10 KEY DIFFERENCE from V9: The LLM is EXPLICITLY required to use
+ * scenario probabilities, exact price levels, trend direction/status,
+ * and quantitative data in the generated text.
+ */
+export function buildV10NarrativePrompt(params: {
+  instrument: string;
+  date: string;
+  persona: V10Persona;
+  template: V10TemplateFormat;
+  dataSection: string;
+  variationSeed: number;
+  school: SchoolDef;
+  style: StyleDef;
+  tone: ToneDef;
+}): string {
+  const { persona, dataSection, tone } = params;
+
+  // Pick 2-3 signature phrases for natural integration
+  const seed = params.variationSeed;
+  const sp = persona.signaturePhrases;
+  const picked = [sp[seed % sp.length], sp[(seed + 3) % sp.length], sp[(seed + 7) % sp.length]];
+
+  return `
+شما ${persona.name} هستید — تحلیلگر ارشد بازار ایران با سبک ${persona.style.sentences} و واژگان ${persona.style.vocabulary}.
+مکتب تحلیلی: ${params.school.name}. لحن: ${tone.name}.
+
+بر اساس داده‌های تکنیکال زیر، یک تحلیل داده‌محور بنویسید.
+فقط و فقط بر اساس داده‌های زیر بنویسید. از اخبار بیرونی یا داده‌های خارجی استفاده نکنید.
+
+عبارات امضای شما که باید در متن استفاده شوند: «${picked[0]}» و «${picked[1]}».
+
+---
+${dataSection}
+---
+
+قوانین الزامی:
+1. فقط فارسی. بدون ایموجی. بدون تیتر داخلی.
+2. ۴ تا ۶ پاراگراف، هر پاراگراف چند جمله کامل.
+3. مستقیماً با تحلیل شروع کنید. هیچ‌گونه نام شخصیت، مکتب، لحن، سبک یا نسخه‌ای در متن ذکر نشود.
+4. **الزامی — داده‌محور بودن:** متن تحلیل حتماً باید شامل موارد زیر باشد:
+   - **الزامی:** حداقل ۱ بار نام دقیق سناریوی غالب (بیشترین احتمال اختصاصی سناریو) با نام، احتمال دقیق و هدف قیمتی آن ذکر شود. مثال: «سناریوی شوک صعودی با احتمال ۲۱٪ بیشترین احتمال اختصاصی سناریو است و هدف قیمتی آن X تا Y است»
+   - **الزامی:** حداقل ۱ بار نام سناریوی با بیشترین احتمال تجمعی با نام، احتمال اختصاصی سناریو و احتمال تجمعی دقیق آن ذکر شود. مثال: «صعودی با احتیاط با احتمال تجمعی ۶۶٪ بیشترین احتمال تجمعی را دارد»
+   - اگر یک سناریو هم غالب و هم بیشترین تجمعی باشد، به هر دو ویژگی اشاره کنید
+   - اعداد و احتمالاتی که در متن می‌آورید باید دقیقاً مطابق داده‌های بخش سناریوهای کلیدی باشد (هیچ عدد متناقضی با جدول سناریوها نباشد)
+   - حداقل ۱ بار ذکر **قیمت فعلی و وضعیت آن نسبت به روند** (مثلاً: «قیمت فعلی X در بالای MA21 قرار دارد»)
+   - حداقل ۱ بار ذکر **حداقل یک سطح حمایت یا مقاومت با قیمت دقیق**
+   - اگر RSI در منطقه اشباع خرید/فروش است، حتماً ذکر شود
+   - اگر MACD سیگنال صعودی/نزولی می‌دهد، حتماً ذکر شود
+5. حداقل ۲ ارجاع به داده‌های v10 (کندل‌استیک، ML، یا بیزی).
+6. حداقل ۱ سوال تعجبی در متن.
+7. در پایان: «خلاصه عملی:» + حداکثر ۲۵ کلمه.
+8. درصد‌ها فارسی بنویسید (۲۸٪ نه 28%).
+9. از پررنگ ** فقط برای تأکید روی داده‌ها و اعداد کلیدی.
+10. متن یکپارچه، طبیعی و انسان‌گونه.
+11. مطلقاً هیچ اشاره‌ای به مکتب تحلیلی، سبک روایت، لحن، نام شخصیت یا نسخه سیستم در متن نشود.
+12. اگر پیش‌بینی ML موجود است، حتماً جهت و اطمینان آن را در متن بیاورید.`;
+}

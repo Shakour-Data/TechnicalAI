@@ -1,0 +1,6 @@
+{
+  "name": "ml-service",
+  "scripts": {
+    "dev": "while true; do python3 -u server.py; echo \"Restarting ML service in 2s...\"; sleep 2; done"
+  }
+}
