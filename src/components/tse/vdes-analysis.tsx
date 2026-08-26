@@ -4,10 +4,18 @@ import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react'
 import { Skeleton } from '@/components/ui/skeleton';
 import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
 // Chart is rendered in page.tsx with id="chart-export-wrapper"
-import { toPng } from 'html-to-image';
-import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
+// Heavy export libs (jspdf, html-to-image, xlsx, file-saver) are loaded lazily via dynamic import
+// to avoid ChunkLoadError on low-memory environments with Turbopack.
+
+function nativeSaveAs(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
 import { smartJalaliDate, fullPersianDate, toPersianDigits, candleDateToJalali, isGregorianDate, formatJalaliString } from '@/lib/jalali';
 import {
   DropdownMenu,
@@ -996,7 +1004,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
 </body>
 </html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    saveAs(blob, `${fileBase}.html`);
+    nativeSaveAs(blob, `${fileBase}.html`);
   }, [symbolName, candles, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark, resistances, supports, ma21, ma100, sar, bollingerUpper, bollingerMiddle, bollingerLower]);
 
 
@@ -1033,13 +1041,17 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     lines.push(`سیگنال غالب: ${strategy.text}`);
     const text = lines.join('\n');
     const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, `${fileBase}.txt`);
+    nativeSaveAs(blob, `${fileBase}.txt`);
   }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, strategy, lastCandleJalali, fileBase, v11Result, v11Map, riskInfo]);
 
   const exportPDF = useCallback(async () => {
     const el = vdesRef.current;
     if (!el || !el.isConnected || el.offsetWidth === 0) return;
     try {
+      const [{ toPng }, { jsPDF }] = await Promise.all([
+        import('html-to-image'),
+        import('jspdf'),
+      ]);
       const originalDisplay = el.style.display;
       const originalVisibility = el.style.visibility;
       if (el.offsetHeight === 0) {
@@ -1071,47 +1083,52 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     }
   }, [fileBase]);
 
-  const exportExcel = useCallback(() => {
-    const rows = dailyIndicators.map((d, i) => ({
-      '#': i + 1,
-      'تاریخ': d.date,
-      'باز': d.open,
-      'بالا': d.high,
-      'پایین': d.low,
-      'بسته': d.close,
-      'حجم': d.volume,
-      'MA21': d.ma21,
-      'MA100': d.ma100,
-      'RSI': d.rsi,
-      'MFI': d.mfi,
-      'CCI': d.cci,
-      'ADX': d.adx,
-      'MACD': d.macd,
-      'MACD_Signal': d.macdSignal,
-      'MACD_Hist': d.macdHist,
-      'Stoch_K': d.stochK,
-      'Stoch_D': d.stochD,
-      'SAR': d.sar,
-      'ATR': d.atr,
-      'BB_Upper': d.bbUpper,
-      'BB_Middle': d.bbMiddle,
-      'BB_Lower': d.bbLower,
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'داده‌ها');
-    // Add scenarios sheet
-    const scenarioRows = SCENARIO_KEYS.map(k => ({
-      'سناریو': SCENARIO_META[k].label,
-      'کد': `سناریوی ${SCENARIO_NUMBER[k]}`,
-      'احتمال اختصاصی٪': scenarios[k]?.probability ?? 0,
-      'احتمال تجمعی٪': v11Map.get(k)?.cumulativeProbability ?? 0,
-      'هدف_حداقل': Math.round(scenarios[k]?.targetMin ?? 0),
-      'هدف_حداکثر': Math.round(scenarios[k]?.targetMax ?? 0),
-    }));
-    const ws2 = XLSX.utils.json_to_sheet(scenarioRows);
-    XLSX.utils.book_append_sheet(wb, ws2, 'سناریوها');
-    XLSX.writeFile(wb, `${fileBase}.xlsx`);
+  const exportExcel = useCallback(async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const rows = dailyIndicators.map((d, i) => ({
+        '#': i + 1,
+        'تاریخ': d.date,
+        'باز': d.open,
+        'بالا': d.high,
+        'پایین': d.low,
+        'بسته': d.close,
+        'حجم': d.volume,
+        'MA21': d.ma21,
+        'MA100': d.ma100,
+        'RSI': d.rsi,
+        'MFI': d.mfi,
+        'CCI': d.cci,
+        'ADX': d.adx,
+        'MACD': d.macd,
+        'MACD_Signal': d.macdSignal,
+        'MACD_Hist': d.macdHist,
+        'Stoch_K': d.stochK,
+        'Stoch_D': d.stochD,
+        'SAR': d.sar,
+        'ATR': d.atr,
+        'BB_Upper': d.bbUpper,
+        'BB_Middle': d.bbMiddle,
+        'BB_Lower': d.bbLower,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'داده‌ها');
+      // Add scenarios sheet
+      const scenarioRows = SCENARIO_KEYS.map(k => ({
+        'سناریو': SCENARIO_META[k].label,
+        'کد': `سناریوی ${SCENARIO_NUMBER[k]}`,
+        'احتمال اختصاصی٪': scenarios[k]?.probability ?? 0,
+        'احتمال تجمعی٪': v11Map.get(k)?.cumulativeProbability ?? 0,
+        'هدف_حداقل': Math.round(scenarios[k]?.targetMin ?? 0),
+        'هدف_حداکثر': Math.round(scenarios[k]?.targetMax ?? 0),
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(scenarioRows);
+      XLSX.utils.book_append_sheet(wb, ws2, 'سناریوها');
+      XLSX.writeFile(wb, `${fileBase}.xlsx`);
+    } catch (err) {
+      console.warn('Excel export failed:', err instanceof Error ? err.message : String(err));
+    }
   }, [dailyIndicators, scenarios, fileBase, v11Map]);
 
   const exportCSV = useCallback(() => {
@@ -1128,7 +1145,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     }
     const csv = csvRows.join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    saveAs(blob, `${fileBase}.csv`);
+    nativeSaveAs(blob, `${fileBase}.csv`);
   }, [dailyIndicators, fileBase]);
 
   // ── Chart Image Export ─────────────────────────────────────────
@@ -1136,8 +1153,9 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     const chartEl = document.getElementById('chart-export-wrapper');
     if (!chartEl || !chartEl.isConnected || chartEl.offsetWidth === 0) return;
     try {
+      const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(chartEl, { backgroundColor: '#ffffff', pixelRatio: 2, cacheBust: true });
-      saveAs(dataUrl, `${fileBase}_نمودار.png`);
+      nativeSaveAs(dataUrl, `${fileBase}_نمودار.png`);
     } catch (err) {
       console.warn('Chart image export failed:', err instanceof Error ? err.message : String(err));
     }

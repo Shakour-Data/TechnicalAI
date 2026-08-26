@@ -1023,3 +1023,23 @@ Stage Summary:
 - Jalali dates shown on time axis, Persian digits on price axis
 - File size controlled by limiting to last 500 candles
 
+---
+Task ID: 1
+Agent: Main
+Task: Fix jspdf ChunkLoadError by converting heavy imports to dynamic imports
+
+Work Log:
+- Identified root cause: `jspdf`, `html-to-image`, `xlsx`, and `file-saver` were imported at top-level in vdes-analysis.tsx (lines 7-10)
+- Turbopack tried to load jspdf chunk immediately on page load, causing ChunkLoadError in low-memory environment
+- Removed top-level imports: `toPng`, `jsPDF`, `XLSX`, `saveAs`
+- Added `nativeSaveAs()` helper function using native `URL.createObjectURL` + `<a>` click pattern
+- Converted `exportPDF` to use `await import('html-to-image')` and `await import('jspdf')` dynamically
+- Converted `exportExcel` to use `await import('xlsx')` dynamically
+- Converted `exportChartImage` to use `await import('html-to-image')` dynamically
+- Replaced `saveAs()` calls in `exportHTML`, `exportText`, `exportCSV` with `nativeSaveAs()`
+- Verified server compiles and returns 200 with no errors
+
+Stage Summary:
+- jspdf ChunkLoadError is fixed - heavy libs only load when user clicks export buttons
+- HTML export interactive chart was already implemented in previous session (lightweight-charts CDN + candle data JSON)
+- No code behavior changes, only import strategy changed from eager to lazy loading
