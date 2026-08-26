@@ -42,6 +42,11 @@ export async function GET() {
         groupTitle: def.groupTitle,
         currency: q?.unit || q?.currency || 'USD',
         unit: q?.unit || q?.currency || 'USD',
+        country: def.country,
+        countryEn: def.countryEn,
+        exchange: def.exchange,
+        sector: def.sector || '',
+        nameEn: def.nameEn,
       };
     };
 
