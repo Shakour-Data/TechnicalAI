@@ -745,6 +745,7 @@ export default function Home() {
                     resistanceStrengths={data.ta.resistanceStrengths}
                     priceTargets={data.ta.priceTargets}
                     hasVolume={data.ta.hasVolume}
+                    instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
                   />
                 </div>
               )}

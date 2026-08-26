@@ -124,6 +124,7 @@ export interface VdesAnalysisProps {
   resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
   priceTargets: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
   hasVolume?: boolean;
+  instrumentType?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -235,6 +236,7 @@ interface AnalysisContext {
   resistanceStrengths: LevelStrength[];
   supportStrengths: LevelStrength[];
   v11Result: V11Result;
+  instrumentType?: string;
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -511,7 +513,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
     diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
-    supportStrengths, resistanceStrengths, priceTargets, hasVolume,
+    supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
   } = props;
 
   const vdesRef = useRef<HTMLDivElement>(null);
@@ -681,6 +683,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             scenarios, hasVolume: hasVolume ?? false,
             resistanceStrengths, supportStrengths,
             v11Probabilities: v11Result,
+            instrumentType,
           }),
           signal: combinedSignal,
         });

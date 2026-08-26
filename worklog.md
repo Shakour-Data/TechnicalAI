@@ -1043,3 +1043,25 @@ Stage Summary:
 - jspdf ChunkLoadError is fixed - heavy libs only load when user clicks export buttons
 - HTML export interactive chart was already implemented in previous session (lightweight-charts CDN + candle data JSON)
 - No code behavior changes, only import strategy changed from eager to lazy loading
+---
+Task ID: 9
+Agent: Main
+Task: Fix AI analysis text quality - spacing, grammar, currency units
+
+Work Log:
+- Added 3 new rules (18, 19, 20) to AI system prompt in /api/ai-analysis/route.ts
+- Rule 18: Proper word spacing - explicit Space between words, correct ZWNJ usage only for compound verbs/prefixes/suffixes
+- Rule 19: Perfect writing - no spelling, grammar, or dictation errors; varied vocabulary
+- Rule 20: Currency unit rules:
+  - TSE stocks → use "ریال" (Rial)
+  - Tgju/Yahoo (indices, gold, forex) → use "واحد" (units), NEVER "ریال" or "تومان"
+  - Examples: "۵ میلیون واحد" for indices, "۲,۱۵۰,۰۰۰ ریال" for stocks
+- Added instrumentType prop to VdesAnalysisProps and passed from page.tsx
+- instrumentType sent to AI API: 'tse' for stocks, 'tgju' for gold/forex, 'yahoo' for international indices
+- Data prompt now includes instrument type label and correct unit label
+- Cleared AI analysis cache so new analyses use updated prompt
+
+Stage Summary:
+- AI prompt now enforces proper word spacing, perfect Persian writing, and correct currency unit usage
+- Indices/commodities use "واحد" instead of "ریال"
+- Cache cleared for fresh analysis generation

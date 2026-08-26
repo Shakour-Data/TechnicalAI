@@ -201,9 +201,14 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     .map(s => `- ${s.name} (${s.key}): ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)}`)
     .join('\n');
 
+  // Instrument type for currency unit rules
+  const instType = (body.instrumentType as string) || 'tse';
+  const unitLabel = instType === 'tgju' || instType === 'yahoo' ? '\u0648\u0627\u062d\u062f' : '\u0631\u06cc\u0627\u0644';
+  const instrumentLabel = instType === 'tgju' ? '\u06a9\u0627\u0644\u0627\u06cc \u0637\u0644\u0627/\u0627\u0631\u0632' : instType === 'yahoo' ? '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc' : '\u0633\u0647\u0627\u0645 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
+
   return `
 **\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647:**
-- \u0646\u0627\u0645: **${symbolName}** | \u0642\u06cc\u0645\u062a: **${toPersianNum(currentPrice)}** | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0, R\u00b2=${(trendR2 * 100).toFixed(1)}%)
+- \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a: **${toPersianNum(currentPrice)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0, R\u00b2=${(trendR2 * 100).toFixed(1)}%)
 - MA21=${toPersianNum(ma21)} | MA100=${toPersianNum(ma100)} | ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632'} MA21, ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632'} MA100
 - RSI=${toPersianNum(rsi)} (${rsiSignal}) | ADX=${toPersianNum(adx)} (${adxStrength}) | DI+/DI-: ${toPersianNum(diPlus)}/${toPersianNum(diMinus)} (${diPressure})
 - \u0627\u0633\u062a\u0648\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)} | CCI=${toPersianNum(cci)}${mfi > 0 ? ` | MFI=${toPersianNum(mfi)}` : ''}
@@ -239,7 +244,13 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 14. هیچ سرفصل یا عنوان داخلی سیستم (مثل مرحله, فاز, خروجی سه‌لایه, تحلیل عملیاتی, تحلیل تحلیلی, تحلیل روانشناختی و غیره) در متن نباشد. متن باید یکپارچه و روان باشد.
 15. متن خروجی فقط و فقط تحلیل باشد. هیچ دستورالعمل, ساختار یا راهنمای داخلی در خروجی نیاید.
 16. برای رنگی کلمات مهم از دستور {color:COLOR}متن{/color} استفاده کنید. رنگهای مجاز: red, green, amber, blue, orange, purple, emerald. مثال: {color:red}**خطر شکست سطح مقاومت**{/color}. حداکثر 8 مورد رنگی در کل متن.
-17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.`;
+17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.
+18. **فاصله‌گذاری صحیح:** بین هر دو کلمه حتماً یک فاصله (Space) باشد. هیچ دو کلمه‌ای نباید به هم بچسبند. نیم‌فاصله (ZWNJ) فقط در جای صحیح استفاده شود (مثل فعل‌های مزید، پیشوندها و پسوندها). مثال صحیح: «حد ضرر»، «نقطه ورود». مثال غلط: «حدضرر»، «نقطه‌ورود» (نیم‌فاصله اشتباه)، «حد ضر ر» (فاصله اشتباه).
+19. **نگارش بی‌نقص:** متن باید از نظر املایی، انشایی و نگارشی کاملاً بی‌نقص باشد. هیچ غلط املایی، خطای دستوری یا عبارت نادرست فارسی در متن نباشد. از کلمات مترادف و متنوع استفاده کنید و از تکرار بیش از حد یک کلمه یا عبارت پرهیز کنید.
+20. **واحد پولی و اندازه‌گیری:**
+    - اگر نوع ابزار «سهام بورس ایران» است، تمام اعداد قیمت را با واحد «ریال» بنویسید (مثلاً «۵,۲۳۰ ریال» یا «۲,۱۵۰,۰۰۰ ریال»).
+    - اگر نوع ابزار «کالای طلا/ارز» یا «نشانگر بین‌المللی» است، به جای واحد پولی از کلمه «واحد» استفاده کنید (مثلاً «۵ میلیون واحد» یا «۲,۱۴۵,۰۰۰ واحد»). به هیچ وجه از «ریال» یا «تومان» استفاده نکنید.
+    - در مورد شاخص‌ها و نشانگرها، هیچ واحد پولی به کار نبرید و فقط بگویید «واحد» (مثلاً «شاخص در محدوده ۲ میلیون واحد قرار دارد»).`;
 
 // ─── POST Handler ────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
