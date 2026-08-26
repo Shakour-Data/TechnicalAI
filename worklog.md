@@ -997,3 +997,29 @@ Stage Summary:
 - Chart appears right after the header section
 - Uses appropriate background color based on current theme
 
+
+---
+Task ID: html-export-interactive-chart
+Agent: Main
+Task: Replace static chart image with interactive lightweight-charts in HTML export
+
+Work Log:
+- Removed toPng image capture approach from exportHTML
+- Embedded lightweight-charts v5 from unpkg CDN
+- Pre-computed Jalali date labels and embedded as JSON
+- Embedded candle OHLC+volume data (last 500 candles) as JSON
+- Built interactive chart with: CandlestickSeries, HistogramSeries (volume), crosshair OHLC legend
+- Added price lines: MA21, MA100, SAR, Bollinger Bands (upper/mid/lower), S/R levels
+- Legend shows date, OHLC, volume, and % change with color coding
+- Chart is fully interactive: zoom, pan, hover crosshair
+- Responsive: auto-resizes on window resize
+- Theme-aware: uses current dark/light theme colors
+- Added missing jalali function imports (candleDateToJalali, isGregorianDate, formatJalaliString)
+
+Stage Summary:
+- HTML export now contains a fully interactive candlestick chart (not a static image)
+- User can zoom, pan, and hover to see OHLC data
+- All price lines (MA, SAR, BB, S/R) are displayed on the chart
+- Jalali dates shown on time axis, Persian digits on price axis
+- File size controlled by limiting to last 500 candles
+

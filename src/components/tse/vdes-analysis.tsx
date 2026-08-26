@@ -8,7 +8,7 @@ import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { smartJalaliDate, fullPersianDate, toPersianDigits } from '@/lib/jalali';
+import { smartJalaliDate, fullPersianDate, toPersianDigits, candleDateToJalali, isGregorianDate, formatJalaliString } from '@/lib/jalali';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -769,20 +769,41 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     if (!vdesRef.current) return;
     const analysisHTML = vdesRef.current.querySelector('.vdes-analysis-text')?.innerHTML || '<p>تحلیل در دسترس نیست</p>';
 
-    // Capture chart as base64 image
-    let chartImgTag = '';
-    try {
-      const chartEl = document.getElementById('chart-export-wrapper');
-      if (chartEl && chartEl.isConnected && chartEl.offsetWidth > 0) {
-        const dataUrl = await toPng(chartEl, { backgroundColor: isDark ? '#0a0a1a' : '#ffffff', pixelRatio: 2, cacheBust: true });
-        chartImgTag = `
-<div class="panel" style="padding:12px 8px;overflow-x:auto;">
-  <img src="${dataUrl}" alt="نمودار ${symbolName}" style="width:100%;height:auto;border-radius:12px;display:block;" />
-</div>`;
-      }
-    } catch (err) {
-      console.warn('[HTML Export] Chart capture failed:', err instanceof Error ? err.message : String(err));
+    // Pre-compute Jalali date labels for chart time axis
+    const dateLabels = candles.map(d =>
+      isGregorianDate(d.date) ? candleDateToJalali(d.date, 'compact') : formatJalaliString(d.date, 'compact')
+    );
+
+    // Build candle data JSON (only last 500 candles to keep file size reasonable)
+    const maxCandles = 500;
+    const chartCandles = candles.length > maxCandles ? candles.slice(-maxCandles) : candles;
+    const chartDateLabels = candles.length > maxCandles ? dateLabels.slice(-maxCandles) : dateLabels;
+    const candleDataJSON = JSON.stringify(chartCandles.map((d, i) => ({
+      time: i, o: d.open, h: d.high, l: d.low, c: d.close, v: d.volume
+    })));
+    const dateLabelsJSON = JSON.stringify(chartDateLabels);
+
+    // Build price lines JSON
+    const priceLines: Array<{ price: number; color: string; title: string; lineStyle: number; lineWidth: number }> = [];
+    if (ma21 > 0) priceLines.push({ price: ma21, color: '#06b6d4', title: 'MA21', lineStyle: 0, lineWidth: 1 });
+    if (ma100 > 0) priceLines.push({ price: ma100, color: '#a855f7', title: 'MA100', lineStyle: 0, lineWidth: 1 });
+    if (sar > 0) priceLines.push({ price: sar, color: '#d97706', title: 'SAR', lineStyle: 1, lineWidth: 1 });
+    if (bollingerUpper > 0) priceLines.push({ price: bollingerUpper, color: '#7c3aed', title: 'BB Upper', lineStyle: 2, lineWidth: 1 });
+    if (bollingerMiddle > 0) priceLines.push({ price: bollingerMiddle, color: '#7c3aed', title: 'BB Mid', lineStyle: 2, lineWidth: 1 });
+    if (bollingerLower > 0) priceLines.push({ price: bollingerLower, color: '#7c3aed', title: 'BB Lower', lineStyle: 2, lineWidth: 1 });
+    for (let i = 0; i < Math.min(resistances.length, 4); i++) {
+      if (resistances[i] > 0) priceLines.push({ price: resistances[i], color: '#ea580c', title: `R${i + 1}`, lineStyle: 0, lineWidth: 2 });
     }
+    for (let i = 0; i < Math.min(supports.length, 4); i++) {
+      if (supports[i] > 0) priceLines.push({ price: supports[i], color: '#2563eb', title: `S${i + 1}`, lineStyle: 0, lineWidth: 2 });
+    }
+    const priceLinesJSON = JSON.stringify(priceLines);
+
+    const chartBg = isDark ? '#0a0a1a' : '#ffffff';
+    const chartText = isDark ? '#9ca3af' : '#6b7280';
+    const chartGrid = isDark ? '#1e293b' : '#f1f5f9';
+    const chartBorder = isDark ? '#334155' : '#e2e8f0';
+    const crosshairColor = isDark ? '#475569' : '#94a3b8';
 
     const html = `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -790,6 +811,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری</title>
+<script src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageBg}; color: ${C.cardFg}; padding: 20px 16px 40px; line-height: 1.8; }
@@ -829,6 +851,11 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
 .summary-bar { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 0.8rem; flex-wrap: wrap; }
 .strategy-tag { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; border: 1px solid; }
 .footer { margin-top: 18px; color: ${C.cardSubFg}; font-size: 0.75rem; text-align: center; border-top: 1px solid ${C.cardBorder}; padding-top: 16px; }
+#chart-container { width: 100%; border-radius: 16px; overflow: hidden; }
+#chart-legend { display: flex; gap: 16px; padding: 8px 16px; font-size: 0.8rem; color: ${chartText}; direction: ltr; text-align: left; flex-wrap: wrap; background: ${chartBg}; border-bottom: 1px solid ${chartBorder}; min-height: 32px; align-items: center; }
+#chart-legend span { white-space: nowrap; }
+#chart-legend .up { color: #22c55e; }
+#chart-legend .dn { color: #ef4444; }
 </style>
 </head>
 <body>
@@ -842,7 +869,62 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
   </div>
 </header>
 
-${chartImgTag}
+<div class="panel" style="padding:8px 0 0 0;overflow:hidden;">
+  <div id="chart-legend"></div>
+  <div id="chart-container"></div>
+</div>
+
+<script>
+(function(){
+  var cd = ${candleDataJSON};
+  var dl = ${dateLabelsJSON};
+  var pl = ${priceLinesJSON};
+
+  function toFa(n){return String(Math.round(n)).replace(/\\d(?=(?:\\d{3})+(?!\\d))/g,function(m){return '\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'[+m]})}
+
+  var chartEl = document.getElementById('chart-container');
+  var legendEl = document.getElementById('chart-legend');
+  var BULL='#22c55e',BEAR='#ef4444';
+
+  var chart = LightweightCharts.createChart(chartEl,{
+    layout:{background:{type:LightweightCharts.ColorType.Solid,color:'${chartBg}'},textColor:'${chartText}',fontSize:11},
+    grid:{vertLines:{color:'${chartGrid}'},horzLines:{color:'${chartGrid}'}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'${crosshairColor}',labelBackgroundColor:'${chartBg}'},horzLine:{color:'${crosshairColor}',labelBackgroundColor:'${chartBg}'}},
+    rightPriceScale:{borderColor:'${chartBorder}',scaleMargins:{top:0.05,bottom:0.3}},
+    timeScale:{borderColor:'${chartBorder}',rightOffset:5,barSpacing:6,tickMarkFormatter:function(t){return dl[t]||String(t)}},
+    localization:{priceFormatter:function(p){return toFa(p)}},
+    width:chartEl.clientWidth,height:520
+  });
+
+  var cs=chart.addSeries(LightweightCharts.CandlestickSeries,{
+    upColor:BULL,downColor:BEAR,borderUpColor:BULL,borderDownColor:BEAR,wickUpColor:BULL,wickDownColor:BEAR
+  });
+  cs.setData(cd.map(function(d){return{time:d.time,open:d.o,high:d.h,low:d.l,close:d.c}}));
+
+  var vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'vol'});
+  vol.setData(cd.map(function(d){return{time:d.time,value:d.v,color:d.c>=d.o?BULL:BEAR}}));
+  chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
+
+  pl.forEach(function(l){
+    cs.createPriceLine({price:l.price,color:l.color,lineWidth:l.lineWidth,lineStyle:l.lineStyle,axisLabelVisible:true,title:l.title});
+  });
+
+  chart.subscribeCrosshairMove(function(p){
+    if(!p.time&&p.time!==0){legendEl.innerHTML='';return}
+    var d=cd[p.time];if(!d){legendEl.innerHTML='';return}
+    var prev=p.time>0?cd[p.time-1]:d;
+    var chg=prev.c>0?((d.c-prev.c)/prev.c*100):0;
+    var cls=chg>=0?'up':'dn';
+    legendEl.innerHTML='<span>'+dl[p.time]+'</span> <span>O: '+toFa(d.o)+'</span> <span>H: '+toFa(d.h)+'</span> <span>L: '+toFa(d.l)+'</span> <span>C: <b class="'+cls+'">'+toFa(d.c)+'</b></span> <span>Vol: '+toFa(d.v)+'</span> <span class="'+cls+'">'+chg.toFixed(2)+'%</span>';
+  });
+
+  chart.timeScale().fitContent();
+
+  window.addEventListener('resize',function(){
+    chart.applyOptions({width:chartEl.clientWidth});
+  });
+})();
+</script>
 
 <div class="grid-2">
   <div class="level-box resistance">
@@ -915,7 +997,7 @@ ${chartImgTag}
 </html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     saveAs(blob, `${fileBase}.html`);
-  }, [symbolName, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark]);
+  }, [symbolName, candles, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark, resistances, supports, ma21, ma100, sar, bollingerUpper, bollingerMiddle, bollingerLower]);
 
 
   const exportText = useCallback(() => {
