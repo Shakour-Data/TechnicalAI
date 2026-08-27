@@ -203,3 +203,24 @@ Stage Summary:
 - All API routes (analysis, yahoo-analysis, tgju-analysis, finpy-sector) now compute and return probabilityTrend
 - 9 new per-scenario charts added showing both individual and cumulative probability trends
 - Users can now see how each scenario's probability has evolved over the past 30 days
+---
+Task ID: 4
+Agent: Sub-agent (general-purpose)
+Task: Rewrite CumulativeProbabilityChart and reorder PerScenarioTrendCharts in vdss-graph.tsx
+
+Work Log:
+- Rewrote CumulativeProbabilityChart function to show 9 thin dashed individual scenario lines (R1-R4 red, R5 amber, R6-R9 green) as background
+- Kept 3 thick solid group cumulative lines (bullish/neutral/bearish) as foreground
+- Increased chart height from 220 to 260 for better visibility
+- Updated legend with two rows: group lines (thick, labeled 'تجمعی') and individual scenario lines (thin dashed, labeled 'اختصاصی')
+- Updated header title to 'نمودار روند احتمالات گروه‌ها' and subtitle to 'احتمال اختصاصی سناریوها + تجمعی گروه‌ها'
+- Reordered PerScenarioTrendCharts grid from R1-R9 sequential to R1,R9,R2,R8,R3,R7,R4,R6,R5 (bearish/bullish mirror pairs)
+- Kept lg:grid-cols-3 layout (3 pairs + 1 center for R5)
+- Added SCENARIO_LINE_COLORS map and buildScenarioLine helper for individual probability lines
+- Used proper tuple array for legend group labels (fixed potential destructure bug)
+
+Stage Summary:
+- CumulativeProbabilityChart now overlays individual scenario trends behind group cumulative lines
+- Per-scenario mini-charts reordered so mirror scenarios (R1↔R9, R2↔R8, etc.) appear side by side
+- No other file sections modified
+- No lint run (pre-existing errors in candlestick-chart.tsx are unrelated)

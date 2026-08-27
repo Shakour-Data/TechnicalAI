@@ -892,9 +892,10 @@ function PerScenarioTrendCharts({ data }: { data?: ProbabilityTrendResult | null
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {data.scenarios.map((sc) => (
-            <ScenarioMiniChart key={sc.scenarioKey} scenario={sc} />
-          ))}
+          {(['R1','R9','R2','R8','R3','R7','R4','R6','R5'] as const)
+            .map(key => data.scenarios.find(s => s.scenarioKey === key))
+            .filter(Boolean)
+            .map(sc => <ScenarioMiniChart key={sc!.scenarioKey} scenario={sc!} />)}
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -1109,8 +1110,8 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
             <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
               style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
             <div className="text-right">
-              <h2 className="text-sm font-bold text-[#111827]">نمودار روند تجمعی ۳۰ روزه</h2>
-              <p className="text-[11px] text-[#6b7280]">احتمال تجمعی گروه‌ها: گاوی، خنثی، خرسی</p>
+              <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات گروه‌ها</h2>
+              <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی سناریوها + تجمعی گروه‌ها</p>
             </div>
           </div>
           <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
@@ -1126,17 +1127,17 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
   }
 
   const groupMap = Object.fromEntries(data.groups.map(g => [g.group, g])) as Record<string, typeof data.groups[number]>;
+  const scenarioMap = Object.fromEntries(data.scenarios.map(s => [s.scenarioKey, s])) as Record<string, typeof data.scenarios[number]>;
   const bull = groupMap['bullish'];
   const neut = groupMap['neutral'];
   const bear = groupMap['bearish'];
   if (!bull || !neut || !bear) return null;
 
   const maxDays = Math.max(bull.trend.length, neut.trend.length, bear.trend.length);
-  const days = Array.from({ length: maxDays }, (_, i) => i + 1);
 
   // Chart dimensions
   const chartW = 1100;
-  const chartH = 220;
+  const chartH = 260;
   const padL = 50;
   const padR = 20;
   const padT = 20;
@@ -1144,65 +1145,58 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
   const plotW = chartW - padL - padR;
   const plotH = chartH - padT - padB;
 
-  // X mapping: day 1 (today) on right, day 30 on left (RTL)
   const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
-  // Y mapping: 0% at bottom, 100% at top
   const yOf = (pct: number) => padT + plotH - pct * plotH;
 
   const lineColor = (g: 'bullish' | 'neutral' | 'bearish') =>
     g === 'bullish' ? '#16a34a' : g === 'neutral' ? '#b45309' : '#dc2626';
 
-  const buildPolyline = (trend: DayPoint[], group: string) => {
+  const SCENARIO_LINE_COLORS: Record<string, string> = {
+    R1: '#fca5a5', R2: '#f87171', R3: '#ef4444', R4: '#dc2626',
+    R5: '#f59e0b',
+    R6: '#4ade80', R7: '#22c55e', R8: '#16a34a', R9: '#15803d',
+  };
+
+  const buildGroupLine = (trend: DayPoint[], group: string) => {
     const color = lineColor(group as 'bullish' | 'neutral' | 'bearish');
     const points = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.cumulativeProb).toFixed(1)}`).join(' ');
     return (
-      <g key={group}>
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          opacity={0.9}
-        />
+      <g key={`grp-${group}`}>
+        <polyline points={points} fill="none" stroke={color} strokeWidth={2.8} strokeLinejoin="round" strokeLinecap="round" opacity={0.95} />
         {trend.map(d => (
-          <circle
-            key={d.day}
-            cx={xOf(d.day)}
-            cy={yOf(d.cumulativeProb)}
-            r={2.5}
-            fill={color}
-            stroke="#ffffff"
-            strokeWidth={1}
-          />
+          <circle key={d.day} cx={xOf(d.day)} cy={yOf(d.cumulativeProb)} r={2.5} fill={color} stroke="#ffffff" strokeWidth={1} />
         ))}
       </g>
     );
   };
 
-  // Grid lines
+  const buildScenarioLine = (key: string) => {
+    const sc = scenarioMap[key];
+    if (!sc) return null;
+    const color = SCENARIO_LINE_COLORS[key] || '#9ca3af';
+    const points = sc.trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.individualProb).toFixed(1)}`).join(' ');
+    return <polyline key={`sc-${key}`} points={points} fill="none" stroke={color} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round" opacity={0.55} strokeDasharray="3,2" />;
+  };
+
+  // Grid
   const gridLines: React.JSX.Element[] = [];
   for (let p = 0; p <= 100; p += 20) {
     const y = yOf(p / 100);
     gridLines.push(
-      <line key={`grid-${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y}
-        stroke="#e5e7eb" strokeWidth={0.8} />
-    );
-    gridLines.push(
-      <text key={`ylbl-${p}`} x={padL - 8} y={y + 3.5} textAnchor="end"
-        fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(p.toString())}٪</text>
+      <line key={`grid-${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#e5e7eb" strokeWidth={0.8} />,
+      <text key={`ylbl-${p}`} x={padL - 8} y={y + 3.5} textAnchor="end" fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(p.toString())}٪</text>,
     );
   }
 
-  // X axis labels (every 5 days)
   const xLabels: React.JSX.Element[] = [];
   for (let d = 1; d <= maxDays; d += 5) {
     xLabels.push(
-      <text key={`xlbl-${d}`} x={xOf(d)} y={chartH - padB + 18} textAnchor="middle"
-        fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(d.toString())}</text>
+      <text key={`xlbl-${d}`} x={xOf(d)} y={chartH - padB + 18} textAnchor="middle" fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(d.toString())}</text>,
     );
   }
+
+  const bearishKeys = ['R1', 'R2', 'R3', 'R4'];
+  const bullishKeys = ['R9', 'R8', 'R7', 'R6'];
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
@@ -1212,44 +1206,60 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
           <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
             style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
           <div className="text-right">
-            <h2 className="text-sm font-bold text-[#111827]">نمودار روند تجمعی ۳۰ روزه</h2>
-            <p className="text-[11px] text-[#6b7280]">احتمال تجمعی گروه‌ها: گاوی، خنثی، خرسی</p>
+            <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات گروه‌ها</h2>
+            <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی سناریوها + تجمعی گروه‌ها</p>
           </div>
         </div>
         <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
       </CollapsibleTrigger>
-
       <CollapsibleContent>
-        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto"
-          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-          {/* Legend */}
-          <div className="flex items-center justify-center gap-6 mb-3">
-            {([
-              ['bullish', 'گاوی', '#16a34a'],
-              ['neutral', 'خنثی', '#b45309'],
-              ['bearish', 'خرسی', '#dc2626'],
-            ] as const).map(([g, label, color]) => (
-              <div key={g} className="flex items-center gap-2">
-                <span className="inline-block w-4 h-1 rounded" style={{ background: color }} />
-                <span className="text-xs font-bold" style={{ color }}>{label}</span>
+        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto" style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <div className="mb-3">
+            <div className="flex items-center justify-center gap-5 mb-1.5">
+              {([
+                ['bullish', 'گاوی (تجمعی)', '#16a34a'],
+                ['neutral', 'خنثی (تجمعی)', '#b45309'],
+                ['bearish', 'خرسی (تجمعی)', '#dc2626'],
+              ] as const).map(([g, label, color]) => (
+                <div key={g} className="flex items-center gap-1.5">
+                  <span className="inline-block w-5 h-[3px] rounded" style={{ background: color }} />
+                  <span className="text-[10px] font-bold" style={{ color }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <span className="text-[9px] text-[#9ca3af]">اختصاصی:</span>
+              {bearishKeys.map(k => (
+                <div key={k} className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS[k], opacity: 0.6 }} />
+                  <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS[k] }}>{k}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS['R5'], opacity: 0.6 }} />
+                <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS['R5'] }}>R5</span>
               </div>
-            ))}
+              {bullishKeys.map(k => (
+                <div key={k} className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS[k], opacity: 0.6 }} />
+                  <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS[k] }}>{k}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 700, maxHeight: 280 }}>
-            {/* Background */}
+          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 700, maxHeight: 320 }}>
             <rect x={0} y={0} width={chartW} height={chartH} fill="#ffffff" rx={4} />
-            {/* Grid */}
             {gridLines}
-            {/* Axes */}
             <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
             <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
-            {/* X labels */}
             {xLabels}
             <text x={chartW / 2} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={10} fontFamily="inherit">روز (۱ = امروز)</text>
-            {/* Lines */}
-            {buildPolyline(bull.trend, 'bullish')}
-            {buildPolyline(neut.trend, 'neutral')}
-            {buildPolyline(bear.trend, 'bearish')}
+            {bearishKeys.map(buildScenarioLine)}
+            {buildScenarioLine('R5')}
+            {bullishKeys.map(buildScenarioLine)}
+            {buildGroupLine(bull.trend, 'bullish')}
+            {buildGroupLine(neut.trend, 'neutral')}
+            {buildGroupLine(bear.trend, 'bearish')}
           </svg>
         </div>
       </CollapsibleContent>
