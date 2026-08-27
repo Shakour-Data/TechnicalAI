@@ -7,7 +7,10 @@
 
 import YahooFinance from 'yahoo-finance2';
 
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+const yahooFinance = new YahooFinance({ 
+  suppressNotices: ['yahooSurvey'],
+  validation: { logErrors: true },
+});
 
 /* ─── Types ────────────────────────────────────────────── */
 
@@ -496,7 +499,41 @@ export async function fetchYahooQuotes(): Promise<YahooQuote[]> {
         });
       }
     } catch (err) {
-      console.error(`[Yahoo Finance] Error fetching batch ${Math.floor(i / BATCH_SIZE) + 1}:`, err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('FailedYahooValidationError') || errMsg.includes('validation')) {
+        // Batch failed due to schema validation — retry individually to salvage valid symbols
+        console.warn(`[Yahoo Finance] Batch ${Math.floor(i / BATCH_SIZE) + 1} validation error, retrying individually...`);
+        for (const symbol of batch) {
+          try {
+            const singleResults = await yahooFinance.quote([symbol], {
+              fields: [
+                'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+                'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+                'regularMarketDayLow', 'regularMarketVolume', 'marketCap', 'currency',
+              ],
+            });
+            for (const r of singleResults) {
+              const def = ALL_YAHOO_INSTRUMENTS.find((s) => s.symbol === r.symbol);
+              if (!def) continue;
+              const unit = r.currency || 'USD';
+              quotes.push({
+                symbol: r.symbol, name: def.name, nameEn: def.nameEn,
+                country: def.country, countryEn: def.countryEn,
+                exchange: def.exchange, groupTitle: def.groupTitle, category: def.category,
+                unit, price: r.regularMarketPrice ?? 0, change: r.regularMarketChange ?? 0,
+                changePercent: r.regularMarketChangePercent ?? 0, previousClose: r.regularMarketPreviousClose ?? 0,
+                open: r.regularMarketOpen ?? 0, high: r.regularMarketDayHigh ?? 0,
+                low: r.regularMarketDayLow ?? 0, volume: r.regularMarketVolume ?? 0,
+                marketCap: r.marketCap ?? 0, currency: r.currency || 'USD',
+              });
+            }
+          } catch {
+            // Skip individual symbol errors
+          }
+        }
+      } else {
+        console.error(`[Yahoo Finance] Error fetching batch ${Math.floor(i / BATCH_SIZE) + 1}:`, err);
+      }
     }
   }
 

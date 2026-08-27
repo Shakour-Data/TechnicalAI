@@ -175,7 +175,7 @@ async function fetchWithCache(
 
   // Tier 3: Fetch from Python service
   try {
-    const res = await fetch(serviceUrl, { signal: AbortSignal.timeout(180_000) });
+    const res = await fetch(serviceUrl, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`Service error ${res.status}: ${body.slice(0, 200)}`);
@@ -334,7 +334,14 @@ export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCand
     return await fetchWithCache(`idx_${key}`, `${SERVICE_BASE}/api/index-history?key=${key}`);
   } catch (serviceErr) {
     // Service failed (rate limit, down, etc.)
-    console.warn(`[tsetmc-index] Service failed for ${key}, trying direct CDN fallback...`);
+    console.warn(`[tsetmc-index] Service failed for ${key}, trying fallbacks...`);
+  }
+
+  // Quick fallback: try expired file cache BEFORE slow CDN call
+  const expiredCache = loadIndexFileCache(`idx_${key}`, true);
+  if (expiredCache && expiredCache.length > 0) {
+    console.warn(`[tsetmc-index] Using expired file cache for ${key} (${expiredCache.length} candles)`);
+    return expiredCache;
   }
 
   // Direct TSETMC CDN fallback via z-ai page_reader
@@ -373,6 +380,20 @@ export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCa
     );
   } catch (serviceErr) {
     console.warn(`[tsetmc-index] Service failed for webId=${webIdStr}, trying direct CDN fallback...`);
+  }
+
+  // Quick fallback: try expired file cache BEFORE slow CDN call
+  if (sectorName) {
+    const expiredSector = loadSectorFileCache(sectorName);
+    if (expiredSector && expiredSector.length > 0) {
+      console.warn(`[tsetmc-index] Using expired sector cache for ${sectorName} (${expiredSector.length} candles)`);
+      return expiredSector;
+    }
+  }
+  const expiredWebId = loadIndexFileCache(`sec_${webIdStr}`, true);
+  if (expiredWebId && expiredWebId.length > 0) {
+    console.warn(`[tsetmc-index] Using expired file cache for webId=${webIdStr} (${expiredWebId.length} candles)`);
+    return expiredWebId;
   }
 
   // Direct TSETMC CDN fallback via z-ai page_reader
