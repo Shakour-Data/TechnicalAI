@@ -278,6 +278,7 @@ export default function SymbolSearch({
   const [showSectorPicker, setShowSectorPicker] = React.useState(false);
   const [recentSearches] = React.useState(() => getRecentSearches());
   const [countrySearch, setCountrySearch] = React.useState('');
+  const [yahooReady, setYahooReady] = React.useState(false);
 
   const cacheRef = React.useRef<InstrumentsData | null>(null);
   const tgjuCacheRef = React.useRef<TgjuData | null>(null);
@@ -286,6 +287,7 @@ export default function SymbolSearch({
   const tgjuFetchRef = React.useRef<Promise<TgjuData | null> | null>(null);
   const yahooFetchRef = React.useRef<Promise<YahooData | null> | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const modalInputRef = React.useRef<HTMLInputElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
 
@@ -296,14 +298,14 @@ export default function SymbolSearch({
     const all = [...yahooCacheRef.current.yahooStocks, ...yahooCacheRef.current.yahooEtfs];
     all.forEach((s) => { if (s.country) set.add(s.country); });
     return Array.from(set);
-  }, [open]);
+  }, [open, yahooReady]);
 
    const yahooSectors = React.useMemo(() => {
     if (!yahooCacheRef.current) return [];
     const set = new Set<string>();
     yahooCacheRef.current.yahooStocks.forEach((s) => { if (s.sector) set.add(s.sector); });
     return Array.from(set);
-  }, [open]);
+  }, [open, yahooReady]);
 
   const showCountryFilter = React.useMemo(() => {
     return activeCategory === 'all' || YAHOO_SPECIFIC_CATEGORIES.has(activeCategory) || activeCategory === 'world_index';
@@ -323,7 +325,7 @@ export default function SymbolSearch({
       if (item.country) counts[item.country] = (counts[item.country] || 0) + 1;
     });
     return counts;
-  }, [open]);
+  }, [open, yahooReady]);
 
   /* -- Data fetching -- */
   const fetchData = React.useCallback(async (): Promise<InstrumentsData> => {
@@ -333,7 +335,7 @@ export default function SymbolSearch({
       try { const r = await fetch('/api/instruments'); if (!r.ok) throw new Error(`${r.status}`); const d: InstrumentsData = await r.json(); cacheRef.current = d; return d; }
       finally { fetchRef.current = null; }
     };
-    fetchRef.current = p(); return fetchRef.current;
+    const promise = p(); fetchRef.current = promise; return promise;
   }, []);
 
   const fetchTgjuData = React.useCallback(async (): Promise<TgjuData | null> => {
@@ -343,17 +345,18 @@ export default function SymbolSearch({
       try { const r = await fetch('/api/tgju-instruments'); if (!r.ok) return null; const d: TgjuData = await r.json(); tgjuCacheRef.current = d; return d; }
       catch { return null; } finally { tgjuFetchRef.current = null; }
     };
-    tgjuFetchRef.current = p(); return p();
+    const promise = p(); tgjuFetchRef.current = promise; return promise;
   }, []);
 
   const fetchYahooData = React.useCallback(async (): Promise<YahooData | null> => {
     if (yahooCacheRef.current) return yahooCacheRef.current;
     if (yahooFetchRef.current) return yahooFetchRef.current;
-    const p = async () => {
-      try { const r = await fetch('/api/yahoo-instruments'); if (!r.ok) return null; const d = await r.json() as YahooData; yahooCacheRef.current = d; return d; }
+    const promise = (async () => {
+      try { const r = await fetch('/api/yahoo-instruments'); if (!r.ok) return null; const d = await r.json() as YahooData; yahooCacheRef.current = d; setYahooReady(true); return d; }
       catch { return null; } finally { yahooFetchRef.current = null; }
-    };
-    yahooFetchRef.current = p(); return p();
+    })();
+    yahooFetchRef.current = promise;
+    return promise;
   }, []);
 
   /* -- Get items for category -- */
@@ -576,7 +579,7 @@ export default function SymbolSearch({
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18); setOpen(false); addRecentSearch(s.l18);
     onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex, s.webId, s.yahooSymbol);
-    inputRef.current?.blur();
+    inputRef.current?.blur(); modalInputRef.current?.blur();
   }, [onSelect]);
 
   const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
@@ -584,7 +587,7 @@ export default function SymbolSearch({
     if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex((p) => p < results.length - 1 ? p + 1 : 0); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((p) => p > 0 ? p - 1 : results.length - 1); }
     else if (e.key === 'Enter') { e.preventDefault(); if (activeIndex >= 0) selectSymbol(results[activeIndex]); }
-    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); inputRef.current?.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); inputRef.current?.blur(); modalInputRef.current?.blur(); }
   }, [open, results, activeIndex, selectSymbol, handleFocus]);
 
   React.useEffect(() => { if (activeIndex >= 0) itemRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' }); }, [activeIndex]);
@@ -600,7 +603,7 @@ export default function SymbolSearch({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const clear = () => { setQuery(''); setActiveIndustry(null); setActiveCountry(null); setActiveSector(null); setActiveCategory('all'); setCountrySearch(''); setResults([]); inputRef.current?.focus(); };
+  const clear = () => { setQuery(''); setActiveIndustry(null); setActiveCountry(null); setActiveSector(null); setActiveCategory('all'); setCountrySearch(''); setResults([]); modalInputRef.current?.focus(); };
   const isPopular = query.trim().length === 0 && activeCategory === 'all' && !activeCountry;
   const isSearch = query.trim().length > 0;
   const industries = cacheRef.current?.industries || [];
@@ -707,23 +710,47 @@ export default function SymbolSearch({
         {query && <button onClick={clear} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#111827] transition-colors' type='button'><X className='w-4 h-4' /></button>}
       </div>
 
+      {/* ═══ Backdrop ═══ */}
+      {open && (
+        <div className='fixed inset-0 z-[99] bg-black/20 backdrop-blur-[2px]' onClick={() => { setOpen(false); inputRef.current?.blur(); modalInputRef.current?.blur(); }} />
+      )}
+
       {open && (
         <div ref={dropdownRef}
-          className='absolute top-full left-1/2 -translate-x-1/2 mt-2 z-[100] rounded-2xl border border-[#e5e7eb] bg-white shadow-2xl shadow-gray-900/15 overflow-hidden'
-          style={{ width: 'min(1100px, 98vw)', maxHeight: 'min(88vh, 820px)', display: 'flex', flexDirection: 'column' }}
+          className='fixed z-[100] rounded-2xl border border-[#e5e7eb] bg-white shadow-2xl shadow-gray-900/15 overflow-hidden'
+          style={{ width: 'min(960px, 96vw)', maxHeight: 'calc(100dvh - 80px)', display: 'flex', flexDirection: 'column', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
         >
-          {/* ═══ Category tabs ═══ */}
-          <div className='shrink-0 flex items-center gap-0.5 px-2 py-2 border-b border-[#e5e7eb] overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
+          {/* ═══ Header with search input ═══ */}
+          <div className='shrink-0 flex items-center gap-2 px-3 pt-3 pb-2'>
+            <Search className='w-4 h-4 text-[#6b7280] shrink-0' />
+            <input
+              ref={modalInputRef}
+              type='text'
+              value={query}
+              onChange={(e) => handleChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder='نام فارسی، English name، نماد (AAPL)، کشور، صنعت ...'
+              className='flex-1 h-9 text-sm text-[#111827] placeholder:text-[#9ca3af] bg-transparent focus:outline-none'
+              autoFocus
+              autoComplete='off'
+              spellCheck={false}
+            />
+            {query && <button onClick={clear} className='p-1 rounded-md hover:bg-[#f3f4f6] text-[#9ca3af] hover:text-[#374151] transition-colors' type='button'><X className='w-4 h-4' /></button>}
+            <div className='w-px h-5 bg-[#e5e7eb] shrink-0' />
+            <button onClick={() => { setOpen(false); inputRef.current?.blur(); modalInputRef.current?.blur(); }} className='p-1 rounded-md hover:bg-[#f3f4f6] text-[#6b7280] hover:text-[#374151] transition-colors' type='button'><X className='w-4 h-4' /></button>
+          </div>
+          {/* ═══ Category tabs — WRAP so all are visible ═══ */}
+          <div className='shrink-0 flex flex-wrap items-center gap-1 px-2 py-1.5 border-b border-[#e5e7eb]'>
             {CATEGORIES.map((cat) => {
               const Icon = cat.icon; const isActive = activeCategory === cat.key;
               const src = YAHOO_SPECIFIC_CATEGORIES.has(cat.key) ? 'yahoo' : TGJU_CATEGORIES.has(cat.key) ? 'tgju' : 'tse';
               return (
                 <button key={cat.key} onClick={() => handleCategoryChange(cat.key)} type='button'
-                  className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 border',
-                    isActive ? (src === 'yahoo' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : src === 'tgju' ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-amber-50 text-amber-800 border-amber-200') : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] border-transparent',
+                  className={cn('flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border',
+                    isActive ? (src === 'yahoo' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm' : src === 'tgju' ? 'bg-teal-50 text-teal-700 border-teal-200 shadow-sm' : 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm') : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] border-transparent',
                   )}
                 >
-                  <Icon className='w-3.5 h-3.5' />{cat.label}
+                  <Icon className='w-3 h-3' />{cat.label}
                 </button>
               );
             })}

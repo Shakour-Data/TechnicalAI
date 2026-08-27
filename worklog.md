@@ -1134,3 +1134,33 @@ Stage Summary:
 - Bilingual search hint is more prominent
 - All country filter logic properly handles 'all' category
 - No lint errors, compiles successfully
+
+---
+Task ID: search-modal-fix
+Agent: Main
+Task: Fix dropdown size, make all tabs visible, fix country filter not showing, add modal search input
+
+Work Log:
+- Changed dropdown from `absolute` to `fixed` positioning, centered on viewport
+- Set width to `min(960px, 96vw)` and maxHeight to `calc(100dvh - 80px)` — no overflow
+- Changed category tabs from `overflow-x-auto` (hidden scrollbar) to `flex-wrap` — ALL 17 tabs now visible
+- Added semi-transparent backdrop with blur behind the modal
+- Fixed country filter not showing: added `yahooReady` state, set in `fetchYahooData`, used as memo dependency
+- Fixed double-fetch bug in all three fetch functions (p() was called twice)
+- Added search input INSIDE the modal header (backdrop was blocking the original input)
+- Added close button (X) in modal header
+- Bilingual placeholder: 'نام فارسی، English name، نماد (AAPL)، کشور، صنعت ...'
+- Verified via browser: all 20 countries visible with flags and counts
+- Verified: clicking Germany shows SAP, Siemens, Allianz, etc.
+- Verified: clicking France shows CAC 40, L'Oréal, LVMH, Sanofi, Airbus, BNP, Schneider
+- Verified: English search 'Tesla' finds تسلا
+- Verified: Persian search 'تسلا' finds Tesla
+- All category tabs including 'سهام جهانی' are clickable and work
+
+Stage Summary:
+- Dropdown is now a centered modal that fits within viewport
+- All 17 category tabs wrap and are always visible
+- Country filter shows 20 countries with flags and instrument counts
+- Modal has its own search input for typing
+- Bilingual search works (Persian and English)
+- No lint errors
