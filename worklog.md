@@ -1467,7 +1467,33 @@ Stage Summary:
 - **First time** (no cache): API called → if succeeds, cached in DB + localStorage
 - **Same day revisit**: localStorage loads instantly, zero API calls
 - **API rate-limited**: Previous day's text shown from DB cache or localStorage with fallback badge
-- **User ALWAYS sees analysis text** instead of error messages
-- Verified: AI text generated successfully (37.3s, attempt 1/3), saved to DB cache and localStorage
-- Verified: localStorage keys confirmed (`ai-بهمن  دیزل-2026-08-27` + `ai-بهمن  دیزل-latest`)
-- No console errors, no new lint errors in modified files
+
+---
+Task ID: VDSS-GRAPH-REDESIGN
+Agent: frontend-styling
+Task: Redesign VDSS decision graph with dark theme
+
+Work Log:
+- Rewrote vdss-graph.tsx with self-contained dark theme (D.* constants)
+- Applied premium visual design inspired by example HTML (Example_VDss_yyyymmdd.html)
+- Header: emblem (◈) with gold glow, dark gradient background, cyan border
+- Metric cards: dark gradient backgrounds with colored values (cyan/gold/purple)
+- Toolbar: dark glass effect buttons, active state with colored border + glow
+- Graph workspace: radial gradient + dark background (#07111b), grid pattern
+- Node cards: inner glow (inset box-shadow), hover lift with outer glow ring, dimmed at 0.12 opacity
+- Edge paths: curved quadratic bezier, colored by type, SVG arrow markers (9x9), paint-order stroke labels on dark bg
+- Selected node: bright glow ring + scale(1.025) + translateY(-4px) + brightness(1.18)
+- Scenario cards: colored borders with gradient backgrounds matching scenario color
+- Probability bars: colored fill on dark track with smooth transitions
+- Detail panel: dark panel with structured content, dashed border separators
+- Legend: semi-transparent dark panel in graph corner
+- Skeleton: dark-themed loading placeholders
+- ProbabilityTrendTable: kept its original light theme styling (uses app theme via useTheme)
+- All data flow, state management, filtering logic, edge drawing algorithm, and detail panel logic preserved exactly
+- Same props interface (VdssGraphProps), same exported components (VdssGraph, VdssGraphSkeleton)
+- Zero lint errors in vdss-graph.tsx
+
+Stage Summary:
+- Complete visual overhaul of decision graph component to premium dark dashboard theme
+- Self-contained dark theme using inline styles (no dependency on app theme for graph area)
+- All functional logic (filters, selections, edge rendering, detail panel) preserved identically

@@ -1,0 +1,375 @@
+     1→     1→<!DOCTYPE html>
+     2→     2→<html lang="fa" dir="rtl">
+     3→     3→<head>
+     4→     4→<meta charset="UTF-8" />
+     5→     5→<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     6→     6→<title>گراف تصمیم سهم - VDss</title>
+     7→     7→<style>
+     8→     8→  :root{
+     9→     9→    --bg:#07111b; --bg2:#0b1c2b; --panel:rgba(13,31,47,.90); --panel2:rgba(19,42,61,.82); --line:rgba(170,208,229,.18); --text:#eaf5fb; --muted:#9db4c2; --cyan:#3ad5db; --blue:#4186ff; --purple:#a04ac5; --gold:#ffb11b; --orange:#ff7b32; --red:#ef4d62; --green:#34c98b; --shadow:0 18px 55px rgba(0,0,0,.35);
+    10→    10→  }
+    11→    11→  *{box-sizing:border-box}
+    12→    12→  body{ margin:0; min-height:100vh; color:var(--text); font-family:Tahoma, "Vazirmatn", Arial, sans-serif; background:radial-gradient(circle at 80% 8%, rgba(65,134,255,.16), transparent 27%), radial-gradient(circle at 10% 86%, rgba(160,74,197,.13), transparent 32%), linear-gradient(135deg, #06101a 0%, #0a1825 52%, #061019 100%); }
+    13→    13→  body::before{ content:""; position:fixed; inset:0; pointer-events:none; opacity:.28; background-image:linear-gradient(rgba(95,172,204,.075) 1px, transparent 1px), linear-gradient(90deg, rgba(95,172,204,.075) 1px, transparent 1px); background-size:48px 48px; mask-image:linear-gradient(to bottom, black, transparent); }
+    14→    14→  .app{ width:min(1720px, 96vw); margin:0 auto; padding:24px 0 40px; }
+    15→    15→  header{ display:flex; align-items:center; justify-content:space-between; gap:18px; padding:18px 22px; border:1px solid rgba(58,213,219,.22); border-radius:18px; background:linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77)); box-shadow:var(--shadow); }
+    16→    16→  .brand{ display:flex; align-items:center; gap:14px }
+    17→    17→  .emblem{ width:48px; height:48px; display:grid; place-items:center; border:1px solid rgba(255,177,27,.7); border-radius:14px; color:var(--gold); font-size:27px; box-shadow:inset 0 0 22px rgba(255,177,27,.12), 0 0 22px rgba(255,177,27,.08); }
+    18→    18→  h1{ font-size:20px; margin:0 0 6px; }
+    19→    19→  .subtitle{ font-size:12px; color:var(--muted); }
+    20→    20→  .stamp{ text-align:left; color:#bbd7e8; font-size:12px; line-height:1.8; padding:5px 12px; border-right:1px solid rgba(58,213,219,.24); }
+    21→    21→  .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:16px 0; }
+    22→    22→  .metric{ padding:15px 16px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86)); }
+    23→    23→  .metric small{ display:block; color:var(--muted); margin-bottom:8px; }
+    24→    24→  .metric strong{ font-size:18px; letter-spacing:.2px; }
+    25→    25→  .metric .up{ color:var(--cyan); } .metric .warn{ color:var(--gold); }
+    26→    26→  .toolbar{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px; border:1px solid var(--line); border-radius:15px 15px 0 0; background:rgba(9,24,37,.92); }
+    27→    27→  .toolbar-title{ font-size:13px; color:var(--muted); margin-left:6px; }
+    28→    28→  button{ color:#dcebf2; border:1px solid rgba(159,198,218,.22); border-radius:10px; background:rgba(255,255,255,.04); padding:8px 11px; font-family:inherit; font-size:12px; cursor:pointer; transition:.2s ease; }
+    29→    29→  button:hover, button.active{ transform:translateY(-1px); color:#fff; border-color:rgba(58,213,219,.7); background:rgba(58,213,219,.14); box-shadow:0 0 18px rgba(58,213,219,.10); }
+    30→    30→  .workspace{ display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:14px; }
+    31→    31→  .graph-shell{ position:relative; overflow:auto; min-height:790px; border:1px solid var(--line); border-top:0; background:radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72); box-shadow:var(--shadow); }
+    32→    32→  #graph{ position:relative; width:1500px; height:780px; margin:auto; }
+    33→    33→  #edges{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+    34→    34→  .edge{ fill:none; stroke-width:2; opacity:.72; transition:opacity .2s, stroke-width .2s; }
+    35→    35→  .edge.dim{ opacity:.08; } .edge.highlight{ opacity:1; stroke-width:3.8; }
+    36→    36→  .edge-label{ fill:#cde4ef; font-size:10px; text-anchor:middle; paint-order:stroke; stroke:#07111b; stroke-width:4px; stroke-linejoin:round; }
+    37→    37→  .edge-label.dim{ opacity:.08; }
+    38→    38→  .node{ position:absolute; width:148px; min-height:80px; padding:10px 9px; text-align:center; border:1px solid var(--node-color); border-radius:13px; background:linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96)); box-shadow:inset 0 0 22px color-mix(in srgb, var(--node-color) 12%, transparent), 0 10px 25px rgba(0,0,0,.25); cursor:pointer; transition:transform .2s, filter .2s, opacity .2s; z-index:2; }
+    39→    39→  .node:hover, .node.selected{ transform:translateY(-4px) scale(1.025); filter:brightness(1.18); box-shadow:0 0 0 2px color-mix(in srgb, var(--node-color) 28%, transparent), 0 0 28px color-mix(in srgb, var(--node-color) 25%, transparent); }
+    40→    40→  .node.dim{ opacity:.18; }
+    41→    41→  .node .id{ display:block; font-size:10px; color:var(--node-color); font-weight:bold; margin-bottom:5px; }
+    42→    42→  .node .name{ font-size:12px; font-weight:bold; line-height:1.55; }
+    43→    43→  .node .value{ font-size:11px; color:#c6dbe6; margin-top:4px; direction:ltr; }
+    44→    44→  .node.terminal{ width:175px; min-height:94px; border-width:2px; }
+    45→    45→  .prob{ display:inline-block; margin-top:6px; padding:3px 10px; border-radius:999px; background:color-mix(in srgb, var(--node-color) 17%, transparent); color:var(--node-color); font-size:15px; font-weight:bold; }
+    46→    46→  .legend{ position:absolute; right:17px; bottom:15px; padding:10px; border:1px solid var(--line); border-radius:10px; background:rgba(7,17,27,.8); font-size:10px; color:var(--muted); line-height:2; }
+    47→    47→  .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:5px; }
+    48→    48→  .dot.up{ background:var(--green); } .dot.pull{ background:var(--blue); } .dot.down{ background:var(--orange); } .dot.risk{ background:var(--red); }
+    49→    49→  aside{ border:1px solid var(--line); border-radius:15px; background:linear-gradient(160deg, rgba(16,39,57,.93), rgba(7,19,31,.93)); padding:16px; box-shadow:var(--shadow); }
+    50→    50→  aside h2{ font-size:15px; margin:0 0 12px; color:#d8eff9; }
+    51→    51→  .detail-empty, .note{ font-size:12px; color:var(--muted); line-height:2; }
+    52→    52→  .detail-card{ border-top:1px solid var(--line); padding-top:12px; }
+    53→    53→  .detail-card h3{ font-size:14px; margin:0 0 9px; }
+    54→    54→  .detail-card p{ font-size:12px; color:#c4d8e3; line-height:1.95; margin:8px 0; }
+    55→    55→  .tag{ display:inline-block; padding:4px 8px; margin:3px 2px; border-radius:8px; color:#d7eaf1; font-size:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09); }
+    56→    56→  .path-list{ margin:12px 0 0; padding:0; list-style:none; }
+    57→    57→  .path-list li{ padding:9px 0; border-top:1px dashed rgba(175,210,225,.15); font-size:11px; line-height:1.8; color:#b8cfdb; }
+    58→    58→  .scenario-section{ margin-top:16px; padding:18px; border:1px solid var(--line); border-radius:16px; background:rgba(8,22,35,.76); }
+    59→    59→  .scenario-section h2{ font-size:16px; margin:0 0 13px; }
+    60→    60→  .scenario-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+    61→    61→  .scenario{ border:1px solid var(--scolor); background:linear-gradient(160deg, color-mix(in srgb,var(--scolor) 12%, transparent), rgba(8,22,35,.65)); border-radius:12px; padding:12px; }
+    62→    62→  .scenario strong{ display:block; color:var(--scolor); font-size:21px; margin-bottom:5px; }
+    63→    63→  .scenario span{ font-size:12px; font-weight:bold; }
+    64→    64→  .scenario small{ display:block; color:var(--muted); font-size:10px; line-height:1.7; margin-top:7px; }
+    65→    65→  .footnote{ margin-top:15px; padding:12px 15px; border-right:3px solid var(--gold); background:rgba(255,177,27,.06); color:#b8cbd5; font-size:11px; line-height:2; }
+    66→    66→  @media(max-width:1050px){ .metrics{grid-template-columns:repeat(2,1fr)} .workspace{grid-template-columns:1fr} aside{min-height:220px} .scenario-grid{grid-template-columns:repeat(2,1fr)} }
+    67→    67→  @media(max-width:580px){ .app{width:94vw} header{align-items:flex-start; flex-direction:column} .stamp{text-align:right; border-right:0; border-top:1px solid var(--line); width:100%} .metrics{grid-template-columns:1fr} .scenario-grid{grid-template-columns:1fr} }
+    68→    68→</style>
+    69→    69→</head>
+    70→    70→<body>
+    71→    71→<div class="app">
+    72→    72→  <header>
+    73→    73→    <div class="brand">
+    74→    74→      <div class="emblem">◈</div>
+    75→    75→      <div>
+    76→    76→        <h1 id="headerTitle">گراف تصمیم سهم (نام سهم را وارد کنید)</h1>
+    77→    77→        <div class="subtitle">مدل ۱۲پایهٔ گره‌ـ‌مسیر | مبتنی بر EMV و مسیرهای بحرانی</div>
+    78→    78→      </div>
+    79→    79→    </div>
+    80→    80→    <div class="stamp">
+    81→    81→      نقطهٔ مرجع: <b id="headerPrice">--</b><br>
+    82→    82→      افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
+    83→    83→    </div>
+    84→    84→  </header>
+    85→    85→
+    86→    86→  <section class="metrics">
+    87→    87→    <div class="metric"><small>مقدار مرجع</small><strong class="up" id="mPrice">--</strong></div>
+    88→    88→    <div class="metric"><small>مقاومت آنی (R1)</small><strong class="warn" id="mR1">--</strong></div>
+    89→    89→    <div class="metric"><small>حمایت تفکیک‌کننده (S1)</small><strong id="mS1">--</strong></div>
+    90→    90→    <div class="metric"><small>میانگین متحرک ۱۰۰</small><strong id="mMA100">--</strong></div>
+    91→    91→  </section>
+    92→    92→
+    93→    93→  <div class="toolbar">
+    94→    94→    <span class="toolbar-title">نمایش مسیرها:</span>
+    95→    95→    <button class="active" data-filter="all">همهٔ مسیرها</button>
+    96→    96→    <button data-filter="up">صعودی</button>
+    97→    97→    <button data-filter="pullback">پولبک و بازگشت</button>
+    98→    98→    <button data-filter="down">اصلاحی</button>
+    99→    99→    <button data-filter="risk">ابطال و ریسک</button>
+   100→   100→    <button id="reset">بازنشانی انتخاب</button>
+   101→   101→  </div>
+   102→   102→
+   103→   103→  <main class="workspace">
+   104→   104→    <section class="graph-shell">
+   105→   105→      <div id="graph">
+   106→   106→        <svg id="edges" aria-label="مسیرهای گراف تصمیم"></svg>
+   107→   107→        <div class="node" id="A" style="right:670px;top:336px;--node-color:#3ad5db"><span class="id">A | گره تصمیم</span><div class="name">ریشه (ورود یا انتظار)</div><div class="value" id="vA">--</div></div>
+   108→   108→        <div class="node" id="B" style="right:930px;top:230px;--node-color:#ffb11b"><span class="id">B | گره رویداد</span><div class="name">آزمون مقاومت R1</div><div class="value" id="vB">--</div></div>
+   109→   109→        <div class="node" id="C" style="right:1170px;top:115px;--node-color:#34c98b"><span class="id">C | گره تأیید</span><div class="name">تثبیت بالای R1</div><div class="value">شرط ادامهٔ صعود</div></div>
+   110→   110→        <div class="node" id="D" style="right:935px;top:42px;--node-color:#ffb11b"><span class="id">D | گره رویداد</span><div class="name">آزمون R2 (شتاب‌سنج)</div><div class="value" id="vD">--</div></div>
+   111→   111→        <div class="node" id="E" style="right:625px;top:42px;--node-color:#34c98b"><span class="id">E | گره پایانی</span><div class="name">کریدور صعودی</div><div class="value" id="vE">--</div></div>
+   112→   112→        <div class="node" id="F" style="right:312px;top:42px;--node-color:#ffb11b"><span class="id">F | گره پایانی</span><div class="name">هدف توسعه‌ای</div><div class="value" id="vF">--</div></div>
+   113→   113→        <div class="node" id="G" style="right:930px;top:450px;--node-color:#4186ff"><span class="id">G | گره رویداد</span><div class="name">پولبک به S1</div><div class="value" id="vG">--</div></div>
+   114→   114→        <div class="node" id="H" style="right:1170px;top:565px;--node-color:#4186ff"><span class="id">H | گره رویداد</span><div class="name">حمایت S2</div><div class="value" id="vH">--</div></div>
+   115→   115→        <div class="node" id="I" style="right:680px;top:590px;--node-color:#ff7b32"><span class="id">I | گره رویداد</span><div class="name">حمایت S3</div><div class="value" id="vI">--</div></div>
+   116→   116→        <div class="node" id="J" style="right:375px;top:590px;--node-color:#ff7b32"><span class="id">J | گره رویداد</span><div class="name">حمایت S4</div><div class="value" id="vJ">--</div></div>
+   117→   117→        <div class="node" id="K" style="right:72px;top:590px;--node-color:#ef4d62"><span class="id">K | گره بحرانی</span><div class="name">MA100</div><div class="value" id="vK">--</div></div>
+   118→   118→        <div class="node" id="L" style="right:348px;top:337px;--node-color:#a04ac5"><span class="id">L | گره اعتبارسنج</span><div class="name">خطوط روند</div><div class="value">صعودی</div></div>
+   119→   119→        
+   120→   120→        <div class="node terminal" id="R1" style="right:75px;top:136px;--node-color:#34c98b"><span class="id">نتیجه R1</span><div class="name">تداوم صعود</div><div class="value" id="vR1">--</div><span class="prob">--%</span></div>
+   121→   121→        <div class="node terminal" id="R2" style="right:1110px;top:350px;--node-color:#3ad5db"><span class="id">نتیجه R2</span><div class="name">پولبک سالم</div><div class="value" id="vR2">--</div><span class="prob">--%</span></div>
+   122→   122→        <div class="node terminal" id="R3" style="right:925px;top:665px;--node-color:#ff7b32"><span class="id">نتیجه R3</span><div class="name">اصلاح کنترل‌شده</div><div class="value" id="vR3">--</div><span class="prob">--%</span></div>
+   123→   123→        <div class="node terminal" id="R4" style="right:275px;top:665px;--node-color:#ffb11b"><span class="id">نتیجه R4</span><div class="name">اصلاح عمیق</div><div class="value" id="vR4">--</div><span class="prob">--%</span></div>
+   124→   124→        <div class="node terminal" id="R5" style="right:15px;top:345px;--node-color:#ef4d62"><span class="id">نتیجه R5</span><div class="name">تضعیف ساختار</div><div class="value" id="vR5">--</div><span class="prob">--%</span></div>
+   125→   125→
+   126→   126→        <div class="legend">
+   127→   127→          <div><i class="dot up"></i>صعود و تأیید</div>
+   128→   128→          <div><i class="dot pull"></i>پولبک و بازگشت</div>
+   129→   129→          <div><i class="dot down"></i>اصلاح</div>
+   130→   130→          <div><i class="dot risk"></i>ریسک / ابطال</div>
+   131→   131→        </div>
+   132→   132→      </div>
+   133→   133→    </section>
+   134→   134→
+   135→   135→    <aside>
+   136→   136→      <h2>پنل تفسیر گره و مسیر</h2>
+   137→   137→      <div id="details" class="detail-empty">
+   138→   138→        برای مشاهدهٔ اطلاعات، روی هر گره یا مسیرهای فیلترشده کلیک کنید.<br><br><b>قاعدهٔ اعتبار:</b> عبور یا شکست هر سطح فقط با تثبیت معتبر تلقی می‌شود؛ لمس سطح به‌تنهایی سیگنال تصمیم نیست.
+   139→   139→      </div>
+   140→   140→    </aside>
+   141→   141→  </main>
+   142→   142→
+   143→   143→  <section class="scenario-section">
+   144→   144→    <h2>گره‌های نتیجه و احتمال تجمیعی مسیرهای ورودی (محاسبه شده توسط موتور داخلی)</h2>
+   145→   145→    <div class="scenario-grid">
+   146→   146→      <div class="scenario" style="--scolor:#34c98b"><strong id="sR1">--%</strong><span>R1 | تداوم صعود</span><small id="dR1">--</small></div>
+   147→   147→      <div class="scenario" style="--scolor:#3ad5db"><strong id="sR2">--%</strong><span>R2 | پولبک سالم</span><small id="dR2">--</small></div>
+   148→   148→      <div class="scenario" style="--scolor:#ff7b32"><strong id="sR3">--%</strong><span>R3 | اصلاح کنترل‌شده</span><small id="dR3">--</small></div>
+   149→   149→      <div class="scenario" style="--scolor:#ffb11b"><strong id="sR4">--%</strong><span>R4 | اصلاح عمیق</span><small id="dR4">--</small></div>
+   150→   150→      <div class="scenario" style="--scolor:#ef4d62"><strong id="sR5">--%</strong><span>R5 | تضعیف ساختار</span><small id="dR5">--</small></div>
+   151→   151→    </div>
+   152→   152→    <div class="footnote"><b>محدودیت مدل:</b> احتمال‌ها توسط موتور محاسباتی داخلی بر اساس فرمول‌های تعریف‌شده (ADX, RSI, MFI, CCI و فاصله از سطوح) محاسبه شده‌اند.</div>
+   153→   153→  </section>
+   154→   154→</div>
+   155→   155→
+   156→   156→<script>
+   157→   157→// ------------------------------------------------------------------
+   158→   158→// 1. داده‌های ورودی (این بخش را با داده‌های سهم جدید پر کنید)
+   159→   159→// ------------------------------------------------------------------
+   160→   160→const inputData = {
+   161→   161→  symbolName: "نام سهم (مثال: شتران)",
+   162→   162→  price: 0, // قیمت آخرین معامله
+   163→   163→  levels: {
+   164→   164→    R1: 0, S1: 0, MA100: 0,
+   165→   165→    R2: 0, S2: 0, S3: 0, S4: 0
+   166→   166→  },
+   167→   167→  indicators: {
+   168→   168→    RSI: 0, MFI: 0, CCI: 0, ADX: 0
+   169→   169→  }
+   170→   170→};
+   171→   171→
+   172→   172→// ------------------------------------------------------------------
+   173→   173→// 2. موتور محاسباتی (دقیقاً طبق فرمول‌های Master Prompt)
+   174→   174→// ------------------------------------------------------------------
+   175→   175→function calculateProbabilities(data) {
+   176→   176→  const {price, levels, indicators} = data;
+   177→   177→  const {R1, S1, MA100, R2, S2, S3, S4} = levels;
+   178→   178→  const {RSI, MFI, CCI, ADX} = indicators;
+   179→   179→
+   180→   180→  const adxScore = ADX / 100;
+   181→   181→  const rsiBull = RSI > 70 ? 1 : RSI > 50 ? 0.5 : 0;
+   182→   182→  const mfiBull = MFI > 80 ? 1 : MFI > 50 ? 0.5 : 0;
+   183→   183→  const cciBull = CCI > 100 ? 1 : CCI > 0 ? 0.5 : 0;
+   184→   184→  const consensus = (rsiBull + mfiBull + cciBull) / 3;
+   185→   185→  const trendBull = Math.min(1, 0.4 * adxScore + 0.6 * consensus);
+   186→   186→
+   187→   187→  const dR1 = Math.exp(-5 * Math.abs(price - R1) / R1);
+   188→   188→
+   189→   189→  const raw_R1 = (0.45 * dR1 + 0.55 * trendBull);
+   190→   190→  const raw_R2 = (1 - raw_R1) * 0.6 + 0.4 * (price > S1 ? 1 : 0) * (RSI < 70 || MFI < 80 ? 0.5 : 1);
+   191→   191→  
+   192→   192→  const dFromR1S1 = (Math.abs(price - R1)/R1 + Math.abs(price - S1)/S1);
+   193→   193→  const corrFact = 1 / (1 + dFromR1S1 * 10);
+   194→   194→  const raw_R3 = 0.3 * (price > MA100 ? 1 : 0) * corrFact * trendBull;
+   195→   195→  
+   196→   196→  const raw_R4 = 0.05 * (price > MA100 ? 0.2 : 1);
+   197→   197→  const raw_R5 = 0.02 * (price > MA100 ? 0 : 1) + 0.01 * (RSI < 30 || MFI < 30 ? 1 : 0);
+   198→   198→
+   199→   199→  const rawValues = {R1: raw_R1, R2: raw_R2, R3: raw_R3, R4: raw_R4, R5: raw_R5};
+   200→   200→  const sum = Object.values(rawValues).reduce((a,b) => a + b, 0);
+   201→   201→  const norm = (k) => Math.round((rawValues[k] / sum) * 100);
+   202→   202→
+   203→   203→  return { R1: norm('R1'), R2: norm('R2'), R3: norm('R3'), R4: norm('R4'), R5: norm('R5') };
+   204→   204→}
+   205→   205→
+   206→   206→// ------------------------------------------------------------------
+   207→   207→// 3. به‌روزرسانی گراف (اتوماتیک)
+   208→   208→// ------------------------------------------------------------------
+   209→   209→function updateGraph(data, probs) {
+   210→   210→  const {symbolName, price, levels, indicators} = data;
+   211→   211→  const {R1, S1, MA100, R2, S2, S3, S4} = levels;
+   212→   212→  
+   213→   213→  document.getElementById('headerTitle').textContent = `گراف تصمیم سهم ${symbolName}`;
+   214→   214→  document.getElementById('headerPrice').textContent = price.toLocaleString();
+   215→   215→  document.getElementById('mPrice').textContent = price.toLocaleString() + ' ریال';
+   216→   216→  document.getElementById('mR1').textContent = R1.toLocaleString() + ' ریال';
+   217→   217→  document.getElementById('mS1').textContent = S1.toLocaleString() + ' ریال';
+   218→   218→  document.getElementById('mMA100').textContent = MA100.toLocaleString() + ' ریال';
+   219→   219→
+   220→   220→  document.getElementById('vA').textContent = price.toLocaleString();
+   221→   221→  document.getElementById('vB').textContent = R1.toLocaleString();
+   222→   222→  document.getElementById('vD').textContent = R2.toLocaleString();
+   223→   223→  document.getElementById('vE').textContent = `${(R1 + Math.round((R2 - R1) * 0.5)).toLocaleString()} — ${(R2 + Math.round((R2 - R1) * 0.8)).toLocaleString()}`;
+   224→   224→  document.getElementById('vF').textContent = `${(R2 + Math.round((R2 - R1) * 1.2)).toLocaleString()} — ${(R2 + Math.round((R2 - R1) * 2.0)).toLocaleString()}`;
+   225→   225→  document.getElementById('vG').textContent = S1.toLocaleString();
+   226→   226→  document.getElementById('vH').textContent = S2.toLocaleString();
+   227→   227→  document.getElementById('vI').textContent = S3.toLocaleString();
+   228→   228→  document.getElementById('vJ').textContent = S4.toLocaleString();
+   229→   229→  document.getElementById('vK').textContent = MA100.toLocaleString();
+   230→   230→
+   231→   231→  document.querySelectorAll('.prob').forEach(el => {
+   232→   232→    const id = el.closest('.node').id;
+   233→   233→    if (probs[id] !== undefined) el.textContent = probs[id] + '%';
+   234→   234→  });
+   235→   235→  
+   236→   236→  document.getElementById('sR1').textContent = probs.R1 + '%';
+   237→   237→  document.getElementById('sR2').textContent = probs.R2 + '%';
+   238→   238→  document.getElementById('sR3').textContent = probs.R3 + '%';
+   239→   239→  document.getElementById('sR4').textContent = probs.R4 + '%';
+   240→   240→  document.getElementById('sR5').textContent = probs.R5 + '%';
+   241→   241→  
+   242→   242→  document.getElementById('dR1').textContent = `عبور از ${R1.toLocaleString()} و ${R2.toLocaleString()} ریال؛ حرکت به کریدور ${(R1 + Math.round((R2 - R1) * 0.5)).toLocaleString()} تا ${(R2 + Math.round((R2 - R1) * 0.8)).toLocaleString()} ریال.`;
+   243→   243→  document.getElementById('dR2').textContent = `اصلاح تا ${S1.toLocaleString()} و بازپس‌گیری مقاومت ${R1.toLocaleString()} ریال.`;
+   244→   244→  document.getElementById('dR3').textContent = `حرکت میان حمایت‌های ${S2.toLocaleString()} تا ${S3.toLocaleString()} ریال.`;
+   245→   245→  document.getElementById('dR4').textContent = `آزمون محدودهٔ ${S4.toLocaleString()} تا ${MA100.toLocaleString()} ریال و ناحیهٔ MA100.`;
+   246→   246→  document.getElementById('dR5').textContent = `شکست پایدار محدودهٔ MA100 و بازبینی فرض روند صعودی.`;
+   247→   247→}
+   248→   248→
+   249→   249→// ------------------------------------------------------------------
+   250→   250→// 4. کدهای گراف و تعامل با کاربر (ثابت)
+   251→   251→// ------------------------------------------------------------------
+   252→   252→const edgesList = [
+   253→   253→  ["A","B","آزمون R1","up"], ["A","G","رد R1 / افت شتاب","pullback"], ["A","L","پایش روند","risk"],
+   254→   254→  ["B","C","تثبیت بالای R1","up"], ["B","G","رد قیمت و پولبک","pullback"], ["B","A","نوسان در کریدور","risk"],
+   255→   255→  ["C","D","آزمون R2","up"], ["C","G","بازگشت زیر R1","pullback"], ["C","L","شکست خط روند","risk"],
+   256→   256→  ["D","E","عبور از R2","up"], ["D","B","رد R2","pullback"], ["D","G","اصلاح سریع","pullback"], ["D","L","واگرایی شتاب","risk"],
+   257→   257→  ["E","F","تداوم شتاب تا هدف","up"], ["E","D","توقف / عرضه","pullback"], ["E","G","اصلاح تا S1","pullback"], ["E","H","شکست S1","down"], ["E","R1","تثبیت در کریدور","up"],
+   258→   258→  ["F","R1","حفظ بالای هدف","up"], ["F","E","رد هدف‌ها","pullback"], ["F","D","بازگشت زیر کریدور","down"], ["F","G","شکست روند","risk"],
+   259→   259→  ["G","B","بازپس‌گیری R1","up"], ["G","A","بازگشت به مرجع","pullback"], ["G","H","شکست S1","down"], ["G","L","واکنش به خط روند","risk"], ["G","R2","حفظ S1 و بازیابی","pullback"],
+   260→   260→  ["H","G","بازگشت بالای S1","pullback"], ["H","I","شکست S2","down"], ["H","B","بازیابی تا R1","up"], ["H","L","ارزیابی روند","risk"], ["H","R2","بازگشت سریع از S2","pullback"],
+   261→   261→  ["I","H","حفظ S3 / بازگشت","pullback"], ["I","J","شکست S3","down"], ["I","G","بازگشت قدرتمند","up"], ["I","L","اعتبار روند","risk"], ["I","R3","حفظ S3","down"],
+   262→   262→  ["J","I","بازگشت از S4","pullback"], ["J","K","شکست S4","down"], ["J","H","بازگشت تا S2","up"], ["J","L","فاصله تا MA100","risk"], ["J","R3","بازگشت از S4","down"],
+   263→   263→  ["K","J","حفظ ناحیه و بازگشت","pullback"], ["K","I","بازیابی S3","up"], ["K","L","شکست MA100","risk"], ["K","R4","حفظ MA100","down"], ["K","R5","شکست MA100","risk"],
+   264→   264→  ["L","C","حفظ روند صعودی","up"], ["L","H","شکست روند / حفظ S2","pullback"], ["L","J","شکست روند میانی","down"], ["L","K","حفظ خط پایه","risk"], ["L","R5","شکست کامل روند","risk"]
+   265→   265→];
+   266→   266→
+   267→   267→const nodesData = {
+   268→   268→  A:{ title:"گره تصمیم (ریشه)", value:"--", type:"گره تصمیم‌گیری", desc:"نقطه صفر تصمیم." },
+   269→   269→  B:{ title:"گره رویداد (آزمون R1)", value:"--", type:"گره رویداد شانسی", desc:"واکنش بازار به مقاومت اول." },
+   270→   270→  C:{ title:"گره تأیید صعود", value:"بالای R1", type:"گره تأیید روند", desc:"تثبیت بالای R1، احتمال حرکت به سمت R2 را افزایش می‌دهد." },
+   271→   271→  D:{ title:"گره رویداد (آزمون R2)", value:"--", type:"گره سنجش تقاضا", desc:"کیفیت تقاضا در این سطح تعیین‌کننده ادامه مسیر است." },
+   272→   272→  E:{ title:"گره پایانی (کریدور)", value:"--", type:"گره نتیجه", desc:"هدف میانی صعود." },
+   273→   273→  F:{ title:"گره پایانی (هدف توسعه)", value:"--", type:"گره نتیجه", desc:"هدف نهایی در صورت تداوم شتاب بالا." },
+   274→   274→  G:{ title:"گره رویداد (پولبک به S1)", value:"--", type:"گره حمایت", desc:"مرز تفکیک پولبک سالم از اصلاح ساختاری." },
+   275→   275→  H:{ title:"گره رویداد (حمایت S2)", value:"--", type:"گره حمایت", desc:"سطح دومین ایستگاه بازسازی ساختار کوتاه‌مدت." },
+   276→   276→  I:{ title:"گره رویداد (حمایت S3)", value:"--", type:"گره حمایت", desc:"سطح ارزیابی قدرت تقاضا در اصلاح‌های عمیق‌تر." },
+   277→   277→  J:{ title:"گره رویداد (حمایت S4)", value:"--", type:"گره حمایت", desc:"آخرین سطح قبل از ناحیه بحرانی MA100." },
+   278→   278→  K:{ title:"گره بحرانی", value:"--", type:"گره ریسک", desc:"شکست معتبر این ناحیه به منزله ابطال روند صعودی است." },
+   279→   279→  L:{ title:"گره اعتبارسنج روند", value:"خطوط روند صعودی", type:"گره کنترل", desc:"حفظ قیمت بالای این خطوط برای تداوم روند صعودی حیاتی است." },
+   280→   280→  R1:{ title:"نتیجه R1: تداوم صعود", value:"احتمال تجمیعی", type:"گره نتیجه", desc:"رسیدن یا تثبیت در کریدور صعودی." },
+   281→   281→  R2:{ title:"نتیجه R2: پولبک سالم", value:"احتمال تجمیعی", type:"گره نتیجه", desc:"حفظ S1 و بازپس‌گیری مقاومت R1." },
+   282→   282→  R3:{ title:"نتیجه R3: اصلاح کنترل‌شده", value:"احتمال تجمیعی", type:"گره نتیجه", desc:"حرکت به حمایت‌های میانی." },
+   283→   283→  R4:{ title:"نتیجه R4: اصلاح عمیق", value:"احتمال تجمیعی", type:"گره نتیجه", desc:"آزمون ناحیهٔ نزدیک به MA100." },
+   284→   284→  R5:{ title:"نتیجه R5: تضعیف ساختار", value:"احتمال تجمیعی", type:"گره نتیجه", desc:"شکست معتبر MA100." }
+   285→   285→};
+   286→   286→
+   287→   287→const colors = {up:"#34c98b", pullback:"#4186ff", down:"#ff7b32", risk:"#ef4d62"};
+   288→   288→const svg = document.getElementById("edges");
+   289→   289→const details = document.getElementById("details");
+   290→   290→let activeFilter = "all";
+   291→   291→let selectedNode = null;
+   292→   292→
+   293→   293→function center(id){
+   294→   294→  const e = document.getElementById(id);
+   295→   295→  return { x:e.offsetLeft + e.offsetWidth/2, y:e.offsetTop + e.offsetHeight/2 };
+   296→   296→}
+   297→   297→
+   298→   298→function drawEdges(){
+   299→   299→  svg.innerHTML = `<defs>${Object.entries(colors).map(([k,c]) => `<marker id="arrow-${k}" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="${c}"></path></marker>`).join("")}</defs>`;
+   300→   300→  edgesList.forEach((edge)=>{
+   301→   301→    const [from,to,label,type] = edge;
+   302→   302→    const a=center(from), b=center(to);
+   303→   303→    const dx=b.x-a.x, dy=b.y-a.y;
+   304→   304→    const dist=Math.sqrt(dx*dx+dy*dy);
+   305→   305→    const bend=Math.min(52, Math.max(18, dist*.11));
+   306→   306→    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+   307→   307→    const nx=-dy/dist, ny=dx/dist;
+   308→   308→    const cx=mx+nx*bend, cy=my+ny*bend;
+   309→   309→    const d=`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
+   310→   310→    const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+   311→   311→    path.setAttribute("d",d); path.setAttribute("stroke",colors[type]); path.setAttribute("marker-end",`url(#arrow-${type})`);
+   312→   312→    path.setAttribute("class",`edge ${type}`); path.dataset.type=type; path.dataset.from=from; path.dataset.to=to;
+   313→   313→    svg.appendChild(path);
+   314→   314→    const text=document.createElementNS("http://www.w3.org/2000/svg","text");
+   315→   315→    text.setAttribute("x",cx); text.setAttribute("y",cy-5); text.setAttribute("class","edge-label"); text.dataset.type=type; text.textContent=label;
+   316→   316→    svg.appendChild(text);
+   317→   317→  });
+   318→   318→}
+   319→   319→
+   320→   320→function showDetails(id){
+   321→   321→  selectedNode=id;
+   322→   322→  document.querySelectorAll(".node").forEach(n=>n.classList.toggle("selected",n.id===id));
+   323→   323→  const node = nodesData[id];
+   324→   324→  const relations = edgesList.filter(e=>e[0]===id || e[1]===id);
+   325→   325→  const inputs = relations.filter(e=>e[1]===id);
+   326→   326→  const outputs = relations.filter(e=>e[0]===id);
+   327→   327→  details.innerHTML=`
+   328→   328→    <div class="detail-card">
+   329→   329→      <h3>${node.title}</h3>
+   330→   330→      <p><b>مقدار / وضعیت:</b> ${node.value}</p>
+   331→   331→      <span class="tag">${node.type}</span>
+   332→   332→      <p>${node.desc}</p>
+   333→   333→      <p><b>مسیرهای ورودی (${inputs.length}):</b></p>
+   334→   334→      <ul class="path-list">${inputs.length ? inputs.map(e=>`<li><b>${e[0]} ← ${e[1]}</b><br>${e[2]}</li>`).join("") : "<li>گره آغازین یا نتیجهٔ پایانی</li>"}</ul>
+   335→   335→      <p><b>مسیرهای خروجی (${outputs.length}):</b></p>
+   336→   336→      <ul class="path-list">${outputs.length ? outputs.map(e=>`<li><b>${e[0]} ← ${e[1]}</b><br>${e[2]}</li>`).join("") : "<li>این گره یک نتیجهٔ پایانی است.</li>"}</ul>
+   337→   337→    </div>`;
+   338→   338→}
+   339→   339→
+   340→   340→function applyFilter(filter){
+   341→   341→  activeFilter=filter;
+   342→   342→  document.querySelectorAll(".toolbar button[data-filter]").forEach(b=>b.classList.toggle("active",b.dataset.filter===filter));
+   343→   343→  const visibleNodes=new Set();
+   344→   344→  document.querySelectorAll(".edge").forEach((p)=>{
+   345→   345→    const ok=filter==="all" || p.dataset.type===filter;
+   346→   346→    p.classList.toggle("dim",!ok);
+   347→   347→    if(ok){visibleNodes.add(p.dataset.from); visibleNodes.add(p.dataset.to);}
+   348→   348→  });
+   349→   349→  document.querySelectorAll(".edge-label").forEach(t=>t.classList.toggle("dim",filter!=="all" && t.dataset.type!==filter));
+   350→   350→  document.querySelectorAll(".node").forEach(n=>n.classList.toggle("dim",filter!=="all" && !visibleNodes.has(n.id)));
+   351→   351→}
+   352→   352→
+   353→   353→document.querySelectorAll(".node").forEach(el=>el.addEventListener("click",()=>showDetails(el.id)));
+   354→   354→document.querySelectorAll(".toolbar button[data-filter]").forEach(btn=>btn.addEventListener("click",()=>applyFilter(btn.dataset.filter)));
+   355→   355→document.getElementById("reset").addEventListener("click",()=>{
+   356→   356→  selectedNode=null;
+   357→   357→  document.querySelectorAll(".node").forEach(n=>n.classList.remove("selected","dim"));
+   358→   358→  document.querySelectorAll(".edge,.edge-label").forEach(e=>e.classList.remove("dim","highlight"));
+   359→   359→  applyFilter("all");
+   360→   360→  details.className="detail-empty";
+   361→   361→  details.innerHTML=`برای مشاهدهٔ اطلاعات، روی هر گره یا مسیرهای فیلترشده کلیک کنید.<br><br><b>قاعدهٔ اعتبار:</b> عبور یا شکست هر سطح فقط با تثبیت معتبر تلقی می‌شود؛ لمس سطح به‌تنهایی سیگنال تصمیم نیست.`;
+   362→   362→});
+   363→   363→
+   364→   364→// ------------------------------------------------------------------
+   365→   365→// 5. اجرای نهایی
+   366→   366→// ------------------------------------------------------------------
+   367→   367→window.addEventListener("load",() => {
+   368→   368→  drawEdges();
+   369→   369→  const probs = calculateProbabilities(inputData);
+   370→   370→  updateGraph(inputData, probs);
+   371→   371→});
+   372→   372→window.addEventListener("resize", drawEdges);
+   373→   373→</script>
+   374→   374→</body>
+   375→   375→</html>

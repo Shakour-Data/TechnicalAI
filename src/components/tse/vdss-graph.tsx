@@ -50,19 +50,37 @@ export interface VdssGraphProps {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Constants
+// Dark Theme Constants
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const D = {
+  bg: '#07111b',
+  bg2: '#0b1c2b',
+  panel: 'rgba(13,31,47,.90)',
+  panel2: 'rgba(19,42,61,.82)',
+  line: 'rgba(170,208,229,.18)',
+  text: '#eaf5fb',
+  muted: '#9db4c2',
+  cyan: '#3ad5db',
+  blue: '#4186ff',
+  purple: '#a04ac5',
+  gold: '#ffb11b',
+  orange: '#ff7b32',
+  red: '#ef4d62',
+  green: '#34c98b',
+  shadow: '0 18px 55px rgba(0,0,0,.35)',
+} as const;
 
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
 
 const COLORS = {
-  up: '#34c98b',
-  pullback: '#4186ff',
-  down: '#ff7b32',
-  risk: '#ef4d62',
-  cyan: '#3ad5db',
-  purple: '#a04ac5',
-  gold: '#ffb11b',
+  up: D.green,
+  pullback: D.blue,
+  down: D.orange,
+  risk: D.red,
+  cyan: D.cyan,
+  purple: D.purple,
+  gold: D.gold,
 };
 
 const EDGE_COLORS: Record<string, string> = {
@@ -225,7 +243,7 @@ export default function VdssGraph(props: VdssGraphProps) {
       const c = EDGE_COLORS[e.type];
       if (c && !seenColors.has(e.type)) {
         seenColors.add(e.type);
-        markersSvg += `<marker id="arrow-${e.type}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="${c}"/></marker>`;
+        markersSvg += `<marker id="arrow-${e.type}" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="${c}"/></marker>`;
       }
     }
 
@@ -248,10 +266,11 @@ export default function VdssGraph(props: VdssGraphProps) {
       const dx = bx - ax;
       const dy = by - ay;
       const dist = Math.sqrt(dx * dx + dy * dy);
+
       if (dist === 0) continue;
 
       // Curved edges with bend proportional to distance
-      const bend = Math.min(40, Math.max(12, dist * 0.08));
+      const bend = Math.min(52, Math.max(18, dist * 0.11));
       const mx = (ax + bx) / 2;
       const my = (ay + by) / 2;
       const nx = -dy / dist;
@@ -264,12 +283,12 @@ export default function VdssGraph(props: VdssGraphProps) {
       const probLabel = toPersianDigits((prob * 100).toFixed(0)) + '٪';
       const edgeColor = EDGE_COLORS[type] ?? '#6b7280';
 
-      pathsSvg += `<path d="${d}" stroke="${edgeColor}" stroke-width="${isVisible ? 2 : 0.8}" opacity="${isVisible ? 0.7 : 0.05}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
+      pathsSvg += `<path d="${d}" stroke="${edgeColor}" stroke-width="${isVisible ? 2 : 0.8}" opacity="${isVisible ? 0.72 : 0.05}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
 
       // Edge labels — skip deterministic root→branch and branch→event edges (index < 6)
       if (isVisible && ei >= 6) {
-        pathsSvg += `<text x="${cx}" y="${cy - 5}" fill="#374151" font-size="8" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" opacity="0.8" data-type="${type}" class="edge-label">${label}</text>`;
-        pathsSvg += `<text x="${cx}" y="${cy + 7}" fill="${edgeColor}" font-size="9" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" opacity="0.85" class="edge-prob">${probLabel}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy - 5}" fill="#cde4ef" font-size="10" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="4" stroke-linejoin="round" opacity="0.9" data-type="${type}" class="edge-label">${label}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy + 7}" fill="${edgeColor}" font-size="9" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3" stroke-linejoin="round" opacity="0.85" class="edge-prob">${probLabel}</text>`;
       }
     }
 
@@ -299,30 +318,37 @@ export default function VdssGraph(props: VdssGraphProps) {
       const meta = SCENARIO_META[selectedNode];
       const s = scenarios[selectedNode as keyof typeof scenarios];
       return (
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold" style={{ color: meta.color }}>{node.title}</h3>
-          <p className="text-xs" style={{ color: C.cardSubFg }}>{node.desc}</p>
-          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border bg-gray-50 text-gray-500">{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-          <div className="text-xs" style={{ color: C.cardSubFg }} dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: meta.color }}>{node.title}</h3>
+          <p style={{ fontSize: '12px', color: '#c4d8e3', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
+          <span style={{
+            display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
+            color: '#d7eaf1', fontSize: '10px',
+            background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
+          }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
+          <div style={{ fontSize: '12px', color: '#c4d8e3' }} dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
 
-          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
-            <p className="text-xs font-bold mb-2" style={{ color: C.cardFg }}>سهم هر استراتژی:</p>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${D.line}` }}>
+            <p style={{ fontSize: '12px', fontWeight: 700, marginBottom: 8, color: '#d8eff9' }}>سهم هر استراتژی:</p>
             {Object.entries(BRANCH_META).map(([bKey, bMeta]) => {
               const val = contrib[bKey as 'trend' | 'breakout' | 'reversal'];
               const pct = (val * 100).toFixed(1);
               return (
-                <div key={bKey} className="flex items-center justify-between py-1.5" style={{ borderBottom: `1px dashed ${C.cardBorder}` }}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: bMeta.color }} />
-                    <span className="text-[11px]" style={{ color: C.cardFg }}>{bMeta.label}</span>
+                <div key={bKey} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '9px 0', borderBottom: `1px dashed rgba(175,210,225,.15)`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: bMeta.color }} />
+                    <span style={{ fontSize: '11px', color: '#d8eff9' }}>{bMeta.label}</span>
                   </div>
-                  <span className="text-[11px] font-bold" style={{ color: bMeta.color }}>{toPersianDigits(pct)}٪</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: bMeta.color }}>{toPersianDigits(pct)}٪</span>
                 </div>
               );
             })}
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-[11px] font-bold" style={{ color: C.cardFg }}>مجموع</span>
-              <span className="text-[11px] font-black" style={{ color: meta.color }}>{toFa(s?.probability ?? 0)}٪</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#d8eff9' }}>مجموع</span>
+              <span style={{ fontSize: '11px', fontWeight: 900, color: meta.color }}>{toFa(s?.probability ?? 0)}٪</span>
             </div>
           </div>
         </div>
@@ -334,22 +360,33 @@ export default function VdssGraph(props: VdssGraphProps) {
     const outputs = edges.filter(e => e.from === selectedNode);
 
     return (
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold" style={{ color: C.cardFg }}>{node.title}</h3>
-        <p className="text-xs" style={{ color: C.cardSubFg }}><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
-        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] border" style={{ borderColor: C.cardBorder, background: C.cardBorder, color: C.cardSubFg }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-        <p className="text-xs leading-relaxed" style={{ color: C.cardSubFg }}>{node.desc}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#d8eff9' }}>{node.title}</h3>
+        <p style={{ fontSize: '12px', color: '#c4d8e3', lineHeight: 1.95, margin: 0 }}><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+        <span style={{
+          display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
+          color: '#d7eaf1', fontSize: '10px',
+          background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
+        }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
+        <p style={{ fontSize: '12px', color: '#c4d8e3', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
         {inputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium mb-1" style={{ color: C.cardFg }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
-            <ul className="space-y-1">
+            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#d8eff9' }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
+            <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
               {inputs.map((e, i) => {
                 const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
                 const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
-                  <li key={i} className="text-[11px] leading-relaxed pt-1.5" style={{ color: C.cardSubFg, borderTop: `1px dashed ${C.cardBorder}` }}>
-                    <b style={{ color: C.cardFg }}>{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
-                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${edgeColor}20`, color: edgeColor }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+                  <li key={i} style={{
+                    padding: '9px 0', borderTop: '1px dashed rgba(175,210,225,.15)',
+                    fontSize: '11px', lineHeight: 1.8, color: '#b8cfdb',
+                  }}>
+                    <b style={{ color: '#d8eff9' }}>{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                    <span style={{
+                      marginRight: 8, padding: '2px 6px', borderRadius: 4,
+                      fontSize: '9px', fontWeight: 700,
+                      background: `${edgeColor}22`, color: edgeColor,
+                    }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e.label}
                   </li>
                 );
@@ -359,15 +396,22 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
         {outputs.length > 0 && (
           <div>
-            <p className="text-xs font-medium mb-1" style={{ color: C.cardFg }}>مسیرهای خروجی ({toFa(outputs.length)}):</p>
-            <ul className="space-y-1">
+            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#d8eff9' }}>مسیرهای خروجی ({toFa(outputs.length)}):</p>
+            <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
               {outputs.map((e, i) => {
                 const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
                 const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
-                  <li key={i} className="text-[11px] leading-relaxed pt-1.5" style={{ color: C.cardSubFg, borderTop: `1px dashed ${C.cardBorder}` }}>
-                    <b className="text-[#374151]">{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
-                    <span className="mr-2 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${edgeColor}20`, color: edgeColor }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
+                  <li key={i} style={{
+                    padding: '9px 0', borderTop: '1px dashed rgba(175,210,225,.15)',
+                    fontSize: '11px', lineHeight: 1.8, color: '#b8cfdb',
+                  }}>
+                    <b style={{ color: '#d8eff9' }}>{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                    <span style={{
+                      marginRight: 8, padding: '2px 6px', borderRadius: 4,
+                      fontSize: '9px', fontWeight: 700,
+                      background: `${edgeColor}22`, color: edgeColor,
+                    }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
                     <br />{e.label}
                   </li>
                 );
@@ -404,86 +448,96 @@ export default function VdssGraph(props: VdssGraphProps) {
   return (
     <div className="space-y-3" dir="rtl">
       {/* ═══ HEADER ═══ */}
-      <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl" style={{ border: `1px solid ${C.cardBorder}`, background: C.cardBg, boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl border border-amber-200 flex items-center justify-center text-amber-800 text-xl font-bold"
-            style={{ boxShadow: 'inset 0 0 22px rgba(146,64,14,.06), 0 0 22px rgba(146,64,14,.04)' }}>◈</div>
+      <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl"
+        style={{
+          border: '1px solid rgba(58,213,219,.22)',
+          background: 'linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77))',
+          boxShadow: D.shadow,
+        }}>
+        <div className="flex items-center gap-3.5">
+          <div style={{
+            width: 48, height: 48, display: 'grid', placeItems: 'center',
+            border: '1px solid rgba(255,177,27,.7)', borderRadius: 14,
+            color: D.gold, fontSize: 27,
+            boxShadow: 'inset 0 0 22px rgba(255,177,27,.12), 0 0 22px rgba(255,177,27,.08)',
+          }}>◈</div>
           <div>
-            <h2 className="text-base font-bold" style={{ color: C.cardFg }}>گراف تصمیم {symbolName}</h2>
-            <p className="text-[11px]" style={{ color: C.cardSubFg }}>مدل ۳‌شاخه‌ای | پیروی از روند، شکست، بازگشت | ۲۷ مسیر به ۹ سناریو</p>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 6px', color: D.text }}>گراف تصمیم {symbolName}</h2>
+            <p style={{ fontSize: 12, color: D.muted, margin: 0 }}>مدل ۳‌شاخه‌ای | پیروی از روند، شکست، بازگشت | ۲۷ مسیر به ۹ سناریو</p>
           </div>
         </div>
-        <div className="text-left text-xs leading-relaxed pr-4" style={{ color: C.cardSubFg, borderRight: `1px solid ${C.cardBorder}` }}>
-          نقطه مرجع: <b className="text-cyan-700">{toFa(currentPrice)}</b><br />
+        <div className="text-left text-xs leading-loose pr-4"
+          style={{ color: '#bbd7e8', borderRight: '1px solid rgba(58,213,219,.24)' }}>
+          نقطهٔ مرجع: <b style={{ color: D.cyan }}>{toFa(currentPrice)}</b><br />
           افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
         </div>
       </div>
 
       {/* ═══ Metric Cards ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color="text-cyan-700" />
-        <MetricCard label="احتمال روند" value={toPersianDigits((branchProbs.trend * 100).toFixed(0)) + '٪'} color="text-cyan-700" />
-        <MetricCard label="احتمال شکست" value={toPersianDigits((branchProbs.breakout * 100).toFixed(0)) + '٪'} color="text-amber-700" />
-        <MetricCard label="احتمال بازگشت" value={toPersianDigits((branchProbs.reversal * 100).toFixed(0)) + '٪'} color="text-purple-700" />
+        <DarkMetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color={D.cyan} />
+        <DarkMetricCard label="احتمال روند" value={toPersianDigits((branchProbs.trend * 100).toFixed(0)) + '٪'} color={D.cyan} />
+        <DarkMetricCard label="احتمال شکست" value={toPersianDigits((branchProbs.breakout * 100).toFixed(0)) + '٪'} color={D.gold} />
+        <DarkMetricCard label="احتمال بازگشت" value={toPersianDigits((branchProbs.reversal * 100).toFixed(0)) + '٪'} color={D.purple} />
       </div>
 
       {/* ═══ Toolbar ═══ */}
-      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 rounded-t-2xl" style={{ border: `1px solid ${C.cardBorder}`, background: C.cardBg }}>
-        <span className="text-xs ml-1" style={{ color: C.cardSubFg }}>فیلتر:</span>
+      <div className="flex flex-wrap items-center gap-2 px-3 py-3 rounded-t-2xl"
+        style={{
+          border: `1px solid ${D.line}`,
+          background: 'rgba(9,24,37,.92)',
+        }}>
+        <span style={{ fontSize: 13, color: D.muted, marginLeft: 6 }}>نمایش مسیرها:</span>
         {allFilters.map((btn, i) => {
           if ('isSep' in btn && btn.isSep) {
-            return <span key={`sep-${i}`} className="text-[#B0A89E] mx-1">│</span>;
+            return <span key={`sep-${i}`} style={{ color: 'rgba(170,208,229,.18)', margin: '0 4px', userSelect: 'none' }}>│</span>;
           }
           const isScenario = 'scenarioKey' in btn;
           const isBranch = 'branchKey' in btn;
           const isActive = activeFilter === btn.key;
           const meta = isScenario ? SCENARIO_META[(btn as { scenarioKey: string }).scenarioKey] : null;
           const bColor = isBranch ? (btn as { branchColor: string }).branchColor : null;
+          const activeColor = isScenario && meta ? meta.color : isBranch && bColor ? bColor : D.cyan;
           return (
             <button
               key={btn.key}
               onClick={() => setActiveFilter(btn.key)}
-              className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                isActive
-                  ? isScenario
-                    ? 'text-[#111827] border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.06)]'
-                    : isBranch
-                      ? 'text-[#111827] border-opacity-60 shadow-[0_0_14px_rgba(0,0,0,.06)]'
-                      : 'text-[#111827] border-cyan-500/60 bg-cyan-50 shadow-[0_0_18px_rgba(58,213,219,.10)]'
-                  : 'text-[#374151] border-[#e5e7eb] bg-[#f3f4f6]/50 hover:bg-[#e5e7eb]'
-              }`}
-              style={
-                isActive && isScenario && meta ? {
-                  borderColor: meta.color + '80',
-                  background: meta.color + '12',
-                  color: meta.color,
-                } : isActive && isBranch && bColor ? {
-                  borderColor: bColor + '80',
-                  background: bColor + '12',
-                  color: bColor,
-                } : undefined
-              }
+              style={{
+                color: isActive ? '#fff' : '#dcebf2',
+                border: `1px solid ${isActive ? activeColor + 'b3' : 'rgba(159,198,218,.22)'}`,
+                borderRadius: 10,
+                background: isActive ? `${activeColor}24` : 'rgba(255,255,255,.04)',
+                padding: '8px 11px',
+                fontFamily: 'inherit', fontSize: 12,
+                cursor: 'pointer', transition: '.2s ease',
+                boxShadow: isActive ? `0 0 18px ${activeColor}1a` : 'none',
+                transform: isActive ? 'translateY(-1px)' : 'none',
+              }}
             >{btn.label}</button>
           );
         })}
         <button
           onClick={() => { setSelectedNode(null); setActiveFilter('all'); }}
-          className="text-xs px-3 py-1.5 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6]/50 text-[#374151] hover:bg-[#e5e7eb] transition-all cursor-pointer mr-auto"
-        >بازنشانی</button>
+          style={{
+            color: '#dcebf2', border: '1px solid rgba(159,198,218,.22)', borderRadius: 10,
+            background: 'rgba(255,255,255,.04)', padding: '8px 11px',
+            fontFamily: 'inherit', fontSize: 12, cursor: 'pointer', transition: '.2s ease',
+            marginRight: 'auto',
+          }}
+        >بازنشانی انتخاب</button>
       </div>
 
       {/* ═══ Graph Workspace ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-3.5">
         {/* Graph Shell */}
         <div
           ref={shellRef}
-          className="relative overflow-auto rounded-b-2xl min-h-[900px]"
+          className="relative overflow-auto min-h-[790px]"
           style={{
-            border: `1px solid ${C.cardBorder}`, borderTop: 'none',
-            background: `radial-gradient(circle at 49% 49%, rgba(180,200,220,.18), transparent 36%), ${C.cardBg}`,
-            boxShadow: '0 4px 16px rgba(0,0,0,.06)',
-          }}
-        >
+            border: `1px solid ${D.line}`, borderTop: 'none',
+            background: `radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72)`,
+            boxShadow: D.shadow,
+          }}>
           <div ref={graphRef} className="relative mx-auto" style={{ width: DISPLAY_W, height: DISPLAY_H, minWidth: DISPLAY_W, minHeight: DISPLAY_H }}>
             <svg ref={svgRef} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" aria-label="مسیرهای گراف تصمیم" />
 
@@ -501,117 +555,120 @@ export default function VdssGraph(props: VdssGraphProps) {
               const scenarioProb = isResultNode ? (scenarioProbabilities[node.id] ?? 0) : null;
               const scenarioColor = isResultNode ? (SCENARIO_META[node.id]?.color ?? node.color) : node.color;
 
-              const nodeWidth = isResultNode ? 155 : isBranchNode ? 145 : isEventNode ? 160 : 130;
-              const nodeMinH = isResultNode ? 82 : isBranchNode ? 65 : isEventNode ? 55 : 60;
+              const nodeWidth = isResultNode ? 175 : isBranchNode ? 148 : isEventNode ? 160 : 148;
+              const nodeMinH = isResultNode ? 94 : isBranchNode ? 80 : isEventNode ? 65 : 80;
 
-              // Decision nodes: rounded-lg with colored left border (3px), white bg, shadow
-              // Event nodes: rounded-lg with dotted left border (2px), light bg
-              // Terminal nodes: rounded-lg with solid bg (color at 10% opacity), colored text
-              let borderStyle: React.CSSProperties['borderLeftStyle'] = 'solid';
-              let borderLeftWidth = '0px';
-              let bgStyle = isVisible
-                ? 'linear-gradient(145deg, #ffffff, #f3f4f6)'
-                : 'rgba(243,244,246,0.5)';
-              let boxShadowStyle = isVisible
-                ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
-                : 'none';
+              // Node styling based on type
+              let bgStyle: string;
+              let innerGlow: string;
+              let baseBoxShadow: string;
+              let borderW = '1px';
+              let borderDash: React.CSSProperties['borderStyle'] = 'solid';
 
-              if (node.type === 'decision' && !isTerminal) {
-                borderLeftWidth = '3px';
-                borderStyle = 'solid';
-                bgStyle = isVisible ? C.cardBg : 'rgba(243,244,246,0.5)';
-                boxShadowStyle = isVisible
-                  ? `inset 0 0 22px color-mix(in srgb, ${scenarioColor} 8%, transparent), 0 4px 12px rgba(0,0,0,.06)`
-                  : 'none';
-              } else if (node.type === 'event') {
-                borderLeftWidth = '2px';
-                borderStyle = 'dotted';
-                bgStyle = isVisible ? C.cardBg : 'rgba(243,244,246,0.5)';
-                boxShadowStyle = isVisible
-                  ? `0 2px 8px rgba(0,0,0,.04)`
-                  : 'none';
+              if (node.id === 'ROOT') {
+                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+                innerGlow = `inset 0 0 22px ${scenarioColor}1f`;
+                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
+              } else if (isBranchNode) {
+                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+                innerGlow = `inset 0 0 22px ${scenarioColor}1f`;
+                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
+              } else if (isEventNode) {
+                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+                innerGlow = `inset 0 0 18px ${scenarioColor}14`;
+                baseBoxShadow = `${innerGlow}, 0 8px 20px rgba(0,0,0,.22)`;
+                borderDash = 'dotted';
               } else if (isTerminal) {
-                borderLeftWidth = '0px';
-                borderStyle = 'solid';
-                bgStyle = isVisible
-                  ? `linear-gradient(145deg, color-mix(in srgb, ${scenarioColor} 10%, #ffffff), color-mix(in srgb, ${scenarioColor} 5%, #f9fafb))`
-                  : 'rgba(243,244,246,0.5)';
-                boxShadowStyle = isVisible
-                  ? `inset 0 0 18px color-mix(in srgb, ${scenarioColor} 6%, transparent), 0 2px 10px rgba(0,0,0,.04)`
-                  : 'none';
+                bgStyle = `linear-gradient(160deg, ${scenarioColor}1f, rgba(8,22,35,.65))`;
+                innerGlow = `inset 0 0 24px ${scenarioColor}18`;
+                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
+                borderW = '2px';
+              } else {
+                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+                innerGlow = `inset 0 0 22px ${scenarioColor}14`;
+                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
               }
 
-              const selectedShadow = isSelected
-                ? `0 0 0 2px color-mix(in srgb, ${scenarioColor} 28%, transparent), 0 0 28px color-mix(in srgb, ${scenarioColor} 25%, transparent)`
-                : boxShadowStyle;
+              const selectedGlow = isSelected
+                ? `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`
+                : baseBoxShadow;
 
               return (
                 <div
                   key={node.id}
                   ref={el => { nodeRefs.current[node.id] = el; }}
                   onClick={() => setSelectedNode(node.id)}
-                  className={`absolute cursor-pointer transition-all duration-200 z-[2] text-center ${isSelected ? 'ring-2 ring-offset-1' : ''}`}
+                  className="absolute cursor-pointer z-[2] text-center"
                   style={{
                     right: pos.right * scaleX,
                     top: pos.top * scaleY,
                     width: nodeWidth,
                     minWidth: nodeWidth,
                     minHeight: nodeMinH,
-                    '--node-color': scenarioColor,
-                    padding: isResultNode ? '7px 6px' : '6px 5px',
-                    border: isTerminal
-                      ? `2px solid ${scenarioColor}`
-                      : `1px solid ${scenarioColor}aa`,
-                    borderLeftWidth,
-                    borderLeftStyle: borderStyle,
-                    borderLeftColor: scenarioColor,
-                    borderRadius: isTerminal ? '12px' : isBranchNode ? '14px' : '10px',
+                    padding: isResultNode ? '10px 9px' : '10px 9px',
+                    border: `${borderW} ${borderDash} ${scenarioColor}`,
+                    borderRadius: isTerminal ? 13 : 13,
                     background: bgStyle,
-                    boxShadow: selectedShadow,
+                    boxShadow: selectedGlow,
                     opacity: isVisible ? 1 : 0.12,
                     transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
-                    filter: isSelected ? 'brightness(1.18)' : isVisible ? 'none' : 'grayscale(0.8) blur(0.5px)',
-                  } as React.CSSProperties}
+                    filter: isSelected ? 'brightness(1.18)' : 'none',
+                    transition: 'transform .2s, filter .2s, opacity .2s, box-shadow .2s',
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelected && isVisible) {
+                      e.currentTarget.style.transform = 'translateY(-4px) scale(1.025)';
+                      e.currentTarget.style.filter = 'brightness(1.18)';
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`;
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelected) {
+                      e.currentTarget.style.transform = 'none';
+                      e.currentTarget.style.filter = 'none';
+                      e.currentTarget.style.boxShadow = baseBoxShadow;
+                    }
+                  }}
                 >
                   {/* Root node */}
                   {node.id === 'ROOT' && (
                     <>
-                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: isVisible ? scenarioColor : '#555' }}>تصمیم</span>
-                      <div className={`text-[12px] font-black leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
-                      <div className="text-[10px] text-[#6b7280] mt-1" dir="ltr">{nodeValues[node.id] ?? '--'}</div>
+                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{node.titleEn || 'تصمیم'}</span>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
+                      <div style={{ fontSize: 11, color: '#c6dbe6', marginTop: 4, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
 
                   {/* Branch nodes */}
                   {isBranchNode && (
                     <>
-                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: isVisible ? scenarioColor : '#555' }}>{node.type === 'decision' ? 'استراتژی' : node.titleEn}</span>
-                      <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
-                      <div className="text-[11px] font-black mt-1" style={{ color: scenarioColor }}>{nodeValues[node.id] ?? '--'}</div>
+                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{node.type === 'decision' ? 'استراتژی' : node.titleEn}</span>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6, color: scenarioColor }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
 
                   {/* Event nodes */}
                   {isEventNode && (
                     <>
-                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: isVisible ? scenarioColor : '#555' }}>رویداد شانسی</span>
-                      <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
-                      <div className="text-[9px] text-[#6b7280] mt-0.5" dir="ltr">{nodeValues[node.id] ?? '--'}</div>
+                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{node.titleEn || 'رویداد شانسی'}</span>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
+                      <div style={{ fontSize: 11, color: '#c6dbe6', marginTop: 4, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
 
                   {/* Terminal scenario nodes */}
                   {isResultNode && (
                     <>
-                      <span className="block text-[9px] font-bold mb-0.5" style={{ color: scenarioColor }}>{SCENARIO_DISPLAY[node.id]}</span>
-                      <div className={`text-[11px] font-bold leading-relaxed ${isVisible ? 'text-[#111827]' : 'text-[#B0A89E]'}`}>{node.title}</div>
-                      <div className="text-[9px] text-[#6b7280] mt-0.5" dir="ltr">{nodeValues[node.id] ?? '--'}</div>
+                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{SCENARIO_DISPLAY[node.id]}</span>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
+                      <div style={{ fontSize: 11, color: '#c6dbe6', marginTop: 4, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                       {scenarioProb !== null && (
                         <span
-                          className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-sm font-black"
                           style={{
-                            background: `color-mix(in srgb, ${scenarioColor} 17%, transparent)`,
-                            color: scenarioColor,
+                            display: 'inline-block', marginTop: 6, padding: '3px 10px', borderRadius: 999,
+                            background: `${scenarioColor}2b`, color: scenarioColor,
+                            fontSize: 15, fontWeight: 700,
                           }}
                         >{toFa(scenarioProb)}٪</span>
                       )}
@@ -622,31 +679,40 @@ export default function VdssGraph(props: VdssGraphProps) {
             })}
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 p-2.5 rounded-lg z-10" style={{ border: `1px solid ${C.cardBorder}`, background: `${C.cardBg}e6`, fontSize: '10px', color: C.cardSubFg, lineHeight: 1.5 }}>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.cyan }} />پیروی از روند</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.gold }} />شکست</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS.purple }} />بازگشت</div>
-              <div style={{ borderTop: `1px solid ${C.cardBorder}` }} className="my-1" />
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#34c98b]" />صعودی</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#4186ff]" />خنثی / رنج</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ff7b32]" />نزولی</div>
-              <div className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-[#ef4d62]" />شوک / ریسک</div>
+            <div style={{
+              position: 'absolute', right: 17, bottom: 15, padding: 10,
+              border: `1px solid ${D.line}`, borderRadius: 10,
+              background: 'rgba(7,17,27,.8)', fontSize: 10, color: D.muted, lineHeight: 2,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.cyan }} />پیروی از روند</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.gold }} />شکست</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.purple }} />بازگشت</div>
+              <div style={{ borderTop: `1px solid ${D.line}`, margin: '4px 0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span className="dot-up" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.up }} />صعودی</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.pullback }} />خنثی / رنج</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.down }} />نزولی</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.risk }} />شوک / ریسک</div>
             </div>
           </div>
         </div>
 
         {/* ═══ Right Panel: Scenario Probabilities & Detail ═══ */}
-        <div className="rounded-2xl p-4 flex flex-col" style={{ border: `1px solid ${C.cardBorder}`, background: C.cardBg, boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-          <h2 className="text-sm font-bold mb-3" style={{ color: C.cardFg }}>📋 احتمال سناریوها</h2>
+        <div style={{
+          border: `1px solid ${D.line}`, borderRadius: 15,
+          background: 'linear-gradient(160deg, rgba(16,39,57,.93), rgba(7,19,31,.93))',
+          padding: 16, boxShadow: D.shadow,
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: '#d8eff9' }}>📋 احتمال سناریوها</h2>
 
           {selectedNode && detailContent ? (
-            <div className="pt-3 flex-1 overflow-y-auto max-h-[860px] custom-scrollbar" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+            <div style={{ borderTop: `1px solid ${D.line}`, paddingTop: 12, flex: 1, overflowY: 'auto', maxHeight: 860 }}>
               {detailContent}
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto max-h-[860px] space-y-3 custom-scrollbar">
+            <div style={{ flex: 1, overflowY: 'auto', maxHeight: 860, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Scenario probabilities from backend */}
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {SCENARIO_KEYS.map(key => {
                   const meta = SCENARIO_META[key];
                   const prob = scenarioProbabilities[key] ?? 0;
@@ -656,40 +722,39 @@ export default function VdssGraph(props: VdssGraphProps) {
                     <div
                       key={key}
                       onClick={() => { setActiveFilter(key); setSelectedNode(null); }}
-                      className={`rounded-xl p-3 cursor-pointer transition-all border ${
-                        isActive
-                          ? 'border-opacity-60'
-                          : 'border-[#e5e7eb]/60 hover:border-[#e5e7eb]'
-                      }`}
                       style={{
-                        background: isActive ? `${meta.color}0a` : 'rgba(243,244,246,0.5)',
-                        borderColor: isActive ? meta.color + '80' : undefined,
+                        cursor: 'pointer', transition: 'all .2s',
+                        borderRadius: 12, padding: 12,
+                        border: `1px solid ${isActive ? meta.color + 'cc' : D.line}`,
+                        background: isActive
+                          ? `linear-gradient(160deg, ${meta.color}1f, rgba(8,22,35,.65))`
+                          : D.panel2,
                       }}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold" style={{ color: meta.color }}>{meta.label}</span>
-                        <span className="text-lg font-black" style={{ color: meta.color }}>{toPersianDigits((prob * 100).toFixed(1))}٪</span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{meta.label}</span>
+                        <span style={{ fontSize: 18, fontWeight: 900, color: meta.color }}>{toPersianDigits((prob * 100).toFixed(1))}٪</span>
                       </div>
-                      <div className="w-full h-1.5 rounded-full mb-2" style={{ background: C.cardBorder }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, prob * 100)}%`, background: meta.color }}
-                        />
+                      <div style={{ width: '100%', height: 6, borderRadius: 999, marginBottom: 8, background: 'rgba(170,208,229,.10)' }}>
+                        <div style={{
+                          height: '100%', borderRadius: 999, transition: 'all .3s',
+                          width: `${Math.min(100, prob * 100)}%`, background: meta.color,
+                        }} />
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-[#6b7280]">
-                        <span>تجمیعی: <b className="text-[#374151]">{toFa(s?.probability ?? 0)}٪</b></span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, color: D.muted }}>
+                        <span>تجمیعی: <b style={{ color: '#d8eff9' }}>{toFa(s?.probability ?? 0)}٪</b></span>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="border-t border-[#e5e7eb] pt-3 mt-3">
-                <p className="text-[10px] text-[#6b7280] leading-relaxed">
-                  <b>ساختار:</b> ۳ استراتژی × ۹ یال = ۲۷ مسیر مستقیم.<br />
-                  <b>احتمال یال:</b> محاسبه‌شده از موتور تصمیم (backend).<br />
-                  <b>احتمال مسیر:</b> P(استراتژی) × P(یال|استراتژی).<br />
-                  <b>احتمال سناریو:</b> تجمیع ۳ مسیر هر سناریو.
+              <div style={{ borderTop: `1px solid ${D.line}`, paddingTop: 12, marginTop: 4 }}>
+                <p style={{ fontSize: 10, color: D.muted, lineHeight: 2, margin: 0 }}>
+                  <b style={{ color: '#d8eff9' }}>ساختار:</b> ۳ استراتژی × ۹ یال = ۲۷ مسیر مستقیم.<br />
+                  <b style={{ color: '#d8eff9' }}>احتمال یال:</b> محاسبه‌شده از موتور تصمیم (backend).<br />
+                  <b style={{ color: '#d8eff9' }}>احتمال مسیر:</b> P(استراتژی) × P(یال|استراتژی).<br />
+                  <b style={{ color: '#d8eff9' }}>احتمال سناریو:</b> تجمیع ۳ مسیر هر سناریو.
                 </p>
               </div>
             </div>
@@ -698,8 +763,12 @@ export default function VdssGraph(props: VdssGraphProps) {
       </div>
 
       {/* ═══ Scenario Result Cards ═══ */}
-      <div className="mt-4 p-4 rounded-2xl border border-[#e5e7eb] bg-[#ffffff]">
-        <h2 className="text-sm font-bold text-[#111827] mb-3">گره‌های نتیجه و سهم استراتژی‌ها</h2>
+      <div style={{
+        marginTop: 16, padding: 18,
+        border: `1px solid ${D.line}`, borderRadius: 16,
+        background: 'rgba(8,22,35,.76)',
+      }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 13px', color: D.text }}>گره‌های نتیجه و سهم استراتژی‌ها</h2>
         <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
           {SCENARIO_KEYS.map(key => {
             const s = scenarios[key];
@@ -709,36 +778,40 @@ export default function VdssGraph(props: VdssGraphProps) {
             return (
               <div
                 key={key}
-                className="rounded-xl p-3"
                 style={{
-                  '--scolor': meta.color,
-                  border: `1px solid color-mix(in srgb, ${meta.color} 40%, transparent)`,
-                  background: `linear-gradient(160deg, color-mix(in srgb, ${meta.color} 8%, #ffffff), #ffffff)`,
-                } as React.CSSProperties}
+                  border: `1px solid ${meta.color}`,
+                  background: `linear-gradient(160deg, ${meta.color}1f, rgba(8,22,35,.65))`,
+                  borderRadius: 12, padding: 12,
+                }}
               >
-                <strong className="block text-xl font-black" style={{ color: meta.color }}>{toFa(s.probability)}٪</strong>
-                <span className="text-xs font-bold text-[#374151]">{meta.label}</span>
-                <div className="mt-2 space-y-0.5">
+                <strong style={{ display: 'block', color: meta.color, fontSize: 21, fontWeight: 900, marginBottom: 5 }}>{toFa(s.probability)}٪</strong>
+                <span style={{ fontSize: 12, fontWeight: 700, color: D.text }}>{meta.label}</span>
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {Object.entries(BRANCH_META).map(([bKey, bMeta]) => (
-                    <div key={bKey} className="flex items-center justify-between text-[9px]">
-                      <span className="text-[#6b7280] flex items-center gap-0.5">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: bMeta.color }} />
+                    <div key={bKey} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9 }}>
+                      <span style={{ color: D.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: bMeta.color }} />
                         {bMeta.label}
                       </span>
-                      <span className="font-bold text-[#374151]">
-                        {toPersianDigits((contrib[bKey as 'trend' | 'breakout' | 'reversal']).toFixed(1))}٪
+                      <span style={{ fontWeight: 700, color: D.text }}>
+                        {toPersianDigits((contrib[bKey as 'trend' | 'breakout' | 'reversal'] * 100).toFixed(1))}٪
                       </span>
                     </div>
                   ))}
                 </div>
-                <small className="block text-[9px] text-[#6b7280] leading-relaxed mt-1.5" dir="ltr">
+                <small style={{ display: 'block', color: D.muted, fontSize: 10, lineHeight: 1.7, marginTop: 7 }} dir="ltr">
                   {toFa(s.targetMin)} — {toFa(s.targetMax)}
                 </small>
               </div>
             );
           })}
         </div>
-        <div className="mt-3 px-4 py-2.5 rounded-lg border-r-3 border-amber-700/60 bg-amber-50 text-[11px] text-[#374151] leading-relaxed">
+        <div style={{
+          marginTop: 15, padding: '12px 15px',
+          borderRight: `3px solid ${D.gold}`,
+          background: 'rgba(255,177,27,.06)',
+          color: '#b8cbd5', fontSize: 11, lineHeight: 2,
+        }}>
           <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی سرور محاسبه شده‌اند. هر استراتژی ۹ یال شرطی دارد و مجموع ۲۷ مسیر، احتمال نهایی هر سناریو را تشکیل می‌دهد.
         </div>
       </div>
@@ -766,6 +839,7 @@ const TREND_GROUP_LABEL: Record<string, string> = {
 };
 
 function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
+  const { colors: C } = useTheme();
   const [open, setOpen] = useState(true);
 
   // Build a lookup: scenarioKey -> trend array
@@ -948,12 +1022,15 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
   );
 }
 
-function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+function DarkMetricCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="px-4 py-3 rounded-xl border border-[#e5e7eb]"
-      style={{ background: 'linear-gradient(145deg, #ffffff, #f3f4f6)' }}>
-      <small className="block text-xs text-[#6b7280] mb-2">{label}</small>
-      <strong className={`text-lg tracking-wide ${color}`}>{value}</strong>
+    <div style={{
+      padding: '15px 16px',
+      border: `1px solid ${D.line}`, borderRadius: 14,
+      background: 'linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86))',
+    }}>
+      <small style={{ display: 'block', color: D.muted, marginBottom: 8, fontSize: 12 }}>{label}</small>
+      <strong style={{ fontSize: 18, letterSpacing: 0.2, color }}>{value}</strong>
     </div>
   );
 }
@@ -963,16 +1040,16 @@ function MetricCard({ label, value, color }: { label: string; value: string; col
 export function VdssGraphSkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-16 w-full bg-[#e5e7eb] rounded-2xl" />
+      <Skeleton className="h-16 w-full rounded-2xl" style={{ background: 'rgba(13,31,47,.90)' }} />
       <div className="grid grid-cols-4 gap-3">
-        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
-        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
-        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
-        <Skeleton className="h-16 bg-[#e5e7eb] rounded-xl" />
+        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
       </div>
-      <Skeleton className="h-10 w-full bg-[#e5e7eb] rounded-t-2xl" />
-      <Skeleton className="h-[500px] w-full bg-[#e5e7eb] rounded-b-2xl" />
-      <Skeleton className="h-40 w-full bg-[#e5e7eb] rounded-2xl" />
+      <Skeleton className="h-10 w-full rounded-t-2xl" style={{ background: 'rgba(9,24,37,.92)' }} />
+      <Skeleton className="h-[500px] w-full rounded-b-2xl" style={{ background: 'rgba(4,15,25,.72)' }} />
+      <Skeleton className="h-40 w-full rounded-2xl" style={{ background: 'rgba(8,22,35,.76)' }} />
     </div>
   );
 }
