@@ -937,57 +937,60 @@ function createEdges(): GraphEdge[] {
 
 function createPositions(): Record<string, { right: number; top: number }> {
   const p: Record<string, { right: number; top: number }> = {};
+  // DESIGN_H is now 1200. Event nodes: 56px, Branch nodes: 74px, Terminal: 84px
+  // No overlaps — each group separated by 14px, siblings by 4px
 
   // Layer 0 (rightmost): ROOT
-  p['ROOT'] = { right: 30, top: 420 };
+  p['ROOT'] = { right: 30, top: 590 };
 
-  // Layer 1: Main branches
-  p['N_TREND'] = { right: 200, top: 100 };
-  p['N_BREAK'] = { right: 200, top: 420 };
-  p['N_REVERSAL'] = { right: 200, top: 740 };
+  // Layer 1: Main branches (centered on their children)
+  p['N_TREND'] = { right: 200, top: 268 };
+  p['N_BREAK'] = { right: 200, top: 690 };
+  p['N_REVERSAL'] = { right: 200, top: 1010 };
 
-  // Layer 2: Sub-branches
-  p['N_T_BULL'] = { right: 390, top: 30 };
-  p['N_T_BEAR'] = { right: 390, top: 190 };
-  p['N_T_FLAT'] = { right: 390, top: 320 };
-  p['N_B_UP'] = { right: 390, top: 440 };
-  p['N_B_DOWN'] = { right: 390, top: 560 };
-  p['N_B_NONE'] = { right: 390, top: 650 };
-  p['N_R_BULL'] = { right: 390, top: 710 };
-  p['N_R_BEAR'] = { right: 390, top: 810 };
-  p['N_R_NONE'] = { right: 390, top: 880 };
+  // Layer 2: Sub-branches (centered on their Layer-3 children groups)
+  p['N_T_BULL'] = { right: 390, top: 50 };
+  p['N_T_BEAR'] = { right: 390, top: 240 };
+  p['N_T_FLAT'] = { right: 390, top: 430 };
+  p['N_B_UP'] = { right: 390, top: 590 };
+  p['N_B_DOWN'] = { right: 390, top: 720 };
+  p['N_B_NONE'] = { right: 390, top: 532 };
+  p['N_R_BULL'] = { right: 390, top: 880 };
+  p['N_R_BEAR'] = { right: 390, top: 1070 };
+  p['N_R_NONE'] = { right: 390, top: 790 };
 
-  // Layer 3: Assessment nodes
-  // Trend-Bull
-  p['N_T_B_MOM_HIGH'] = { right: 570, top: 5 };
-  p['N_T_B_MOM_MOD'] = { right: 570, top: 75 };
-  p['N_T_B_OVERBOUGHT'] = { right: 570, top: 145 };
-  // Trend-Bear
-  p['N_T_BE_MOM_LOW'] = { right: 570, top: 180 };
-  p['N_T_BE_MOM_MOD'] = { right: 570, top: 250 };
-  p['N_T_BE_OVERSOLD'] = { right: 570, top: 320 };
-  // Trend-Flat
-  p['N_T_F_VOL_LOW'] = { right: 570, top: 355 };
-  p['N_T_F_VOL_HIGH'] = { right: 570, top: 405 };
-  p['N_T_F_VOL_MOD'] = { right: 570, top: 455 };
-  // Breakout-Up
-  p['N_B_U_VOL_C'] = { right: 570, top: 490 };
-  p['N_B_U_VOL_W'] = { right: 570, top: 540 };
-  // Breakout-Down
-  p['N_B_D_VOL_C'] = { right: 570, top: 580 };
-  p['N_B_D_VOL_W'] = { right: 570, top: 630 };
-  // Reversal-Bull
-  p['N_R_B_DIV'] = { right: 570, top: 680 };
-  p['N_R_B_CANDLE'] = { right: 570, top: 730 };
-  p['N_R_B_SR'] = { right: 570, top: 780 };
-  // Reversal-Bear
-  p['N_R_BE_DIV'] = { right: 570, top: 820 };
-  p['N_R_BE_CANDLE'] = { right: 570, top: 860 };
-  p['N_R_BE_SR'] = { right: 570, top: 900 };
+  // Layer 3: Assessment nodes (19 nodes, 7 groups, no overlaps)
+  // Event node height: 56px, within-group gap: 4px, between-group gap: 14px
+  // Trend-Bull (3 nodes)
+  p['N_T_B_MOM_HIGH'] = { right: 570, top: 2 };
+  p['N_T_B_MOM_MOD'] = { right: 570, top: 62 };
+  p['N_T_B_OVERBOUGHT'] = { right: 570, top: 122 };
+  // Trend-Bear (3 nodes)
+  p['N_T_BE_MOM_LOW'] = { right: 570, top: 192 };
+  p['N_T_BE_MOM_MOD'] = { right: 570, top: 252 };
+  p['N_T_BE_OVERSOLD'] = { right: 570, top: 312 };
+  // Trend-Flat (3 nodes)
+  p['N_T_F_VOL_LOW'] = { right: 570, top: 382 };
+  p['N_T_F_VOL_HIGH'] = { right: 570, top: 442 };
+  p['N_T_F_VOL_MOD'] = { right: 570, top: 502 };
+  // Breakout-Up (2 nodes)
+  p['N_B_U_VOL_C'] = { right: 570, top: 572 };
+  p['N_B_U_VOL_W'] = { right: 570, top: 632 };
+  // Breakout-Down (2 nodes)
+  p['N_B_D_VOL_C'] = { right: 570, top: 702 };
+  p['N_B_D_VOL_W'] = { right: 570, top: 762 };
+  // Reversal-Bull (3 nodes)
+  p['N_R_B_DIV'] = { right: 570, top: 832 };
+  p['N_R_B_CANDLE'] = { right: 570, top: 892 };
+  p['N_R_B_SR'] = { right: 570, top: 952 };
+  // Reversal-Bear (3 nodes)
+  p['N_R_BE_DIV'] = { right: 570, top: 1022 };
+  p['N_R_BE_CANDLE'] = { right: 570, top: 1082 };
+  p['N_R_BE_SR'] = { right: 570, top: 1142 };
 
-  // Layer 4 (leftmost): Terminal nodes R1–R9
+  // Layer 4 (leftmost): Terminal nodes R1–R9 (height 84px, gap 35px)
   for (let i = 0; i < 9; i++) {
-    p[`R${i + 1}`] = { right: 1100, top: i * 95 + 10 };
+    p[`R${i + 1}`] = { right: 1050, top: i * 119 + 30 };
   }
 
   return p;

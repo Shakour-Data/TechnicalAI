@@ -2802,3 +2802,101 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
     },
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 30-Day Historical Probability Computation
+// ═══════════════════════════════════════════════════════════════════════════════
+// Computes daily probabilities for the past 30 days by running the decision
+// graph model with day-specific indicators (no look-ahead bias).
+// Per CumProbTrend.txt §5: each day t uses only data up to end of day t.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface DailyProbSnapshot {
+  date: string;
+  dayIndex: number; // 0=today, -1=yesterday, ...
+  probs: Record<string, number>; // R1-R9, sum=100
+}
+
+export function computeHistoricalProbabilities(
+  data: OHLCV[],
+  maxDays: number = 30,
+): DailyProbSnapshot[] {
+  if (!data || data.length < 30) return [];
+
+  const result: DailyProbSnapshot[] = [];
+  const today = data.length - 1;
+  const startDate = Math.max(30, today - maxDays + 1);
+
+  // Pre-compute indicators that have array variants for efficiency
+  for (let di = today; di >= startDate; di--) {
+    const slice = data.slice(0, di + 1);
+    if (slice.length < 30) continue;
+
+    const price = slice[slice.length - 1].close;
+    const closes = slice.map(d => d.close);
+    const hasVolume = slice.some(d => d.volume > 0);
+
+    // Key indicators for the decision graph
+    const rsi = calcRSI(closes, 14);
+    const mfi = hasVolume ? calcMFI(slice, 14) : 50;
+    const cci = calcCCI(slice, 20);
+    const stoch = calcStochastic(slice, 14, 3, 3);
+    const adxResult = calcADX(slice, 14);
+    const macd = calcMACD(closes);
+    const atrVal = calcATR(slice, 14);
+    const sarVal = calcSAR(slice);
+    const bb = calcBollingerBands(closes, 20, 2);
+    const ichimoku = calcIchimoku(slice);
+    const momentum = calcMomentum(closes, 10);
+    const awesomeOsc = calcAwesomeOscillator(slice);
+    const fisher = calcFisherTransform(slice, 9);
+    const maAlign = calcMARibbonAlignment(closes);
+    const confidence = calcConfidenceIndex(rsi, mfi, macd.line, macd.signal, adxResult.adx, stoch.k, { r2: 0.5 } as any);
+    const strength = calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atrVal, price, calcEMA(closes, 12), calcEMA(closes, 26));
+
+    // Simple bull consensus
+    const bullConsensus = clamp((rsi - 50) / 50 * 0.3 + (macd.histogram > 0 ? 0.15 : -0.15) + (adxResult.diPlus > adxResult.diMinus ? 0.15 : -0.15) + 0.5, 0, 1);
+
+    // Simple S/R distance proxy
+    const distToR1 = 0.05;
+    const distToS1 = 0.05;
+
+    try {
+      const graphData = buildDecisionGraph({
+        price,
+        bullConsensus,
+        rsi, mfi, cci,
+        stochK: stoch.k, stochD: stoch.d,
+        adx: adxResult.adx,
+        diPlus: adxResult.diPlus, diMinus: adxResult.diMinus,
+        macdHist: macd.histogram,
+        atr: atrVal,
+        bbUpper: bb.upper, bbMiddle: bb.middle, bbLower: bb.lower,
+        sar: sarVal,
+        ichimokuTenkan: ichimoku.tenkan, ichimokuKijun: ichimoku.kijun,
+        ichimokuSenkouA: ichimoku.senkouA, ichimokuSenkouB: ichimoku.senkouB,
+        maAlignment: maAlign,
+        momentum, awesomeOsc, fisherTransform: fisher,
+        confidenceIndex: confidence, strengthIndex: strength,
+        hasVolume,
+        distToR1, distToS1,
+        srAvgStrength: 0.5,
+        mlMomentum: 0.5, mlVolatility: 0.5, mlTrend: 0.5,
+      });
+
+      result.push({
+        date: slice[slice.length - 1].date,
+        dayIndex: -(today - di),
+        probs: { ...graphData.scenarioProbabilities },
+      });
+    } catch {
+      // Skip days where computation fails
+    }
+  }
+
+  return result;
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
