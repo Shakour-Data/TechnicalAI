@@ -243,6 +243,23 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
   );
 }
 
+// ─── Suppress framework-internal unhandled rejections (HMR, React DevTools, etc.) ─────
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = e.reason;
+    // Suppress internal framework errors that we can't control
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    const isFrameworkInternal =
+      msg.includes('Fast Refresh') ||
+      msg.includes('React DevTools') ||
+      msg.includes('forward-logs') ||
+      (typeof reason === 'object' && reason !== null && !Array.isArray(reason) && !(reason instanceof Error) && Object.keys(reason).length <= 2);
+    if (isFrameworkInternal) {
+      e.preventDefault();
+    }
+  });
+}
+
 // ─── Main Home Component ────────────────────────────────────────
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);

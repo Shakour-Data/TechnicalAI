@@ -516,9 +516,9 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
   try {
     const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=5000`;
 
-    // Direct fetch instead of page_reader — avoids queue contention with AI calls
+    // Server-side fetch — no CORS issues, no ZAI queue needed
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20_000);
+    const timer = setTimeout(() => controller.abort(), 25_000);
     let jsonStr: string;
     try {
       const res = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
@@ -527,11 +527,9 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
       jsonStr = await res.text();
     } catch (fetchErr) {
       clearTimeout(timer);
-      // Fallback to page_reader if direct fetch fails (e.g., CORS)
-      console.warn(`[TGJU] Direct fetch failed for ${tgjuKey}, falling back to page_reader:`, fetchErr);
-      const { rateLimitedPageReader } = await import('@/lib/zai-shared');
-      const html = await rateLimitedPageReader(url, 30_000);
-      jsonStr = html.replace(/<[^>]+>/g, '').trim();
+      // This is a server-side route — no CORS. If direct fetch fails, the API is down.
+      console.warn(`[TGJU] Direct fetch failed for ${tgjuKey}:`, fetchErr instanceof Error ? fetchErr.message : fetchErr);
+      return cached?.data || [];
     }
 
     if (!jsonStr.startsWith('{')) {
