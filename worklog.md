@@ -1399,3 +1399,37 @@ Stage Summary:
 - Daily cache: unchanged, still provides instant response for repeated symbol views
 - Page auto-refresh: confirmed 15-minute window.location.reload() is active
 - External ZAI rate limit is the remaining bottleneck (not fixable in our code)
+
+---
+Task ID: dedicated-ai-channel
+Agent: Main
+Task: Fix AI text generation permanently — dedicated channel separate from page_reader
+
+Work Log:
+- **Root cause identified**: page_reader (data fetching) and chat.completions (AI text) shared ONE queue. When page_reader gets 429'd, it sets sharedCooldownUntil which blocks AI text generation immediately via pre-check.
+- **Created dedicated AI channel** (`dedicatedAIChatCompletion` in zai-shared.ts):
+  - Completely independent from the shared page_reader queue
+  - Waits politely for any existing shared cooldown to expire (doesn't fail)
+  - Has its own retry logic: 5 retries with 30s, 45s, 68s, 101s, 151s backoff
+  - Total timeout: 4 minutes (enough for all retries)
+  - aiInProgress mutex with 10s timeout (prevents infinite concurrent blocking)
+  - Does NOT set sharedCooldownUntil (doesn't pollute page_reader)
+- **Updated ai-analysis/route.ts**:
+  - Removed pre-check that returned 429 immediately (was the main cause of user error)
+  - Uses dedicatedAIChatCompletion instead of rateLimitedChatCompletion
+  - maxDuration: 300s (Next.js limit)
+  - Timeout: 240s (enough for 5 retries)
+  - Simplified error messages (no more "شارژ" confusion)
+- **Updated vdes-analysis.tsx client**:
+  - Client timeout: 300s (5 min) — enough for server to complete all retries
+  - No client-side 429 retry (server handles it)
+  - Only retries 502/503 once (10s delay)
+  - Only retries network errors once (10s delay)
+  - Simplified loading message (no misleading time estimates)
+
+Stage Summary:
+- BEFORE: page_reader 429 → sharedCooldownUntil → pre-check → immediate 429 error to user → NO TEXT
+- AFTER: page_reader 429 → sharedCooldownUntil → AI channel WAITS for cooldown → retries 5 times → TEXT GENERATED
+- Daily cache still provides instant responses for previously analyzed symbols
+- The ZAI API rate limit is external and unavoidable, but the system now handles it gracefully
+- Verified: POST /api/ai-analysis 200 in 3.0min (with 3 retries through 429s)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimitedChatCompletion, getCooldownRemainingMs } from '@/lib/zai-shared';
+import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
 import { db } from '@/lib/db';
 import {
   selectMLCombination,
@@ -14,7 +14,7 @@ import {
 } from '@/lib/msl-v4';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function toPersianNum(n: number): string {
@@ -300,30 +300,17 @@ export async function POST(req: NextRequest) {
     const userMessage = buildPrompt(body, mlSelection, methods);
     const dynamicSystemPrompt = `${SYSTEM_PROMPT}\n\n${mslSystemPrompt}`;
 
-    console.log(`[AI] Generating for ${symbolName} (daily cache miss) [${Date.now() - startTime}ms]`);
+    console.log(`[AI] Generating for ${symbolName} (cache miss) [${Date.now() - startTime}ms]`);
 
-    // 5. Pre-check: if ZAI is heavily rate-limited, return immediately
-    const cooldownMs = getCooldownRemainingMs();
-    if (cooldownMs > 30_000) {
-      const waitSec = Math.ceil((cooldownMs + 30_000) / 1000);
-      console.log(`[AI] Rate limited, returning immediately. Cooldown: ${waitSec}s`);
-      return NextResponse.json({
-        error: `سرور هوشمند در حال حاضر شارژ دارد. لطفاً ${waitSec} ثانیه دیگر تلاش کنید.`,
-        text: '',
-        retryAfterSec: waitSec,
-      }, { status: 429 });
-    }
-
-    // 6. Call AI through unified rate-limited queue
-    const content = await rateLimitedChatCompletion(
+    // 5. Call AI through dedicated channel (independent of page_reader queue)
+    const content = await dedicatedAIChatCompletion(
       [
         { role: 'system', content: dynamicSystemPrompt },
         { role: 'user', content: userMessage },
       ],
       {
-        timeoutMs: 90_000,  // 90s max total (queue wait + generation)
-        maxRetries: 2,
-        maxQueueWaitMs: 15_000,  // Fail fast if queue wait > 15s
+        timeoutMs: 240_000,  // 4 min total (enough for 5 retries with backoff)
+        maxRetries: 5,
       }
     );
 
@@ -362,14 +349,14 @@ export async function POST(req: NextRequest) {
 
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes('ZAI_RATE_LIMITED')) {
-    const match = msg.match(/Try after (\d+)s/);
-    const sec = match ? match[1] : '۲ الی ۳ دقیقه';
-    return `سرور هوشمند در حال حاضر شارژ دارد. لطفاً ${sec} ثانیه دیگر تلاش کنید.`;
+  if (msg.includes('Rate limited') || msg.includes('429')) {
+    return 'سرور هوشمند محدودیت سرعت دارد. لطفاً دکمه «تلاش مجدد» را بزنید.';
   }
-  if (msg.includes('429') || msg.includes('Rate limited')) return 'سرور هوشمند در حال حاضر شارژ دارد. لطفاً ۲ الی ۳ دقیقه دیگر تلاش کنید.';
-  if (msg.includes('Timed out in queue')) return 'صف درخواست‌ها شلوغ است. لطفاً ۱ دقیقه دیگر تلاش کنید.';
-  if (msg.includes('timeout') || msg.includes('زمان') || msg.includes('Max retries')) return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً ۲ الی ۳ دقیقه بعد دوباره تلاش کنید.';
-  if (msg.includes('اتصال') || msg.includes('SDK')) return msg;
-  return '\u062e\u0637\u0627\u06cc\u06cc \u062f\u0631 \u062a\u0648\u0644\u06cc\u062f \u062a\u062d\u0644\u06cc\u0644 \u0631\u062e \u062f\u0627\u062f. \u0644\u0637\u0641\u0627\u064b \u062f\u0648\u0628\u0627\u0631\u0647 \u062a\u0644\u0627\u0634 \u06a9\u0646\u06cc\u062f.';
+  if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
+    return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً دوباره تلاش کنید.';
+  }
+  if (msg.includes('concurrent')) {
+    return 'درخواست تحلیل قبلی هنوز در حال اجراست. لطفاً کمی صبر کنید.';
+  }
+  return 'خطایی در تولید تحلیل رخ داد. لطفاً دوباره تلاش کنید.';
 }

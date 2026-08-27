@@ -1,10 +1,11 @@
 /**
- * Unified Z-AI SDK rate-limited executor
+ * Z-AI SDK rate-limited executor
  *
- * ALL ZAI SDK calls (page_reader, chat.completions, etc.) MUST go through this module.
- * This prevents competing rate-limit retries across different API routes.
+ * Two separate channels:
+ * 1. Shared queue (page_reader, etc.) — rate-limited, sequential
+ * 2. Dedicated AI channel (chat.completions) — independent, patient, persistent
  *
- * Uses dynamic import to avoid SDK crashing during Turbopack compilation.
+ * This prevents page_reader 429s from blocking AI text generation.
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -31,20 +32,18 @@ export async function getZai(): Promise<ZaiType> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Unified rate-limited queue for ALL ZAI operations
+// Channel 1: Shared queue for page_reader etc.
 // ═══════════════════════════════════════════════════════════════
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// --- Shared state ---
-const MIN_INTERVAL_MS = 2_000; // 2s between ANY two ZAI calls
-let lastCallTime = 0;
+const MIN_INTERVAL_MS = 2_000;
+let lastSharedCallTime = 0;
 let sharedCooldownUntil = 0;
-let processing = false;
+let sharedProcessing = false;
 
-// --- Queue item type ---
 interface QueueItem<T = unknown> {
   operation: (zai: ZaiType) => Promise<T>;
   name: string;
@@ -58,12 +57,10 @@ interface QueueItem<T = unknown> {
 
 const unifiedQueue: QueueItem[] = [];
 
-// --- Get remaining cooldown ---
 export function getCooldownRemainingMs(): number {
   return Math.max(0, sharedCooldownUntil - Date.now());
 }
 
-// --- Record a 429 from outside the queue (if someone bypasses the queue) ---
 export function recordExternal429() {
   const currentCooldown = Math.max(sharedCooldownUntil - Date.now(), 0);
   const newCooldown = Math.max(currentCooldown + 60_000, 120_000);
@@ -71,13 +68,11 @@ export function recordExternal429() {
   console.warn(`[zai-shared] External 429 recorded, cooldown: ${Math.round(Math.min(newCooldown, 600_000) / 1000)}s`);
 }
 
-// --- Queue processor ---
 async function processQueue() {
-  if (processing) return;
-  processing = true;
+  if (sharedProcessing) return;
+  sharedProcessing = true;
 
   while (unifiedQueue.length > 0) {
-    // 1. Wait for cooldown if needed
     const now = Date.now();
     if (sharedCooldownUntil > now) {
       const waitMs = sharedCooldownUntil - now + 1_000;
@@ -85,13 +80,11 @@ async function processQueue() {
       await sleep(waitMs);
     }
 
-    // 2. Wait for minimum interval
-    const elapsed = Date.now() - lastCallTime;
+    const elapsed = Date.now() - lastSharedCallTime;
     if (elapsed < MIN_INTERVAL_MS) {
       await sleep(MIN_INTERVAL_MS - elapsed);
     }
 
-    // 3. Pick next item (check if timed out)
     const item = unifiedQueue.shift();
     if (!item) break;
     if (Date.now() > item.timeoutAt) {
@@ -99,27 +92,20 @@ async function processQueue() {
       continue;
     }
 
-    // 4. Execute
     try {
       const zai = await getZai();
       const result = await item.operation(zai);
-      lastCallTime = Date.now();
-
-      // Success: reset cooldown immediately
+      lastSharedCallTime = Date.now();
       sharedCooldownUntil = 0;
-
       item.resolve(result);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-
       if (msg.includes('429')) {
         item.retries++;
         const backoff = Math.min(45_000 * Math.pow(1.5, item.retries - 1), 180_000);
         sharedCooldownUntil = Date.now() + backoff;
         console.warn(`[zai-shared] 429 on [${item.name}], attempt ${item.retries}/${item.maxRetries}, cooldown ${Math.round(backoff / 1000)}s`);
-
         if (item.retries < item.maxRetries) {
-          // Re-queue at front
           unifiedQueue.unshift(item);
           continue;
         }
@@ -130,23 +116,10 @@ async function processQueue() {
     }
   }
 
-  processing = false;
+  sharedProcessing = false;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Public API
-// ═══════════════════════════════════════════════════════════════
-
-/**
- * Execute any ZAI operation through the unified rate-limited queue.
- *
- * @param operation - Async function that receives the ZAI instance and returns a result
- * @param options
- *   - timeoutMs: Max total time (queue wait + execution). Default 120s.
- *   - maxRetries: How many 429 retries before giving up. Default 3.
- *   - name: Label for logging. Default 'zai-call'.
- *   - maxQueueWaitMs: If cooldown exceeds this, fail immediately. Default 90s.
- */
+// --- Public: shared queue call ---
 export async function rateLimitedZaiCall<T>(
   operation: (zai: ZaiType) => Promise<T>,
   options: {
@@ -163,7 +136,6 @@ export async function rateLimitedZaiCall<T>(
     maxQueueWaitMs = 30_000,
   } = options;
 
-  // Quick check: if shared cooldown is very long, fail immediately
   const cooldownMs = getCooldownRemainingMs();
   if (cooldownMs > maxQueueWaitMs) {
     throw new Error(
@@ -173,7 +145,6 @@ export async function rateLimitedZaiCall<T>(
 
   return new Promise<T>((resolve, reject) => {
     const createdAt = Date.now();
-
     const timer = setTimeout(() => {
       const idx = unifiedQueue.indexOf(queueItem);
       if (idx >= 0) unifiedQueue.splice(idx, 1);
@@ -181,13 +152,10 @@ export async function rateLimitedZaiCall<T>(
     }, timeoutMs);
 
     const queueItem: QueueItem<T> = {
-      operation,
-      name,
+      operation, name,
       resolve: (v) => { clearTimeout(timer); resolve(v); },
       reject: (e) => { clearTimeout(timer); reject(e); },
-      retries: 0,
-      maxRetries,
-      createdAt,
+      retries: 0, maxRetries, createdAt,
       timeoutAt: createdAt + timeoutMs,
     };
 
@@ -196,18 +164,13 @@ export async function rateLimitedZaiCall<T>(
   });
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Convenience: rate-limited page_reader
-// ═══════════════════════════════════════════════════════════════
-
+// --- Convenience: page_reader ---
 export async function rateLimitedPageReader(url: string, timeoutMs = 60_000): Promise<string> {
   return rateLimitedZaiCall<string>(
     async (zai) => {
       const result = await zai.functions.invoke('page_reader', { url });
       const html: string = result.data?.html || '';
-      if (!html || html.length < 5) {
-        throw new Error('Empty response from page_reader');
-      }
+      if (!html || html.length < 5) throw new Error('Empty response from page_reader');
       return html;
     },
     { timeoutMs, maxRetries: 2, name: `page_reader(${url.slice(0, 60)})` }
@@ -232,7 +195,107 @@ export async function batchPageReader(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Convenience: rate-limited chat completion
+// Channel 2: DEDICATED AI chat completion (bypasses shared queue)
+// ═══════════════════════════════════════════════════════════════
+//
+// AI text generation is the most important user-facing feature.
+// It must NEVER be blocked by page_reader rate limits.
+// This function has its own retry logic and does NOT use the shared queue.
+//
+let aiLastCallTime = 0;
+const AI_MIN_INTERVAL_MS = 5_000; // 5s between AI calls
+let aiInProgress = false; // Prevent concurrent AI calls
+
+export async function dedicatedAIChatCompletion(
+  messages: { role: string; content: string }[],
+  options: {
+    timeoutMs?: number;    // Total timeout including all retries. Default 200s
+    maxRetries?: number;   // 429 retries. Default 5
+  } = {}
+): Promise<string> {
+  const { timeoutMs = 200_000, maxRetries = 5 } = options;
+  const startTime = Date.now();
+  const deadline = startTime + timeoutMs;
+
+  // Prevent concurrent AI calls (serialize) — but don't block for too long
+  const CONCURRENT_WAIT_MS = 10_000; // Only wait 10s for a concurrent call
+  const concurrentStart = Date.now();
+  while (aiInProgress) {
+    if (Date.now() - concurrentStart > CONCURRENT_WAIT_MS) {
+      console.log('[AI-dedicated] Concurrent call still running, proceeding anyway');
+      break;
+    }
+    if (Date.now() > deadline) throw new Error('Timeout waiting for concurrent AI call');
+    await sleep(1_000);
+  }
+  aiInProgress = true;
+
+  try {
+    const zai = await getZai();
+
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      // Check deadline
+      if (Date.now() > deadline) {
+        throw new Error(`Timeout after ${timeoutMs / 1000}s: AI generation`);
+      }
+
+      // Wait: (1) existing shared cooldown, (2) AI min interval
+      const sharedCd = getCooldownRemainingMs();
+      const aiInterval = Math.max(0, AI_MIN_INTERVAL_MS - (Date.now() - aiLastCallTime));
+      const waitMs = Math.max(sharedCd, aiInterval);
+      if (waitMs > 0) {
+        console.log(`[AI-dedicated] Waiting ${Math.round(waitMs / 1000)}s (shared_cd=${Math.round(sharedCd / 1000)}s, ai_interval=${Math.round(aiInterval / 1000)}s)...`);
+        // Don't wait longer than what we have left
+        const remaining = deadline - Date.now() - 30_000; // keep 30s buffer for the actual call
+        if (waitMs > remaining) {
+          throw new Error(`Rate limited: need ${Math.round(waitMs / 1000)}s but only ${Math.round(remaining / 1000)}s remaining`);
+        }
+        await sleep(waitMs);
+      }
+
+      // Make the call
+      try {
+        console.log(`[AI-dedicated] Attempt ${attempt}/${maxRetries + 1}...`);
+        const completion = await zai.chat.completions.create({
+          messages,
+          thinking: { type: 'disabled' },
+        });
+        aiLastCallTime = Date.now();
+        const raw = completion.choices[0]?.message?.content;
+        if (!raw || raw.trim().length < 10) {
+          throw new Error('AI response too short or empty');
+        }
+        console.log(`[AI-dedicated] Success in ${((Date.now() - startTime) / 1000).toFixed(1)}s (attempt ${attempt})`);
+        return raw.trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+
+        if (msg.includes('429')) {
+          // Calculate backoff: 30s, 45s, 60s, 90s, 120s
+          const backoff = Math.min(30_000 * Math.pow(1.5, attempt - 1), 150_000);
+          const remaining = deadline - Date.now();
+          console.warn(`[AI-dedicated] 429, attempt ${attempt}/${maxRetries + 1}, backoff ${Math.round(backoff / 1000)}s, remaining ${Math.round(remaining / 1000)}s`);
+
+          if (attempt <= maxRetries && backoff < remaining - 30_000) {
+            await sleep(backoff);
+            continue;
+          }
+          throw new Error(`Rate limited after ${attempt} attempts: ${msg}`);
+        }
+
+        // Non-429 error: throw immediately
+        throw new Error(msg);
+      }
+    }
+
+    throw new Error('AI generation failed after all retries');
+  } finally {
+    aiInProgress = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Legacy: rate-limited chat completion (uses shared queue)
 // ═══════════════════════════════════════════════════════════════
 
 export async function rateLimitedChatCompletion(
@@ -244,17 +307,11 @@ export async function rateLimitedChatCompletion(
   } = {}
 ): Promise<string> {
   const { timeoutMs = 120_000, maxRetries = 2, maxQueueWaitMs = 30_000 } = options;
-
   return rateLimitedZaiCall<string>(
     async (zai) => {
-      const completion = await zai.chat.completions.create({
-        messages,
-        thinking: { type: 'disabled' },
-      });
+      const completion = await zai.chat.completions.create({ messages, thinking: { type: 'disabled' } });
       const raw = completion.choices[0]?.message?.content;
-      if (!raw || raw.trim().length < 10) {
-        throw new Error('AI response too short or empty');
-      }
+      if (!raw || raw.trim().length < 10) throw new Error('AI response too short or empty');
       return raw.trim();
     },
     { timeoutMs, maxRetries, name: 'chat.completions', maxQueueWaitMs }

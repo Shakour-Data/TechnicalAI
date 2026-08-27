@@ -686,8 +686,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       try {
         setAiLoading(true);
         setAiError(null);
-        // Combine abort signals: component unmount + 2 min timeout
-        const timeoutSignal = AbortSignal.timeout(120_000);
+        // Combine abort signals: component unmount + 5 min timeout (server retries internally)
+        const timeoutSignal = AbortSignal.timeout(300_000);
         const combinedSignal = controller.signal.aborted ? controller.signal : AbortSignal.any([controller.signal, timeoutSignal]);
 
         const res = await fetch('/api/ai-analysis', {
@@ -709,15 +709,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         if (cancelled) return;
         if (!res.ok) {
           let errMsg = `خطای سرور (${res.status})`;
-          let shouldAutoRetry = false;
           let retryAfterSec = 0;
-          // For 429: server already retried internally, show error immediately
-          // For 502/503: auto-retry with fast delays
-          if (res.status === 429) {
-            shouldAutoRetry = false; // Don't retry 429 client-side, server handles it
-          } else if (res.status === 502 || res.status === 503) {
-            shouldAutoRetry = true;
-          }
           try {
             const errBody = await res.json();
             if (errBody.error) errMsg = errBody.error;
@@ -727,18 +719,13 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست. لطفاً بعداً تلاش کنید.';
             else if (res.status === 429) errMsg = 'تعداد درخواست‌ها زیاد است. لطفاً کمی صبر کنید.';
           }
-          // Auto-retry for rate limit / gateway errors (up to 3 times, with fast delays)
-          const MAX_RETRIES = 3;
-          if (shouldAutoRetry && aiAutoRetryRef.current < MAX_RETRIES) {
+          // Server handles retries internally. Only retry 502/503 once.
+          const shouldRetry = (res.status === 502 || res.status === 503) && aiAutoRetryRef.current < 1;
+          if (shouldRetry) {
             aiAutoRetryRef.current += 1;
-            const retryNum = aiAutoRetryRef.current;
-            // Use server-suggested delay if available, otherwise use fast progressive delays
-            const delays = [8_000, 15_000, 25_000];
-            const delay = retryAfterSec > 0
-              ? Math.min(retryAfterSec * 1000 + 3_000, 60_000) // Server suggestion + 3s buffer, max 60s
-              : delays[Math.min(retryNum - 1, delays.length - 1)];
-            console.log(`[AI] Auto-retry ${retryNum}/${MAX_RETRIES} in ${delay / 1000}s...`);
-            setAiRetryCount(retryNum);
+            const delay = 10_000;
+            console.log(`[AI] Gateway error ${res.status}, retry in ${delay / 1000}s...`);
+            setAiRetryCount(1);
             setAiRetryDelay(Math.round(delay / 1000));
             setAiLoading(true);
             setAiError(null);
@@ -764,18 +751,15 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
-        // Network errors may also be transient - auto retry (up to 3 times)
-        if (aiAutoRetryRef.current < 3) {
+        // Network errors: retry once after 10s
+        if (aiAutoRetryRef.current < 1) {
           aiAutoRetryRef.current += 1;
-          const retryNum = aiAutoRetryRef.current;
-          const delays = [8_000, 15_000, 25_000];
-          const delay = delays[Math.min(retryNum - 1, delays.length - 1)];
-          console.log(`[AI] Network error, auto-retry ${retryNum}/3 in ${delay / 1000}s...`);
-          setAiRetryCount(retryNum);
-          setAiRetryDelay(Math.round(delay / 1000));
+          console.log(`[AI] Network error, retry in 10s...`);
+          setAiRetryCount(1);
+          setAiRetryDelay(10);
           setAiLoading(true);
           setAiError(null);
-          await new Promise(r => setTimeout(r, delay));
+          await new Promise(r => setTimeout(r, 10_000));
           if (!cancelled) setAiRetryKey(k => k + 1);
           return;
         }
@@ -1455,8 +1439,8 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
               <div className="w-5 h-5 border-2 border-[rgba(37,99,235,0.3)] border-t-[#2563eb] rounded-full animate-spin" />
               <span style={{ fontSize: '0.875rem', color: C.primary }}>
                 {aiRetryCount > 0
-                  ? `در حال تولید تحلیل هوشمند ... (تلاش ${toFa(aiRetryCount)} از ${toFa(8)})`
-                  : 'در حال تولید تحلیل هوشمند ... (حدود ۳۰ ثانیه تا ۲ دقیقه)'
+                  ? `در حال تلاش مجدد ... (${toFa(aiRetryCount)} از ۱)`
+                  : 'در حال تولید تحلیل هوشمند ...'
                 }
               </span>
               {aiRetryDelay > 0 && (
