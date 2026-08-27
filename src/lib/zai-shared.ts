@@ -39,7 +39,7 @@ function sleep(ms: number) {
 }
 
 // --- Shared state ---
-const MIN_INTERVAL_MS = 3_000; // 3s between ANY two ZAI calls
+const MIN_INTERVAL_MS = 2_000; // 2s between ANY two ZAI calls
 let lastCallTime = 0;
 let sharedCooldownUntil = 0;
 let processing = false;
@@ -105,10 +105,8 @@ async function processQueue() {
       const result = await item.operation(zai);
       lastCallTime = Date.now();
 
-      // Success: reduce cooldown slightly
-      if (sharedCooldownUntil > Date.now() + 30_000) {
-        sharedCooldownUntil = Date.now() + 30_000; // Don't fully reset, keep small buffer
-      }
+      // Success: reset cooldown immediately
+      sharedCooldownUntil = 0;
 
       item.resolve(result);
     } catch (err: unknown) {
@@ -116,7 +114,7 @@ async function processQueue() {
 
       if (msg.includes('429')) {
         item.retries++;
-        const backoff = Math.min(60_000 * Math.pow(1.5, item.retries - 1), 300_000);
+        const backoff = Math.min(45_000 * Math.pow(1.5, item.retries - 1), 180_000);
         sharedCooldownUntil = Date.now() + backoff;
         console.warn(`[zai-shared] 429 on [${item.name}], attempt ${item.retries}/${item.maxRetries}, cooldown ${Math.round(backoff / 1000)}s`);
 
@@ -160,9 +158,9 @@ export async function rateLimitedZaiCall<T>(
 ): Promise<T> {
   const {
     timeoutMs = 120_000,
-    maxRetries = 3,
+    maxRetries = 2,
     name = 'zai-call',
-    maxQueueWaitMs = 90_000,
+    maxQueueWaitMs = 30_000,
   } = options;
 
   // Quick check: if shared cooldown is very long, fail immediately
@@ -245,7 +243,7 @@ export async function rateLimitedChatCompletion(
     maxQueueWaitMs?: number;
   } = {}
 ): Promise<string> {
-  const { timeoutMs = 120_000, maxRetries = 3, maxQueueWaitMs = 90_000 } = options;
+  const { timeoutMs = 120_000, maxRetries = 2, maxQueueWaitMs = 30_000 } = options;
 
   return rateLimitedZaiCall<string>(
     async (zai) => {

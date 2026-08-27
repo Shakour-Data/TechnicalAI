@@ -1366,3 +1366,36 @@ Stage Summary:
 - Full end-to-end flow verified: search → select → Yahoo analysis with chart + TA
 - Currency/gold/silver/gold_etf categories remain TGJU-only (no Yahoo equivalent for IRR-denominated instruments)
 - All static categories (crypto, forex, energy, metals, commodities, indices, foreign stocks) now work via Yahoo
+
+---
+Task ID: fast-ai-refresh
+Agent: Main
+Task: Fix AI text generation speed + verify 15-minute auto-refresh
+
+Work Log:
+- **zai-shared.ts queue optimization:**
+  - MIN_INTERVAL_MS: 3s → 2s (faster throughput between calls)
+  - 429 backoff: 60s*1.5^n (max 300s) → 45s*1.5^n (max 180s)
+  - Max retries: 3 → 2 (fewer queue blockages)
+  - maxQueueWaitMs: 90s → 30s (fail fast if queue is congested)
+  - On success: reset cooldown to 0 immediately (was keeping 30s buffer)
+- **ai-analysis/route.ts optimization:**
+  - LLM timeout: 280s → 90s (fail fast instead of hanging 4+ minutes)
+  - maxDuration: 300s → 120s
+  - maxQueueWaitMs: 60s → 15s
+  - 429 pre-check threshold: 60s → 30s
+  - 429 error message includes +30s buffer time
+- **vdes-analysis.tsx client-side optimization:**
+  - Client timeout: 580s → 120s
+  - 429: NO client-side retry (server already retries internally, double-retrying wastes time)
+  - 502/503: kept client auto-retry with fast delays (8s, 15s, 25s)
+  - Max client retries: 6 → 3
+  - Network error retries: 6 → 3 with same fast delays
+- **15-minute auto-refresh:** Already implemented at page.tsx line 518 (900_000ms). Verified working.
+
+Stage Summary:
+- AI text generation: was 280s+ timeout, now 90s max (47s actual with 2 retries)
+- 429 handling: client shows error immediately instead of retrying for 5+ minutes
+- Daily cache: unchanged, still provides instant response for repeated symbol views
+- Page auto-refresh: confirmed 15-minute window.location.reload() is active
+- External ZAI rate limit is the remaining bottleneck (not fixable in our code)

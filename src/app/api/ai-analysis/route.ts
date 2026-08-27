@@ -14,7 +14,7 @@ import {
 } from '@/lib/msl-v4';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function toPersianNum(n: number): string {
@@ -304,8 +304,8 @@ export async function POST(req: NextRequest) {
 
     // 5. Pre-check: if ZAI is heavily rate-limited, return immediately
     const cooldownMs = getCooldownRemainingMs();
-    if (cooldownMs > 60_000) {
-      const waitSec = Math.ceil(cooldownMs / 1000);
+    if (cooldownMs > 30_000) {
+      const waitSec = Math.ceil((cooldownMs + 30_000) / 1000);
       console.log(`[AI] Rate limited, returning immediately. Cooldown: ${waitSec}s`);
       return NextResponse.json({
         error: `سرور هوشمند در حال حاضر شارژ دارد. لطفاً ${waitSec} ثانیه دیگر تلاش کنید.`,
@@ -321,9 +321,9 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: userMessage },
       ],
       {
-        timeoutMs: 280_000,  // ~4.5 min max total (queue wait + generation)
-        maxRetries: 3,
-        maxQueueWaitMs: 60_000,  // Fail fast if queue wait > 60s
+        timeoutMs: 90_000,  // 90s max total (queue wait + generation)
+        maxRetries: 2,
+        maxQueueWaitMs: 15_000,  // Fail fast if queue wait > 15s
       }
     );
 

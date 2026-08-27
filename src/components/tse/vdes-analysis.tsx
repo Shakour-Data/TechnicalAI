@@ -686,8 +686,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       try {
         setAiLoading(true);
         setAiError(null);
-        // Combine abort signals: component unmount + 10 min timeout
-        const timeoutSignal = AbortSignal.timeout(580_000);
+        // Combine abort signals: component unmount + 2 min timeout
+        const timeoutSignal = AbortSignal.timeout(120_000);
         const combinedSignal = controller.signal.aborted ? controller.signal : AbortSignal.any([controller.signal, timeoutSignal]);
 
         const res = await fetch('/api/ai-analysis', {
@@ -711,8 +711,11 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           let errMsg = `خطای سرور (${res.status})`;
           let shouldAutoRetry = false;
           let retryAfterSec = 0;
-          // Determine if this status should auto-retry
-          if (res.status === 429 || res.status === 502 || res.status === 503) {
+          // For 429: server already retried internally, show error immediately
+          // For 502/503: auto-retry with fast delays
+          if (res.status === 429) {
+            shouldAutoRetry = false; // Don't retry 429 client-side, server handles it
+          } else if (res.status === 502 || res.status === 503) {
             shouldAutoRetry = true;
           }
           try {
@@ -724,15 +727,15 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست. لطفاً بعداً تلاش کنید.';
             else if (res.status === 429) errMsg = 'تعداد درخواست‌ها زیاد است. لطفاً کمی صبر کنید.';
           }
-          // Auto-retry for rate limit / gateway errors (up to 6 times, with increasing delays)
-          const MAX_RETRIES = 6;
+          // Auto-retry for rate limit / gateway errors (up to 3 times, with fast delays)
+          const MAX_RETRIES = 3;
           if (shouldAutoRetry && aiAutoRetryRef.current < MAX_RETRIES) {
             aiAutoRetryRef.current += 1;
             const retryNum = aiAutoRetryRef.current;
-            // Use server-suggested delay if available, otherwise use progressive delays
-            const delays = [30_000, 45_000, 60_000, 90_000, 120_000, 150_000];
+            // Use server-suggested delay if available, otherwise use fast progressive delays
+            const delays = [8_000, 15_000, 25_000];
             const delay = retryAfterSec > 0
-              ? Math.min(retryAfterSec * 1000 + 5_000, 180_000) // Server suggestion + 5s buffer, max 3min
+              ? Math.min(retryAfterSec * 1000 + 3_000, 60_000) // Server suggestion + 3s buffer, max 60s
               : delays[Math.min(retryNum - 1, delays.length - 1)];
             console.log(`[AI] Auto-retry ${retryNum}/${MAX_RETRIES} in ${delay / 1000}s...`);
             setAiRetryCount(retryNum);
@@ -761,13 +764,13 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
-        // Network errors may also be transient - auto retry
-        if (aiAutoRetryRef.current < 6) {
+        // Network errors may also be transient - auto retry (up to 3 times)
+        if (aiAutoRetryRef.current < 3) {
           aiAutoRetryRef.current += 1;
           const retryNum = aiAutoRetryRef.current;
-          const delays = [30_000, 45_000, 60_000, 90_000, 120_000, 150_000];
+          const delays = [8_000, 15_000, 25_000];
           const delay = delays[Math.min(retryNum - 1, delays.length - 1)];
-          console.log(`[AI] Network error, auto-retry ${retryNum}/4 in ${delay / 1000}s...`);
+          console.log(`[AI] Network error, auto-retry ${retryNum}/3 in ${delay / 1000}s...`);
           setAiRetryCount(retryNum);
           setAiRetryDelay(Math.round(delay / 1000));
           setAiLoading(true);
