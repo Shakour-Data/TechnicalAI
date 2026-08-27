@@ -45,6 +45,25 @@ export interface MSLV4Context {
   rsi?: number;
   adx?: number;
   audience_level?: string;
+  // Probability trend signals (from 30-day historical analysis)
+  probTrend?: {
+    // Group cumulative trend directions
+    bullGroupDir?: 'rising' | 'falling' | 'stable' | 'volatile';
+    bearGroupDir?: 'rising' | 'falling' | 'stable' | 'volatile';
+    neutralGroupDir?: 'rising' | 'falling' | 'stable' | 'volatile';
+    // Group cumulative current values (today)
+    bullGroupCum?: number;
+    bearGroupCum?: number;
+    neutralGroupCum?: number;
+    // Dominant scenario cumulative trend
+    dominantCumDir?: 'rising' | 'falling' | 'stable' | 'volatile';
+    // Individual trend direction for dominant scenario
+    dominantIndivDir?: 'rising' | 'falling' | 'stable' | 'volatile';
+    // 7-day change in group cumulative (positive = rising)
+    bullGroupChange7d?: number;
+    bearGroupChange7d?: number;
+    neutralGroupChange7d?: number;
+  };
 }
 
 export interface SchoolResult {
@@ -244,11 +263,46 @@ function selectSchools(ctx: MSLV4Context) {
   const tm = TF_MULT[tf] ?? TF_MULT.daily;
   const rm = REGIME_MULT[regime] ?? REGIME_MULT.Range;
 
+  const pt = ctx.probTrend;
+
   const rawWeights: Record<SchoolId, number> = {} as Record<SchoolId, number>;
   for (const s of SCHOOLS) {
     let w = s.base_weight * am[s.id] * tm[s.id] * rm[s.id];
     // Adaptive: zero out volume school if no volume data
     if (s.id === 'volume' && ctx.hasVolume === false) w *= 0.2;
+
+    // Probability trend adjustments (cumulative weighted 2x more than individual)
+    if (pt) {
+      // Oscillator school: if cumulative bearish trend rising → divergence/reversal signals
+      if (s.id === 'oscillator' && pt.bearGroupDir === 'rising' && pt.bullGroupCum && pt.bullGroupCum > 0.3) {
+        w *= 1.25; // Bearish momentum building, oscillators useful for reversal timing
+      }
+      // Classical school: strong directional cumulative trend → support/resistance focus
+      if (s.id === 'classical' && (pt.bullGroupDir === 'rising' || pt.bearGroupDir === 'rising')) {
+        w *= 1.15; // Clear trend direction, classical S/R analysis
+      }
+      // Elliott school: volatile or changing cumulative trends → wave analysis
+      if (s.id === 'elliott' && (pt.bullGroupDir === 'volatile' || pt.bearGroupDir === 'volatile')) {
+        w *= 1.2; // Volatile probability shifts suggest wave structure changes
+      }
+      // Harmonic school: trend reversal in cumulative probabilities
+      if (s.id === 'harmonic' && (
+        (pt.bullGroupDir === 'falling' && pt.bullGroupCum && pt.bullGroupCum > 0.4) ||
+        (pt.bearGroupDir === 'falling' && pt.bearGroupCum && pt.bearGroupCum > 0.4)
+      )) {
+        w *= 1.2; // Declining dominant group suggests reversal zone
+      }
+      // Hybrid school: neutral dominant and stable trends
+      if (s.id === 'hybrid' && pt.neutralGroupDir === 'stable' && pt.neutralGroupCum && pt.neutralGroupCum > 0.2) {
+        w *= 1.15; // Range-bound market, hybrid approach best
+      }
+      // Volume school: strong directional 7-day change
+      if (s.id === 'volume' && ctx.hasVolume !== false) {
+        const maxChange = Math.max(Math.abs(pt.bullGroupChange7d ?? 0), Math.abs(pt.bearGroupChange7d ?? 0));
+        if (maxChange > 0.15) w *= 1.15; // Significant probability shift, volume confirms
+      }
+    }
+
     rawWeights[s.id] = w;
   }
 
@@ -315,13 +369,28 @@ function buildSchoolReasoning(s: SchoolDef, w: Record<string, number>, ctx: MSLV
 function selectStyles(primarySchoolId: SchoolId, ctx: MSLV4Context) {
   const scores: Record<StyleId, number> = {} as Record<StyleId, number>;
   const audience = ctx.audience_level ?? 'pro';
+  const pt = ctx.probTrend;
 
   for (const style of STYLES) {
     const compatibility = SS_MATRIX[primarySchoolId]?.[style.id] ?? 0.5;
     const audienceMatch = getAudienceMatch(style.id, audience);
     const marketMatch = getMarketContextMatch(style.id, ctx);
     const schoolMatch = SS_MATRIX[primarySchoolId]?.[style.id] ?? 0.5;
-    scores[style.id] = compatibility * 0.4 + audienceMatch * 0.3 + marketMatch * 0.2 + schoolMatch * 0.1;
+
+    // Probability trend influence on style (cumulative weighted 2x)
+    let trendStyleBonus = 0;
+    if (pt) {
+      const cumDir = pt.bullGroupDir === 'rising' ? 1 : pt.bearGroupDir === 'rising' ? -1 : 0;
+      const indivDir = pt.dominantIndivDir === 'rising' ? 1 : pt.dominantIndivDir === 'falling' ? -1 : 0;
+      const trendSignal = cumDir * 0.67 + indivDir * 0.33; // cumulative 2x weight
+
+      if (style.id === 'forecasting' && Math.abs(trendSignal) > 0.5) trendStyleBonus = 0.1;
+      if (style.id === 'trading' && Math.abs(trendSignal) > 0.3) trendStyleBonus = 0.08;
+      if (style.id === 'analytical' && Math.abs(trendSignal) < 0.3) trendStyleBonus = 0.08;
+      if (style.id === 'executive' && (pt.bullGroupDir === 'stable' || pt.bearGroupDir === 'stable')) trendStyleBonus = 0.05;
+    }
+
+    scores[style.id] = compatibility * 0.35 + audienceMatch * 0.25 + marketMatch * 0.2 + schoolMatch * 0.1 + trendStyleBonus;
   }
 
   const sorted = (Object.entries(scores) as [StyleId, number][]).sort((a, b) => b[1] - a[1]);
@@ -379,13 +448,40 @@ function buildStyleReasoning(s: StyleDef, schoolId: SchoolId, ctx: MSLV4Context)
 
 function selectTones(schoolId: SchoolId, styleId: StyleId, ctx: MSLV4Context) {
   const scores: Record<ToneId, number> = {} as Record<ToneId, number>;
+  const pt = ctx.probTrend;
 
   for (const tone of TONES) {
     const condMatch = checkToneConditions(tone.id, ctx);
     const schoolMatch = ST_MATRIX[schoolId]?.[tone.id] ?? 0.5;
     const styleMatch = STYLE_TONE_MATRIX[styleId]?.[tone.id] ?? 0.5;
     const intensity = 0.5 + ctx.confidence * 0.3 + ctx.volatility * 0.2;
-    scores[tone.id] = condMatch * 0.5 + schoolMatch * 0.2 + styleMatch * 0.2 + Math.min(intensity, 1) * 0.1;
+
+    // Probability trend influence on tone (cumulative weighted 2x)
+    let trendToneBonus = 0;
+    if (pt) {
+      const cumDir = pt.bullGroupDir === 'rising' ? 1 : pt.bearGroupDir === 'rising' ? -1 : 0;
+      const indivDir = pt.dominantIndivDir === 'rising' ? 1 : pt.dominantIndivDir === 'falling' ? -1 : 0;
+      const trendSignal = cumDir * 0.67 + indivDir * 0.33;
+
+      // Cumulative trend overrides basic regime check
+      if (tone.id === 'optimistic' && pt.bullGroupDir === 'rising' && (pt.bullGroupChange7d ?? 0) > 0.05) {
+        trendToneBonus = 0.15;
+      }
+      if (tone.id === 'warning' && pt.bearGroupDir === 'rising' && (pt.bearGroupChange7d ?? 0) > 0.05) {
+        trendToneBonus = 0.15;
+      }
+      if (tone.id === 'conservative' && pt.neutralGroupDir === 'stable' && (pt.neutralGroupCum ?? 0) > 0.15) {
+        trendToneBonus = 0.12;
+      }
+      if (tone.id === 'aggressive' && Math.abs(trendSignal) > 0.67 && Math.abs(pt.bullGroupChange7d ?? 0) > 0.1) {
+        trendToneBonus = 0.1;
+      }
+      if (tone.id === 'realistic' && (pt.bullGroupDir === 'volatile' || pt.bearGroupDir === 'volatile')) {
+        trendToneBonus = 0.12;
+      }
+    }
+
+    scores[tone.id] = condMatch * 0.4 + schoolMatch * 0.15 + styleMatch * 0.15 + Math.min(intensity, 1) * 0.1 + trendToneBonus;
   }
 
   const sorted = (Object.entries(scores) as [ToneId, number][]).sort((a, b) => b[1] - a[1]);
@@ -409,13 +505,43 @@ function selectTones(schoolId: SchoolId, styleId: StyleId, ctx: MSLV4Context) {
 function checkToneConditions(toneId: ToneId, ctx: MSLV4Context): number {
   const isBull = ctx.regime.includes('Bull');
   const isBear = ctx.regime.includes('Bear');
+  const pt = ctx.probTrend;
+
   switch (toneId) {
-    case 'conservative': return ctx.confidence < 0.6 ? 0.9 : ctx.volatility > 0.03 ? 0.7 : 0.4;
-    case 'aggressive': return ctx.confidence > 0.8 && isBull ? 0.9 : ctx.confidence > 0.7 ? 0.6 : 0.3;
-    case 'balanced': return ctx.confidence >= 0.6 && ctx.confidence <= 0.8 ? 0.9 : 0.5;
-    case 'warning': return ctx.divergence_present ? 0.9 : isBear && ctx.volatility > 0.03 ? 0.8 : 0.3;
-    case 'optimistic': return isBull && ctx.confidence > 0.7 ? 0.9 : isBull ? 0.5 : 0.2;
-    case 'realistic': return ctx.confidence >= 0.4 && ctx.confidence <= 0.7 ? 0.9 : 0.5;
+    case 'conservative': {
+      let s = ctx.confidence < 0.6 ? 0.9 : ctx.volatility > 0.03 ? 0.7 : 0.4;
+      if (pt?.neutralGroupDir === 'stable' && (pt.neutralGroupCum ?? 0) > 0.3) s = Math.max(s, 0.85);
+      if (pt?.neutralGroupDir === 'rising' && (pt.neutralGroupCum ?? 0) > 0.25) s = Math.max(s, 0.8);
+      return s;
+    }
+    case 'aggressive': {
+      let s = ctx.confidence > 0.8 && isBull ? 0.9 : ctx.confidence > 0.7 ? 0.6 : 0.3;
+      if (pt?.bullGroupDir === 'rising' && (pt.bullGroupChange7d ?? 0) > 0.08) s = Math.max(s, 0.85);
+      if (pt?.bearGroupDir === 'rising' && (pt.bearGroupChange7d ?? 0) > 0.08) s = Math.max(s, 0.8);
+      return s;
+    }
+    case 'balanced': {
+      let s = ctx.confidence >= 0.6 && ctx.confidence <= 0.8 ? 0.9 : 0.5;
+      if (pt?.bullGroupDir === 'stable' && pt.bearGroupDir === 'stable') s = Math.max(s, 0.85);
+      return s;
+    }
+    case 'warning': {
+      let s = ctx.divergence_present ? 0.9 : isBear && ctx.volatility > 0.03 ? 0.8 : 0.3;
+      if (pt?.bearGroupDir === 'rising' && (pt.bearGroupChange7d ?? 0) > 0.05) s = Math.max(s, 0.85);
+      if (pt?.bullGroupDir === 'falling' && (pt.bullGroupChange7d ?? 0) < -0.05) s = Math.max(s, 0.8);
+      return s;
+    }
+    case 'optimistic': {
+      let s = isBull && ctx.confidence > 0.7 ? 0.9 : isBull ? 0.5 : 0.2;
+      if (pt?.bullGroupDir === 'rising' && (pt.bullGroupChange7d ?? 0) > 0.05) s = Math.max(s, 0.85);
+      if (pt?.bearGroupDir === 'falling' && (pt.bearGroupChange7d ?? 0) < -0.03) s = Math.max(s, 0.7);
+      return s;
+    }
+    case 'realistic': {
+      let s = ctx.confidence >= 0.4 && ctx.confidence <= 0.7 ? 0.9 : 0.5;
+      if (pt?.bullGroupDir === 'volatile' || pt?.bearGroupDir === 'volatile') s = Math.max(s, 0.9);
+      return s;
+    }
     default: return 0.5;
   }
 }

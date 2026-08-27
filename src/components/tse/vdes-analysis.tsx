@@ -128,6 +128,10 @@ export interface VdesAnalysisProps {
   instrumentType?: string;
   currencyUnit?: string;
   priceDecimals?: number;
+  probabilityTrend?: {
+    scenarios: { scenarioKey: string; label: string; group: string; currentProbability: number; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+    groups: { group: string; label: string; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -520,6 +524,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
     supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
     currencyUnit: propCurrencyUnit, priceDecimals: propPriceDecimals,
+    probabilityTrend,
   } = props;
   const unit = propCurrencyUnit || 'ریال';
   const decimals = propPriceDecimals ?? 0;
@@ -698,6 +703,17 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             resistanceStrengths, supportStrengths,
             v11Probabilities: v11Result,
             instrumentType,
+            probabilityTrend: probabilityTrend ? {
+              scenarios: probabilityTrend.scenarios.map(s => ({
+                scenarioKey: s.scenarioKey, label: s.label, group: s.group,
+                currentProbability: s.currentProbability, trendDirection: s.trendDirection,
+                trend: s.trend.slice(0, 7).map(d => ({ individualProb: d.individualProb, cumulativeProb: d.cumulativeProb })),
+              })),
+              groups: probabilityTrend.groups.map(g => ({
+                group: g.group, label: g.label, trendDirection: g.trendDirection,
+                trend: g.trend.slice(0, 7).map(d => ({ cumulativeProb: d.cumulativeProb })),
+              })),
+            } : undefined,
           }),
           signal: controller.signal,
         });

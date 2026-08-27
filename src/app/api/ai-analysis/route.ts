@@ -113,6 +113,9 @@ function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
   } | undefined;
   const overallConfidence = (body.overallConfidence as number) ?? (body.confidence as number) ?? 0.6;
 
+  // Extract probability trend signals for MSL selection
+  const probTrend = extractProbTrendSignals(body);
+
   return {
     asset: instrumentType, timeframe: (body.timeframe as string) || 'daily',
     regime, confidence: Math.max(0, Math.min(1, overallConfidence)),
@@ -122,6 +125,50 @@ function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
     hasVolume: (body.hasVolume as boolean) ?? false,
     rsi: (body.rsi as number) || 50, adx,
     audience_level: (body.audienceLevel as string) || 'pro',
+    probTrend,
+  };
+}
+
+// ─── Extract probability trend signals from body ──────────────────
+function extractProbTrendSignals(body: Record<string, unknown>): MSLV4Context['probTrend'] {
+  const pt = body.probabilityTrend as {
+    scenarios?: { scenarioKey: string; group: string; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+    groups?: { group: string; trendDirection: string; trend: { cumulativeProb: number }[] }[];
+  } | undefined;
+  if (!pt?.groups || pt.groups.length === 0) return undefined;
+
+  const findGroup = (g: string) => pt.groups!.find(x => x.group === g);
+  const bullG = findGroup('bullish');
+  const bearG = findGroup('bearish');
+  const neutralG = findGroup('neutral');
+
+  // Find dominant scenario trend
+  const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
+  let domKey = 'R5'; let domProb = 0;
+  for (const k of ['R1','R2','R3','R4','R5','R6','R7','R8','R9']) {
+    const p = scenarios?.[k]?.probability ?? 0;
+    if (p > domProb) { domProb = p; domKey = k; }
+  }
+  const domScenario = pt.scenarios?.find(s => s.scenarioKey === domKey);
+
+  // 7-day change (day 1 = today, day 7 = 7 days ago)
+  const get7dChange = (trend: { cumulativeProb: number }[]) => {
+    if (!trend || trend.length < 7) return 0;
+    return trend[0].cumulativeProb - trend[6].cumulativeProb;
+  };
+
+  return {
+    bullGroupDir: bullG?.trendDirection as MSLV4Context['probTrend']['bullGroupDir'],
+    bearGroupDir: bearG?.trendDirection as MSLV4Context['probTrend']['bearGroupDir'],
+    neutralGroupDir: neutralG?.trendDirection as MSLV4Context['probTrend']['neutralGroupDir'],
+    bullGroupCum: bullG?.trend?.[0]?.cumulativeProb,
+    bearGroupCum: bearG?.trend?.[0]?.cumulativeProb,
+    neutralGroupCum: neutralG?.trend?.[0]?.cumulativeProb,
+    dominantCumDir: domScenario?.trendDirection as MSLV4Context['probTrend']['dominantCumDir'],
+    dominantIndivDir: domScenario?.trendDirection as MSLV4Context['probTrend']['dominantIndivDir'],
+    bullGroupChange7d: get7dChange(bullG?.trend ?? []),
+    bearGroupChange7d: get7dChange(bearG?.trend ?? []),
+    neutralGroupChange7d: get7dChange(neutralG?.trend ?? []),
   };
 }
 
@@ -206,6 +253,44 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   const unitLabel = instType === 'tgju' || instType === 'yahoo' ? '\u0648\u0627\u062d\u062f' : '\u0631\u06cc\u0627\u0644';
   const instrumentLabel = instType === 'tgju' ? '\u06a9\u0627\u0644\u0627\u06cc \u0637\u0644\u0627/\u0627\u0631\u0632' : instType === 'yahoo' ? '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc' : '\u0633\u0647\u0627\u0645 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
 
+  // Probability trend block (cumulative trends for scenarios and groups)
+  let trendBlock = '';
+  const probTrendData = body.probabilityTrend as {
+    scenarios?: { scenarioKey: string; label: string; group: string; currentProbability: number; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+    groups?: { group: string; label: string; trendDirection: string; trend: { cumulativeProb: number }[] }[];
+  } | undefined;
+
+  const dirLabel: Record<string, string> = {
+    rising: '\u0635\u0639\u0648\u062f\u06cc \u2191', falling: '\u0646\u0632\u0648\u0644\u06cc \u2193', stable: '\u062b\u0627\u0628\u062a \u2192', volatile: '\u0646\u0627\u067e\u0627\u06cc\u0631',
+  };
+
+  if (probTrendData?.scenarios && probTrendData.scenarios.length > 0) {
+    // Group cumulative trends
+    const groupLines = (probTrendData.groups || []).map(g => {
+      const today = g.trend[0]?.cumulativeProb;
+      const weekAgo = g.trend.length >= 7 ? g.trend[6].cumulativeProb : null;
+      const change = weekAgo !== null ? ((today - weekAgo) * 100).toFixed(1) : null;
+      const changeStr = change !== null ? (change.startsWith('-') ? '' : '+') + change + '%' : '';
+      return `- ${g.label}: \u0627\u0645\u0631\u0648\u0632 \u062a\u062c\u0645\u0639\u06cc \u0627\u0645\u0631\u0648\u0632 ${toPersianNum((today ?? 0) * 100)}\u066a | \u0631\u0648\u0646\u062f: ${dirLabel[g.trendDirection] || g.trendDirection}${changeStr ? ' (' + changeStr + ' \u062f\u0631 7 \u0631\u0648\u0632)' : ''}`;
+    }).join('\n');
+
+    // Top 5 scenario cumulative trends (sorted by currentProbability)
+    const topScenarios = [...probTrendData.scenarios]
+      .sort((a, b) => b.currentProbability - a.currentProbability)
+      .slice(0, 5);
+    const scenarioTrendLines = topScenarios.map(s => {
+      const todayCum = s.trend[0]?.cumulativeProb;
+      const weekAgoCum = s.trend.length >= 7 ? s.trend[6].cumulativeProb : null;
+      const cumChange = weekAgoCum !== null ? ((todayCum - weekAgoCum) * 100).toFixed(1) : null;
+      return `- ${s.scenarioKey} (${s.label}): \u062a\u062c\u0645\u0639\u06cc \u0627\u0645\u0631\u0648\u0632 ${toPersianNum((todayCum ?? 0) * 100)}\u066a | \u0631\u0648\u0646\u062f: ${dirLabel[s.trendDirection] || s.trendDirection}${cumChange !== null ? ' (' + (cumChange.startsWith('-') ? '' : '+') + cumChange + '%)' : ''}`;
+    }).join('\n');
+
+    trendBlock = `
+**\u0631\u0648\u0646\u062f \u0627\u062d\u062a\u0645\u0627\u0644 \u062a\u062c\u0645\u0639\u06cc (7 \u0631\u0648\u0632 \u0627\u062e\u06cc\u0631):**
+\u06af\u0631\u0648\u0647\u200c\u0647\u0627:\n${groupLines}
+\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631:\n${scenarioTrendLines}`;
+  }
+
   return `
 **\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647:**
 - \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a: **${toPersianNum(currentPrice)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0, R\u00b2=${(trendR2 * 100).toFixed(1)}%)
@@ -219,6 +304,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
 **\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631 (\u0645\u0631\u062a\u0628 \u0628\u0631 \u0627\u062d\u062a\u0645\u0627\u0644):**
 ${scenarioBlock}
 ${v11Block}
+${trendBlock}
 **\u0631\u0648\u0634\u200c\u0647\u0627:**\n${methodsStr}
 `;
 }

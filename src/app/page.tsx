@@ -762,6 +762,7 @@ export default function Home() {
                     instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
                     currencyUnit={currencyUnit}
                     priceDecimals={decimals}
+                    probabilityTrend={data.probabilityTrend}
                   />
                 </div>
               )}

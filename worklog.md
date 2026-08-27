@@ -254,3 +254,26 @@ Stage Summary:
   - Very Strong Trend: ~7%, Very Weak (ADX=12): 33% (reasonable for low ADX)
 - Verified in production with real data (وساپا): R5=10%, Bear=47%, Bull=43%
 - All changes in /home/z/my-project/src/lib/decision-graph.ts
+---
+Task ID: 4
+Agent: main
+Task: Integrate probability trend data into MSL school/style/tone selection and AI prompt
+
+Work Log:
+- Added probabilityTrend prop to VdesAnalysisProps (vdes-analysis.tsx)
+- Passed probabilityTrend from page.tsx to VdesAnalysis component
+- Sent compact 7-day probability trend data in POST body to /api/ai-analysis
+- Added probTrend field to MSLV4Context with group directions, cumulative values, 7-day changes
+- Modified selectSchools() to use cumulative trend signals (e.g., oscillator if bearish rising, classical if directional, elliott if volatile, hybrid if neutral stable)
+- Modified selectStyles() with trendStyleBonus (cumulative 2x weight, 10% bonus max)
+- Modified selectTones() with trendToneBonus (reduced base weights to 40% to make room)
+- Enhanced checkToneConditions() to use probTrend data directly (e.g., warning if bearish rising, optimistic if bullish rising, realistic if volatile, conservative if neutral dominant)
+- Added extractProbTrendSignals() to build MSL context from API body
+- Added trend block to AI prompt with group cumulative trends + top 5 scenario cumulative trends
+
+Stage Summary:
+- Probability trend data now flows: analysis API → page.tsx → VdesAnalysis → /api/ai-analysis → MSL v4 + prompt
+- Cumulative trends weighted 2x more than individual in all selections (user requirement)
+- Tone selection correctly responds: bullish rising→optimistic, bearish rising→warning, volatile→realistic, neutral stable→conservative
+- AI prompt includes new 'روند احتمال تجمعی' section with group and scenario 7-day trends
+- Files changed: src/lib/msl-v4.ts, src/app/api/ai-analysis/route.ts, src/components/tse/vdes-analysis.tsx, src/app/page.tsx
