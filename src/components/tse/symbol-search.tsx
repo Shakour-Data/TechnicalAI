@@ -40,6 +40,7 @@ interface InstrumentItem {
   indexMin?: number;
   indexMax?: number;
   yahooSymbol?: string;
+  yahooFallbackSymbol?: string;
   yahooCategory?: string;
   currency?: string;
   unit?: string;
@@ -263,7 +264,7 @@ function Spinner() {
 }
 
 function getSource(item: InstrumentItem): 'tse' | 'tgju' | 'yahoo' {
-  if (item.yahooSymbol || item.category === 'yahoo_stock' || item.category === 'yahoo_etf') return 'yahoo';
+  if (item.yahooSymbol || item.yahooFallbackSymbol || item.category === 'yahoo_stock' || item.category === 'yahoo_etf') return 'yahoo';
   if (TGJU_CATEGORY_ITEMS.has(item.category) || item.tgjuKey) return 'tgju';
   return 'tse';
 }
@@ -724,7 +725,9 @@ export default function SymbolSearch({
 
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18); setOpen(false); addRecentSearch(s.l18);
-    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex, s.webId, s.yahooSymbol);
+    // If this is a TGJU instrument with a Yahoo fallback symbol, use Yahoo for analysis
+    const effectiveYahooSymbol = s.yahooFallbackSymbol || s.yahooSymbol;
+    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex, s.webId, effectiveYahooSymbol);
     inputRef.current?.blur(); modalInputRef.current?.blur();
   }, [onSelect]);
 

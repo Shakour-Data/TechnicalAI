@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchTgjuHistory, fetchTgjuInstruments } from '@/lib/tgju-api';
+import { fetchTgjuHistory, fetchTgjuInstruments, getTgjuYahooFallback } from '@/lib/tgju-api';
+import { fetchYahooHistory, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
 import { analyze } from '@/lib/ta-engine';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
@@ -13,28 +14,54 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Fetch historical OHLC data
-    const history = await fetchTgjuHistory(key);
+    // 1. Try TGJU historical data first
+    let history = await fetchTgjuHistory(key);
+
+    // 2. If TGJU fails (< 30 candles, likely 403), try Yahoo fallback
+    const yahooFallbackSymbol = getTgjuYahooFallback(key);
+    let isYahooFallback = false;
+
+    if (history.length < 30 && yahooFallbackSymbol) {
+      console.log(`[TGJU Analysis] TGJU returned ${history.length} candles for ${key}, falling back to Yahoo: ${yahooFallbackSymbol}`);
+      try {
+        const yahooHistory = await fetchYahooHistory(yahooFallbackSymbol, 365);
+        if (yahooHistory.length >= 30) {
+          history = yahooHistory.map((h) => ({
+            date: h.date,
+            open: h.open,
+            high: h.high,
+            low: h.low,
+            close: h.close,
+          }));
+          isYahooFallback = true;
+        }
+      } catch (yahooErr) {
+        console.warn(`[TGJU Analysis] Yahoo fallback also failed for ${yahooFallbackSymbol}:`, yahooErr);
+      }
+    }
 
     if (history.length < 30) {
+      const msg = isYahooFallback
+        ? `داده‌های تاریخی کافی نیست (${history.length} روز). منبع داده TGJU مسدود است و یاهو فایننس نیز داده کافی ندارد.`
+        : `داده‌های تاریخی کافی نیست (${history.length} روز). حداقل ۳۰ روز داده نیاز است.`;
       return NextResponse.json({
-        error: `داده‌های تاریخی کافی نیست (${history.length} روز). حداقل ۳۰ روز داده نیاز است.`,
+        error: msg,
         candles: [],
         ta: null,
       });
     }
 
-    // 2. Convert to OHLCV format for TA engine
+    // 3. Convert to OHLCV format for TA engine
     const ohlcvData = history.map((h) => ({
       date: h.date,
       open: h.open,
       high: h.high,
       low: h.low,
       close: h.close,
-      volume: 0, // TGJU daily data has no volume
+      volume: isYahooFallback ? (history[0] as any).volume || 0 : 0,
     }));
 
-    // 3. Get instrument info from cached data
+    // 4. Get instrument info
     const instruments = await fetchTgjuInstruments();
     const instrument = instruments.find((i) => i.key === key);
 
@@ -44,23 +71,24 @@ export async function GET(req: NextRequest) {
     const changePercent = prevCandle.close > 0 ? (change / prevCandle.close) * 100 : 0;
 
     const category = instrument?.category || 'currency';
-    const decimals = detectDecimals(lastCandle.close, category, 'tgju');
-    const currencyUnit = getCurrencyUnit(category, 'tgju');
+    const source = isYahooFallback ? 'yahoo' : 'tgju';
+    const decimals = detectDecimals(lastCandle.close, category, source);
+    const currencyUnit = getCurrencyUnit(category, source);
 
-    // 4. Run TA analysis
+    // 5. Run TA analysis
     const ta = analyze(ohlcvData, currencyUnit);
 
-    // Build candle data for chart (with volume=0)
+    // Build candle data for chart
     const candles = history.map((h) => ({
       date: h.date,
       open: h.open,
       high: h.high,
       low: h.low,
       close: h.close,
-      volume: 0,
+      volume: isYahooFallback ? (h as any).volume || 0 : 0,
     }));
 
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       symbol: key,
       candles,
       info: {
@@ -84,7 +112,14 @@ export async function GET(req: NextRequest) {
         category,
       },
       ta,
-    });
+    };
+
+    if (isYahooFallback) {
+      response.isYahoo = true;
+      response.yahooFallbackSymbol = yahooFallbackSymbol;
+    }
+
+    return NextResponse.json(response);
   } catch (err) {
     console.error('[TGJU Analysis Error]:', err);
     return NextResponse.json(

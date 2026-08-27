@@ -206,6 +206,142 @@ export const STATIC_INSTRUMENTS: StaticInstrument[] = [
   { title: 'ذرت (لندن)', key: 'commodities-london-wheat', category: 'commodity', groupTitle: 'غلات' },
 ];
 
+/* ─── TGJU → Yahoo Finance Fallback Map ─────────────── */
+/**
+ * Maps TGJU static instrument keys to Yahoo Finance symbols.
+ * Used when api.tgju.org returns 403 (blocked) so we fall back to Yahoo.
+ * Only instruments with Yahoo equivalents are mapped.
+ */
+export const TGJU_TO_YAHOO_MAP: Record<string, string> = {
+  // Crypto
+  'crypto-bitcoin': 'BTC-USD',
+  'crypto-ethereum': 'ETH-USD',
+  'crypto-litecoin': 'LTC-USD',
+  'crypto-ripple': 'XRP-USD',
+  'crypto-bitcoin-cash': 'BCH-USD',
+  'crypto-cardano': 'ADA-USD',
+  'crypto-stellar': 'XLM-USD',
+  'crypto-tether': 'USDT-USD',
+  'crypto-monero': 'XMR-USD',
+  'crypto-dash': 'DASH-USD',
+  'crypto-eos': 'EOS-USD',
+  'crypto-neo': 'NEO-USD',
+  'crypto-iota': 'MIOTA-USD',
+
+  // World Indices — Americas
+  'indices-us30-oanda': '^DJI',
+  'indices-ndx-indx': '^NDX',
+  'indices-xsp-indx': '^GSPC',
+  'indices-midde50-icmarkets': '^RUT',
+  'indices-bvsp-indx': '^BVSP',
+  'indices-mxx-indx': '^MXX',
+  // World Indices — Europe
+  'indices-gdaxi-indx': '^GDAXI',
+  'indices-fr40-oanda': '^FCHI',
+  'indices-uk100-oanda': '^FTSE',
+  'indices-ibex-indx': '^IBEX',
+  'indices-it40-icmarkets': '^MIB',
+  'indices-ssmi-indx': '^SSMI',
+  'indices-aex-indx': '^AEX',
+  'indices-imoex-indx': '^IMOEX',
+  // World Indices — Asia-Pacific
+  'indices-jp225-oanda': '^N225',
+  'indices-hk50-pepperstone': '^HSI',
+  'indices-ks200-icmarkets': '^KS11',
+  'indices-ssec-indx': '^000001.SS',
+  'indices-bsesn-indx': '^BSESN',
+  'indices-nsei-indx': '^NSEI',
+  'indices-set50-indx': '^SET',
+  'indices-xjo-indx': '^AXJO',
+  'indices-twii-indx': '^TWII',
+  // World Indices — Middle East
+  'indices-tasi-indx': '^TASI',
+  'indices-dfmgi-indx': '^DFMGI',
+  'indices-xu100-is': '^XU100',
+
+  // Foreign Stocks (Tokenized) → Real Yahoo tickers
+  'crypto-apple-tokenized-stock-ondo': 'AAPL',
+  'crypto-microsoft-tokenized-stock-ondo': 'MSFT',
+  'crypto-nvidia-tokenized-stock-ondo': 'NVDA',
+  'crypto-alphabet-class-a-tokenized-stock-ondo': 'GOOGL',
+  'crypto-meta-platforms-tokenized-stock-ondo': 'META',
+  'crypto-amazon-tokenized-stock-ondo': 'AMZN',
+  'crypto-tesla-tokenized-stock-ondo': 'TSLA',
+  'crypto-netflix-tokenized-stock-ondo': 'NFLX',
+  'crypto-intel-tokenized-stock-ondo': 'INTC',
+  'crypto-adobe-tokenized-stock-ondo': 'ADBE',
+  'crypto-broadcom-tokenized-stock-xstock': 'AVGO',
+  'crypto-qualcomm-tokenized-stock-ondo': 'QCOM',
+  'crypto-jpmorgan-chase-tokenized-stock-ondo': 'JPM',
+  'crypto-goldman-sachs-tokenized-stock-ondo': 'GS',
+  'crypto-visa-tokenized-stock-ondo': 'V',
+  'crypto-mastercard-tokenized-stock-ondo': 'MA',
+  'crypto-blackrock-tokenized-stock-ondo': 'BLK',
+  'crypto-johnson-johnson-tokenized-stock-ondo': 'JNJ',
+  'crypto-coca-cola-tokenized-stock-ondo': 'KO',
+  'crypto-pfizer-tokenized-stock-ondo': 'PFE',
+  'crypto-wrapped-tesla-tokenized-stock-xstock': 'TSLA',
+  'crypto-wrapped-meta-tokenized-stock-xstock': 'META',
+  'crypto-coinbase-tokenized-stock-xstock': 'COIN',
+  'crypto-baba': 'BABA',
+  'crypto-tencent': '0700.HK',
+  'crypto-baidu': 'BIDU',
+  'crypto-jd-com': 'JD',
+
+  // Forex — Major
+  'eur-usd-ask': 'EURUSD=X',
+  'gbp-usd-ask': 'GBPUSD=X',
+  'usd-jpy-ask': 'USDJPY=X',
+  'usd-chf-ask': 'USDCHF=X',
+  'aud-usd-ask': 'AUDUSD=X',
+  'nzd-usd-ask': 'NZDUSD=X',
+  'usd-cad-ask': 'USDCAD=X',
+  // Forex — Exotic
+  'usd-try-ask': 'USDTRY=X',
+  'usd-sek-ask': 'USDSEK=X',
+  'usd-nok-ask': 'USDNOK=X',
+  'usd-cny-ask': 'USDCNH=X',
+  'usd-mxn-ask': 'USDMXN=X',
+  'brl-usd-ask': 'USDZAR=X',
+  'usd-aed-ask': 'USDAED=X',
+  'usd-sgd-ask': 'USDSGD=X',
+  'usd-rub-ask': 'USDRUB=X',
+
+  // Energy
+  'energy-brent-oil': 'BZ=F',
+  'energy-crude-oil': 'CL=F',
+  'energy-natural-gas': 'NG=F',
+  'energy-gasoline-rbob': 'RB=F',
+  'lng-japan-korea-marker': 'NG=F', // closest Yahoo equivalent
+
+  // Metals — Precious
+  'ons': 'GC=F',
+  'silver': 'SI=F',
+  'platinum': 'PL=F',
+  'palladium': 'PA=F',
+  // Metals — Base
+  'basemetal-copper': 'HG=F',
+  'basemetal-aluminum': 'ALI.L',
+  'basemetal-zinc': 'ZI=F',
+  'basemetal-nickel': 'NICKEL.L',
+  'basemetal-lead': 'ZI=F',    // closest Yahoo equivalent
+  'basemetal-tin': 'ALI.L',    // closest Yahoo equivalent
+
+  // Commodities
+  'commodities-us-wheat': 'ZW=F',
+  'commodities-us-corn': 'ZC=F',
+  'commodities-us-soybeans': 'ZS=F',
+  'commodities-rough-rice': 'ZR=F', // rough rice futures
+  'commodities-us-cotton': 'CT=F',
+  'commodities-us-cocoa': 'CC=F',
+  'commodities-us-sugar': 'SB=F',
+  'commodities-london-cocoa': 'CC=F',
+  'commodities-us-soybean-oil': 'ZL=F',
+  'commodities-palm-oil': 'ZL=F',  // closest Yahoo equivalent
+  'commodities-london-wheat': 'ZW=F',
+  'oil_opec': 'CL=F', // OPEC basket → use WTI as proxy
+};
+
 /* ─── Helpers ──────────────────────────────────────────── */
 
 /**
@@ -454,6 +590,9 @@ export async function fetchTgjuInstruments(): Promise<TgjuInstrument[]> {
     // ── Background: fetch chart data for currency/gold to get accurate daily change ──
     backgroundFetchCurrencyGoldChange(instruments).catch(() => {});
 
+    // ── Background: fetch Yahoo prices for static instruments with price=0 (TGJU API 403) ──
+    backgroundFetchYahooFallbackPrices(instruments).catch(() => {});
+
     return instruments;
   } catch {
     clearTimeout(timeout);
@@ -501,6 +640,129 @@ async function backgroundFetchCurrencyGoldChange(instruments: TgjuInstrument[]) 
     } catch {
       // skip individual errors
     }
+  }
+}
+
+/**
+ * Get the Yahoo Finance fallback symbol for a TGJU instrument key.
+ * Returns undefined if no mapping exists.
+ */
+export function getTgjuYahooFallback(tgjuKey: string): string | undefined {
+  return TGJU_TO_YAHOO_MAP[tgjuKey];
+}
+
+/**
+ * Background task: fetch Yahoo Finance prices for static instruments that have price=0
+ * (happens when api.tgju.org returns 403). Updates the live cache in-place.
+ */
+async function backgroundFetchYahooFallbackPrices(instruments: TgjuInstrument[]) {
+  // Collect static instruments with price=0 that have a Yahoo mapping
+  const zeroPriceItems = instruments.filter(
+    (i) => i.price === 0 && i.key in TGJU_TO_YAHOO_MAP
+  );
+
+  if (zeroPriceItems.length === 0) return;
+
+  console.log(`[TGJU] ${zeroPriceItems.length} static instruments have price=0, fetching from Yahoo Finance as fallback...`);
+
+  // Collect unique Yahoo symbols
+  const keyToSymbol = new Map<string, string>();
+  const symbolToKeys = new Map<string, string[]>();
+  for (const item of zeroPriceItems) {
+    const yahooSym = TGJU_TO_YAHOO_MAP[item.key];
+    if (!yahooSym) continue;
+    keyToSymbol.set(item.key, yahooSym);
+    if (!symbolToKeys.has(yahooSym)) symbolToKeys.set(yahooSym, []);
+    symbolToKeys.get(yahooSym)!.push(item.key);
+  }
+
+  const uniqueSymbols = [...symbolToKeys.keys()];
+
+  try {
+    // Dynamic import to avoid loading yahoo-finance2 for TSE-only users
+    const YahooFinance = (await import('yahoo-finance2')).default;
+    const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'], validation: { logErrors: false } });
+
+    // Fetch in batches of 15 (smaller batches reduce Yahoo validation errors)
+    const BATCH_SIZE = 15;
+    for (let i = 0; i < uniqueSymbols.length; i += BATCH_SIZE) {
+      const batch = uniqueSymbols.slice(i, i + BATCH_SIZE);
+      try {
+        const results = await yahooFinance.quote(batch, {
+          fields: ['symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent', 'regularMarketPreviousClose', 'regularMarketDayHigh', 'regularMarketDayLow'],
+        });
+
+        for (const r of results) {
+          if (r.regularMarketPrice == null) continue;
+          const tgjuKeys = symbolToKeys.get(r.symbol);
+          if (!tgjuKeys) continue;
+
+          for (const tgjuKey of tgjuKeys) {
+            const inst = liveInstrumentsCache.data?.find((x) => x.key === tgjuKey);
+            if (inst && inst.price === 0) {
+              inst.price = r.regularMarketPrice;
+              inst.highPrice = r.regularMarketDayHigh ?? r.regularMarketPrice;
+              inst.lowPrice = r.regularMarketDayLow ?? r.regularMarketPrice;
+              inst.change = r.regularMarketChange ?? 0;
+              inst.changePercent = r.regularMarketChangePercent ?? 0;
+
+              // Also update static price cache
+              staticPriceCache.set(tgjuKey, {
+                close: r.regularMarketPrice,
+                high: r.regularMarketDayHigh ?? r.regularMarketPrice,
+                low: r.regularMarketDayLow ?? r.regularMarketPrice,
+                prevClose: r.regularMarketPreviousClose ?? r.regularMarketPrice,
+                ts: Date.now(),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes('validation') || errMsg.includes('FailedYahooValidationError')) {
+          // Batch failed due to schema validation — retry individually
+          console.warn(`[TGJU] Yahoo fallback batch ${Math.floor(i / BATCH_SIZE) + 1} validation error, retrying individually...`);
+          for (const symbol of batch) {
+            try {
+              const singleResults = await yahooFinance.quote([symbol], {
+                fields: ['symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent', 'regularMarketPreviousClose', 'regularMarketDayHigh', 'regularMarketDayLow'],
+              });
+              for (const r of singleResults) {
+                if (r.regularMarketPrice == null) continue;
+                const tgjuKeys = symbolToKeys.get(r.symbol);
+                if (!tgjuKeys) continue;
+                for (const tgjuKey of tgjuKeys) {
+                  const inst = liveInstrumentsCache.data?.find((x) => x.key === tgjuKey);
+                  if (inst && inst.price === 0) {
+                    inst.price = r.regularMarketPrice;
+                    inst.highPrice = r.regularMarketDayHigh ?? r.regularMarketPrice;
+                    inst.lowPrice = r.regularMarketDayLow ?? r.regularMarketPrice;
+                    inst.change = r.regularMarketChange ?? 0;
+                    inst.changePercent = r.regularMarketChangePercent ?? 0;
+                    staticPriceCache.set(tgjuKey, {
+                      close: r.regularMarketPrice,
+                      high: r.regularMarketDayHigh ?? r.regularMarketPrice,
+                      low: r.regularMarketDayLow ?? r.regularMarketPrice,
+                      prevClose: r.regularMarketPreviousClose ?? r.regularMarketPrice,
+                      ts: Date.now(),
+                    });
+                  }
+                }
+              }
+            } catch {
+              // skip individual symbol errors
+            }
+          }
+        } else {
+          console.warn(`[TGJU] Yahoo fallback batch ${Math.floor(i / BATCH_SIZE) + 1} failed:`, errMsg);
+        }
+      }
+    }
+
+    const filledCount = zeroPriceItems.filter((i) => i.price > 0).length;
+    console.log(`[TGJU] Yahoo fallback filled ${filledCount}/${zeroPriceItems.length} instrument prices`);
+  } catch (err) {
+    console.error(`[TGJU] Yahoo fallback fetch failed:`, err);
   }
 }
 

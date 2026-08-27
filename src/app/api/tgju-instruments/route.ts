@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchTgjuInstruments } from '@/lib/tgju-api';
+import { fetchTgjuInstruments, getTgjuYahooFallback, TGJU_TO_YAHOO_MAP } from '@/lib/tgju-api';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -10,9 +10,15 @@ export async function GET() {
     const instruments = await fetchTgjuInstruments();
 
     const toItem = (i: { title: string; key: string; price: number; highPrice: number; lowPrice: number; change: number; changePercent: number; category: string; groupTitle?: string }) => {
-      const decimals = detectDecimals(i.price, i.category, 'tgju');
-      const currencyUnit = getCurrencyUnit(i.category, 'tgju');
-      return {
+      const yahooFallback = getTgjuYahooFallback(i.key);
+      // Use Yahoo formatting for instruments that are mapped to Yahoo
+      const source = yahooFallback ? 'yahoo' : 'tgju';
+      const decimals = detectDecimals(i.price, i.category, source);
+      const currencyUnit = yahooFallback
+        ? getCurrencyUnit(i.category, 'yahoo')
+        : getCurrencyUnit(i.category, 'tgju');
+
+      const item: Record<string, unknown> = {
         l18: i.title,
         l30: i.groupTitle || '',
         pl: i.price,
@@ -26,6 +32,14 @@ export async function GET() {
         decimals,
         currencyUnit,
       };
+
+      // Add yahooFallbackSymbol for instruments that have Yahoo mapping
+      // This tells the frontend to use Yahoo analysis instead of TGJU
+      if (yahooFallback) {
+        item.yahooFallbackSymbol = yahooFallback;
+      }
+
+      return item;
     };
 
     // Group by category

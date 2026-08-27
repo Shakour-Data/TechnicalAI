@@ -1,0 +1,1267 @@
+     1→'use client';
+     2→
+     3→import * as React from 'react';
+     4→import { Input } from '@/components/ui/input';
+     5→import { cn } from '@/lib/utils';
+     6→import {
+     7→  Search, X, TrendingUp, TrendingDown,
+     8→  BarChart3, Landmark, Building2, FileText,
+     9→  ChevronDown, ChevronLeft, Layers, ArrowUpDown, Coins, CircleDollarSign,
+    10→  Globe, Bitcoin, Fuel, Gem, Package, Earth, MapPin,
+    11→  Zap, Clock, Star, Hash, ChevronRight, ArrowLeft, Filter,
+    12→} from 'lucide-react';
+    13→
+    14→/* ═══════════════════════════════════════════════════════════════
+    15→   Types
+    16→   ═══════════════════════════════════════════════════════════════ */
+    17→
+    18→interface InstrumentItem {
+    19→  l18: string;
+    20→  l30: string;
+    21→  pl: number;
+    22→  pcp: number;
+    23→  tno: number;
+    24→  tvol: number;
+    25→  tval: number;
+    26→  cs: string;
+    27→  category: 'stock' | 'etf' | 'bond' | 'future' | 'salaf' | 'mortgage' | 'index'
+    28→    | 'currency' | 'gold' | 'silver' | 'gold_etf'
+    29→    | 'crypto' | 'world_index' | 'foreign_stock' | 'forex' | 'energy' | 'metal' | 'commodity'
+    30→    | 'yahoo_stock' | 'yahoo_etf';
+    31→  insCode?: string;
+    32→  tgjuKey?: string;
+    33→  finpySector?: string;
+    34→  finpyIndex?: string;
+    35→  webId?: string | number;
+    36→  isMainIndex?: boolean;
+    37→  index?: number;
+    38→  indexChange?: number;
+    39→  indexChangePercent?: number;
+    40→  indexMin?: number;
+    41→  indexMax?: number;
+    42→  yahooSymbol?: string;
+    43→  yahooFallbackSymbol?: string;
+    44→  yahooCategory?: string;
+    45→  currency?: string;
+    46→  unit?: string;
+    47→  decimals?: number;
+    48→  currencyUnit?: string;
+    49→  country?: string;
+    50→  countryEn?: string;
+    51→  exchange?: string;
+    52→  sector?: string;
+    53→  nameEn?: string;
+    54→}
+    55→
+    56→interface InstrumentsData {
+    57→  indices: InstrumentItem[];
+    58→  stocks: InstrumentItem[];
+    59→  etfs: InstrumentItem[];
+    60→  bonds: InstrumentItem[];
+    61→  futures: InstrumentItem[];
+    62→  salaf: InstrumentItem[];
+    63→  mortgage: InstrumentItem[];
+    64→  industries: string[];
+    65→}
+    66→
+    67→interface TgjuData {
+    68→  currencies: InstrumentItem[];
+    69→  gold: InstrumentItem[];
+    70→  silver: InstrumentItem[];
+    71→  goldEtfs: InstrumentItem[];
+    72→  crypto: InstrumentItem[];
+    73→  worldIndices: InstrumentItem[];
+    74→  foreignStocks: InstrumentItem[];
+    75→  forex: InstrumentItem[];
+    76→  energy: InstrumentItem[];
+    77→  metals: InstrumentItem[];
+    78→  commodities: InstrumentItem[];
+    79→  items: InstrumentItem[];
+    80→}
+    81→
+    82→interface YahooData {
+    83→  yahooStocks: InstrumentItem[];
+    84→  yahooIndices: InstrumentItem[];
+    85→  yahooEnergy: InstrumentItem[];
+    86→  yahooMetals: InstrumentItem[];
+    87→  yahooCommodities: InstrumentItem[];
+    88→  yahooForex: InstrumentItem[];
+    89→  yahooCrypto: InstrumentItem[];
+    90→  yahooEtfs: InstrumentItem[];
+    91→  items: InstrumentItem[];
+    92→  worldIndices: InstrumentItem[];
+    93→  energy: InstrumentItem[];
+    94→  metals: InstrumentItem[];
+    95→  commodities: InstrumentItem[];
+    96→  forex: InstrumentItem[];
+    97→  crypto: InstrumentItem[];
+    98→}
+    99→
+   100→interface SymbolSearchProps {
+   101→  onSelect?: (symbol: string, category?: string, insCode?: string, tgjuKey?: string, finpySector?: string, finpyIndex?: string, webId?: string | number, yahooSymbol?: string) => void;
+   102→  placeholder?: string;
+   103→  className?: string;
+   104→  compact?: boolean;
+   105→}
+   106→
+   107→/* ═══════════════════════════════════════════════════════════════
+   108→   Constants
+   109→   ═══════════════════════════════════════════════════════════════ */
+   110→
+   111→const MAX_RESULTS = 60;
+   112→
+   113→/* Categories grouped for better UX */
+   114→const CATEGORY_GROUPS = [
+   115→  {
+   116→    label: 'بورس تهران',
+   117→    items: [
+   118→      { key: 'indices' as const,    label: 'شاخص‌ها',       icon: BarChart3 },
+   119→      { key: 'stocks' as const,     label: 'سهام بورس',     icon: Building2 },
+   120→      { key: 'etf' as const,        label: 'صندوق‌ها',      icon: Landmark },
+   121→      { key: 'bond' as const,       label: 'اوراق بدهی',    icon: FileText },
+   122→      { key: 'derivative' as const, label: 'مشتقه',         icon: ArrowUpDown },
+   123→    ],
+   124→  },
+   125→  {
+   126→    label: 'بازار ایران',
+   127→    items: [
+   128→      { key: 'currency' as const,  label: 'ارز (ریال)',     icon: CircleDollarSign },
+   129→      { key: 'gold' as const,      label: 'طلا و نقره',    icon: Coins },
+   130→      { key: 'gold_etf' as const,  label: 'صندوق طلا',     icon: Coins },
+   131→    ],
+   132→  },
+   133→  {
+   134→    label: 'بازارهای جهانی',
+   135→    items: [
+   136→      { key: 'crypto' as const,       label: 'کریپتو',        icon: Bitcoin },
+   137→      { key: 'forex' as const,        label: 'جفت ارز',       icon: Globe },
+   138→      { key: 'world_index' as const,  label: 'شاخص جهانی',   icon: Globe },
+   139→      { key: 'energy' as const,       label: 'نفت و انرژی',   icon: Fuel },
+   140→      { key: 'metal' as const,        label: 'فلزات',        icon: Gem },
+   141→      { key: 'commodity' as const,    label: 'کالا',          icon: Package },
+   142→    ],
+   143→  },
+   144→  {
+   145→    label: 'بورس جهانی (Yahoo)',
+   146→    items: [
+   147→      { key: 'yahoo_stock' as const,  label: 'سهام جهانی',   icon: Earth },
+   148→      { key: 'yahoo_etf' as const,    label: 'ETF جهانی',    icon: Landmark },
+   149→    ],
+   150→  },
+   151→] as const;
+   152→
+   153→/* Flat list for backward compat */
+   154→const CATEGORIES = [
+   155→  { key: 'all' as const,          label: 'همه',           icon: Layers },
+   156→  ...CATEGORY_GROUPS.flatMap(g => g.items),
+   157→];
+   158→
+   159→type CategoryKey = 'all' | (typeof CATEGORIES)[number]['key'];
+   160→
+   161→const TGJU_CATEGORY_ITEMS = new Set<string>([
+   162→  'currency', 'gold', 'silver', 'gold_etf',
+   163→  'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity',
+   164→]);
+   165→
+   166→const TGJU_CATEGORIES = new Set<CategoryKey>([
+   167→  'currency', 'gold', 'gold_etf',
+   168→  'crypto', 'world_index', 'forex', 'energy', 'metal', 'commodity',
+   169→]);
+   170→
+   171→const YAHOO_SPECIFIC_CATEGORIES = new Set<CategoryKey>(['yahoo_stock', 'yahoo_etf']);
+   172→
+   173→const CATEGORY_COLORS: Record<string, string> = {
+   174→  stock: 'bg-blue-50 text-blue-700 border border-blue-100',
+   175→  etf: 'bg-purple-50 text-purple-700 border border-purple-100',
+   176→  bond: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+   177→  future: 'bg-orange-50 text-orange-700 border border-orange-100',
+   178→  salaf: 'bg-amber-50 text-amber-800 border border-amber-100',
+   179→  mortgage: 'bg-cyan-50 text-cyan-700 border border-cyan-100',
+   180→  index: 'bg-rose-50 text-rose-700 border border-rose-100',
+   181→  currency: 'bg-teal-50 text-teal-700 border border-teal-100',
+   182→  gold: 'bg-yellow-50 text-yellow-700 border border-yellow-100',
+   183→  silver: 'bg-gray-100 text-gray-600 border border-gray-200',
+   184→  gold_etf: 'bg-amber-50 text-amber-800 border border-amber-100',
+   185→  crypto: 'bg-orange-50 text-orange-700 border border-orange-100',
+   186→  world_index: 'bg-sky-50 text-sky-700 border border-sky-100',
+   187→  forex: 'bg-violet-50 text-violet-700 border border-violet-100',
+   188→  energy: 'bg-red-50 text-red-700 border border-red-100',
+   189→  metal: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+   190→  commodity: 'bg-lime-50 text-lime-700 border border-lime-100',
+   191→  yahoo_stock: 'bg-indigo-50 text-indigo-700 border border-indigo-100',
+   192→  yahoo_etf: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100',
+   193→};
+   194→
+   195→const CATEGORY_LABELS: Record<string, string> = {
+   196→  stock: 'سهام', etf: 'صندوق', bond: 'اخزا', future: 'آتی', salaf: 'سلف', mortgage: 'تسه',
+   197→  index: 'شاخص', currency: 'ارز', gold: 'طلا', silver: 'نقره', gold_etf: 'صندوق طلا',
+   198→  crypto: 'کریپتو', world_index: 'شاخص جهانی', forex: 'فارکس', energy: 'انرژی',
+   199→  metal: 'فلز', commodity: 'کالا', yahoo_stock: 'سهام جهانی', yahoo_etf: 'ETF جهانی',
+   200→};
+   201→
+   202→const SOURCE_STYLES: Record<string, string> = {
+   203→  tse: 'bg-amber-100 text-amber-800 border-amber-200',
+   204→  tgju: 'bg-teal-100 text-teal-700 border-teal-200',
+   205→  yahoo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+   206→};
+   207→
+   208→const COUNTRY_FLAGS: Record<string, string> = {
+   209→  'US': '\u{1F1FA}\u{1F1F8}', 'آمریکا': '\u{1F1FA}\u{1F1F8}',
+   210→  'UK': '\u{1F1EC}\u{1F1E7}', 'انگلستان': '\u{1F1EC}\u{1F1E7}',
+   211→  'DE': '\u{1F1E9}\u{1F1EA}', 'آلمان': '\u{1F1E9}\u{1F1EA}',
+   212→  'FR': '\u{1F1EB}\u{1F1F7}', 'فرانسه': '\u{1F1EB}\u{1F1F7}',
+   213→  'JP': '\u{1F1EF}\u{1F1F5}', 'ژاپن': '\u{1F1EF}\u{1F1F5}',
+   214→  'CN': '\u{1F1E8}\u{1F1F3}', 'چین': '\u{1F1E8}\u{1F1F3}',
+   215→  'KR': '\u{1F1F0}\u{1F1F7}', 'کره جنوبی': '\u{1F1F0}\u{1F1F7}',
+   216→  'IN': '\u{1F1EE}\u{1F1F3}', 'هند': '\u{1F1EE}\u{1F1F3}',
+   217→  'TW': '\u{1F1F9}\u{1F1FC}', 'تایوان': '\u{1F1F9}\u{1F1FC}',
+   218→  'AU': '\u{1F1E6}\u{1F1FA}', 'استرالیا': '\u{1F1E6}\u{1F1FA}',
+   219→  'SA': '\u{1F1F8}\u{1F1E6}', 'عربستان': '\u{1F1F8}\u{1F1E6}',
+   220→  'AE': '\u{1F1E6}\u{1F1EA}', 'امارات': '\u{1F1E6}\u{1F1EA}',
+   221→  'TR': '\u{1F1F9}\u{1F1F7}', 'ترکیه': '\u{1F1F9}\u{1F1F7}',
+   222→  'BR': '\u{1F1E7}\u{1F1F7}', 'برزیل': '\u{1F1E7}\u{1F1F7}',
+   223→  'NL': '\u{1F1F3}\u{1F1F1}', 'هلند': '\u{1F1F3}\u{1F1F1}',
+   224→  'CH': '\u{1F1E8}\u{1F1ED}', 'سوئیس': '\u{1F1E8}\u{1F1ED}',
+   225→  'ES': '\u{1F1EA}\u{1F1F8}', 'اسپانیا': '\u{1F1EA}\u{1F1F8}',
+   226→  'IT': '\u{1F1EE}\u{1F1F9}', 'ایتالیا': '\u{1F1EE}\u{1F1F9}',
+   227→  'HK': '\u{1F1ED}\u{1F1F0}', 'هنگ کنگ': '\u{1F1ED}\u{1F1F0}',
+   228→  'RU': '\u{1F1F7}\u{1F1FA}', 'روسیه': '\u{1F1F7}\u{1F1FA}',
+   229→  'SG': '\u{1F1F8}\u{1F1EC}', 'سنگاپور': '\u{1F1F8}\u{1F1EC}',
+   230→  'MY': '\u{1F1F2}\u{1F1FE}', 'مالزی': '\u{1F1F2}\u{1F1FE}',
+   231→  'TH': '\u{1F1F9}\u{1F1ED}', 'تایلند': '\u{1F1F9}\u{1F1ED}',
+   232→  'ID': '\u{1F1EE}\u{1F1E9}', 'اندونزی': '\u{1F1EE}\u{1F1E9}',
+   233→  'MX': '\u{1F1F2}\u{1F1FD}', 'مکزیک': '\u{1F1F2}\u{1F1FD}',
+   234→  'IR': '\u{1F1EE}\u{1F1F7}',
+   235→  'INTL': '\u{1F30D}', 'بین‌المللی': '\u{1F30D}',
+   236→};
+   237→
+   238→function getCountryFlag(country?: string): string {
+   239→  if (!country) return '';
+   240→  return COUNTRY_FLAGS[country] || '';
+   241→}
+   242→
+   243→/* ═══════════════════════════════════════════════════════════════
+   244→   Helpers
+   245→   ═══════════════════════════════════════════════════════════════ */
+   246→
+   247→function formatNum(num: number, decimals?: number): string {
+   248→  if (num == null) return '—';
+   249→  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: decimals ?? 0 }).format(num);
+   250→}
+   251→
+   252→function formatIdx(num: number): string {
+   253→  if (num == null) return '—';
+   254→  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 2 }).format(num);
+   255→}
+   256→
+   257→function Spinner() {
+   258→  return (
+   259→    <svg className='animate-spin text-gray-400' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' width='16' height='16'>
+   260→      <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
+   261→      <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z' />
+   262→    </svg>
+   263→  );
+   264→}
+   265→
+   266→function getSource(item: InstrumentItem): 'tse' | 'tgju' | 'yahoo' {
+   267→  if (item.yahooSymbol || item.category === 'yahoo_stock' || item.category === 'yahoo_etf') return 'yahoo';
+   268→  if (TGJU_CATEGORY_ITEMS.has(item.category) || item.tgjuKey) return 'tgju';
+   269→  return 'tse';
+   270→}
+   271→
+   272→/* Advanced query parser — supports operators like country:US, exchange:NASD, sector:Tech */
+   273→interface ParsedQuery {
+   274→  country?: string;
+   275→  exchange?: string;
+   276→  sector?: string;
+   277→  terms: string[];
+   278→}
+   279→
+   280→function parseQuery(q: string): ParsedQuery {
+   281→  const country: string[] = [];
+   282→  const exchange: string[] = [];
+   283→  const sector: string[] = [];
+   284→  const terms: string[] = [];
+   285→
+   286→  for (const part of q.split(/\s+/)) {
+   287→    if (!part) continue;
+   288→    const lower = part.toLowerCase();
+   289→    if (lower.startsWith('country:') || lower.startsWith('کشور:')) {
+   290→      const val = part.includes(':') ? part.split(':').slice(1).join(':') : '';
+   291→      if (val) country.push(val.toLowerCase());
+   292→    } else if (lower.startsWith('exchange:') || lower.startsWith('صرافی:')) {
+   293→      const val = part.includes(':') ? part.split(':').slice(1).join(':') : '';
+   294→      if (val) exchange.push(val.toLowerCase());
+   295→    } else if (lower.startsWith('sector:') || lower.startsWith('صنعت:')) {
+   296→      const val = part.includes(':') ? part.split(':').slice(1).join(':') : '';
+   297→      if (val) sector.push(val.toLowerCase());
+   298→    } else {
+   299→      terms.push(lower);
+   300→    }
+   301→  }
+   302→
+   303→  return {
+   304→    country: country.length > 0 ? country.join(' ') : undefined,
+   305→    exchange: exchange.length > 0 ? exchange.join(' ') : undefined,
+   306→    sector: sector.length > 0 ? sector.join(' ') : undefined,
+   307→    terms,
+   308→  };
+   309→}
+   310→
+   311→/* ═══════════════════════════════════════════════════════════════
+   312→   Recent Searches
+   313→   ═══════════════════════════════════════════════════════════════ */
+   314→
+   315→const RECENT_KEY = 'fin-search-recent';
+   316→const MAX_RECENT = 8;
+   317→
+   318→function getRecentSearches(): string[] {
+   319→  if (typeof window === 'undefined') return [];
+   320→  try { const raw = localStorage.getItem(RECENT_KEY); return raw ? JSON.parse(raw) : []; }
+   321→  catch { return []; }
+   322→}
+   323→
+   324→function addRecentSearch(name: string) {
+   325→  if (typeof window === 'undefined' || !name) return;
+   326→  try {
+   327→    let list = getRecentSearches();
+   328→    list = list.filter((r) => r !== name);
+   329→    list.unshift(name);
+   330→    if (list.length > MAX_RECENT) list = list.slice(0, MAX_RECENT);
+   331→    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+   332→  } catch { /* ignore */ }
+   333→}
+   334→
+   335→/* ═══════════════════════════════════════════════════════════════
+   336→   Component
+   337→   ═══════════════════════════════════════════════════════════════ */
+   338→
+   339→export default function SymbolSearch({
+   340→  onSelect,
+   341→  placeholder = 'جستجوی ابزار مالی ...',
+   342→  className,
+   343→  compact = false,
+   344→}: SymbolSearchProps) {
+   345→  /* ── State ── */
+   346→  const [query, setQuery] = React.useState('');
+   347→  const [open, setOpen] = React.useState(false);
+   348→  const [results, setResults] = React.useState<InstrumentItem[]>([]);
+   349→  const [loading, setLoading] = React.useState(false);
+   350→  const [activeIndex, setActiveIndex] = React.useState(-1);
+   351→  const [totalMatched, setTotalMatched] = React.useState(0);
+   352→  const [activeCategory, setActiveCategory] = React.useState<CategoryKey>('all');
+   353→  const [activeIndustry, setActiveIndustry] = React.useState<string | null>(null);
+   354→  const [activeCountry, setActiveCountry] = React.useState<string | null>(null);
+   355→  const [activeSector, setActiveSector] = React.useState<string | null>(null);
+   356→  const [showIndustryPicker, setShowIndustryPicker] = React.useState(false);
+   357→  const [showSectorPicker, setShowSectorPicker] = React.useState(false);
+   358→  const [recentSearches] = React.useState(() => getRecentSearches());
+   359→  const [countrySearch, setCountrySearch] = React.useState('');
+   360→  const [yahooReady, setYahooReady] = React.useState(false);
+   361→  const [anchorRect, setAnchorRect] = React.useState<{ top: number; left: number; width: number } | null>(null);
+   362→
+   363→  /* ── Refs ── */
+   364→  const cacheRef = React.useRef<InstrumentsData | null>(null);
+   365→  const tgjuCacheRef = React.useRef<TgjuData | null>(null);
+   366→  const yahooCacheRef = React.useRef<YahooData | null>(null);
+   367→  const fetchRef = React.useRef<Promise<InstrumentsData> | null>(null);
+   368→  const tgjuFetchRef = React.useRef<Promise<TgjuData | null> | null>(null);
+   369→  const yahooFetchRef = React.useRef<Promise<YahooData | null> | null>(null);
+   370→  const inputRef = React.useRef<HTMLInputElement>(null);
+   371→  const modalInputRef = React.useRef<HTMLInputElement>(null);
+   372→  const dropdownRef = React.useRef<HTMLDivElement>(null);
+   373→  const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+   374→
+   375→  /* ── Derived ── */
+   376→  const yahooCountries = React.useMemo(() => {
+   377→    if (!yahooCacheRef.current) return [];
+   378→    const set = new Set<string>();
+   379→    [...yahooCacheRef.current.yahooStocks, ...yahooCacheRef.current.yahooEtfs].forEach((s) => {
+   380→      if (s.country) set.add(s.country);
+   381→    });
+   382→    return Array.from(set);
+   383→  }, [open, yahooReady]);
+   384→
+   385→  const yahooSectors = React.useMemo(() => {
+   386→    if (!yahooCacheRef.current) return [];
+   387→    const set = new Set<string>();
+   388→    yahooCacheRef.current.yahooStocks.forEach((s) => { if (s.sector) set.add(s.sector); });
+   389→    return Array.from(set);
+   390→  }, [open, yahooReady]);
+   391→
+   392→  /* Country filter: ONLY for Yahoo-specific categories (yahoo_stock, yahoo_etf) */
+   393→  const showCountryFilter = React.useMemo(() => {
+   394→    return YAHOO_SPECIFIC_CATEGORIES.has(activeCategory);
+   395→  }, [activeCategory]);
+   396→
+   397→  const filteredCountries = React.useMemo(() => {
+   398→    if (!countrySearch.trim()) return yahooCountries;
+   399→    const q = countrySearch.trim().toLowerCase();
+   400→    return yahooCountries.filter(c => c.toLowerCase().includes(q));
+   401→  }, [yahooCountries, countrySearch]);
+   402→
+   403→  const countryCounts = React.useMemo(() => {
+   404→    const counts: Record<string, number> = {};
+   405→    const yahoo = yahooCacheRef.current;
+   406→    if (!yahoo) return counts;
+   407→    [...(yahoo.yahooStocks || []), ...(yahoo.yahooEtfs || [])].forEach(item => {
+   408→      if (item.country) counts[item.country] = (counts[item.country] || 0) + 1;
+   409→    });
+   410→    return counts;
+   411→  }, [open, yahooReady]);
+   412→
+   413→  const EMPTY_TSE_DATA: InstrumentsData = { indices: [], stocks: [], etfs: [], bonds: [], futures: [], salaf: [], mortgage: [], industries: [] };
+   414→
+   415→  /* ── Data fetching ── */
+   416→  const fetchData = React.useCallback(async (): Promise<InstrumentsData> => {
+   417→    if (cacheRef.current) return cacheRef.current;
+   418→    if (fetchRef.current) return fetchRef.current;
+   419→    const p = async () => {
+   420→      try {
+   421→        const r = await fetch('/api/instruments');
+   422→        if (!r.ok) { console.warn('[Search] /api/instruments returned', r.status); return EMPTY_TSE_DATA; }
+   423→        const d: InstrumentsData = await r.json();
+   424→        cacheRef.current = d;
+   425→        return d;
+   426→      } catch (err) {
+   427→        console.warn('[Search] fetchData failed:', err);
+   428→        return EMPTY_TSE_DATA;
+   429→      } finally { fetchRef.current = null; }
+   430→    };
+   431→    const promise = p(); fetchRef.current = promise; return promise;
+   432→  }, []);
+   433→
+   434→  const fetchTgjuData = React.useCallback(async (): Promise<TgjuData | null> => {
+   435→    if (tgjuCacheRef.current) return tgjuCacheRef.current;
+   436→    if (tgjuFetchRef.current) return tgjuFetchRef.current;
+   437→    const p = async () => {
+   438→      try {
+   439→        const r = await fetch('/api/tgju-instruments');
+   440→        if (!r.ok) return null;
+   441→        const d: TgjuData = await r.json();
+   442→        tgjuCacheRef.current = d;
+   443→        return d;
+   444→      } catch { return null; } finally { tgjuFetchRef.current = null; }
+   445→    };
+   446→    const promise = p(); tgjuFetchRef.current = promise; return promise;
+   447→  }, []);
+   448→
+   449→  const fetchYahooData = React.useCallback(async (): Promise<YahooData | null> => {
+   450→    if (yahooCacheRef.current) return yahooCacheRef.current;
+   451→    if (yahooFetchRef.current) return yahooFetchRef.current;
+   452→    const promise = (async () => {
+   453→      try {
+   454→        const r = await fetch('/api/yahoo-instruments');
+   455→        if (!r.ok) return null;
+   456→        const d = await r.json() as YahooData;
+   457→        yahooCacheRef.current = d;
+   458→        setYahooReady(true);
+   459→        return d;
+   460→      } catch { return null; } finally { yahooFetchRef.current = null; }
+   461→    })();
+   462→    yahooFetchRef.current = promise;
+   463→    return promise;
+   464→  }, []);
+   465→
+   466→  /* ── Get items for category ── */
+   467→  const getItemsForCategory = React.useCallback(async (cat: CategoryKey): Promise<InstrumentItem[]> => {
+   468→    if (cat === 'yahoo_stock') {
+   469→      const yahoo = yahooCacheRef.current || await fetchYahooData();
+   470→      let items = yahoo?.yahooStocks || [];
+   471→      if (activeCountry) items = items.filter((s) => s.country === activeCountry);
+   472→      if (activeSector) items = items.filter((s) => s.sector === activeSector);
+   473→      return items;
+   474→    }
+   475→    if (cat === 'yahoo_etf') {
+   476→      const yahoo = yahooCacheRef.current || await fetchYahooData();
+   477→      let items = yahoo?.yahooEtfs || [];
+   478→      if (activeCountry) items = items.filter((s) => s.country === activeCountry);
+   479→      return items;
+   480→    }
+   481→
+   482→    if (TGJU_CATEGORIES.has(cat)) {
+   483→      const tgju = tgjuCacheRef.current || await fetchTgjuData();
+   484→      const yahoo = yahooCacheRef.current || await fetchYahooData();
+   485→      if (!tgju && !yahoo) return [];
+   486→      let items: InstrumentItem[] = [];
+   487→      switch (cat) {
+   488→        case 'currency': items = tgju?.currencies || []; break;
+   489→        case 'gold': items = [...(tgju?.gold || []), ...(tgju?.silver || [])]; break;
+   490→        case 'gold_etf': items = tgju?.goldEtfs || []; break;
+   491→        case 'crypto': items = [...(tgju?.crypto || []), ...(yahoo?.yahooCrypto || [])]; break;
+   492→        case 'world_index': items = [...(tgju?.worldIndices || []), ...(tgju?.foreignStocks || []), ...(yahoo?.yahooIndices || [])]; break;
+   493→        case 'forex': items = [...(tgju?.forex || []), ...(yahoo?.yahooForex || [])]; break;
+   494→        case 'energy': items = [...(tgju?.energy || []), ...(yahoo?.yahooEnergy || [])]; break;
+   495→        case 'metal': items = [...(tgju?.metals || []), ...(yahoo?.yahooMetals || [])]; break;
+   496→        case 'commodity': items = [...(tgju?.commodities || []), ...(yahoo?.yahooCommodities || [])]; break;
+   497→        default: items = [];
+   498→      }
+   499→      return items;
+   500→    }
+   501→
+   502→    const data = cacheRef.current || await fetchData();
+   503→    switch (cat) {
+   504→      case 'indices': return data.indices;
+   505→      case 'stocks': return activeIndustry ? data.stocks.filter((s) => s.cs === activeIndustry) : data.stocks;
+   506→      case 'etf': return data.etfs;
+   507→      case 'bond': return [...data.bonds, ...data.mortgage];
+   508→      case 'derivative': return [...data.futures, ...data.salaf];
+   509→      case 'all':
+   510→      default: {
+   511→        const tgju = tgjuCacheRef.current || await fetchTgjuData();
+   512→        const yahoo = yahooCacheRef.current || await fetchYahooData();
+   513→        return [
+   514→          ...data.indices, ...data.stocks, ...data.etfs,
+   515→          ...(tgju?.currencies || []), ...(tgju?.forex || []), ...(yahoo?.yahooForex || []),
+   516→          ...(tgju?.crypto || []), ...(yahoo?.yahooCrypto || []),
+   517→          ...(tgju?.gold || []), ...(tgju?.silver || []), ...(tgju?.goldEtfs || []),
+   518→          ...(tgju?.worldIndices || []), ...(yahoo?.yahooIndices || []),
+   519→          ...(tgju?.energy || []), ...(yahoo?.yahooEnergy || []),
+   520→          ...(tgju?.metals || []), ...(yahoo?.yahooMetals || []),
+   521→          ...(tgju?.commodities || []), ...(yahoo?.yahooCommodities || []),
+   522→          ...(yahoo?.yahooStocks || []), ...(yahoo?.yahooEtfs || []),
+   523→          ...data.bonds, ...data.futures, ...data.salaf, ...data.mortgage,
+   524→        ];
+   525→      }
+   526→    }
+   527→  }, [activeIndustry, activeCountry, activeSector, fetchData, fetchTgjuData, fetchYahooData]);
+   528→
+   529→  /* ── Advanced multi-field search with operator support ── */
+   530→  const doFilter = React.useCallback((items: InstrumentItem[], q: string) => {
+   531→    const parsed = parseQuery(q);
+   532→    const { country: opCountry, exchange: opExchange, sector: opSector, terms } = parsed;
+   533→
+   534→    const scoreAndFilter = (item: InstrumentItem) => {
+   535→      /* Apply query operators */
+   536→      if (opCountry) {
+   537→        const match = (item.country?.toLowerCase().includes(opCountry)) ||
+   538→          (item.countryEn?.toLowerCase().includes(opCountry));
+   539→        if (!match) return null;
+   540→      }
+   541→      if (opExchange) {
+   542→        const match = item.exchange?.toLowerCase().includes(opExchange);
+   543→        if (!match) return null;
+   544→      }
+   545→      if (opSector) {
+   546→        const match = item.sector?.toLowerCase().includes(opSector) ||
+   547→          item.cs?.toLowerCase().includes(opSector);
+   548→        if (!match) return null;
+   549→      }
+   550→
+   551→      const fields = [item.l18, item.l30, item.cs, item.yahooSymbol || '', item.nameEn || '', item.exchange || '', item.country || '', item.countryEn || '', item.sector || ''];
+   552→      const fullText = fields.join(' ').toLowerCase();
+   553→      let score = 0;
+   554→
+   555→      for (const term of terms) {
+   556→        if (!term) continue;
+   557→        if (item.l18.toLowerCase().includes(term)) score += 10;
+   558→        if (item.nameEn?.toLowerCase().includes(term)) score += 8;
+   559→        if (item.yahooSymbol?.toLowerCase() === term) score += 20;
+   560→        else if (item.yahooSymbol?.toLowerCase().includes(term)) score += 15;
+   561→        if (item.l30.toLowerCase().includes(term)) score += 7;
+   562→        if (item.exchange?.toLowerCase().includes(term)) score += 5;
+   563→        if (item.country?.toLowerCase().includes(term)) score += 6;
+   564→        if (item.countryEn?.toLowerCase() === term) score += 15;
+   565→        else if (item.countryEn?.toLowerCase().includes(term)) score += 4;
+   566→        if (item.sector?.toLowerCase().includes(term)) score += 5;
+   567→        if (item.cs?.toLowerCase().includes(term)) score += 6;
+   568→
+   569→        if (!item.l18.toLowerCase().includes(term) && !item.l30.toLowerCase().includes(term) &&
+   570→            !item.cs?.toLowerCase().includes(term) && !(item.yahooSymbol?.toLowerCase().includes(term)) &&
+   571→            !(item.nameEn?.toLowerCase().includes(term)) && !(item.exchange?.toLowerCase().includes(term)) &&
+   572→            !(item.country?.toLowerCase().includes(term)) && !(item.countryEn?.toLowerCase().includes(term)) &&
+   573→            !(item.sector?.toLowerCase().includes(term))) {
+   574→          return null;
+   575→        }
+   576→      }
+   577→      /* If only operators (no terms), accept all filtered items */
+   578→      if (terms.length === 0) score = 1;
+   579→      return score;
+   580→    };
+   581→
+   582→    const scored = items.map((item) => ({ item, score: scoreAndFilter(item) }))
+   583→      .filter((r): r is { item: InstrumentItem; score: number } => r.score !== null && r.score > 0)
+   584→      .sort((a, b) => b.score - a.score);
+   585→
+   586→    setTotalMatched(scored.length);
+   587→    setResults(scored.slice(0, MAX_RESULTS).map((s) => s.item));
+   588→    setActiveIndex(-1);
+   589→  }, []);
+   590→
+   591→  /* ── Popular ── */
+   592→  const getPopular = React.useCallback(async () => {
+   593→    try {
+   594→      const data = cacheRef.current || await fetchData();
+   595→      const tgju = tgjuCacheRef.current;
+   596→      const yahoo = yahooCacheRef.current;
+   597→      const all = [
+   598→        ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))), ...data.stocks, ...data.etfs,
+   599→        ...(tgju?.currencies || []), ...(tgju?.crypto?.slice(0, 5) || []), ...(tgju?.gold?.slice(0, 3) || []),
+   600→        ...(yahoo?.yahooStocks?.slice(0, 8) || []), ...(yahoo?.yahooIndices?.slice(0, 5) || []),
+   601→      ];
+   602→      const sorted = [...all].sort((a, b) => (b.tval || 0) - (a.tval || 0)).slice(0, 20);
+   603→      setResults(sorted); setTotalMatched(all.length);
+   604→    } catch (err) {
+   605→      console.warn('[Search] getPopular error:', err);
+   606→      setResults([]); setTotalMatched(0);
+   607→    }
+   608→  }, [fetchData]);
+   609→
+   610→  /* ── Anchor position calculation ── */
+   611→  const updateAnchor = React.useCallback(() => {
+   612→    if (inputRef.current) {
+   613→      const rect = inputRef.current.getBoundingClientRect();
+   614→      setAnchorRect({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+   615→    }
+   616→  }, []);
+   617→
+   618→  /* ── Show dropdown ── */
+   619→  const showDropdown = React.useCallback(async (q: string) => {
+   620→    try {
+   621→      setOpen(true);
+   622→      updateAnchor();
+   623→      await Promise.all([fetchData(), fetchTgjuData(), fetchYahooData()]);
+   624→      const items = await getItemsForCategory(activeCategory);
+   625→      if (q.trim().length === 0) {
+   626→        if (activeCategory === 'all') await getPopular();
+   627→        else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
+   628→      } else { doFilter(items, q); }
+   629→    } catch (err) {
+   630→      console.warn('[Search] showDropdown error:', err);
+   631→      setResults([]);
+   632→      setTotalMatched(0);
+   633→    } finally {
+   634→      setLoading(false);
+   635→    }
+   636→  }, [fetchData, fetchTgjuData, getItemsForCategory, activeCategory, getPopular, doFilter, updateAnchor]);
+   637→
+   638→  /* ── Handlers ── */
+   639→  const handleCategoryChange = React.useCallback(async (cat: CategoryKey) => {
+   640→    setActiveCategory(cat);
+   641→    if (cat !== 'stocks') setActiveIndustry(null);
+   642→    const newShowCountry = YAHOO_SPECIFIC_CATEGORIES.has(cat);
+   643→    if (!newShowCountry) { setActiveCountry(null); setActiveSector(null); }
+   644→    setShowIndustryPicker(false); setShowSectorPicker(false); setCountrySearch('');
+   645→    try {
+   646→      const items = await getItemsForCategory(cat);
+   647→      if (query.trim().length > 0) {
+   648→        doFilter(items, query);
+   649→      } else if (cat === 'all') {
+   650→        await getPopular();
+   651→      } else {
+   652→        setResults(items.slice(0, MAX_RESULTS));
+   653→        setTotalMatched(items.length);
+   654→      }
+   655→    } catch (err) {
+   656→      console.error('Category change error:', err);
+   657→      setResults([]);
+   658→      setTotalMatched(0);
+   659→    }
+   660→    setActiveIndex(-1);
+   661→  }, [getItemsForCategory, query, doFilter, getPopular]);
+   662→
+   663→  const handleIndustryChange = React.useCallback((industry: string | null) => {
+   664→    setActiveIndustry(industry); setShowIndustryPicker(false);
+   665→    if (cacheRef.current) {
+   666→      const items = industry ? cacheRef.current.stocks.filter((s) => s.cs === industry) : cacheRef.current.stocks;
+   667→      if (query.trim().length > 0) doFilter(items, query);
+   668→      else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
+   669→      setActiveIndex(-1);
+   670→    }
+   671→  }, [query, doFilter]);
+   672→
+   673→  const handleCountryChange = React.useCallback((country: string | null) => {
+   674→    setActiveCountry(country);
+   675→    const yahoo = yahooCacheRef.current;
+   676→    if (!yahoo) return;
+   677→
+   678→    let items: InstrumentItem[] = activeCategory === 'yahoo_etf'
+   679→      ? [...(yahoo.yahooEtfs || [])]
+   680→      : [...(yahoo.yahooStocks || [])];
+   681→    if (country) items = items.filter((s) => s.country === country);
+   682→    if (activeSector && activeCategory === 'yahoo_stock') items = items.filter((s) => s.sector === activeSector);
+   683→    if (query.trim().length > 0) doFilter(items, query);
+   684→    else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
+   685→    setActiveIndex(-1);
+   686→  }, [activeCategory, activeSector, query, doFilter]);
+   687→
+   688→  const handleSectorChange = React.useCallback((sector: string | null) => {
+   689→    setActiveSector(sector); setShowSectorPicker(false);
+   690→    const yahoo = yahooCacheRef.current; if (!yahoo) return;
+   691→    let items: InstrumentItem[] = [...(yahoo.yahooStocks || [])];
+   692→    if (activeCountry) items = items.filter((s) => s.country === activeCountry);
+   693→    if (sector) items = items.filter((s) => s.sector === sector);
+   694→    if (query.trim().length > 0) doFilter(items, query);
+   695→    else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
+   696→    setActiveIndex(-1);
+   697→  }, [activeCountry, query, doFilter]);
+   698→
+   699→  /* Back to all categories */
+   700→  const handleBackToCategories = React.useCallback(() => {
+   701→    setActiveCategory('all');
+   702→    setActiveCountry(null); setActiveSector(null); setCountrySearch('');
+   703→    getPopular().catch((err) => {
+   704→      console.warn('[Search] handleBackToCategories error:', err);
+   705→      setResults([]);
+   706→      setTotalMatched(0);
+   707→    });
+   708→  }, [getPopular]);
+   709→
+   710→  const handleChange = React.useCallback((value: string) => {
+   711→    setQuery(value);
+   712→    getItemsForCategory(activeCategory).then((items) => {
+   713→      if (value.trim().length === 0) {
+   714→        if (activeCategory === 'all') getPopular().catch(() => { setResults([]); setTotalMatched(0); });
+   715→        else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
+   716→      } else doFilter(items, value);
+   717→    }).catch((err) => {
+   718→      console.warn('[Search] handleChange error:', err);
+   719→      setResults([]);
+   720→      setTotalMatched(0);
+   721→    });
+   722→  }, [activeCategory, getItemsForCategory, getPopular, doFilter]);
+   723→
+   724→  const handleFocus = React.useCallback(() => { setLoading(true); showDropdown(query).catch(() => {}); }, [query, showDropdown]);
+   725→
+   726→  const selectSymbol = React.useCallback((s: InstrumentItem) => {
+   727→    setQuery(s.l18); setOpen(false); addRecentSearch(s.l18);
+   728→    onSelect?.(s.l18, s.category, s.insCode, s.tgjuKey, s.finpySector, s.finpyIndex, s.webId, s.yahooSymbol);
+   729→    inputRef.current?.blur(); modalInputRef.current?.blur();
+   730→  }, [onSelect]);
+   731→
+   732→  const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+   733→    if (!open || results.length === 0) {
+   734→      if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); handleFocus(); }
+   735→      return;
+   736→    }
+   737→    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex((p) => p < results.length - 1 ? p + 1 : 0); }
+   738→    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((p) => p > 0 ? p - 1 : results.length - 1); }
+   739→    else if (e.key === 'Enter') { e.preventDefault(); if (activeIndex >= 0) selectSymbol(results[activeIndex]); }
+   740→    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); inputRef.current?.blur(); modalInputRef.current?.blur(); }
+   741→  }, [open, results, activeIndex, selectSymbol, handleFocus]);
+   742→
+   743→  /* ── Effects ── */
+   744→  React.useEffect(() => { if (activeIndex >= 0) itemRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' }); }, [activeIndex]);
+   745→
+   746→  React.useEffect(() => {
+   747→    if (!open) return;
+   748→    const handler = (e: MouseEvent) => {
+   749→      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+   750→          inputRef.current && !inputRef.current.contains(e.target as Node)) {
+   751→        setOpen(false); setShowIndustryPicker(false); setShowSectorPicker(false);
+   752→      }
+   753→    };
+   754→    document.addEventListener('mousedown', handler);
+   755→    return () => document.removeEventListener('mousedown', handler);
+   756→  }, [open]);
+   757→
+   758→  /* Recalculate anchor on scroll/resize */
+   759→  React.useEffect(() => {
+   760→    if (!open) return;
+   761→    const onScroll = () => updateAnchor();
+   762→    const onResize = () => updateAnchor();
+   763→    window.addEventListener('scroll', onScroll, true);
+   764→    window.addEventListener('resize', onResize);
+   765→    return () => { window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', onResize); };
+   766→  }, [open, updateAnchor]);
+   767→
+   768→  const clear = () => {
+   769→    setQuery(''); setActiveIndustry(null); setActiveCountry(null);
+   770→    setActiveSector(null); setActiveCategory('all'); setCountrySearch('');
+   771→    setResults([]); modalInputRef.current?.focus();
+   772→  };
+   773→
+   774→  const isPopular = query.trim().length === 0 && activeCategory === 'all' && !activeCountry;
+   775→  const isSearch = query.trim().length > 0;
+   776→  const industries = cacheRef.current?.industries || [];
+   777→  const hasActiveFilters = activeCategory !== 'all' || activeCountry || activeSector || activeIndustry;
+   778→
+   779→  /* Active category info for breadcrumb */
+   780→  const activeCategoryLabel = React.useMemo(() => {
+   781→    if (activeCategory === 'all') return null;
+   782→    return CATEGORIES.find(c => c.key === activeCategory)?.label || null;
+   783→  }, [activeCategory]);
+   784→
+   785→  const activeCategoryGroup = React.useMemo(() => {
+   786→    if (activeCategory === 'all') return null;
+   787→    for (const group of CATEGORY_GROUPS) {
+   788→      if (group.items.some(c => c.key === activeCategory)) return group.label;
+   789→    }
+   790→    return null;
+   791→  }, [activeCategory]);
+   792→
+   793→  /* ── Render price ── */
+   794→  const renderPrice = (item: InstrumentItem) => {
+   795→    const source = getSource(item);
+   796→    const decimals = item.decimals ?? 0;
+   797→    const currencyUnit = item.currencyUnit;
+   798→
+   799→    if (item.category === 'index') {
+   800→      return (
+   801→        <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
+   802→          <span className='text-xs font-semibold text-[#111827]'>{formatIdx(item.pl)}</span>
+   803→          <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' : item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
+   804→            {item.pcp > 0 ? '+' : ''}{item.pcp?.toFixed(2)}%
+   805→          </span>
+   806→        </div>
+   807→      );
+   808→    }
+   809→    if (source === 'yahoo') {
+   810→      const cur = item.currencyUnit || item.currency || item.unit || 'USD';
+   811→      if (item.pl === 0) return <div className='flex shrink-0 flex-col items-end gap-0.5'><span className='text-xs text-[#6b7280]'>—</span></div>;
+   812→      return (
+   813→        <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
+   814→          <div className='flex items-center gap-1'>
+   815→            <span className='text-xs font-semibold text-[#111827]'>{formatNum(item.pl, decimals)}</span>
+   816→            <span className='text-[9px] text-[#9ca3af]'>{cur}</span>
+   817→          </div>
+   818→          <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' : item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
+   819→            {item.pcp > 0 ? '+' : ''}{item.pcp?.toFixed(2)}%
+   820→          </span>
+   821→        </div>
+   822→      );
+   823→    }
+   824→    if (source === 'tgju' && item.pl === 0) return <div className='flex shrink-0 flex-col items-end gap-0.5'><span className='text-xs text-[#6b7280]'>—</span></div>;
+   825→    const isUp = item.pcp > 0;
+   826→    // For TGJU, show currency unit if it's not ریال (e.g. تتر, دلار)
+   827→    const showUnit = source === 'tgju' && currencyUnit && currencyUnit !== 'ریال';
+   828→    return (
+   829→      <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
+   830→        <div className='flex items-center gap-1'>
+   831→          <span className='text-xs font-semibold text-[#111827]'>{formatNum(item.pl, decimals)}</span>
+   832→          {showUnit && <span className='text-[9px] text-[#9ca3af]'>{currencyUnit}</span>}
+   833→        </div>
+   834→        <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', isUp ? 'bg-emerald-50 text-emerald-700' : !isUp && item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
+   835→          {isUp ? '+' : ''}{item.pcp?.toFixed(2)}%
+   836→        </span>
+   837→      </div>
+   838→    );
+   839→  };
+   840→
+   841→  /* ── Render item ── */
+   842→  const renderItem = (item: InstrumentItem, index: number) => {
+   843→    const isActive = index === activeIndex;
+   844→    const source = getSource(item);
+   845→    const flag = getCountryFlag(item.country) || getCountryFlag(item.countryEn);
+   846→    return (
+   847→      <div
+   848→        key={`${item.category}-${item.l18}-${item.tgjuKey || ''}-${item.yahooSymbol || ''}-${index}`}
+   849→        ref={(el) => { itemRefs.current[index] = el; }}
+   850→        role='option' aria-selected={isActive}
+   851→        onMouseEnter={() => setActiveIndex(index)}
+   852→        onClick={() => selectSymbol(item)}
+   853→        className={cn(
+   854→          'flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm transition-all',
+   855→          'border-b border-[#e5e7eb]/50 last:border-b-0',
+   856→          isActive ? (source === 'yahoo' ? 'bg-indigo-50/80' : source === 'tgju' ? 'bg-teal-50/80' : 'bg-amber-50/80') : 'hover:bg-[#f8f9fa]',
+   857→        )}
+   858→      >
+   859→        <div className='flex min-w-0 flex-1 items-start gap-2.5'>
+   860→          <div className='flex shrink-0 items-center justify-center w-5 pt-0.5'>
+   861→            {item.pcp > 0 && <TrendingUp className='w-3.5 h-3.5 text-emerald-600' />}
+   862→            {item.pcp < 0 && <TrendingDown className='w-3.5 h-3.5 text-red-600' />}
+   863→            {item.pcp === 0 && <div className='w-2 h-2 rounded-full bg-gray-300' />}
+   864→          </div>
+   865→          <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+   866→            <div className='flex items-center gap-1.5 flex-wrap'>
+   867→              <span className='truncate font-bold text-[13px] text-[#111827]'>{item.l18}</span>
+   868→              <span className={cn('text-[9px] px-1.5 py-px rounded font-medium shrink-0', CATEGORY_COLORS[item.category] || 'bg-gray-50 text-gray-600')}>
+   869→                {CATEGORY_LABELS[item.category] || item.category}
+   870→              </span>
+   871→              <span className={cn('text-[8px] px-1 py-px rounded font-medium shrink-0 border', SOURCE_STYLES[source])}>
+   872→                {source === 'tse' ? 'بورس' : source === 'tgju' ? 'TGJU' : 'Yahoo'}
+   873→              </span>
+   874→            </div>
+   875→            <div className='flex items-center gap-1.5 text-[11px] text-[#6b7280] leading-tight'>
+   876→              {flag && <span className='shrink-0'>{flag}</span>}
+   877→              {item.yahooSymbol && <span className='font-mono font-medium text-[#374151]'>{item.yahooSymbol}</span>}
+   878→              {item.nameEn && item.nameEn !== item.l18 && <span className='truncate'>{item.nameEn}</span>}
+   879→              {!item.nameEn && item.l30 && item.l30 !== item.l18 && <span className='truncate'>{item.l30}</span>}
+   880→              {item.exchange && <span className='shrink-0 text-[#9ca3af]'>{item.exchange}</span>}
+   881→              {item.cs && (item.category === 'stock' || source === 'yahoo') && <span className='truncate text-[#9ca3af]'>· {item.cs}</span>}
+   882→            </div>
+   883→          </div>
+   884→        </div>
+   885→        {renderPrice(item)}
+   886→      </div>
+   887→    );
+   888→  };
+   889→
+   890→  /* ── Dropdown style (positioned below input on desktop, centered on mobile) ── */
+   891→  const dropdownStyle = React.useMemo((): React.CSSProperties => {
+   892→    const base: React.CSSProperties = {
+   893→      width: 'min(860px, 96vw)',
+   894→      maxHeight: 'calc(100dvh - 100px)',
+   895→      display: 'flex',
+   896→      flexDirection: 'column',
+   897→    };
+   898→    if (anchorRect && typeof window !== 'undefined' && window.innerWidth >= 640) {
+   899→      /* Position below the input, clamped to viewport */
+   900→      const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - 860 - 8));
+   901→      return { ...base, position: 'fixed', top: anchorRect.top, left };
+   902→    }
+   903→    return { ...base, position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+   904→  }, [anchorRect]);
+   905→
+   906→  /* ═══════════════════════════════════════════════════════════ */
+   907→  /* Render */
+   908→  /* ═══════════════════════════════════════════════════════════ */
+   909→  return (
+   910→    <div dir='rtl' className={cn('relative', className)}>
+   911→      {/* Trigger input */}
+   912→      <div className='relative'>
+   913→        <Search className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280] pointer-events-none' />
+   914→        <Input ref={inputRef} type='text' value={query} onChange={(e) => handleChange(e.target.value)}
+   915→          onFocus={handleFocus} onKeyDown={handleKeyDown} placeholder={placeholder} suppressHydrationWarning
+   916→          className={cn(
+   917→            'h-11 w-full rounded-xl border border-[#e5e7eb] bg-white text-sm text-[#111827] placeholder:text-[#9ca3af]',
+   918→            'transition-all shadow-sm focus-visible:border-blue-400 focus-visible:ring-blue-400/20 focus-visible:ring-[3px] focus-visible:shadow-md pr-10',
+   919→            compact ? 'h-9 text-xs pr-9' : '',
+   920→          )}
+   921→          autoComplete='off' spellCheck={false}
+   922→        />
+   923→        {query && <button onClick={clear} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#111827] transition-colors' type='button'><X className='w-4 h-4' /></button>}
+   924→      </div>
+   925→
+   926→      {/* Backdrop */}
+   927→      {open && (
+   928→        <div className='fixed inset-0 z-[99] bg-black/20 backdrop-blur-[2px]'
+   929→          onClick={() => { setOpen(false); inputRef.current?.blur(); modalInputRef.current?.blur(); }} />
+   930→      )}
+   931→
+   932→      {/* Dropdown panel */}
+   933→      {open && (
+   934→        <div ref={dropdownRef}
+   935→          className='z-[100] rounded-2xl border border-[#e5e7eb] bg-white shadow-2xl shadow-gray-900/15 overflow-hidden'
+   936→          style={dropdownStyle}
+   937→        >
+   938→          {/* ═══ Search input ═══ */}
+   939→          <div className='shrink-0 flex items-center gap-2 px-4 pt-3 pb-2'>
+   940→            <Search className='w-4 h-4 text-[#6b7280] shrink-0' />
+   941→            <input
+   942→              ref={modalInputRef}
+   943→              type='text'
+   944→              value={query}
+   945→              onChange={(e) => handleChange(e.target.value)}
+   946→              onKeyDown={handleKeyDown}
+   947→              placeholder='نام فارسی، English name، نماد (AAPL)، country:US، exchange:NASD ...'
+   948→              className='flex-1 h-9 text-sm text-[#111827] placeholder:text-[#9ca3af] bg-transparent focus:outline-none'
+   949→              autoFocus
+   950→              autoComplete='off' spellCheck={false}
+   951→            />
+   952→            {query && <button onClick={clear} className='p-1 rounded-md hover:bg-[#f3f4f6] text-[#9ca3af] hover:text-[#374151] transition-colors' type='button'><X className='w-4 h-4' /></button>}
+   953→            <div className='w-px h-5 bg-[#e5e7eb] shrink-0' />
+   954→            <button onClick={() => { setOpen(false); inputRef.current?.blur(); modalInputRef.current?.blur(); }}
+   955→              className='p-1 rounded-md hover:bg-[#f3f4f6] text-[#6b7280] hover:text-[#374151] transition-colors' type='button'>
+   956→              <X className='w-4 h-4' />
+   957→            </button>
+   958→          </div>
+   959→
+   960→          {/* ═══ Breadcrumb / Back navigation ═══ */}
+   961→          {hasActiveFilters && (
+   962→            <div className='shrink-0 flex items-center gap-1.5 px-4 py-2 border-b border-[#e5e7eb]/60 bg-[#f9fafb]'>
+   963→              <button onClick={handleBackToCategories} type='button'
+   964→                className='flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors'
+   965→              >
+   966→                <ArrowLeft className='w-3.5 h-3.5' />
+   967→                <span>همه دسته‌بندی‌ها</span>
+   968→              </button>
+   969→              <ChevronLeft className='w-3 h-3 text-[#9ca3af]' />
+   970→              {activeCategoryGroup && <span className='text-[11px] text-[#9ca3af]'>{activeCategoryGroup}</span>}
+   971→              {activeCategoryGroup && <ChevronLeft className='w-3 h-3 text-[#9ca3af]' />}
+   972→              <span className='text-xs font-semibold text-[#374151]'>{activeCategoryLabel}</span>
+   973→              {activeCountry && (
+   974→                <>
+   975→                  <ChevronLeft className='w-3 h-3 text-[#9ca3af]' />
+   976→                  <span className='text-xs text-indigo-600 font-medium'>{getCountryFlag(activeCountry)} {activeCountry}</span>
+   977→                </>
+   978→              )}
+   979→              {activeSector && (
+   980→                <>
+   981→                  <ChevronLeft className='w-3 h-3 text-[#9ca3af]' />
+   982→                  <span className='text-xs text-purple-600 font-medium'>{activeSector}</span>
+   983→                </>
+   984→              )}
+   985→            </div>
+   986→          )}
+   987→
+   988→          {/* ═══ Category tabs — grouped ═══ */}
+   989→          <div className='shrink-0 px-3 py-2 border-b border-[#e5e7eb]'>
+   990→            {/* "All" tab */}
+   991→            <div className='flex flex-wrap items-center gap-1'>
+   992→              <button onClick={() => handleCategoryChange('all')} type='button'
+   993→                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all border',
+   994→                  activeCategory === 'all'
+   995→                    ? 'bg-gray-100 text-gray-900 border-gray-300 shadow-sm'
+   996→                    : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] border-transparent',
+   997→                )}
+   998→              >
+   999→                <Layers className='w-3.5 h-3.5' />همه
+  1000→              </button>
+  1001→
+  1002→              {/* Grouped categories */}
+  1003→              {CATEGORY_GROUPS.map((group) => (
+  1004→                <React.Fragment key={group.label}>
+  1005→                  <div className='w-px h-4 bg-[#e5e7eb] mx-0.5' />
+  1006→                  {group.items.map((cat) => {
+  1007→                    const Icon = cat.icon;
+  1008→                    const isActive = activeCategory === cat.key;
+  1009→                    const isYahoo = YAHOO_SPECIFIC_CATEGORIES.has(cat.key);
+  1010→                    const isTgju = TGJU_CATEGORIES.has(cat.key);
+  1011→                    return (
+  1012→                      <button key={cat.key} onClick={() => handleCategoryChange(cat.key)} type='button'
+  1013→                        className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border',
+  1014→                          isActive
+  1015→                            ? isYahoo ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm'
+  1016→                              : isTgju ? 'bg-teal-50 text-teal-700 border-teal-200 shadow-sm'
+  1017→                              : 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm'
+  1018→                            : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] border-transparent',
+  1019→                        )}
+  1020→                      >
+  1021→                        <Icon className='w-3.5 h-3.5' />{cat.label}
+  1022→                      </button>
+  1023→                    );
+  1024→                  })}
+  1025→                </React.Fragment>
+  1026→              ))}
+  1027→            </div>
+  1028→          </div>
+  1029→
+  1030→          {/* ═══ TSE Industry filter ═══ */}
+  1031→          {activeCategory === 'stocks' && (
+  1032→            <div className='shrink-0 relative px-4 py-2 border-b border-[#e5e7eb]'>
+  1033→              <div className='flex items-center gap-2 overflow-x-auto' style={{ scrollbarWidth: 'none' }}>
+  1034→                <button onClick={() => handleIndustryChange(null)} type='button'
+  1035→                  className={cn('flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-all shrink-0',
+  1036→                    !activeIndustry ? 'bg-blue-50 text-blue-700' : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]')}
+  1037→                >
+  1038→                  <Layers className='w-3 h-3' />همه صنایع
+  1039→                </button>
+  1040→                {industries.slice(0, 10).map((ind) => (
+  1041→                  <button key={ind} onClick={() => handleIndustryChange(ind)} type='button'
+  1042→                    className={cn('px-3 py-1 rounded-md text-[11px] whitespace-nowrap transition-all shrink-0',
+  1043→                      activeIndustry === ind ? 'bg-blue-50 text-blue-700 font-medium' : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]')}
+  1044→                  >{ind}</button>
+  1045→                ))}
+  1046→                {industries.length > 10 && (
+  1047→                  <div className='relative shrink-0'>
+  1048→                    <button onClick={() => setShowIndustryPicker(!showIndustryPicker)} type='button'
+  1049→                      className={cn('flex items-center gap-1 px-3 py-1 rounded-md text-[11px] transition-all',
+  1050→                        showIndustryPicker ? 'bg-blue-50 text-blue-700' : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]')}
+  1051→                    >بیشتر<ChevronDown className={cn('w-3 h-3 transition-transform', showIndustryPicker && 'rotate-180')} /></button>
+  1052→                    {showIndustryPicker && (
+  1053→                      <div className='absolute top-full mt-1 left-0 right-0 z-10 rounded-lg border border-[#e5e7eb] bg-white shadow-xl p-2 max-h-[200px] overflow-y-auto'
+  1054→                        style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
+  1055→                        {industries.slice(10).map((ind) => (
+  1056→                          <button key={ind} onClick={() => handleIndustryChange(ind)} type='button'
+  1057→                            className={cn('block w-full text-right px-3 py-1.5 rounded-md text-[11px] transition-all',
+  1058→                              activeIndustry === ind ? 'bg-blue-50 text-blue-700 font-medium' : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]')}
+  1059→                          >{ind}</button>
+  1060→                        ))}
+  1061→                      </div>
+  1062→                    )}
+  1063→                  </div>
+  1064→                )}
+  1065→              </div>
+  1066→              {activeIndustry && (
+  1067→                <div className='mt-1.5 flex items-center gap-1.5 text-[10px] text-blue-700'>
+  1068→                  <span>صنعت:</span><span className='font-bold'>{activeIndustry}</span>
+  1069→                  <button onClick={() => handleIndustryChange(null)} className='mr-1 hover:text-blue-600' type='button'><X className='w-3 h-3' /></button>
+  1070→                </div>
+  1071→              )}
+  1072→            </div>
+  1073→          )}
+  1074→
+  1075→          {/* ═══ Country + Sector filters (ONLY for Yahoo-specific categories) ═══ */}
+  1076→          {showCountryFilter && yahooCountries.length > 0 && (
+  1077→            <div className='shrink-0 px-4 py-3 border-b border-[#e5e7eb] bg-gradient-to-b from-[#f8f9fb] to-[#f1f3f5]'>
+  1078→              {/* Country selector header */}
+  1079→              <div className='flex items-center justify-between mb-2.5'>
+  1080→                <div className='flex items-center gap-2'>
+  1081→                  <div className='flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-100'>
+  1082→                    <MapPin className='w-3.5 h-3.5 text-indigo-600' />
+  1083→                  </div>
+  1084→                  <span className='text-xs font-bold text-[#374151]'>انتخاب کشور</span>
+  1085→                  {activeCountry && (
+  1086→                    <span className='flex items-center gap-1 text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200'>
+  1087→                      <span>{getCountryFlag(activeCountry)}</span>
+  1088→                      <span className='font-semibold'>{activeCountry}</span>
+  1089→                      <span className='text-indigo-400'>·</span>
+  1090→                      <span>{(countryCounts[activeCountry] || 0).toLocaleString('fa-IR')} ابزار</span>
+  1091→                    </span>
+  1092→                  )}
+  1093→                </div>
+  1094→                <div className='relative'>
+  1095→                  <Search className='absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9ca3af] pointer-events-none' />
+  1096→                  <input type='text' value={countrySearch} onChange={(e) => setCountrySearch(e.target.value)}
+  1097→                    placeholder='فیلتر کشور...'
+  1098→                    className='h-8 w-40 text-[11px] pr-8 pl-3 rounded-lg border border-[#e5e7eb] bg-white placeholder:text-[#b0b7c3] focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-100 transition-all'
+  1099→                  />
+  1100→                  {countrySearch && (
+  1101→                    <button onClick={() => setCountrySearch('')} className='absolute left-2 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#374151]' type='button'>
+  1102→                      <X className='w-3 h-3' />
+  1103→                    </button>
+  1104→                  )}
+  1105→                </div>
+  1106→              </div>
+  1107→              {/* Country chips */}
+  1108→              <div className='flex flex-wrap gap-2'>
+  1109→                <button onClick={() => handleCountryChange(null)} type='button'
+  1110→                  className={cn('flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border shrink-0 shadow-sm',
+  1111→                    !activeCountry ? 'bg-white text-indigo-700 border-indigo-300 ring-2 ring-indigo-100' : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border-[#e5e7eb] shadow-none',
+  1112→                  )}
+  1113→                >
+  1114→                  <Globe className='w-3.5 h-3.5' />
+  1115→                  <span>همه کشورها</span>
+  1116→                </button>
+  1117→                {(countrySearch.trim() ? filteredCountries : yahooCountries).map((c) => {
+  1118→                  const count = countryCounts[c] || 0;
+  1119→                  const isActive = activeCountry === c;
+  1120→                  return (
+  1121→                    <button key={c} onClick={() => handleCountryChange(isActive ? null : c)} type='button'
+  1122→                      className={cn('flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border shrink-0',
+  1123→                        isActive ? 'bg-white text-indigo-700 border-indigo-300 ring-2 ring-indigo-100 shadow-sm' : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border-transparent',
+  1124→                      )}
+  1125→                    >
+  1126→                      <span className='text-base leading-none'>{getCountryFlag(c)}</span>
+  1127→                      <span>{c}</span>
+  1128→                      <span className={cn('text-[10px] tabular-nums', isActive ? 'text-indigo-400' : 'text-[#9ca3af]')}>({count.toLocaleString('fa-IR')})</span>
+  1129→                    </button>
+  1130→                  );
+  1131→                })}
+  1132→              </div>
+  1133→
+  1134→              {/* Sector row (only for yahoo_stock) */}
+  1135→              {activeCategory === 'yahoo_stock' && yahooSectors.length > 0 && (
+  1136→                <div className='mt-3 pt-3 border-t border-[#e5e7eb]/60'>
+  1137→                  <div className='flex items-center gap-2 mb-2'>
+  1138→                    <div className='flex items-center justify-center w-6 h-6 rounded-lg bg-purple-100'>
+  1139→                      <Zap className='w-3.5 h-3.5 text-purple-600' />
+  1140→                    </div>
+  1141→                    <span className='text-xs font-bold text-[#374151]'>صنعت (Sector)</span>
+  1142→                  </div>
+  1143→                  <div className='flex flex-wrap gap-1.5'>
+  1144→                    <button onClick={() => handleSectorChange(null)} type='button'
+  1145→                      className={cn('px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all border shrink-0',
+  1146→                        !activeSector ? 'bg-purple-100 text-purple-800 border-purple-300' : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border-transparent',
+  1147→                      )}
+  1148→                    >همه صنایع</button>
+  1149→                    {yahooSectors.slice(0, 10).map((s) => (
+  1150→                      <button key={s} onClick={() => handleSectorChange(activeSector === s ? null : s)} type='button'
+  1151→                        className={cn('px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all border shrink-0',
+  1152→                          activeSector === s ? 'bg-purple-100 text-purple-800 border-purple-300' : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border-transparent',
+  1153→                        )}
+  1154→                      >{s}</button>
+  1155→                    ))}
+  1156→                    {yahooSectors.length > 10 && (
+  1157→                      <div className='relative shrink-0'>
+  1158→                        <button onClick={() => setShowSectorPicker(!showSectorPicker)} type='button'
+  1159→                          className={cn('flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all border shrink-0',
+  1160→                            showSectorPicker ? 'bg-purple-100 text-purple-800 border-purple-300' : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border-transparent',
+  1161→                          )}
+  1162→                        >بیشتر<ChevronDown className={cn('w-3 h-3 transition-transform', showSectorPicker && 'rotate-180')} /></button>
+  1163→                        {showSectorPicker && (
+  1164→                          <div className='absolute top-full mt-1 left-0 z-10 rounded-lg border border-[#e5e7eb] bg-white shadow-xl p-2 min-w-[200px] max-h-[220px] overflow-y-auto'
+  1165→                            style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
+  1166→                            {yahooSectors.slice(10).map((s) => (
+  1167→                              <button key={s} onClick={() => handleSectorChange(s)} type='button'
+  1168→                                className={cn('block w-full text-right px-3 py-2 rounded-md text-[11px] transition-all',
+  1169→                                  activeSector === s ? 'bg-purple-50 text-purple-700 font-medium' : 'text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6]',
+  1170→                                )}
+  1171→                              >{s}</button>
+  1172→                            ))}
+  1173→                          </div>
+  1174→                        )}
+  1175→                      </div>
+  1176→                    )}
+  1177→                  </div>
+  1178→                </div>
+  1179→              )}
+  1180→            </div>
+  1181→          )}
+  1182→
+  1183→          {/* ═══ Search hint ═══ */}
+  1184→          {isSearch && (
+  1185→            <div className='shrink-0 px-4 py-2 border-b border-[#e5e7eb]/50 bg-[#f9fafb]'>
+  1186→              <span className='flex items-center gap-2 text-[11px] text-[#6b7280]'>
+  1187→                <Filter className='w-3.5 h-3.5 text-[#9ca3af]' />
+  1188→                <span>جستجوی <strong className='text-[#374151]'>پیشرفته</strong>: نام فارسی، English name، نماد (AAPL)،
+  1189→                  <span className='font-mono text-[10px] bg-gray-100 px-1 rounded mx-0.5'>country:US</span>
+  1190→                  <span className='font-mono text-[10px] bg-gray-100 px-1 rounded mx-0.5'>exchange:NASDAQ</span>
+  1191→                  <span className='font-mono text-[10px] bg-gray-100 px-1 rounded mx-0.5'>sector:Tech</span>
+  1192→                </span>
+  1193→              </span>
+  1194→            </div>
+  1195→          )}
+  1196→
+  1197→          {/* ═══ Content area ═══ */}
+  1198→          <div className='flex-1 overflow-hidden flex flex-col min-h-0'>
+  1199→            {/* Loading */}
+  1200→            {loading && results.length === 0 && (
+  1201→              <div className='flex-1 flex items-center justify-center gap-2 text-sm text-[#6b7280]'><Spinner /><span>در حال بارگذاری ...</span></div>
+  1202→            )}
+  1203→
+  1204→            {/* Empty */}
+  1205→            {!loading && results.length === 0 && query.trim().length > 0 && (
+  1206→              <div className='flex-1 flex flex-col items-center justify-center py-10'>
+  1207→                <div className='w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3'>
+  1208→                  <Search className='w-5 h-5 text-gray-400' />
+  1209→                </div>
+  1210→                <div className='text-[#6b7280] text-sm mb-1'>ابزاری با این نام یافت نشد</div>
+  1211→                <div className='text-[#9ca3af] text-xs text-center max-w-xs'>
+  1212→                  نام فارسی، نام انگلیسی، نماد (مثلاً AAPL)، کشور یا صنعت را جستجو کنید.
+  1213→                  <br />از عملگرهای <span className='font-mono text-[10px]'>country:US</span> یا <span className='font-mono text-[10px]'>exchange:NASD</span> استفاده کنید.
+  1214→                </div>
+  1215→              </div>
+  1216→            )}
+  1217→
+  1218→            {/* Recent searches */}
+  1219→            {!loading && results.length === 0 && query.trim().length === 0 && activeCategory === 'all' && !activeCountry && recentSearches.length > 0 && (
+  1220→              <div className='px-4 py-3'>
+  1221→                <div className='flex items-center gap-1.5 text-[11px] text-[#9ca3af] mb-2'><Clock className='w-3 h-3' />جستجوهای اخیر</div>
+  1222→                <div className='flex flex-wrap gap-1.5'>{recentSearches.map((r) => (
+  1223→                  <button key={r} onClick={() => { setQuery(r); handleChange(r); }} type='button'
+  1224→                    className='px-2.5 py-1 rounded-lg text-[11px] text-[#374151] bg-[#f3f4f6] hover:bg-[#e5e7eb] transition-colors'
+  1225→                  >{r}</button>
+  1226→                ))}</div>
+  1227→              </div>
+  1228→            )}
+  1229→
+  1230→            {/* Results */}
+  1231→            {results.length > 0 && (
+  1232→              <>
+  1233→                <div className='shrink-0 flex items-center justify-between px-4 py-2 border-b border-[#e5e7eb]'>
+  1234→                  <span className='text-xs text-[#6b7280]'>
+  1235→                    {isPopular && <><Star className='w-3 h-3 inline-block ml-1 text-amber-500' />محبوب‌ترین‌ها</>}
+  1236→                    {!isPopular && !isSearch && (
+  1237→                      <>
+  1238→                        {activeCategoryGroup && <span className='ml-1 text-[#374151] font-medium'>{activeCategoryGroup}</span>}
+  1239→                        {activeCategoryLabel && <><ChevronLeft className='w-3 h-3 inline-block mx-0.5 text-[#9ca3af]' /><span className='font-semibold'>{activeCategoryLabel}</span></>}
+  1240→                        {activeCountry && <><ChevronLeft className='w-3 h-3 inline-block mx-0.5 text-[#9ca3af]' /><span className='text-indigo-600'>{getCountryFlag(activeCountry)} {activeCountry}</span></>}
+  1241→                        {activeSector && <><ChevronLeft className='w-3 h-3 inline-block mx-0.5 text-[#9ca3af]' /><span className='text-purple-600'>{activeSector}</span></>}
+  1242→                        {!activeCategoryGroup && !activeCategoryLabel && !activeCountry && !activeSector && <span>همه ابزارها</span>}
+  1243→                      </>
+  1244→                    )}
+  1245→                    {isSearch && <><span className='text-[#374151] font-medium'>{totalMatched.toLocaleString('fa-IR')}</span> نتیجه</>}
+  1246→                  </span>
+  1247→                  {isSearch && <span className='text-[10px] text-[#9ca3af]'>↑↓ ناوبری · Enter انتخاب · Esc بستن</span>}
+  1248→                </div>
+  1249→
+  1250→                <div role='listbox' className='flex-1 overflow-y-auto min-h-0' style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
+  1251→                  {results.map((item, index) => renderItem(item, index))}
+  1252→                </div>
+  1253→
+  1254→                {!isPopular && totalMatched > MAX_RESULTS && (
+  1255→                  <div className='shrink-0 px-4 py-2 border-t border-[#e5e7eb] text-center text-[11px] text-[#9ca3af]'>
+  1256→                    و {((totalMatched - MAX_RESULTS).toLocaleString('fa-IR'))} مورد دیگر ... عبارت دقیق‌تری وارد کنید
+  1257→                  </div>
+  1258→                )}
+  1259→              </>
+  1260→            )}
+  1261→          </div>
+  1262→        </div>
+  1263→      )}
+  1264→    </div>
+  1265→  );
+  1266→}
+  1267→
