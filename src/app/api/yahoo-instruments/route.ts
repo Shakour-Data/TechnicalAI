@@ -18,7 +18,13 @@ const CATEGORY_LABEL_MAP: Record<YahooCategory, string> = {
 
 export async function GET() {
   try {
-    const quotes = await fetchYahooQuotes();
+    // Always return instrument definitions, even if live quotes fail
+    let quotes: Awaited<ReturnType<typeof fetchYahooQuotes>> = [];
+    try {
+      quotes = await fetchYahooQuotes();
+    } catch (err) {
+      console.warn('[Yahoo Instruments] Quote fetch failed, returning zero-price instruments:', err);
+    }
 
     // Build a map of symbol -> quote for fast lookup
     const quoteMap = new Map(quotes.map((q) => [q.symbol, q]));

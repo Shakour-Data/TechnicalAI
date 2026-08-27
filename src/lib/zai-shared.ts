@@ -92,7 +92,8 @@ async function processQueue() {
     }
 
     // 3. Pick next item (check if timed out)
-    const item = unifiedQueue.shift()!;
+    const item = unifiedQueue.shift();
+    if (!item) break;
     if (Date.now() > item.timeoutAt) {
       item.reject(new Error(`Timed out in queue: ${item.name}`));
       continue;

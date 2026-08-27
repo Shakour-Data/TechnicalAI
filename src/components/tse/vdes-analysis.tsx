@@ -631,6 +631,16 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const [aiRetryCount, setAiRetryCount] = useState(0);
   const [aiRetryDelay, setAiRetryDelay] = useState(0);
   const aiAutoRetryRef = useRef(0);
+  // Live countdown timer for retry delay
+  const [aiCountdown, setAiCountdown] = useState(0);
+  useEffect(() => {
+    if (aiRetryDelay <= 0) { setAiCountdown(0); return; }
+    setAiCountdown(aiRetryDelay);
+    const iv = setInterval(() => {
+      setAiCountdown((prev) => { if (prev <= 1) { clearInterval(iv); return 0; } return prev - 1; });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [aiRetryDelay]);
 
   // Listen for retry events from the retry button
   useEffect(() => {
@@ -692,14 +702,18 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           let errMsg = `خطای سرور (${res.status})`;
           let shouldAutoRetry = false;
           let retryAfterSec = 0;
+          // Determine if this status should auto-retry
+          if (res.status === 429 || res.status === 502 || res.status === 503) {
+            shouldAutoRetry = true;
+          }
           try {
             const errBody = await res.json();
             if (errBody.error) errMsg = errBody.error;
             if (errBody.retryAfterSec) retryAfterSec = Number(errBody.retryAfterSec) || 0;
           } catch {
-            if (res.status === 502) { errMsg = 'سرور هوشمند در حال بارگذاری مجدد است...'; shouldAutoRetry = true; }
+            if (res.status === 502) errMsg = 'سرور هوشمند در حال بارگذاری مجدد است...';
             else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست. لطفاً بعداً تلاش کنید.';
-            else if (res.status === 429) { errMsg = 'تعداد درخواست‌ها زیاد است. لطفاً کمی صبر کنید.'; shouldAutoRetry = true; }
+            else if (res.status === 429) errMsg = 'تعداد درخواست‌ها زیاد است. لطفاً کمی صبر کنید.';
           }
           // Auto-retry for rate limit / gateway errors (up to 6 times, with increasing delays)
           const MAX_RETRIES = 6;
@@ -1435,7 +1449,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
               </span>
               {aiRetryDelay > 0 && (
                 <span style={{ fontSize: '0.75rem', color: C.cardSubFg }}>
-                  منتظر رفع محدودیت سرور ... {toFa(aiRetryDelay)} ثانیه دیگر
+                  منتظر رفع محدودیت سرور ... {toFa(aiCountdown > 0 ? aiCountdown : 0)} ثانیه دیگر
                 </span>
               )}
             </div>
@@ -1504,7 +1518,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
 // ── Loading ────────────────────────────────────────────────────────────────────
 
 export function VdesAnalysisSkeleton() {
-  const { colors: C } = useTheme(); // eslint-disable-line
+  const { colors: C } = useTheme();
   return (
     <div className="space-y-7" style={{ background: C.pageBg, padding: '20px 16px 40px', borderRadius: '16px' }}>
       <Skeleton className="h-28 w-full rounded-[32px]" style={{ background: C.cardBg }} />

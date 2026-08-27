@@ -1214,3 +1214,30 @@ Stage Summary:
 - Eliminates queue contention between data fetch and AI analysis
 - Background currency/gold change updates also use direct fetch
 - All instrument types should now load without 502 errors
+
+---
+Task ID: session-continuation-fixes
+Agent: Main
+Task: Fix search "Uncaught (in promise)" errors, fix AI analysis 429 auto-retry bug, improve graceful degradation
+
+Work Log:
+- **Search component error handling (symbol-search.tsx)**:
+  - `fetchData`: Added try/catch, returns EMPTY_TSE_DATA on error instead of throwing
+  - `showDropdown`: Wrapped in try/catch/finally, ensures `setLoading(false)` always called
+  - `handleChange`: Added `.catch()` to promise chain
+  - `handleBackToCategories`: Added `.catch()` to `getPopular()` call
+  - Added `EMPTY_TSE_DATA` constant for safe fallback
+- **Yahoo instruments API (yahoo-instruments/route.ts)**:
+  - Made resilient: wraps `fetchYahooQuotes()` in inner try/catch, returns instrument definitions with zero prices even when Yahoo API fails
+- **AI analysis 429 auto-retry bug (vdes-analysis.tsx)**:
+  - **Critical bug found**: `shouldAutoRetry` was only set to true inside the `catch` block (when `res.json()` parsing fails). When server returns valid JSON with error message + retryAfterSec, the try block succeeds and `shouldAutoRetry` stays false → auto-retry NEVER triggered for 429!
+  - **Fix**: Moved `shouldAutoRetry` check BEFORE the try/catch, based on HTTP status code (429/502/503)
+  - Added live countdown timer (`aiCountdown` state with 1-second interval) for retry delay display
+  - Removed unused eslint-disable directive
+- **zai-shared queue race condition**: Fixed `unifiedQueue.shift()!` non-null assertion that caused TypeError when queue was empty during async cooldown wait
+
+Stage Summary:
+- Search errors: FIXED - all async paths now have error handling, no more "Uncaught (in promise)" errors
+- AI 429 auto-retry: FIXED - auto-retry now correctly triggers for 429 responses with valid JSON body
+- Graceful degradation: IMPLEMENTED - if TSE/TGJU/Yahoo APIs fail, search shows results from available sources
+- Queue race condition: FIXED in zai-shared.ts

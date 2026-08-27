@@ -407,6 +407,8 @@ export default function SymbolSearch({
     return counts;
   }, [open, yahooReady]);
 
+  const EMPTY_TSE_DATA: InstrumentsData = { indices: [], stocks: [], etfs: [], bonds: [], futures: [], salaf: [], mortgage: [], industries: [] };
+
   /* ── Data fetching ── */
   const fetchData = React.useCallback(async (): Promise<InstrumentsData> => {
     if (cacheRef.current) return cacheRef.current;
@@ -414,10 +416,13 @@ export default function SymbolSearch({
     const p = async () => {
       try {
         const r = await fetch('/api/instruments');
-        if (!r.ok) throw new Error(`${r.status}`);
+        if (!r.ok) { console.warn('[Search] /api/instruments returned', r.status); return EMPTY_TSE_DATA; }
         const d: InstrumentsData = await r.json();
         cacheRef.current = d;
         return d;
+      } catch (err) {
+        console.warn('[Search] fetchData failed:', err);
+        return EMPTY_TSE_DATA;
       } finally { fetchRef.current = null; }
     };
     const promise = p(); fetchRef.current = promise; return promise;
@@ -604,15 +609,22 @@ export default function SymbolSearch({
 
   /* ── Show dropdown ── */
   const showDropdown = React.useCallback(async (q: string) => {
-    setOpen(true);
-    updateAnchor();
-    await Promise.all([fetchData(), fetchTgjuData(), fetchYahooData()]);
-    const items = await getItemsForCategory(activeCategory);
-    if (q.trim().length === 0) {
-      if (activeCategory === 'all') await getPopular();
-      else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
-    } else { doFilter(items, q); }
-    setLoading(false);
+    try {
+      setOpen(true);
+      updateAnchor();
+      await Promise.all([fetchData(), fetchTgjuData(), fetchYahooData()]);
+      const items = await getItemsForCategory(activeCategory);
+      if (q.trim().length === 0) {
+        if (activeCategory === 'all') await getPopular();
+        else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
+      } else { doFilter(items, q); }
+    } catch (err) {
+      console.warn('[Search] showDropdown error:', err);
+      setResults([]);
+      setTotalMatched(0);
+    } finally {
+      setLoading(false);
+    }
   }, [fetchData, fetchTgjuData, getItemsForCategory, activeCategory, getPopular, doFilter, updateAnchor]);
 
   /* ── Handlers ── */
@@ -680,7 +692,11 @@ export default function SymbolSearch({
   const handleBackToCategories = React.useCallback(() => {
     setActiveCategory('all');
     setActiveCountry(null); setActiveSector(null); setCountrySearch('');
-    getPopular();
+    getPopular().catch((err) => {
+      console.warn('[Search] handleBackToCategories error:', err);
+      setResults([]);
+      setTotalMatched(0);
+    });
   }, [getPopular]);
 
   const handleChange = React.useCallback((value: string) => {
@@ -690,6 +706,10 @@ export default function SymbolSearch({
         if (activeCategory === 'all') getPopular();
         else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
       } else doFilter(items, value);
+    }).catch((err) => {
+      console.warn('[Search] handleChange error:', err);
+      setResults([]);
+      setTotalMatched(0);
     });
   }, [activeCategory, getItemsForCategory, getPopular, doFilter]);
 
