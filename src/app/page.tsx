@@ -308,7 +308,7 @@ export default function Home() {
     // TGJU instrument: fetch historical data via tgju.org chart API
     if (category && TGJU_CATEGORIES.has(category) && tgjuKey) {
       setLoading(true);
-      setLoadingMessage('در حال دریافت داده‌های تاریخی ... (حدود ۱۵ ثانیه)');
+      setLoadingMessage('در حال دریافت داده‌های تاریخی ...');
       setError(null);
       setData(null);
       lastFetchRef.current = { symbol, category, insCode, tgjuKey, finpySector, finpyIndex, webId, yahooSymbol };

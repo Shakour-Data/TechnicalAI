@@ -463,7 +463,7 @@ export async function fetchTgjuInstruments(): Promise<TgjuInstrument[]> {
 
 /**
  * Background task: fetch last 2 candles for currency/gold items to compute accurate daily change.
- * Uses rate-limited page_reader to avoid 429.
+ * Uses direct fetch to avoid queue contention.
  * Only updates change/changePercent — keeps the live price from tgju-api.
  */
 async function backgroundFetchCurrencyGoldChange(instruments: TgjuInstrument[]) {
@@ -474,14 +474,12 @@ async function backgroundFetchCurrencyGoldChange(instruments: TgjuInstrument[]) 
   // Limit to first 10 to avoid rate-limiting (most important: USD, EUR, gold coin, etc.)
   const priorityKeys = currencyGoldItems.slice(0, 10).map((i) => i.key);
 
-  try {
-    const { rateLimitedPageReader } = await import('@/lib/zai-shared');
-
-    for (const key of priorityKeys) {
- try {
+  for (const key of priorityKeys) {
+    try {
       const url = `${TGJU_CHART_API}/${key}?lang=fa&order_dir=desc&start=0&length=2`;
-      const html = await rateLimitedPageReader(url, 15_000);
-      const jsonStr = html.replace(/<[^>]+>/g, '').trim();
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) continue;
+      const jsonStr = await res.text();
       if (!jsonStr.startsWith('{')) continue;
 
       const data = JSON.parse(jsonStr);
@@ -500,16 +498,13 @@ async function backgroundFetchCurrencyGoldChange(instruments: TgjuInstrument[]) 
           inst.changePercent = ((latestClose - prevClose) / prevClose) * 100;
         }
       }
- } catch {
+    } catch {
       // skip individual errors
- }
     }
-  } catch {
-    // zai-shared import failed — skip background update
   }
 }
 
-/* ─── Fetch historical OHLC data via rate-limited page_reader ── */
+/* ─── Fetch historical OHLC data ── */
 
 export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
   const cached = historyCache.get(tgjuKey);
@@ -519,14 +514,25 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
   }
 
   try {
-    const { rateLimitedPageReader } = await import('@/lib/zai-shared');
-
     const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=5000`;
 
-    const html = await rateLimitedPageReader(url, 30_000);
-
-    // Strip HTML tags (page_reader wraps in <pre> tags)
-    const jsonStr = html.replace(/<[^>]+>/g, '').trim();
+    // Direct fetch instead of page_reader — avoids queue contention with AI calls
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+    let jsonStr: string;
+    try {
+      const res = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      jsonStr = await res.text();
+    } catch (fetchErr) {
+      clearTimeout(timer);
+      // Fallback to page_reader if direct fetch fails (e.g., CORS)
+      console.warn(`[TGJU] Direct fetch failed for ${tgjuKey}, falling back to page_reader:`, fetchErr);
+      const { rateLimitedPageReader } = await import('@/lib/zai-shared');
+      const html = await rateLimitedPageReader(url, 30_000);
+      jsonStr = html.replace(/<[^>]+>/g, '').trim();
+    }
 
     if (!jsonStr.startsWith('{')) {
       console.warn(`[TGJU] Non-JSON response for ${tgjuKey}: ${jsonStr.slice(0, 100)}`);

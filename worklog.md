@@ -1193,3 +1193,24 @@ Stage Summary:
 - Advanced query operators (country:, exchange:, sector:) implemented
 - Dropdown positioning improved (anchored to input on desktop)
 - AI analysis timeout increased to prevent 504 errors
+
+---
+Task ID: 2
+Agent: main
+Task: Fix 502 errors when selecting financial instruments - TGJU data fetch optimization
+
+Work Log:
+- Investigated 502 error for energy-brent-oil: root cause was fetchTgjuHistory using rateLimitedPageReader (shared queue with AI analysis)
+- When AI analysis runs (180s+), TGJU page_reader requests get queued and timeout after 30s
+- Fixed fetchTgjuHistory to use direct fetch() to TGJU API (JSON endpoint) with page_reader as fallback
+- Fixed backgroundFetchCurrencyGoldChange to also use direct fetch
+- Added maxDuration=60 to tgju-analysis route
+- Updated loading message in page.tsx (removed '15 seconds' estimate since it's now faster)
+- Updated Caddy timeout 120s→300s (previous session)
+- Updated AI analysis LLM timeout 180s→280s (previous session)
+
+Stage Summary:
+- TGJU data fetch now uses direct HTTP fetch (20s timeout) instead of queued page_reader
+- Eliminates queue contention between data fetch and AI analysis
+- Background currency/gold change updates also use direct fetch
+- All instrument types should now load without 502 errors
