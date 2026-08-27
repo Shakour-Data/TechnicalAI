@@ -520,7 +520,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         {/* Graph Shell */}
         <div
           ref={shellRef}
-          className="relative overflow-auto min-h-[790px]"
+          className="relative overflow-auto min-h-[400px]"
           style={{
             border: `1px solid ${D.line}`, borderTop: 'none',
             background: `radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72)`,
@@ -534,17 +534,21 @@ export default function VdssGraph(props: VdssGraphProps) {
               const pos = nodePositions[node.id];
               if (!pos) return null;
 
-              const isResultNode = SCENARIO_KEYS.includes(node.id as typeof SCENARIO_KEYS[number]);
-              const isBranchNode = ['BR1', 'BR2', 'BR3'].includes(node.id);
-              const isEventNode = ['EA', 'EB', 'EC'].includes(node.id);
+              const isRoot = node.id === 'ROOT';
+              const isResultNode = node.isTerminal === true || node.type === 'terminal' || SCENARIO_KEYS.includes(node.id as typeof SCENARIO_KEYS[number]);
+              const isEventNode = node.type === 'event';
+              // Layer 1 main branches: N_TREND, N_BREAK, N_REVERSAL
+              const isMainBranch = ['N_TREND', 'N_BREAK', 'N_REVERSAL'].includes(node.id);
+              // All other decision nodes (Layer 2 sub-branches)
+              const isSubBranch = node.type === 'decision' && !isRoot && !isMainBranch;
               const isSelected = selectedNode === node.id;
               const isVisible = visibleNodes.has(node.id);
               const scenarioProb = isResultNode ? (scenarioProbabilities[node.id] ?? 0) : null;
               const scenarioColor = isResultNode ? (SCENARIO_META_LOCAL[node.id]?.color ?? node.color) : node.color;
 
-              // Node dimensions per requirements
-              const nodeWidth = isResultNode ? 175 : isBranchNode ? 148 : isEventNode ? 145 : 148;
-              const nodeMinH = isResultNode ? 84 : isBranchNode ? 74 : isEventNode ? 56 : 74;
+              // Node dimensions — match the layout in decision-graph.ts
+              const nodeWidth = isResultNode ? 175 : isEventNode ? 158 : 155;
+              const nodeMinH = isResultNode ? 84 : isEventNode ? 56 : 72;
 
               // Node styling based on type
               let bgStyle: string;
@@ -553,17 +557,13 @@ export default function VdssGraph(props: VdssGraphProps) {
               let borderW = '1px';
               let borderDash: React.CSSProperties['borderStyle'] = 'solid';
 
-              if (node.id === 'ROOT') {
+              if (isRoot) {
                 bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
                 innerGlow = `inset 0 0 22px ${D.cyan}1f`;
                 baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
-              } else if (isBranchNode) {
-                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 22px ${scenarioColor}1f`;
-                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
               } else if (isEventNode) {
                 bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 18px ${scenarioColor}14`;
+                innerGlow = `inset 0 0 18px ${scenarioColor}1f`;
                 baseBoxShadow = `${innerGlow}, 0 8px 20px rgba(0,0,0,.22)`;
                 borderDash = 'dotted';
               } else if (isResultNode) {
@@ -572,8 +572,9 @@ export default function VdssGraph(props: VdssGraphProps) {
                 baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
                 borderW = '2px';
               } else {
+                // Main branch and sub-branch decision nodes
                 bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 22px ${scenarioColor}14`;
+                innerGlow = `inset 0 0 22px ${scenarioColor}22`;
                 baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
               }
 
@@ -581,7 +582,8 @@ export default function VdssGraph(props: VdssGraphProps) {
                 ? `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`
                 : baseBoxShadow;
 
-              const textColor = isVisible ? '#ffffff' : '#555';
+              // High-contrast text: bright white for visibility on dark backgrounds
+              const textColor = isVisible ? '#ffffff' : 'rgba(255,255,255,.3)';
               const secondaryColor = '#e0eaf0';
 
               return (
@@ -621,45 +623,55 @@ export default function VdssGraph(props: VdssGraphProps) {
                     }
                   }}
                 >
-                  {/* ROOT node: 'ریشه تصمیم' 13px bold white, 'Decision Root' 10px cyan */}
-                  {node.id === 'ROOT' && (
+                  {/* ROOT node */}
+                  {isRoot && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: textColor }}>ریشه تصمیم</div>
-                      <div style={{ fontSize: 10, color: D.cyan, fontWeight: 600, marginTop: 3 }}>Decision Root</div>
-                      <div style={{ fontSize: 11, color: secondaryColor, marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>ریشه تصمیم</div>
+                      <div style={{ fontSize: 10, color: D.cyan, fontWeight: 700, marginTop: 3 }}>Decision Root</div>
+                      <div style={{ fontSize: 11, color: '#d4e8f0', marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
 
-                  {/* Branch nodes: name 12px bold white, value 11px light */}
-                  {isBranchNode && (
+                  {/* Main branch nodes (N_TREND, N_BREAK, N_REVERSAL) */}
+                  {isMainBranch && (
                     <>
-                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.5, color: textColor }}>{node.title}</div>
-                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 600, marginTop: 2 }}>{node.titleEn}</span>
-                      <div style={{ fontSize: 11, color: secondaryColor, marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
+                      <div style={{ fontSize: 10, color: scenarioColor, fontWeight: 700, marginTop: 2 }}>{node.titleEn}</div>
+                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
 
-                  {/* Event/assessment nodes: name 11px bold white, value 10px light */}
+                  {/* Sub-branch decision nodes (Layer 2: N_T_BULL, N_B_UP, N_R_BULL, etc.) */}
+                  {isSubBranch && (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
+                      <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
+                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 2, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
+                    </>
+                  )}
+
+                  {/* Event/assessment nodes (Layer 3: N_T_B_MOM_HIGH, etc.) */}
                   {isEventNode && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: textColor }}>{node.title}</div>
-                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 600, marginTop: 1 }}>{node.titleEn}</span>
-                      <div style={{ fontSize: 10, color: secondaryColor, marginTop: 2, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 11, fontWeight: 800, lineHeight: 1.35, color: '#ffffff' }}>{node.title}</div>
+                      <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
+                      <div style={{ fontSize: 9, color: '#d4e8f0', marginTop: 1, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
 
-                  {/* Terminal result nodes (R1-R9): name 12px bold white, probability 16px bold scenario color */}
+                  {/* Terminal result nodes (R1-R9) */}
                   {isResultNode && (
                     <>
-                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.4, color: textColor }}>{SCENARIO_META_LOCAL[node.id]?.label ?? node.title}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.4, color: '#ffffff' }}>{SCENARIO_META_LOCAL[node.id]?.label ?? node.title}</div>
                       {scenarioProb !== null && (
                         <span style={{
                           display: 'inline-block', marginTop: 4, padding: '2px 8px', borderRadius: 999,
-                          background: `${scenarioColor}2b`, color: scenarioColor,
-                          fontSize: 16, fontWeight: 700,
+                          background: `${scenarioColor}30`, color: '#ffffff',
+                          fontSize: 16, fontWeight: 900,
+                          textShadow: `0 0 8px ${scenarioColor}88`,
                         }}>{toFa(scenarioProb)}٪</span>
                       )}
-                      <div style={{ fontSize: 10, color: secondaryColor, marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
                 </div>
@@ -1055,7 +1067,7 @@ function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null 
             style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
           <div className="text-right">
             <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
-            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — مدل زوال نمایی دوگانه + احتمال تجمعی CDF</p>
+            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — احتمال اختصاصی و تجمعی CDF</p>
           </div>
         </div>
         <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>

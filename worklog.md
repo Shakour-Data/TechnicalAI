@@ -136,3 +136,27 @@ Stage Summary:
 - Historical 30-day probability computation added to backend
 - Correct CDF calculation implemented per documentation
 - Cumulative probability line chart and 30-day table added to frontend
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix node text visibility in decision graph (vdss-graph.tsx)
+
+Work Log:
+- Identified critical bug: node type detection used hardcoded IDs ('BR1','BR2','BR3','EA','EB','EC') that didn't match actual node IDs in decision-graph.ts ('N_TREND','N_T_BULL','N_T_B_MOM_HIGH', etc.)
+- This caused ALL non-ROOT and non-R1-R9 nodes (28 out of 32 nodes) to render with NO text at all
+- Fixed by using `node.type` ('decision','event','terminal') and `node.isTerminal` from the GraphNode interface instead of hardcoded ID lists
+- Added proper classification for 5 node types: isRoot, isMainBranch (N_TREND/N_BREAK/N_REVERSAL), isSubBranch (Layer 2), isEvent (Layer 3), isResult (R1-R9)
+- Increased font weights from 700 to 800 for all node titles to improve readability
+- Set all title text to pure white (#ffffff) with fontWeight 800 for maximum contrast on dark backgrounds
+- Updated terminal node probability display to use white text with colored text-shadow for better visibility
+- Updated event node inner glow from '14' to '1f' opacity for subtle color coding
+- Fixed graph container min-height from 790px to 400px (content scrolls within)
+- Fixed probability trend table description (removed outdated 'dual exponential decay' reference)
+- Verified with agent-browser: all 32 nodes now display text correctly
+- Verified with VLM: confirmed "ALL nodes are showing text", "excellent contrast", "clearly visible and highly readable"
+
+Stage Summary:
+- Root cause was mismatched node ID detection logic (old IDs vs actual graph node IDs)
+- All 32 graph nodes now render with visible Persian title, English subtitle, and value text
+- Text contrast confirmed excellent (white on dark navy background, fontWeight 800)
+- No lint errors introduced (pre-existing errors in candlestick-chart.tsx unrelated)
