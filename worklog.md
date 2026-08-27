@@ -1433,3 +1433,41 @@ Stage Summary:
 - Daily cache still provides instant responses for previously analyzed symbols
 - The ZAI API rate limit is external and unavoidable, but the system now handles it gracefully
 - Verified: POST /api/ai-analysis 200 in 3.0min (with 3 retries through 429s)
+---
+Task ID: AI-429-FIX
+Agent: Main
+Task: Fix AI text generation 429 rate limit - permanent solution with 3-layer cache defense
+
+Work Log:
+- Analyzed root cause: ZAI API consistently returns 429, previous retries (5 attempts, 240s timeout) wasted time and always failed
+- Identified secondary issue: client-side `aiCacheKey` included volatile data (currentPrice, all indicators) causing re-fetches on every data refresh
+
+**Layer 1: Server-side previous-day fallback** (`src/app/api/ai-analysis/route.ts`)
+- Added step 1b: before calling AI API, check for ANY previous day's cached analysis in Prisma DB
+- If found, return immediately with `isFallback: true` flag
+- Reduced retries from 5 to 2, timeout from 240s to 90s
+- Reduced maxDuration from 300 to 120
+- Simplified error messages
+
+**Layer 2: Client-side localStorage caching** (`src/components/tse/vdes-analysis.tsx`)
+- Removed volatile `aiCacheKey` (included currentPrice, ma21, rsi, etc.) - replaced with stable `symbolName`-only key
+- Added localStorage read on mount: if today's text exists, show instantly (no API call, no loading spinner)
+- Added localStorage write on successful API response (per-day key + "latest" key for any-day fallback)
+- On API error (429, 502, network): check localStorage for any previous day's text → show as fallback
+- Added `aiIsFallback` state with warning badge: "⚠️ این تحلیل از روزهای قبل بازیابی شده است"
+- Removed unused retry countdown timer (aiRetryCount, aiRetryDelay, aiCountdown states)
+- Simplified retry button to directly trigger re-fetch via setAiRetryKey
+
+**Layer 3: Global AI cooldown** (`src/lib/zai-shared.ts`)
+- Added `aiGlobalCooldownUntil` variable: when 429 received, set 10-minute global cooldown
+- All subsequent AI calls fail immediately during cooldown (no wasted retry time)
+- Only 1 retry with 10s delay before giving up (was: 5 retries with 30-150s backoffs)
+
+Stage Summary:
+- **First time** (no cache): API called → if succeeds, cached in DB + localStorage
+- **Same day revisit**: localStorage loads instantly, zero API calls
+- **API rate-limited**: Previous day's text shown from DB cache or localStorage with fallback badge
+- **User ALWAYS sees analysis text** instead of error messages
+- Verified: AI text generated successfully (37.3s, attempt 1/3), saved to DB cache and localStorage
+- Verified: localStorage keys confirmed (`ai-بهمن  دیزل-2026-08-27` + `ai-بهمن  دیزل-latest`)
+- No console errors, no new lint errors in modified files

@@ -637,48 +637,45 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const [aiLoading, setAiLoading] = useState(true);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiRetryKey, setAiRetryKey] = useState(0);
-  const [aiRetryCount, setAiRetryCount] = useState(0);
-  const [aiRetryDelay, setAiRetryDelay] = useState(0);
+  const [aiIsFallback, setAiIsFallback] = useState(false);
   const aiAutoRetryRef = useRef(0);
-  // Live countdown timer for retry delay
-  const [aiCountdown, setAiCountdown] = useState(0);
-  useEffect(() => {
-    if (aiRetryDelay <= 0) { setAiCountdown(0); return; }
-    setAiCountdown(aiRetryDelay);
-    const iv = setInterval(() => {
-      setAiCountdown((prev) => { if (prev <= 1) { clearInterval(iv); return 0; } return prev - 1; });
-    }, 1000);
-    return () => clearInterval(iv);
-  }, [aiRetryDelay]);
 
   // Listen for retry events from the retry button
   useEffect(() => {
-    const handler = () => { setAiRetryKey((k) => k + 1); aiAutoRetryRef.current = 0; setAiRetryCount(0); setAiRetryDelay(0); };
+    const handler = () => { setAiRetryKey((k) => k + 1); aiAutoRetryRef.current = 0; };
     window.addEventListener('ai-retry', handler);
     return () => window.removeEventListener('ai-retry', handler);
   }, []);
 
-  // Serialize dependencies to stable string to prevent request flooding
-  const aiCacheKey = useMemo(() => {
-    return JSON.stringify({
-      symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
-      stochK, stochD, macdLine, macdSignal, macdHist,
-      diPlus, diMinus, sar, atr, obv,
-      bollingerUpper, bollingerMiddle, bollingerLower,
-      trendDirection, trendAngle, trendR2,
-      hasVolume,
-      scenarios: Object.entries(scenarios || {}).map(([k, v]) => [k, v.probability, v.targetMin, v.targetMax]),
-      v11Profile: v11Result.riskProfile,
-    });
-  }, [symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
-    stochK, stochD, macdLine, macdSignal, macdHist,
-    diPlus, diMinus, sar, atr, obv,
-    bollingerUpper, bollingerMiddle, bollingerLower,
-    trendDirection, trendAngle, trendR2, hasVolume,
-    scenarios, v11Result]);
+  // ── localStorage helpers for AI text caching ──
 
+  // On mount: check localStorage for today's text first (instant, no loading)
   useEffect(() => {
     if (!currentPrice) return;
+    try {
+      const todayKey = `ai-${symbolName}-${new Date().toISOString().slice(0, 10)}`;
+      const cached = localStorage.getItem(todayKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.text && parsed.text.length > 50) {
+          setAiText(parsed.text);
+          setAiIsFallback(!!parsed.isFallback);
+          setAiLoading(false);
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+    // No localStorage cache → will fetch from API
+  }, [symbolName]); // Only symbolName matters — one cache per symbol per day
+
+  // Stable key: only re-fetch when symbol changes (not on every indicator update)
+  const aiFetchKey = symbolName;
+
+  // Fetch from API when symbol changes or retry is triggered
+  useEffect(() => {
+    if (!currentPrice) return;
+    // If we already have text from localStorage, don't re-fetch (unless retry)
+    if (aiText && aiRetryKey === 0) return;
     let cancelled = false;
     const controller = new AbortController();
 
@@ -686,9 +683,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       try {
         setAiLoading(true);
         setAiError(null);
-        // Combine abort signals: component unmount + 5 min timeout (server retries internally)
-        const timeoutSignal = AbortSignal.timeout(300_000);
-        const combinedSignal = controller.signal.aborted ? controller.signal : AbortSignal.any([controller.signal, timeoutSignal]);
+        setAiIsFallback(false);
 
         const res = await fetch('/api/ai-analysis', {
           method: 'POST',
@@ -704,75 +699,96 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             v11Probabilities: v11Result,
             instrumentType,
           }),
-          signal: combinedSignal,
+          signal: controller.signal,
         });
         if (cancelled) return;
         if (!res.ok) {
           let errMsg = `خطای سرور (${res.status})`;
-          let retryAfterSec = 0;
           try {
             const errBody = await res.json();
             if (errBody.error) errMsg = errBody.error;
-            if (errBody.retryAfterSec) retryAfterSec = Number(errBody.retryAfterSec) || 0;
           } catch {
-            if (res.status === 502) errMsg = 'سرور هوشمند در حال بارگذاری مجدد است...';
-            else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست. لطفاً بعداً تلاش کنید.';
-            else if (res.status === 429) errMsg = 'تعداد درخواست‌ها زیاد است. لطفاً کمی صبر کنید.';
+            if (res.status === 502) errMsg = 'سرور هوشمند در حال بارگذاری مجدد است.';
+            else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست.';
           }
-          // Server handles retries internally. Only retry 502/503 once.
-          const shouldRetry = (res.status === 502 || res.status === 503) && aiAutoRetryRef.current < 1;
-          if (shouldRetry) {
-            aiAutoRetryRef.current += 1;
-            const delay = 10_000;
-            console.log(`[AI] Gateway error ${res.status}, retry in ${delay / 1000}s...`);
-            setAiRetryCount(1);
-            setAiRetryDelay(Math.round(delay / 1000));
-            setAiLoading(true);
-            setAiError(null);
-            await new Promise(r => setTimeout(r, delay));
-            if (!cancelled) setAiRetryKey(k => k + 1);
+          // On error, try to show any previous localStorage text as fallback
+          const prevText = getAnyLocalCache(symbolName);
+          if (prevText) {
+            setAiText(prevText);
+            setAiIsFallback(true);
+            setAiLoading(false);
             return;
           }
           setAiError(errMsg);
-          setAiRetryCount(0);
-          setAiRetryDelay(0);
           return;
         }
         const data = await res.json();
         if (cancelled) return;
         if (data.text) {
           setAiText(data.text);
-          setAiRetryCount(0);
-          setAiRetryDelay(0);
+          setAiIsFallback(!!data.isFallback);
+          setAiError(null);
+          // Save to localStorage
+          saveLocalCache(symbolName, data.text, !!data.isFallback);
+        } else if (data.error) {
+          const prevText = getAnyLocalCache(symbolName);
+          if (prevText) {
+            setAiText(prevText);
+            setAiIsFallback(true);
+          } else {
+            setAiError(data.error);
+          }
         }
-        else if (data.error) { setAiError(data.error); setAiRetryCount(0); setAiRetryDelay(0); }
       } catch (err: unknown) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
-        // Network errors: retry once after 10s
-        if (aiAutoRetryRef.current < 1) {
-          aiAutoRetryRef.current += 1;
-          console.log(`[AI] Network error, retry in 10s...`);
-          setAiRetryCount(1);
-          setAiRetryDelay(10);
-          setAiLoading(true);
-          setAiError(null);
-          await new Promise(r => setTimeout(r, 10_000));
-          if (!cancelled) setAiRetryKey(k => k + 1);
-          return;
+        // On network error, show localStorage fallback if available
+        const prevText = getAnyLocalCache(symbolName);
+        if (prevText) {
+          setAiText(prevText);
+          setAiIsFallback(true);
+        } else {
+          setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
         }
-        setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
-        setAiRetryCount(0);
-        setAiRetryDelay(0);
       } finally {
         if (!cancelled) setAiLoading(false);
       }
     })();
 
     return () => { cancelled = true; controller.abort(); };
-  }, [aiCacheKey, aiRetryKey]);
+  }, [aiFetchKey, aiRetryKey]);
+
+  // Helper: save AI text to localStorage (per-day key)
+  function saveLocalCache(sym: string, text: string, isFallback: boolean) {
+    try {
+      const key = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
+      localStorage.setItem(key, JSON.stringify({ text, isFallback, ts: Date.now() }));
+      // Also keep a "latest" key for any-day fallback
+      localStorage.setItem(`ai-${sym}-latest`, JSON.stringify({ text, date: new Date().toISOString().slice(0, 10), ts: Date.now() }));
+    } catch { /* quota exceeded — ignore */ }
+  }
+
+  // Helper: get any previous cached text from localStorage (any day)
+  function getAnyLocalCache(sym: string): string | null {
+    try {
+      // First try today
+      const todayKey = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
+      const todayCached = localStorage.getItem(todayKey);
+      if (todayCached) {
+        const parsed = JSON.parse(todayCached);
+        if (parsed.text && parsed.text.length > 50) return parsed.text;
+      }
+      // Then try "latest" from any day
+      const latestCached = localStorage.getItem(`ai-${sym}-latest`);
+      if (latestCached) {
+        const parsed = JSON.parse(latestCached);
+        if (parsed.text && parsed.text.length > 50) return parsed.text;
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
 
   // ── File name helper ───────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
@@ -1438,19 +1454,11 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
             <div className="flex flex-col items-center gap-3 py-8 justify-center">
               <div className="w-5 h-5 border-2 border-[rgba(37,99,235,0.3)] border-t-[#2563eb] rounded-full animate-spin" />
               <span style={{ fontSize: '0.875rem', color: C.primary }}>
-                {aiRetryCount > 0
-                  ? `در حال تلاش مجدد ... (${toFa(aiRetryCount)} از ۱)`
-                  : 'در حال تولید تحلیل هوشمند ...'
-                }
+                در حال تولید تحلیل هوشمند ...
               </span>
-              {aiRetryDelay > 0 && (
-                <span style={{ fontSize: '0.75rem', color: C.cardSubFg }}>
-                  منتظر رفع محدودیت سرور ... {toFa(aiCountdown > 0 ? aiCountdown : 0)} ثانیه دیگر
-                </span>
-              )}
             </div>
           )}
-          {aiError && (
+          {aiError && !aiText && (
             <div style={{ borderRadius: '12px', padding: '16px', background: 'rgba(255,117,138,0.08)', border: '1px solid rgba(255,117,138,0.2)' }}>
               <p style={{ fontSize: '0.75rem', color: C.bearColor, marginBottom: '4px' }}>خطا در تولید تحلیل هوشمند:</p>
               <p style={{ fontSize: '0.75rem', color: C.bearColor, marginBottom: '8px', opacity: 0.8 }}>{aiError.length > 150 ? aiError.slice(0, 150) + '...' : aiError}</p>
@@ -1459,15 +1467,21 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
                   setAiError(null);
                   setAiText(null);
                   aiAutoRetryRef.current = 0;
-                  setTimeout(() => window.dispatchEvent(new Event('ai-retry')), 1000);
-                  setAiLoading(true);
+                  setAiRetryKey(k => k + 1);
                 }}
                 style={{ fontSize: '0.75rem', fontWeight: 500, color: C.bearColor, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
               >تلاش مجدد</button>
             </div>
           )}
           {!aiLoading && aiText && (
-            <div dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }} />
+            <div>
+              {aiIsFallback && (
+                <div style={{ fontSize: '0.7rem', color: C.cardSubFg, marginBottom: '8px', opacity: 0.7 }}>
+                  ⚠️ این تحلیل از روزهای قبل بازیابی شده است. برای تولید تحلیل جدید دکمه «تلاش مجدد» را بزنید.
+                </div>
+              )}
+              <div dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }} />
+            </div>
           )}
           {!aiLoading && !aiText && !aiError && analysisParagraphs.length > 0 && (
             <div className="space-y-4">

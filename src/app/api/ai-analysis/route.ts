@@ -14,7 +14,7 @@ import {
 } from '@/lib/msl-v4';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function toPersianNum(n: number): string {
@@ -282,6 +282,26 @@ export async function POST(req: NextRequest) {
       console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
     }
 
+    // 1b. Check for previous day's cache (fallback for rate-limit scenarios)
+    try {
+      const prevCached = await db.aiAnalysisCache.findFirst({
+        where: { symbol: symbolName, date: { not: today } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (prevCached && prevCached.text) {
+        console.log(`[AI] Previous cache fallback HIT for ${symbolName} (${prevCached.date}) [${Date.now() - startTime}ms]`);
+        return NextResponse.json({
+          text: prevCached.text,
+          ml: prevCached.ml ? JSON.parse(prevCached.ml) : undefined,
+          cached: true,
+          cachedDate: prevCached.date,
+          isFallback: true,
+        });
+      }
+    } catch (dbErr) {
+      console.warn('[AI] Previous cache fallback read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
+    }
+
     // 2. ML selection
     const mlInput = buildMLInput(body);
     const mlSelection = selectMLCombination(mlInput);
@@ -302,15 +322,17 @@ export async function POST(req: NextRequest) {
 
     console.log(`[AI] Generating for ${symbolName} (cache miss) [${Date.now() - startTime}ms]`);
 
-    // 5. Call AI through dedicated channel (independent of page_reader queue)
+    // 5. Call AI through dedicated channel — fail fast on 429
+    //    Only retry 2 times max (3 total attempts) to avoid wasting time.
+    //    If rate-limited, the previous-day fallback above already returned.
     const content = await dedicatedAIChatCompletion(
       [
         { role: 'system', content: dynamicSystemPrompt },
         { role: 'user', content: userMessage },
       ],
       {
-        timeoutMs: 240_000,  // 4 min total (enough for 5 retries with backoff)
-        maxRetries: 5,
+        timeoutMs: 90_000,  // 90s max (1 initial + 2 retries)
+        maxRetries: 2,
       }
     );
 
@@ -350,13 +372,13 @@ export async function POST(req: NextRequest) {
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes('Rate limited') || msg.includes('429')) {
-    return 'سرور هوشمند محدودیت سرعت دارد. لطفاً دکمه «تلاش مجدد» را بزنید.';
+    return 'سرور هوشمند محدودیت سرعت دارد.';
   }
   if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
-    return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً دوباره تلاش کنید.';
+    return 'زمان پاسخدهی هوشمند به پایان رسید.';
   }
   if (msg.includes('concurrent')) {
-    return 'درخواست تحلیل قبلی هنوز در حال اجراست. لطفاً کمی صبر کنید.';
+    return 'درخواست تحلیل قبلی هنوز در حال اجراست.';
   }
-  return 'خطایی در تولید تحلیل رخ داد. لطفاً دوباره تلاش کنید.';
+  return 'خطایی در تولید تحلیل رخ داد.';
 }

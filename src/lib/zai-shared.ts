@@ -205,6 +205,7 @@ export async function batchPageReader(
 let aiLastCallTime = 0;
 const AI_MIN_INTERVAL_MS = 5_000; // 5s between AI calls
 let aiInProgress = false; // Prevent concurrent AI calls
+let aiGlobalCooldownUntil = 0; // Global cooldown: if AI is rate-limited, don't retry for a while
 
 export async function dedicatedAIChatCompletion(
   messages: { role: string; content: string }[],
@@ -216,6 +217,13 @@ export async function dedicatedAIChatCompletion(
   const { timeoutMs = 200_000, maxRetries = 5 } = options;
   const startTime = Date.now();
   const deadline = startTime + timeoutMs;
+
+  // Check global AI cooldown (set when 429 was received)
+  const globalCdRemaining = aiGlobalCooldownUntil - Date.now();
+  if (globalCdRemaining > 0) {
+    console.log(`[AI-dedicated] Global AI cooldown active, ${Math.round(globalCdRemaining / 1000)}s remaining`);
+    throw new Error(`Rate limited: global AI cooldown ${Math.round(globalCdRemaining / 1000)}s remaining`);
+  }
 
   // Prevent concurrent AI calls (serialize) — but don't block for too long
   const CONCURRENT_WAIT_MS = 10_000; // Only wait 10s for a concurrent call
@@ -271,13 +279,14 @@ export async function dedicatedAIChatCompletion(
         const msg = err instanceof Error ? err.message : String(err);
 
         if (msg.includes('429')) {
-          // Calculate backoff: 30s, 45s, 60s, 90s, 120s
-          const backoff = Math.min(30_000 * Math.pow(1.5, attempt - 1), 150_000);
-          const remaining = deadline - Date.now();
-          console.warn(`[AI-dedicated] 429, attempt ${attempt}/${maxRetries + 1}, backoff ${Math.round(backoff / 1000)}s, remaining ${Math.round(remaining / 1000)}s`);
+          // Set global cooldown so future calls fail fast
+          const GLOBAL_COOLDOWN_MS = 600_000; // 10 minutes
+          aiGlobalCooldownUntil = Date.now() + GLOBAL_COOLDOWN_MS;
+          console.warn(`[AI-dedicated] 429 on attempt ${attempt}/${maxRetries + 1}, setting global cooldown ${GLOBAL_COOLDOWN_MS / 1000}s`);
 
-          if (attempt <= maxRetries && backoff < remaining - 30_000) {
-            await sleep(backoff);
+          // Only retry once with a short delay (10s), then give up
+          if (attempt === 1 && deadline - Date.now() > 40_000) {
+            await sleep(10_000);
             continue;
           }
           throw new Error(`Rate limited after ${attempt} attempts: ${msg}`);
