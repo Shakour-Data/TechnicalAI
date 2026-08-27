@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
 import { type GraphData } from '@/lib/decision-graph';
-import { type ProbabilityTrendResult, type DayPoint } from '@/lib/probability-trend';
+import { type ProbabilityTrendResult, type DayPoint, SCENARIO_KEYS, SCENARIO_META } from '@/lib/probability-trend';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useTheme } from '@/lib/theme-store';
@@ -93,9 +93,7 @@ const EDGE_COLORS: Record<string, string> = {
   risk: COLORS.risk,
 };
 
-const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
-
-const SCENARIO_META: Record<string, { label: string; color: string }> = {
+const SCENARIO_META_LOCAL: Record<string, { label: string; color: string }> = {
   R1: { label: 'شوک نزولی', color: '#b91c1c' },
   R2: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
   R3: { label: 'نزولی قوی', color: '#ea580c' },
@@ -175,7 +173,6 @@ export default function VdssGraph(props: VdssGraphProps) {
       return { visibleEdgeIndices: allEdgeIdx, visibleNodes: allNodes };
     }
     if (SCENARIO_KEYS.includes(activeFilter as typeof SCENARIO_KEYS[number])) {
-      // Show edges going TO this scenario node, plus their source nodes
       const edgeSet = new Set<number>();
       const nodeSet = new Set<string>(['ROOT', activeFilter]);
       edges.forEach((e, i) => {
@@ -184,7 +181,6 @@ export default function VdssGraph(props: VdssGraphProps) {
           nodeSet.add(e.from);
         }
       });
-      // Also show intermediate nodes connected to those sources
       edges.forEach((e, i) => {
         if (nodeSet.has(e.to) && !e.to.startsWith('R')) {
           edgeSet.add(i);
@@ -198,16 +194,12 @@ export default function VdssGraph(props: VdssGraphProps) {
       const edgeSet = new Set<number>();
       const nodeSet = new Set<string>(['ROOT']);
       edges.forEach((e, i) => {
-        if (e.type === branchType || (e.type !== `branch-trend` && e.type !== `branch-breakout` && e.type !== `branch-reversal` && nodeSet.has(e.from))) {
-          // Include branch-type edges
-          if (e.type === branchType) {
-            edgeSet.add(i);
-            nodeSet.add(e.from);
-            nodeSet.add(e.to);
-          }
+        if (e.type === branchType) {
+          edgeSet.add(i);
+          nodeSet.add(e.from);
+          nodeSet.add(e.to);
         }
       });
-      // Now add all edges whose source is already in nodeSet
       const expanded = new Set<number>();
       const expandedNodes = new Set<string>(nodeSet);
       edges.forEach((e, i) => {
@@ -269,7 +261,6 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       if (dist === 0) continue;
 
-      // Curved edges with bend proportional to distance
       const bend = Math.min(52, Math.max(18, dist * 0.11));
       const mx = (ax + bx) / 2;
       const my = (ay + by) / 2;
@@ -285,10 +276,9 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       pathsSvg += `<path d="${d}" stroke="${edgeColor}" stroke-width="${isVisible ? 2 : 0.8}" opacity="${isVisible ? 0.72 : 0.05}" fill="none" marker-end="url(#arrow-${type})" data-type="${type}" data-from="${fromId}" data-to="${toId}" class="edge-path" style="transition: opacity .25s, stroke-width .25s;"/>`;
 
-      // Edge labels — skip deterministic root→branch and branch→event edges (index < 6)
       if (isVisible && ei >= 6) {
-        pathsSvg += `<text x="${cx}" y="${cy - 5}" fill="#cde4ef" font-size="10" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="4" stroke-linejoin="round" opacity="0.9" data-type="${type}" class="edge-label">${label}</text>`;
-        pathsSvg += `<text x="${cx}" y="${cy + 7}" fill="${edgeColor}" font-size="9" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3" stroke-linejoin="round" opacity="0.85" class="edge-prob">${probLabel}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy - 5}" fill="#ffffff" font-size="10" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="4" stroke-linejoin="round" opacity="0.95" data-type="${type}" class="edge-label">${label}</text>`;
+        pathsSvg += `<text x="${cx}" y="${cy + 7}" fill="${edgeColor}" font-size="9" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">${probLabel}</text>`;
       }
     }
 
@@ -312,42 +302,41 @@ export default function VdssGraph(props: VdssGraphProps) {
     const node = nodeMap[selectedNode];
     if (!node) return null;
 
-    // For terminal scenario nodes, show branch breakdown
     if (node.isTerminal && SCENARIO_KEYS.includes(selectedNode as typeof SCENARIO_KEYS[number])) {
       const contrib = pathContributions[selectedNode] ?? { trend: 0, breakout: 0, reversal: 0 };
-      const meta = SCENARIO_META[selectedNode];
+      const meta = SCENARIO_META_LOCAL[selectedNode];
       const s = scenarios[selectedNode as keyof typeof scenarios];
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: meta.color }}>{node.title}</h3>
-          <p style={{ fontSize: '12px', color: '#c4d8e3', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
+          <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
           <span style={{
             display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
-            color: '#d7eaf1', fontSize: '10px',
+            color: '#ffffff', fontSize: '10px',
             background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
           }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-          <div style={{ fontSize: '12px', color: '#c4d8e3' }} dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
+          <div style={{ fontSize: '12px', color: '#e0eaf0' }} dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
 
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${D.line}` }}>
-            <p style={{ fontSize: '12px', fontWeight: 700, marginBottom: 8, color: '#d8eff9' }}>سهم هر استراتژی:</p>
+            <p style={{ fontSize: '12px', fontWeight: 700, marginBottom: 8, color: '#ffffff' }}>سهم هر استراتژی:</p>
             {Object.entries(BRANCH_META).map(([bKey, bMeta]) => {
               const val = contrib[bKey as 'trend' | 'breakout' | 'reversal'];
               const pct = (val * 100).toFixed(1);
               return (
                 <div key={bKey} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '9px 0', borderBottom: `1px dashed rgba(175,210,225,.15)`,
+                  padding: '9px 0', borderBottom: '1px dashed rgba(255,255,255,.12)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: bMeta.color }} />
-                    <span style={{ fontSize: '11px', color: '#d8eff9' }}>{bMeta.label}</span>
+                    <span style={{ fontSize: '11px', color: '#ffffff' }}>{bMeta.label}</span>
                   </div>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: bMeta.color }}>{toPersianDigits(pct)}٪</span>
                 </div>
               );
             })}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#d8eff9' }}>مجموع</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>مجموع</span>
               <span style={{ fontSize: '11px', fontWeight: 900, color: meta.color }}>{toFa(s?.probability ?? 0)}٪</span>
             </div>
           </div>
@@ -355,33 +344,32 @@ export default function VdssGraph(props: VdssGraphProps) {
       );
     }
 
-    // For non-terminal nodes, show incoming/outgoing edges
     const inputs = edges.filter(e => e.to === selectedNode);
     const outputs = edges.filter(e => e.from === selectedNode);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#d8eff9' }}>{node.title}</h3>
-        <p style={{ fontSize: '12px', color: '#c4d8e3', lineHeight: 1.95, margin: 0 }}><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+        <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#ffffff' }}>{node.title}</h3>
+        <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: 1.95, margin: 0 }}><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
         <span style={{
           display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
-          color: '#d7eaf1', fontSize: '10px',
+          color: '#ffffff', fontSize: '10px',
           background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
         }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-        <p style={{ fontSize: '12px', color: '#c4d8e3', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
+        <p style={{ fontSize: '12px', color: '#e0eaf0', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
         {inputs.length > 0 && (
           <div>
-            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#d8eff9' }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
+            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#ffffff' }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
             <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
               {inputs.map((e, i) => {
                 const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
                 const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
                   <li key={i} style={{
-                    padding: '9px 0', borderTop: '1px dashed rgba(175,210,225,.15)',
-                    fontSize: '11px', lineHeight: 1.8, color: '#b8cfdb',
+                    padding: '9px 0', borderTop: '1px dashed rgba(255,255,255,.12)',
+                    fontSize: '11px', lineHeight: 1.8, color: '#e0eaf0',
                   }}>
-                    <b style={{ color: '#d8eff9' }}>{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                    <b style={{ color: '#ffffff' }}>{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
                     <span style={{
                       marginRight: 8, padding: '2px 6px', borderRadius: 4,
                       fontSize: '9px', fontWeight: 700,
@@ -396,17 +384,17 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
         {outputs.length > 0 && (
           <div>
-            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#d8eff9' }}>مسیرهای خروجی ({toFa(outputs.length)}):</p>
+            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#ffffff' }}>مسیرهای خروجی ({toFa(outputs.length)}):</p>
             <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
               {outputs.map((e, i) => {
                 const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
                 const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
                 return (
                   <li key={i} style={{
-                    padding: '9px 0', borderTop: '1px dashed rgba(175,210,225,.15)',
-                    fontSize: '11px', lineHeight: 1.8, color: '#b8cfdb',
+                    padding: '9px 0', borderTop: '1px dashed rgba(255,255,255,.12)',
+                    fontSize: '11px', lineHeight: 1.8, color: '#e0eaf0',
                   }}>
-                    <b style={{ color: '#d8eff9' }}>{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
+                    <b style={{ color: '#ffffff' }}>{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
                     <span style={{
                       marginRight: 8, padding: '2px 6px', borderRadius: 4,
                       fontSize: '9px', fontWeight: 700,
@@ -429,14 +417,14 @@ export default function VdssGraph(props: VdssGraphProps) {
     { key: 'sep1', label: '│', isSep: true as const },
     ...Object.entries(BRANCH_META).map(([k, v]) => ({ key: k, label: v.label, branchKey: k, branchColor: v.color })),
     { key: 'sep2', label: '│', isSep: true as const },
-    ...SCENARIO_KEYS.map(k => ({ key: k, label: SCENARIO_META[k].label, scenarioKey: k })),
+    ...SCENARIO_KEYS.map(k => ({ key: k, label: SCENARIO_META_LOCAL[k].label, scenarioKey: k })),
   ];
 
   // ═══ Design dimensions ═══
   const DESIGN_W = 1500;
-  const DESIGN_H = 820;
+  const DESIGN_H = 1200;
   const DISPLAY_W = 1200;
-  const DISPLAY_H = DESIGN_H;
+  const DISPLAY_H = 1200;
   const scaleX = DISPLAY_W / DESIGN_W;
   const scaleY = DISPLAY_H / DESIGN_H;
 
@@ -467,7 +455,7 @@ export default function VdssGraph(props: VdssGraphProps) {
           </div>
         </div>
         <div className="text-left text-xs leading-loose pr-4"
-          style={{ color: '#bbd7e8', borderRight: '1px solid rgba(58,213,219,.24)' }}>
+          style={{ color: '#ffffff', borderRight: '1px solid rgba(58,213,219,.24)' }}>
           نقطهٔ مرجع: <b style={{ color: D.cyan }}>{toFa(currentPrice)}</b><br />
           افق برآورد: ۱۰ تا ۲۵ جلسه معاملاتی
         </div>
@@ -495,16 +483,16 @@ export default function VdssGraph(props: VdssGraphProps) {
           const isScenario = 'scenarioKey' in btn;
           const isBranch = 'branchKey' in btn;
           const isActive = activeFilter === btn.key;
-          const meta = isScenario ? SCENARIO_META[(btn as { scenarioKey: string }).scenarioKey] : null;
-          const bColor = isBranch ? (btn as { branchColor: string }).branchColor : null;
+          const meta = isScenario ? SCENARIO_META_LOCAL[(btn as { scenarioKey: string }).scenarioKey] : null;
+          const bColor = isBranch ? (btn as unknown as { branchColor: string }).branchColor : null;
           const activeColor = isScenario && meta ? meta.color : isBranch && bColor ? bColor : D.cyan;
           return (
             <button
               key={btn.key}
               onClick={() => setActiveFilter(btn.key)}
               style={{
-                color: isActive ? '#fff' : '#dcebf2',
-                border: `1px solid ${isActive ? activeColor + 'b3' : 'rgba(159,198,218,.22)'}`,
+                color: isActive ? '#fff' : '#ffffff',
+                border: `1px solid ${isActive ? activeColor + 'b3' : 'rgba(255,255,255,.15)'}`,
                 borderRadius: 10,
                 background: isActive ? `${activeColor}24` : 'rgba(255,255,255,.04)',
                 padding: '8px 11px',
@@ -519,7 +507,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         <button
           onClick={() => { setSelectedNode(null); setActiveFilter('all'); }}
           style={{
-            color: '#dcebf2', border: '1px solid rgba(159,198,218,.22)', borderRadius: 10,
+            color: '#ffffff', border: '1px solid rgba(255,255,255,.15)', borderRadius: 10,
             background: 'rgba(255,255,255,.04)', padding: '8px 11px',
             fontFamily: 'inherit', fontSize: 12, cursor: 'pointer', transition: '.2s ease',
             marginRight: 'auto',
@@ -546,17 +534,17 @@ export default function VdssGraph(props: VdssGraphProps) {
               const pos = nodePositions[node.id];
               if (!pos) return null;
 
-              const isTerminal = node.isTerminal ?? false;
               const isResultNode = SCENARIO_KEYS.includes(node.id as typeof SCENARIO_KEYS[number]);
               const isBranchNode = ['BR1', 'BR2', 'BR3'].includes(node.id);
               const isEventNode = ['EA', 'EB', 'EC'].includes(node.id);
               const isSelected = selectedNode === node.id;
               const isVisible = visibleNodes.has(node.id);
               const scenarioProb = isResultNode ? (scenarioProbabilities[node.id] ?? 0) : null;
-              const scenarioColor = isResultNode ? (SCENARIO_META[node.id]?.color ?? node.color) : node.color;
+              const scenarioColor = isResultNode ? (SCENARIO_META_LOCAL[node.id]?.color ?? node.color) : node.color;
 
-              const nodeWidth = isResultNode ? 175 : isBranchNode ? 148 : isEventNode ? 160 : 148;
-              const nodeMinH = isResultNode ? 94 : isBranchNode ? 80 : isEventNode ? 65 : 80;
+              // Node dimensions per requirements
+              const nodeWidth = isResultNode ? 175 : isBranchNode ? 148 : isEventNode ? 145 : 148;
+              const nodeMinH = isResultNode ? 84 : isBranchNode ? 74 : isEventNode ? 56 : 74;
 
               // Node styling based on type
               let bgStyle: string;
@@ -567,7 +555,7 @@ export default function VdssGraph(props: VdssGraphProps) {
 
               if (node.id === 'ROOT') {
                 bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 22px ${scenarioColor}1f`;
+                innerGlow = `inset 0 0 22px ${D.cyan}1f`;
                 baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
               } else if (isBranchNode) {
                 bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
@@ -578,7 +566,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                 innerGlow = `inset 0 0 18px ${scenarioColor}14`;
                 baseBoxShadow = `${innerGlow}, 0 8px 20px rgba(0,0,0,.22)`;
                 borderDash = 'dotted';
-              } else if (isTerminal) {
+              } else if (isResultNode) {
                 bgStyle = `linear-gradient(160deg, ${scenarioColor}1f, rgba(8,22,35,.65))`;
                 innerGlow = `inset 0 0 24px ${scenarioColor}18`;
                 baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
@@ -593,6 +581,9 @@ export default function VdssGraph(props: VdssGraphProps) {
                 ? `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`
                 : baseBoxShadow;
 
+              const textColor = isVisible ? '#ffffff' : '#555';
+              const secondaryColor = '#e0eaf0';
+
               return (
                 <div
                   key={node.id}
@@ -605,9 +596,9 @@ export default function VdssGraph(props: VdssGraphProps) {
                     width: nodeWidth,
                     minWidth: nodeWidth,
                     minHeight: nodeMinH,
-                    padding: isResultNode ? '10px 9px' : '10px 9px',
+                    padding: isResultNode ? '8px 9px' : '8px 9px',
                     border: `${borderW} ${borderDash} ${scenarioColor}`,
-                    borderRadius: isTerminal ? 13 : 13,
+                    borderRadius: 13,
                     background: bgStyle,
                     boxShadow: selectedGlow,
                     opacity: isVisible ? 1 : 0.12,
@@ -630,48 +621,45 @@ export default function VdssGraph(props: VdssGraphProps) {
                     }
                   }}
                 >
-                  {/* Root node */}
+                  {/* ROOT node: 'ریشه تصمیم' 13px bold white, 'Decision Root' 10px cyan */}
                   {node.id === 'ROOT' && (
                     <>
-                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{node.titleEn || 'تصمیم'}</span>
-                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
-                      <div style={{ fontSize: 11, color: '#c6dbe6', marginTop: 4, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: textColor }}>ریشه تصمیم</div>
+                      <div style={{ fontSize: 10, color: D.cyan, fontWeight: 600, marginTop: 3 }}>Decision Root</div>
+                      <div style={{ fontSize: 11, color: secondaryColor, marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
 
-                  {/* Branch nodes */}
+                  {/* Branch nodes: name 12px bold white, value 11px light */}
                   {isBranchNode && (
                     <>
-                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{node.type === 'decision' ? 'استراتژی' : node.titleEn}</span>
-                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6, color: scenarioColor }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.5, color: textColor }}>{node.title}</div>
+                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 600, marginTop: 2 }}>{node.titleEn}</span>
+                      <div style={{ fontSize: 11, color: secondaryColor, marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
 
-                  {/* Event nodes */}
+                  {/* Event/assessment nodes: name 11px bold white, value 10px light */}
                   {isEventNode && (
                     <>
-                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{node.titleEn || 'رویداد شانسی'}</span>
-                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
-                      <div style={{ fontSize: 11, color: '#c6dbe6', marginTop: 4, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: textColor }}>{node.title}</div>
+                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 600, marginTop: 1 }}>{node.titleEn}</span>
+                      <div style={{ fontSize: 10, color: secondaryColor, marginTop: 2, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
 
-                  {/* Terminal scenario nodes */}
+                  {/* Terminal result nodes (R1-R9): name 12px bold white, probability 16px bold scenario color */}
                   {isResultNode && (
                     <>
-                      <span style={{ display: 'block', fontSize: 10, color: scenarioColor, fontWeight: 700, marginBottom: 5 }}>{SCENARIO_DISPLAY[node.id]}</span>
-                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.55, color: isVisible ? D.text : '#555' }}>{node.title}</div>
-                      <div style={{ fontSize: 11, color: '#c6dbe6', marginTop: 4, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.4, color: textColor }}>{SCENARIO_META_LOCAL[node.id]?.label ?? node.title}</div>
                       {scenarioProb !== null && (
-                        <span
-                          style={{
-                            display: 'inline-block', marginTop: 6, padding: '3px 10px', borderRadius: 999,
-                            background: `${scenarioColor}2b`, color: scenarioColor,
-                            fontSize: 15, fontWeight: 700,
-                          }}
-                        >{toFa(scenarioProb)}٪</span>
+                        <span style={{
+                          display: 'inline-block', marginTop: 4, padding: '2px 8px', borderRadius: 999,
+                          background: `${scenarioColor}2b`, color: scenarioColor,
+                          fontSize: 16, fontWeight: 700,
+                        }}>{toFa(scenarioProb)}٪</span>
                       )}
+                      <div style={{ fontSize: 10, color: secondaryColor, marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? '--'}</div>
                     </>
                   )}
                 </div>
@@ -682,13 +670,13 @@ export default function VdssGraph(props: VdssGraphProps) {
             <div style={{
               position: 'absolute', right: 17, bottom: 15, padding: 10,
               border: `1px solid ${D.line}`, borderRadius: 10,
-              background: 'rgba(7,17,27,.8)', fontSize: 10, color: D.muted, lineHeight: 2,
+              background: 'rgba(7,17,27,.8)', fontSize: 10, color: '#ffffff', lineHeight: 2,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.cyan }} />پیروی از روند</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.gold }} />شکست</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.purple }} />بازگشت</div>
               <div style={{ borderTop: `1px solid ${D.line}`, margin: '4px 0' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span className="dot-up" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.up }} />صعودی</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.up }} />صعودی</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.pullback }} />خنثی / رنج</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.down }} />نزولی</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.risk }} />شوک / ریسک</div>
@@ -703,7 +691,7 @@ export default function VdssGraph(props: VdssGraphProps) {
           padding: 16, boxShadow: D.shadow,
           display: 'flex', flexDirection: 'column',
         }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: '#d8eff9' }}>📋 احتمال سناریوها</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: '#ffffff' }}>📋 احتمال سناریوها</h2>
 
           {selectedNode && detailContent ? (
             <div style={{ borderTop: `1px solid ${D.line}`, paddingTop: 12, flex: 1, overflowY: 'auto', maxHeight: 860 }}>
@@ -711,10 +699,9 @@ export default function VdssGraph(props: VdssGraphProps) {
             </div>
           ) : (
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: 860, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {/* Scenario probabilities from backend */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {SCENARIO_KEYS.map(key => {
-                  const meta = SCENARIO_META[key];
+                  const meta = SCENARIO_META_LOCAL[key];
                   const prob = scenarioProbabilities[key] ?? 0;
                   const isActive = activeFilter === key;
                   const s = scenarios[key as keyof typeof scenarios];
@@ -732,17 +719,17 @@ export default function VdssGraph(props: VdssGraphProps) {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{meta.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{meta.label}</span>
                         <span style={{ fontSize: 18, fontWeight: 900, color: meta.color }}>{toPersianDigits((prob * 100).toFixed(1))}٪</span>
                       </div>
-                      <div style={{ width: '100%', height: 6, borderRadius: 999, marginBottom: 8, background: 'rgba(170,208,229,.10)' }}>
+                      <div style={{ width: '100%', height: 6, borderRadius: 999, marginBottom: 8, background: 'rgba(255,255,255,.08)' }}>
                         <div style={{
                           height: '100%', borderRadius: 999, transition: 'all .3s',
                           width: `${Math.min(100, prob * 100)}%`, background: meta.color,
                         }} />
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, color: D.muted }}>
-                        <span>تجمیعی: <b style={{ color: '#d8eff9' }}>{toFa(s?.probability ?? 0)}٪</b></span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, color: '#e0eaf0' }}>
+                        <span>تجمیعی: <b style={{ color: '#ffffff' }}>{toFa(s?.probability ?? 0)}٪</b></span>
                       </div>
                     </div>
                   );
@@ -750,11 +737,11 @@ export default function VdssGraph(props: VdssGraphProps) {
               </div>
 
               <div style={{ borderTop: `1px solid ${D.line}`, paddingTop: 12, marginTop: 4 }}>
-                <p style={{ fontSize: 10, color: D.muted, lineHeight: 2, margin: 0 }}>
-                  <b style={{ color: '#d8eff9' }}>ساختار:</b> ۳ استراتژی × ۹ یال = ۲۷ مسیر مستقیم.<br />
-                  <b style={{ color: '#d8eff9' }}>احتمال یال:</b> محاسبه‌شده از موتور تصمیم (backend).<br />
-                  <b style={{ color: '#d8eff9' }}>احتمال مسیر:</b> P(استراتژی) × P(یال|استراتژی).<br />
-                  <b style={{ color: '#d8eff9' }}>احتمال سناریو:</b> تجمیع ۳ مسیر هر سناریو.
+                <p style={{ fontSize: 10, color: '#e0eaf0', lineHeight: 2, margin: 0 }}>
+                  <b style={{ color: '#ffffff' }}>ساختار:</b> ۳ استراتژی × ۹ یال = ۲۷ مسیر مستقیم.<br />
+                  <b style={{ color: '#ffffff' }}>احتمال یال:</b> محاسبه‌شده از موتور تصمیم (backend).<br />
+                  <b style={{ color: '#ffffff' }}>احتمال مسیر:</b> P(استراتژی) × P(یال|استراتژی).<br />
+                  <b style={{ color: '#ffffff' }}>احتمال سناریو:</b> تجمیع ۳ مسیر هر سناریو.
                 </p>
               </div>
             </div>
@@ -773,7 +760,7 @@ export default function VdssGraph(props: VdssGraphProps) {
           {SCENARIO_KEYS.map(key => {
             const s = scenarios[key];
             if (!s) return null;
-            const meta = SCENARIO_META[key];
+            const meta = SCENARIO_META_LOCAL[key];
             const contrib = pathContributions[key] ?? { trend: 0, breakout: 0, reversal: 0 };
             return (
               <div
@@ -785,21 +772,21 @@ export default function VdssGraph(props: VdssGraphProps) {
                 }}
               >
                 <strong style={{ display: 'block', color: meta.color, fontSize: 21, fontWeight: 900, marginBottom: 5 }}>{toFa(s.probability)}٪</strong>
-                <span style={{ fontSize: 12, fontWeight: 700, color: D.text }}>{meta.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{meta.label}</span>
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {Object.entries(BRANCH_META).map(([bKey, bMeta]) => (
                     <div key={bKey} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9 }}>
-                      <span style={{ color: D.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ color: '#e0eaf0', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: bMeta.color }} />
                         {bMeta.label}
                       </span>
-                      <span style={{ fontWeight: 700, color: D.text }}>
+                      <span style={{ fontWeight: 700, color: '#ffffff' }}>
                         {toPersianDigits((contrib[bKey as 'trend' | 'breakout' | 'reversal'] * 100).toFixed(1))}٪
                       </span>
                     </div>
                   ))}
                 </div>
-                <small style={{ display: 'block', color: D.muted, fontSize: 10, lineHeight: 1.7, marginTop: 7 }} dir="ltr">
+                <small style={{ display: 'block', color: '#e0eaf0', fontSize: 10, lineHeight: 1.7, marginTop: 7 }} dir="ltr">
                   {toFa(s.targetMin)} — {toFa(s.targetMax)}
                 </small>
               </div>
@@ -810,21 +797,192 @@ export default function VdssGraph(props: VdssGraphProps) {
           marginTop: 15, padding: '12px 15px',
           borderRight: `3px solid ${D.gold}`,
           background: 'rgba(255,177,27,.06)',
-          color: '#b8cbd5', fontSize: 11, lineHeight: 2,
+          color: '#e0eaf0', fontSize: 11, lineHeight: 2,
         }}>
           <b>محدودیت مدل:</b> احتمال‌های سناریو توسط موتور محاسباتی سرور محاسبه شده‌اند. هر استراتژی ۹ یال شرطی دارد و مجموع ۲۷ مسیر، احتمال نهایی هر سناریو را تشکیل می‌دهد.
         </div>
       </div>
 
-      {/* ═══ Probability Trend Table ═══ */}
-      {props.probabilityTrend && <ProbabilityTrendTable data={props.probabilityTrend} />}
+      {/* ═══ Cumulative Probability Line Chart (NEW) ═══ */}
+      <CumulativeProbabilityChart data={props.probabilityTrend} />
+
+      {/* ═══ Probability Trend Table (UPDATED) ═══ */}
+      <ProbabilityTrendTable data={props.probabilityTrend} />
     </div>
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Cumulative Probability Line Chart (Pure SVG)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const TREND_DAYS = [1, 5, 10, 20, 30] as const;
+function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | null }) {
+  const [open, setOpen] = useState(true);
+
+  const hasData = data && data.groups && data.groups.length === 3 &&
+    data.groups[0].trend.length > 1;
+
+  if (!hasData) {
+    if (!data || data.groups?.length === 0) return null;
+    return (
+      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+              style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
+            <div className="text-right">
+              <h2 className="text-sm font-bold text-[#111827]">نمودار روند تجمعی ۳۰ روزه</h2>
+              <p className="text-[11px] text-[#6b7280]">احتمال تجمعی گروه‌ها: گاوی، خنثی، خرسی</p>
+            </div>
+          </div>
+          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
+            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)', minHeight: 200 }}>
+            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  }
+
+  const groupMap = Object.fromEntries(data.groups.map(g => [g.group, g])) as Record<string, typeof data.groups[number]>;
+  const bull = groupMap['bullish'];
+  const neut = groupMap['neutral'];
+  const bear = groupMap['bearish'];
+  if (!bull || !neut || !bear) return null;
+
+  const maxDays = Math.max(bull.trend.length, neut.trend.length, bear.trend.length);
+  const days = Array.from({ length: maxDays }, (_, i) => i + 1);
+
+  // Chart dimensions
+  const chartW = 1100;
+  const chartH = 220;
+  const padL = 50;
+  const padR = 20;
+  const padT = 20;
+  const padB = 40;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
+
+  // X mapping: day 1 (today) on right, day 30 on left (RTL)
+  const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
+  // Y mapping: 0% at bottom, 100% at top
+  const yOf = (pct: number) => padT + plotH - pct * plotH;
+
+  const lineColor = (g: 'bullish' | 'neutral' | 'bearish') =>
+    g === 'bullish' ? '#16a34a' : g === 'neutral' ? '#b45309' : '#dc2626';
+
+  const buildPolyline = (trend: DayPoint[], group: string) => {
+    const color = lineColor(group as 'bullish' | 'neutral' | 'bearish');
+    const points = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.cumulativeProb).toFixed(1)}`).join(' ');
+    return (
+      <g key={group}>
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          opacity={0.9}
+        />
+        {trend.map(d => (
+          <circle
+            key={d.day}
+            cx={xOf(d.day)}
+            cy={yOf(d.cumulativeProb)}
+            r={2.5}
+            fill={color}
+            stroke="#ffffff"
+            strokeWidth={1}
+          />
+        ))}
+      </g>
+    );
+  };
+
+  // Grid lines
+  const gridLines: React.JSX.Element[] = [];
+  for (let p = 0; p <= 100; p += 20) {
+    const y = yOf(p / 100);
+    gridLines.push(
+      <line key={`grid-${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y}
+        stroke="#e5e7eb" strokeWidth={0.8} />
+    );
+    gridLines.push(
+      <text key={`ylbl-${p}`} x={padL - 8} y={y + 3.5} textAnchor="end"
+        fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(p.toString())}٪</text>
+    );
+  }
+
+  // X axis labels (every 5 days)
+  const xLabels: React.JSX.Element[] = [];
+  for (let d = 1; d <= maxDays; d += 5) {
+    xLabels.push(
+      <text key={`xlbl-${d}`} x={xOf(d)} y={chartH - padB + 18} textAnchor="middle"
+        fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(d.toString())}</text>
+    );
+  }
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+            style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
+          <div className="text-right">
+            <h2 className="text-sm font-bold text-[#111827]">نمودار روند تجمعی ۳۰ روزه</h2>
+            <p className="text-[11px] text-[#6b7280]">احتمال تجمعی گروه‌ها: گاوی، خنثی، خرسی</p>
+          </div>
+        </div>
+        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+      </CollapsibleTrigger>
+
+      <CollapsibleContent>
+        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-6 mb-3">
+            {([
+              ['bullish', 'گاوی', '#16a34a'],
+              ['neutral', 'خنثی', '#b45309'],
+              ['bearish', 'خرسی', '#dc2626'],
+            ] as const).map(([g, label, color]) => (
+              <div key={g} className="flex items-center gap-2">
+                <span className="inline-block w-4 h-1 rounded" style={{ background: color }} />
+                <span className="text-xs font-bold" style={{ color }}>{label}</span>
+              </div>
+            ))}
+          </div>
+          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 700, maxHeight: 280 }}>
+            {/* Background */}
+            <rect x={0} y={0} width={chartW} height={chartH} fill="#ffffff" rx={4} />
+            {/* Grid */}
+            {gridLines}
+            {/* Axes */}
+            <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
+            <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
+            {/* X labels */}
+            {xLabels}
+            <text x={chartW / 2} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={10} fontFamily="inherit">روز (۱ = امروز)</text>
+            {/* Lines */}
+            {buildPolyline(bull.trend, 'bullish')}
+            {buildPolyline(neut.trend, 'neutral')}
+            {buildPolyline(bear.trend, 'bearish')}
+          </svg>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Probability Trend Table (30 days, all scenarios, individual + cumulative)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const TREND_GROUP_COLOR: Record<string, { bg: string; text: string; badge: string }> = {
   bearish: { bg: 'rgba(239,68,68,0.06)', text: '#dc2626', badge: 'rgba(239,68,68,0.12)' },
@@ -838,30 +996,55 @@ const TREND_GROUP_LABEL: Record<string, string> = {
   bullish: 'گاوی',
 };
 
-function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
+function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null }) {
   const { colors: C } = useTheme();
   const [open, setOpen] = useState(true);
 
-  // Build a lookup: scenarioKey -> trend array
-  const scenarioMap = useMemo(() => {
-    const m: Record<string, ProbabilityTrendResult['scenarios'][number]> = {};
-    for (const s of data.scenarios) m[s.scenarioKey] = s;
-    return m;
-  }, [data.scenarios]);
+  const hasData = !!(data && data.scenarios && data.scenarios.length > 0 &&
+    (data.scenarios[0]?.trend?.length ?? 0) > 1);
+
+  // Build scenario lookup (computed inline, React Compiler auto-memoizes)
+  const scenarioMap: Record<string, ProbabilityTrendResult['scenarios'][number]> = {};
+  if (data?.scenarios) {
+    for (const s of data.scenarios) scenarioMap[s.scenarioKey] = s;
+  }
 
   // Group map
-  const groupMap = useMemo(() => {
-    const m: Record<string, ProbabilityTrendResult['groups'][number]> = {};
-    for (const g of data.groups) m[g.group] = g;
-    return m;
-  }, [data.groups]);
+  const groupMap: Record<string, ProbabilityTrendResult['groups'][number]> = {};
+  if (data?.groups) {
+    for (const g of data.groups) groupMap[g.group] = g;
+  }
 
-  // Get DayPoint by day number (1-indexed)
-  const getDay = (trend: DayPoint[], day: number) =>
-    trend.find(d => d.day === day);
-
-  // Format probability as percentage string with 2 decimals
+  const totalDays = data?.scenarios?.[0]?.trend?.length ?? 30;
+  const allDays = Array.from({ length: totalDays }, (_, i) => i + 1);
+  const getDay = useCallback((trend: DayPoint[], day: number) =>
+    trend.find(d => d.day === day), []);
   const fmtPct = (v: number) => toPersianDigits((v * 100).toFixed(2)) + '٪';
+
+  if (!hasData) {
+    return (
+      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+              style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
+            <div className="text-right">
+              <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
+              <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها</p>
+            </div>
+          </div>
+          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
+            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  }
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
@@ -881,26 +1064,24 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
       <CollapsibleContent>
         <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-          <Table className="text-[11px] min-w-[900px]">
+          <Table style={{ fontSize: 10, minWidth: 1200 }}>
             <TableHeader>
               <TableRow className="border-b border-[#e5e7eb]">
-                <TableHead className="text-right text-[#374151] font-bold px-2 py-2 min-w-[120px]">سناریو</TableHead>
-                {TREND_DAYS.map(day => (
-                  <TableHead key={day} colSpan={2} className="text-center text-[#374151] font-bold px-1.5 py-2 border-r border-[#e5e7eb]">
-                    روز {toPersianDigits(day.toString())}
+                <TableHead className="text-right text-[#374151] font-bold px-2 py-2 min-w-[120px]" style={{ fontSize: 10 }}>سناریو</TableHead>
+                {allDays.map(day => (
+                  <TableHead key={day} colSpan={2} className="text-center text-[#374151] font-bold px-0.5 py-1.5 border-r border-[#e5e7eb]" style={{ fontSize: 9 }}>
+                    {toPersianDigits(day.toString())}
                   </TableHead>
                 ))}
-                <TableHead className="text-center text-[#374151] font-bold px-2 py-2 border-r border-[#e5e7eb]">اوج</TableHead>
               </TableRow>
               <TableRow className="border-b border-[#e5e7eb] bg-[#f9fafb]">
-                <TableHead className="px-2 py-1" />
-                {TREND_DAYS.map(day => (
+                <TableHead className="px-2 py-1" style={{ fontSize: 9 }} />
+                {allDays.map(day => (
                   <React.Fragment key={day}>
-                    <TableHead className="text-center text-[10px] text-[#6b7280] font-medium px-1 py-1">اختصاصی</TableHead>
-                    <TableHead className="text-center text-[10px] text-[#6b7280] font-medium px-1 py-1">تجمعی</TableHead>
+                    <TableHead className="text-center text-[#6b7280] font-medium px-0.5 py-0.5" style={{ fontSize: 8 }}>اختصاصی</TableHead>
+                    <TableHead className="text-center text-[#6b7280] font-medium px-0.5 py-0.5" style={{ fontSize: 8 }}>تجمعی</TableHead>
                   </React.Fragment>
                 ))}
-                <TableHead className="text-center text-[10px] text-[#6b7280] font-medium px-2 py-1">روز</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -911,105 +1092,94 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
                 const gc = TREND_GROUP_COLOR[sc.group];
                 return (
                   <TableRow key={key} className="border-b border-[#e5e7eb]/60 hover:bg-[#f9fafb]">
-                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text, minWidth: 120 }}>
-                      <span className="inline-block w-2 h-2 rounded-full ml-1.5" style={{ background: gc.text }} />
+                    <TableCell className="px-2 py-1 font-bold" style={{ color: gc.text, minWidth: 100, fontSize: 10 }}>
+                      <span className="inline-block w-2 h-2 rounded-full ml-1" style={{ background: gc.text }} />
                       {sc.label}
                     </TableCell>
-                    {TREND_DAYS.map(day => {
+                    {allDays.map(day => {
                       const dp = getDay(sc.trend, day);
                       const isPeak = sc.peakDay === day;
                       return (
                         <React.Fragment key={day}>
                           <TableCell
-                            className={`text-center px-1 py-1 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
-                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 4 } : { color: '#374151' }}
+                            className={`text-center px-0.5 py-0.5 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
+                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 3, fontSize: 9 } : { color: '#374151', fontSize: 9 }}
                           >
                             {dp ? fmtPct(dp.individualProb) : '—'}
                           </TableCell>
                           <TableCell
-                            className={`text-center px-1 py-1 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
-                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 4 } : { color: '#6b7280' }}
+                            className={`text-center px-0.5 py-0.5 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
+                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 3, fontSize: 9 } : { color: '#6b7280', fontSize: 9 }}
                           >
                             {dp ? fmtPct(dp.cumulativeProb) : '—'}
                           </TableCell>
                         </React.Fragment>
                       );
                     })}
-                    <TableCell className="text-center px-2 py-1 font-bold tabular-nums" style={{ color: gc.text }}>
-                      {toPersianDigits(sc.peakDay.toString())}
-                    </TableCell>
                   </TableRow>
                 );
               })}
 
-              {/* Group trend rows */}
-              <TableRow className="border-t-2 border-[#e5e7eb] bg-[#f3f4f6]">
-                <TableCell className="px-2 py-2 font-black text-[#111827]" colSpan={1}>
-                  روند گروهی
-                </TableCell>
-                {TREND_DAYS.map(day => {
-                  const bearG = groupMap['bearish'];
-                  const neutG = groupMap['neutral'];
-                  const bullG = groupMap['bullish'];
-                  const bCum = getDay(bearG?.trend ?? [], day)?.cumulativeProb ?? 0;
-                  const nCum = getDay(neutG?.trend ?? [], day)?.cumulativeProb ?? 0;
-                  const buCum = getDay(bullG?.trend ?? [], day)?.cumulativeProb ?? 0;
-                  const total = bCum + nCum + buCum;
-                  const bullPct = total > 0 ? buCum / total : 0;
-                  const barColor = bullPct > 0.55 ? '#16a34a' : bullPct < 0.45 ? '#dc2626' : '#6b7280';
-                  return (
-                    <TableCell key={day} colSpan={2} className="text-center px-1 py-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <div className="w-12 h-1.5 rounded-full bg-[#e5e7eb] overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, bullPct * 100)}%`, background: barColor }} />
-                        </div>
-                        <span className="text-[10px] font-bold tabular-nums" style={{ color: barColor }}>
-                          {fmtPct(bullPct)}
-                        </span>
-                      </div>
-                    </TableCell>
-                  );
-                })}
-                <TableCell className="px-2 py-2" />
+              {/* Separator row */}
+              <TableRow>
+                <TableCell className="py-1" colSpan={1 + allDays.length * 2} style={{ borderBottom: '2px solid #e5e7eb' }} />
               </TableRow>
-              {/* Group detail rows */}
+
+              {/* Group cumulative rows: Bullish, Neutral, Bearish */}
               {(['bearish', 'neutral', 'bullish'] as const).map(g => {
                 const gData = groupMap[g];
                 if (!gData) return null;
                 const gc = TREND_GROUP_COLOR[g];
-                const lastDay = getDay(gData.trend, 30);
                 return (
-                  <TableRow key={g} className="border-b border-[#e5e7eb]/40">
-                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text }}>
+                  <TableRow key={`grp-${g}`} className="border-b border-[#e5e7eb]/40">
+                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text, fontSize: 10 }}>
                       <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ background: gc.text }} />
-                      {TREND_GROUP_LABEL[g]}
+                      تجمعی {TREND_GROUP_LABEL[g]}
                     </TableCell>
-                    {TREND_DAYS.map(day => {
+                    {allDays.map(day => {
                       const dp = getDay(gData.trend, day);
                       return (
-                        <TableCell key={day} colSpan={2} className="text-center px-1 py-1 tabular-nums font-medium" style={{ color: gc.text }}>
+                        <TableCell key={day} colSpan={2} className="text-center px-0.5 py-1 tabular-nums font-bold" style={{ color: gc.text, fontSize: 9 }}>
                           {dp ? fmtPct(dp.cumulativeProb) : '—'}
                         </TableCell>
                       );
                     })}
-                    <TableCell className="text-center px-2 py-1 font-bold tabular-nums text-[10px]" style={{ color: gc.text }}>
-                      {lastDay ? fmtPct(lastDay.cumulativeProb) : '—'}
-                    </TableCell>
                   </TableRow>
                 );
               })}
+
+              {/* Sum verification row */}
+              <TableRow className="bg-[#f3f4f6]">
+                <TableCell className="px-2 py-1.5 font-black" style={{ color: '#111827', fontSize: 10 }}>
+                  مجموع سه گروه
+                </TableCell>
+                {allDays.map(day => {
+                  const bCum = getDay(groupMap['bearish']?.trend ?? [], day)?.cumulativeProb ?? 0;
+                  const nCum = getDay(groupMap['neutral']?.trend ?? [], day)?.cumulativeProb ?? 0;
+                  const buCum = getDay(groupMap['bullish']?.trend ?? [], day)?.cumulativeProb ?? 0;
+                  const total = bCum + nCum + buCum;
+                  const isOk = Math.abs(total - 1.0) < 0.001;
+                  return (
+                    <TableCell key={day} colSpan={2} className="text-center px-0.5 py-1 tabular-nums font-black" style={{
+                      color: isOk ? '#059669' : '#dc2626',
+                      fontSize: 9,
+                    }}>
+                      {fmtPct(total)}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
             </TableBody>
           </Table>
 
           <div className="mt-3 space-y-2">
             <div className="px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
               <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص.
-              احتمال تجمعی (CDF) = مجموع احتمال از ضعیف‌ترین سناریو تا این سناریو در همان روز.
+              احتمال تجمعی (CDF) = مجموع احتمال از شدیدترین سناریو تا این سناریو در همان روز.
               صعودی: از شوک صعودی (R9) تجمعی تا صعودی خفیف (R6) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
               نزولی: از شوک نزولی (R1) تجمعی تا نزولی خفیف (R4) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
-              سلول‌های برجسته نشان‌دهنده روز اوج احتمال هر سناریو هستند. نوار روند گروهی نسبت تجمعی گاوی به کل را نشان می‌دهد.
+              ردیف «مجموع سه گروه» باید همیشه ۱۰۰٪ باشد.
             </div>
-            {/* Scenario interpretations */}
             {data.scenarios.filter(s => s.interpretation).map(s => (
               <div key={s.scenarioKey} className="px-4 py-1.5 text-[10px] text-[#6b7280]">
                 <b>{s.label}:</b> {s.interpretation}
@@ -1022,6 +1192,10 @@ function ProbabilityTrendTable({ data }: { data: ProbabilityTrendResult }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Dark Metric Card
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function DarkMetricCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{
@@ -1029,13 +1203,15 @@ function DarkMetricCard({ label, value, color }: { label: string; value: string;
       border: `1px solid ${D.line}`, borderRadius: 14,
       background: 'linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86))',
     }}>
-      <small style={{ display: 'block', color: D.muted, marginBottom: 8, fontSize: 12 }}>{label}</small>
+      <small style={{ display: 'block', color: '#ffffff', marginBottom: 8, fontSize: 12 }}>{label}</small>
       <strong style={{ fontSize: 18, letterSpacing: 0.2, color }}>{value}</strong>
     </div>
   );
 }
 
-// ── Loading ────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Loading Skeleton
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export function VdssGraphSkeleton() {
   return (

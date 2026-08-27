@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCandlestick, fetchSymbolData, fetchTsetmcIndexHistory, type CandleData } from '@/lib/tse-api';
-import { analyze, type OHLCV } from '@/lib/ta-engine';
-import { calculateProbabilityTrend } from '@/lib/probability-trend';
+import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
+import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -32,12 +32,16 @@ export async function GET(req: NextRequest) {
 
         const ta = analyze(ohlcv, 'واحد');
 
-        // Compute 30-day probability trend from scenario probabilities
-        const probFractions: Record<string, number> = {};
-        for (const [k, v] of Object.entries(ta.scenarioSums)) {
-          probFractions[k] = v / 100;
+        // Compute 30-day probability trend from historical daily probabilities
+        let probabilityTrend;
+        try {
+          const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
+          probabilityTrend = dailySnapshots.length > 1
+            ? buildTrendFromDailySnapshots(dailySnapshots)
+            : undefined;
+        } catch {
+          probabilityTrend = undefined;
         }
-        const probabilityTrend = calculateProbabilityTrend(probFractions, 30);
 
         const lastCandle = tsetmcCandles[tsetmcCandles.length - 1];
         const prevCandle = tsetmcCandles.length > 1 ? tsetmcCandles[tsetmcCandles.length - 2] : lastCandle;
@@ -103,12 +107,16 @@ export async function GET(req: NextRequest) {
 
     const ta = analyze(ohlcv, 'ریال');
 
-    // Compute 30-day probability trend from scenario probabilities
-    const probFractions2: Record<string, number> = {};
-    for (const [k, v] of Object.entries(ta.scenarioSums)) {
-      probFractions2[k] = v / 100;
+    // Compute 30-day probability trend from historical daily probabilities
+    let probabilityTrend;
+    try {
+      const dailySnapshots2: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
+      probabilityTrend = dailySnapshots2.length > 1
+        ? buildTrendFromDailySnapshots(dailySnapshots2)
+        : undefined;
+    } catch {
+      probabilityTrend = undefined;
     }
-    const probabilityTrend = calculateProbabilityTrend(probFractions2, 30);
 
     // Extract real-time info from symbol data
     const info = symbolInfo && typeof symbolInfo === 'object' && !Array.isArray(symbolInfo)
