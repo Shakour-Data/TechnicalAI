@@ -1164,3 +1164,32 @@ Stage Summary:
 - Modal has its own search input for typing
 - Bilingual search works (Persian and English)
 - No lint errors
+
+---
+Task ID: 1
+Agent: main
+Task: Fix search component issues - country filter, back navigation, advanced query, positioning, AI analysis timeout
+
+Work Log:
+- Read and analyzed the existing 983-line symbol-search.tsx component
+- Identified root causes: country filter showing for wrong categories, no back navigation, dropdown centered instead of positioned below input, no advanced query operators
+- Completely rewrote symbol-search.tsx with the following key changes:
+  1. Country filter now ONLY shows for yahoo_stock and yahoo_etf (was showing for all, world_index too)
+  2. Added breadcrumb navigation with back button (← همه دسته‌بندی‌ها)
+  3. Categories now visually grouped (بورس تهران, بازار ایران, بازارهای جهانی, بورس جهانی Yahoo)
+  4. Dropdown positioned below input on desktop, centered on mobile
+  5. Added advanced query operators: country:US, exchange:NASD, sector:Tech
+  6. Added error handling for category changes (try/catch)
+  7. Better empty states with search hints
+  8. Fixed yahoo_stock selection by removing async state dependency issues
+- Updated page.tsx: landing page search max-w-lg → max-w-2xl, header search max-w-xl → max-w-2xl
+- Fixed Caddy timeout: read_timeout/write_timeout 120s → 300s
+- Fixed AI analysis LLM timeout: 180s → 280s
+
+Stage Summary:
+- symbol-search.tsx fully rewritten (~1231 lines) with advanced UI/UX
+- Country filter restricted to Yahoo-specific categories only
+- Back navigation added with breadcrumb trail
+- Advanced query operators (country:, exchange:, sector:) implemented
+- Dropdown positioning improved (anchored to input on desktop)
+- AI analysis timeout increased to prevent 504 errors

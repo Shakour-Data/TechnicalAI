@@ -123,7 +123,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
             سیستم جامع تحلیل تکنیکال با موتور ۷ لایه VDss، انتخاب خودکار مکتب تحلیلی با ML،
             گراف تصمیم هوشمند و تحلیل متنی تولیدشده توسط هوش مصنوعی.
           </p>
-          <div className="max-w-lg mx-auto">
+          <div className="max-w-2xl mx-auto">
             <SymbolSearch onSelect={onSearch} placeholder="جستجوی نماد، ارز، طلا، کریپتو، شاخص، سهام جهانی ..." />
           </div>
           <div className="flex flex-wrap justify-center gap-2 mt-8">
@@ -802,7 +802,7 @@ export default function Home() {
           </div>
 
           {/* Search */}
-          <div className="flex-1 min-w-[240px] max-w-xl">
+          <div className="flex-1 min-w-[260px] max-w-2xl">
             <SymbolSearch onSelect={handleSelect} placeholder="جستجوی نماد، ارز، طلا، کریپتو، شاخص ..." />
           </div>
 

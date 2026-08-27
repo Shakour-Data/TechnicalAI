@@ -321,7 +321,7 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: userMessage },
       ],
       {
-        timeoutMs: 180_000,  // 3 min max total (queue wait + generation)
+        timeoutMs: 280_000,  // ~4.5 min max total (queue wait + generation)
         maxRetries: 3,
         maxQueueWaitMs: 60_000,  // Fail fast if queue wait > 60s
       }
