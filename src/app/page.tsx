@@ -14,6 +14,7 @@ import MLForecast from '@/components/tse/ml-forecast';
 import HelpPage from '@/components/help-page';
 import DocsPage from '@/components/docs-page';
 import { toPersianDigits } from '@/lib/jalali';
+import { formatPriceFa } from '@/lib/format-price';
 
 interface AnalysisData {
   symbol: string;
@@ -34,13 +35,18 @@ interface AnalysisData {
     trades: number;
     eps: number;
     pe: number;
+    currencyUnit?: string;
+    decimals?: number;
+    category?: string;
+    currency?: string;
   } | null;
   ta: import('@/lib/ta-engine').TAResult;
   isTgju?: boolean;
   isYahoo?: boolean;
 }
 
-const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+// Formatting helpers using dynamic decimals
+const toFa = (n: number, decimals: number = 0) => formatPriceFa(n, decimals);
 const toFaDecimal = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: 2 });
 
 // Theme-aware signal colors
@@ -553,6 +559,8 @@ export default function Home() {
 
   const lastPrice = data?.info?.lastPrice
     ?? (data?.ta ? data.candles[data.candles.length - 1]?.close ?? 0 : 0);
+  const decimals = data?.info?.decimals ?? 0;
+  const currencyUnit = data?.info?.currencyUnit ?? 'ریال';
   const SignalIcon = data?.ta?.overallSignal === 'bullish' ? TrendingUp : data?.ta?.overallSignal === 'bearish' ? TrendingDown : Activity;
   const sig = signalStyle(data?.ta?.overallSignal, C);
 
@@ -644,10 +652,10 @@ export default function Home() {
               {data.info && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { label: 'اولین', value: toFa(data.info.openPrice) },
-                    { label: 'بیشترین', value: toFa(data.info.maxPrice), cls: 'text-emerald-600' },
-                    { label: 'کمترین', value: toFa(data.info.minPrice), cls: 'text-red-600' },
-                    { label: 'پایانی', value: toFa(data.info.closePrice) },
+                    { label: 'اولین', value: toFa(data.info.openPrice, decimals) },
+                    { label: 'بیشترین', value: toFa(data.info.maxPrice, decimals), cls: 'text-emerald-600' },
+                    { label: 'کمترین', value: toFa(data.info.minPrice, decimals), cls: 'text-red-600' },
+                    { label: 'پایانی', value: toFa(data.info.closePrice, decimals) },
                     ...(data.ta.hasVolume ? [
                       { label: 'حجم معاملات', value: toPersianDigits((data.info.volume / 1e6).toFixed(1)) + 'M' },
                       { label: 'ارزش معاملات', value: toPersianDigits((data.info.value / 1e9).toFixed(1)) + 'B' },
@@ -715,7 +723,7 @@ export default function Home() {
               {activePanel === 'visual' && (
                 <div className="space-y-4">
                   <div id="chart-export-wrapper" ref={chartWrapperRef}>
-                    <CandlestickChart data={data.candles} ta={chartTa} height={520} />
+                    <CandlestickChart data={data.candles} ta={chartTa} height={520} priceDecimals={decimals} />
                   </div>
                   <VdesAnalysis
                     symbolName={data.info?.name ?? data.symbol}
@@ -752,6 +760,8 @@ export default function Home() {
                     priceTargets={data.ta.priceTargets}
                     hasVolume={data.ta.hasVolume}
                     instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
+                    currencyUnit={currencyUnit}
+                    priceDecimals={decimals}
                   />
                 </div>
               )}
@@ -858,7 +868,8 @@ export default function Home() {
               <div className="text-left">
                 <div className="text-xs" style={{ color: C.cardSubFg }}>{data.info.name}</div>
                 <div className="font-bold text-lg" style={{ color: C.cardFg }}>
-                  {toFa(data.info.lastPrice)}
+                  {toFa(data.info.lastPrice, decimals)}
+                  <span className="text-[10px] mr-1.5 opacity-60">{currencyUnit}</span>
                   <span className="text-xs mr-2" style={{ color: data.info.change >= 0 ? C.bullColor : C.bearColor }}>
                     {data.info.change >= 0 ? '▲' : '▼'} {toFaDecimal(Math.abs(data.info.change))}%
                   </span>

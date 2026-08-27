@@ -34,6 +34,7 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import { computeDailyIndicators } from '@/lib/indicator-arrays';
+import { formatPriceFa } from '@/lib/format-price';
 import { useTheme } from '@/lib/theme-store';
 
 function renderAIText(text: string): string {
@@ -125,6 +126,8 @@ export interface VdesAnalysisProps {
   priceTargets: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
   hasVolume?: boolean;
   instrumentType?: string;
+  currencyUnit?: string;
+  priceDecimals?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -237,6 +240,7 @@ interface AnalysisContext {
   supportStrengths: LevelStrength[];
   v11Result: V11Result;
   instrumentType?: string;
+  currencyUnit?: string;
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -248,8 +252,9 @@ function generateAnalysisText(ctx: AnalysisContext) {
     trendDirection, trendAngle, trendR2, overallSignal,
     highestKey, highestProb, scenarios, S1, R1, R2,
     hasVolume, resistanceStrengths, supportStrengths,
-    v11Result,
+    v11Result, currencyUnit: ctxCurrencyUnit,
   } = ctx;
+  const unit = ctxCurrencyUnit || 'ریال';
 
   const R1_info = resistanceStrengths[0];
   const S1_info = supportStrengths[0];
@@ -298,12 +303,12 @@ function generateAnalysisText(ctx: AnalysisContext) {
     <>
       <strong className="text-amber-800">روند کلی و موقعیت قیمت:</strong>{' '}
       سناریوی غالب برای سهم {symbolName} <b className="text-[#111827]">{dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
-      قیمت در محدوده <b className="text-[#111827]">{toFa(currentPrice)} ریال</b> معامله می‌شود و روند میان‌مدت{' '}
+      قیمت در محدوده <b className="text-[#111827]">{toFa(currentPrice)} {unit}</b> معامله می‌شود و روند میان‌مدت{' '}
       <b className={trendColor}>{trendLabel}</b>
       {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={toPersianDigits((trendR2 * 100).toFixed(1))}٪).
-      قیمت نسبت به MA21 ({toFa(ma21)} ریال){' '}
+      قیمت نسبت به MA21 ({toFa(ma21)} {unit}){' '}
       <span className={abColor(currentPrice, ma21)}>{aboveBelow(currentPrice, ma21)}</span>
-      {' '}و نسبت به MA100 ({toFa(ma100)} ریال){' '}
+      {' '}و نسبت به MA100 ({toFa(ma100)} {unit}){' '}
       <span className={abColor(currentPrice, ma100)}>{aboveBelow(currentPrice, ma100)}</span>
       {' '}قرار دارد.
       اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
@@ -383,7 +388,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     <>
       <strong className="text-amber-800">تحلیل نوسانات و باند بولینگر:</strong>{' '}
       قیمت در باند بولینگر <b className="text-[#111827]">{bbSignal}</b> قرار دارد.
-      باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} ریال.
+      باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} {unit}.
       {currentPrice > bollingerUpper
         ? ' عبور از باند بالایی معمولاً نشان‌دهنده ادامه حرکت صعودی کوتاه‌مدت یا واکنش به باند است.'
         : currentPrice < bollingerLower
@@ -434,14 +439,14 @@ function generateAnalysisText(ctx: AnalysisContext) {
         {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         با احتمال {toFa(highestProb)}٪ برای سناریوی {dominant}، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی{isStrong ? ' قدرتمند و شتابدار' : ''}</b> را تأیید می‌کنند.
         {bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
-        نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} ریال، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
+        نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} {unit}، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
         تلاقی MA21 و MA100{' '}
         {Math.abs(ma21 - ma100) / currentPrice < 0.01
           ? <span className="text-amber-800">بسیار نزدیک به هم — تقاطع طلایی احتمالی</span>
           : ma21 > ma100
           ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
           : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
-        {' '}است. {isStrong ? 'مومنتوم بالا مدیریت ریسک دقیق‌تری را ایجاب می‌کند.' : `توصیه: در صورت شکست مقاومت ${toFa(R1)}، هدف بعدی ${toFa(R2)} ریال تعیین می‌شود.`}
+        {' '}است. {isStrong ? 'مومنتوم بالا مدیریت ریسک دقیق‌تری را ایجاب می‌کند.' : `توصیه: در صورت شکست مقاومت ${toFa(R1)}، هدف بعدی ${toFa(R2)} ${unit} تعیین می‌شود.`}
       </>
     );
   } else if (highestKey === 'R5') {
@@ -451,7 +456,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
         سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
         سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بهترین استراتژی <b className="text-amber-800">انتظار و مشاهده</b> است.
-        منتظر خروج قیمت از محدوده {toFa(S1)} تا {toFa(R1)} ریال بمانید.
+        منتظر خروج قیمت از محدوده {toFa(S1)} تا {toFa(R1)} {unit} بمانید.
         تلاقی MA21 و MA100{' '}
         {Math.abs(ma21 - ma100) / currentPrice < 0.01
           ? <span className="text-amber-800">نزدیک به هم — هر گونه تقاطع می‌تواند سیگنال جهت باشد</span>
@@ -477,7 +482,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
           : ma21 > ma100
           ? <span className="text-amber-800">MA21 هنوز بالاتر اما {isStrong ? 'به سرعت در حال نزدیک شدن' : 'در حال ضعیف شدن'}</span>
           : <span className="text-red-700">MA21 زیر MA100 — {isStrong ? 'تأیید نهایی ساختار نزولی' : 'تأیید‌کننده فشار فروش'}</span>}
-        {' '}. {isStrong ? 'حفظ سرمایه اولویت اول است. از هرگونه موقعیت خرید جدید خودداری کنید.' : `توصیه: احتیاط و انتظار برای بازگشت به محدوده حمایت ${toFa(S1)} ریال.`}
+        {' '}. {isStrong ? 'حفظ سرمایه اولویت اول است. از هرگونه موقعیت خرید جدید خودداری کنید.' : `توصیه: احتیاط و انتظار برای بازگشت به محدوده حمایت ${toFa(S1)} ${unit}.`}
       </>
     );
   }
@@ -514,7 +519,10 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
     supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
+    currencyUnit: propCurrencyUnit, priceDecimals: propPriceDecimals,
   } = props;
+  const unit = propCurrencyUnit || 'ریال';
+  const decimals = propPriceDecimals ?? 0;
 
   const vdesRef = useRef<HTMLDivElement>(null);
 
@@ -595,6 +603,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       hasVolume: hasVolume ?? false,
       resistanceStrengths, supportStrengths,
       v11Result,
+      currencyUnit: propCurrencyUnit,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -604,7 +613,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     trendDirection, trendAngle, trendR2, overallSignal,
     highestKey, highestProb, scenarios,
     S1_level, R1_level, R2_level, hasVolume,
-    resistanceStrengths, supportStrengths, v11Result,
+    resistanceStrengths, supportStrengths, v11Result, propCurrencyUnit,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────
@@ -612,10 +621,10 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const mfiOversold = hasVolume && mfi < 20;
   const mfiNote = hasVolume ? `, MFI: ${toFa(mfi)}` : '';
   const strategyText = rsi > 70 || mfiOverbought
-    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}${mfiNote}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ریال می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ریال وارد موقعیت خرید شد.`
+    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}${mfiNote}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ${unit} می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ${unit} وارد موقعیت خرید شد.`
     : rsi < 30 || mfiOversold
-    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ریال قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ریال تعیین می‌شود.`
-    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ریال و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
+    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ${unit} قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ${unit} تعیین می‌شود.`
+    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ${unit} و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
 
   const v11Map = useMemo(() => {
     const m = new Map<string, V11Result['scenarios'][number]>();
@@ -888,8 +897,8 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
 <header class="header">
   <h1>📈 تحلیل تکنیکال · ${symbolName}</h1>
   <div class="sub">
-    <span>📍 قیمت مرجع: <b style="color:${C.cardFg}">${toFa(currentPrice)} ریال</b></span>
-    <span>🎯 هدف کوتاه‌مدت: <b style="color:${C.cardFg}">${toFa(targetMin)} – ${toFa(targetMax)} ریال</b></span>
+    <span>📍 قیمت مرجع: <b style="color:${C.cardFg}">${toFa(currentPrice)} ${unit}</b></span>
+    <span>🎯 هدف کوتاه‌مدت: <b style="color:${C.cardFg}">${toFa(targetMin)} – ${toFa(targetMax)} ${unit}</b></span>
     ${lastCandleJalali ? `<span>📅 تاریخ: ${lastCandleJalali}</span>` : ''}
   </div>
 </header>
@@ -991,7 +1000,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
             <td>${m.label}</td>
             <td style="text-align:center"><span class="s-prob">${toFa(v?.rawProbability ?? s.probability)}٪</span></td>
             <td style="text-align:center"><span class="s-cum">${toFa(v?.cumulativeProbability ?? 0)}٪</span></td>
-            <td class="s-range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال</td>
+            <td class="s-range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1030,8 +1039,8 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     lines.push(`تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری`);
     if (lastCandleJalali) lines.push(`تاریخ: ${lastCandleJalali}`);
     lines.push('');
-    lines.push(`قیمت مرجع: ${toFa(currentPrice)} ریال`);
-    lines.push(`هدف کوتاه‌مدت: ${toFa(targetMin)} — ${toFa(targetMax)} ریال`);
+    lines.push(`قیمت مرجع: ${toFa(currentPrice)} ${unit}`);
+    lines.push(`هدف کوتاه‌مدت: ${toFa(targetMin)} — ${toFa(targetMax)} ${unit}`);
     lines.push(`روند: ${trendText}`);
     lines.push(`پروفایل ریسک: ${riskInfo.label}`);
     lines.push(`RSI: ${toFa(rsi)} (${rsiSignal})`);
@@ -1051,7 +1060,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
       if (!s) continue;
       const m = SCENARIO_META[k];
       const v = v11Map.get(k);
-      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cumulativeProbability ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ریال`);
+      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cumulativeProbability ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}`);
     }
     lines.push('');
     lines.push(`مجموع صعودی: ${toFa(v11Result.bullishCumulative)}٪ | رنج: ${toFa(v11Result.neutralCumulative)}٪ | مجموع نزولی: ${toFa(v11Result.bearishCumulative)}٪`);
@@ -1202,13 +1211,13 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
             background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
             border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
           }}>
-            📍 قیمت مرجع: <b style={{ color: C.cardFg }}>{toFa(currentPrice)} ریال</b>
+            📍 قیمت مرجع: <b style={{ color: C.cardFg }}>{toFa(currentPrice)} {unit}</b>
           </span>
           <span style={{
             background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
             border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
           }}>
-            🎯 هدف کوتاه‌مدت: <b style={{ color: C.cardFg }}>{toFa(targetMin)} – {toFa(targetMax)} ریال</b>
+            🎯 هدف کوتاه‌مدت: <b style={{ color: C.cardFg }}>{toFa(targetMin)} – {toFa(targetMax)} {unit}</b>
           </span>
           {lastCandleJalali && (
             <span style={{
@@ -1401,7 +1410,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
                       </span>
                     </td>
                     <td style={{ padding: '10px 14px', direction: 'ltr', textAlign: 'left', fontWeight: 500, color: C.cardSubFg }}>
-                      {toFa(s.targetMin)} — {toFa(s.targetMax)} ریال
+                      {toFa(s.targetMin)} — {toFa(s.targetMax)} {unit}
                     </td>
                   </tr>
                 );

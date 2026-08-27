@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchTgjuInstruments } from '@/lib/tgju-api';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -8,18 +9,24 @@ export async function GET() {
   try {
     const instruments = await fetchTgjuInstruments();
 
-    const toItem = (i: { title: string; key: string; price: number; highPrice: number; lowPrice: number; change: number; changePercent: number; category: string; groupTitle?: string }) => ({
-      l18: i.title,
-      l30: i.groupTitle || '',
-      pl: i.price,
-      pcp: i.changePercent,
-      tno: 0,
-      tvol: 0,
-      tval: 0,
-      cs: i.groupTitle || '',
-      category: i.category,
-      tgjuKey: i.key,
-    });
+    const toItem = (i: { title: string; key: string; price: number; highPrice: number; lowPrice: number; change: number; changePercent: number; category: string; groupTitle?: string }) => {
+      const decimals = detectDecimals(i.price, i.category, 'tgju');
+      const currencyUnit = getCurrencyUnit(i.category, 'tgju');
+      return {
+        l18: i.title,
+        l30: i.groupTitle || '',
+        pl: i.price,
+        pcp: i.changePercent,
+        tno: 0,
+        tvol: 0,
+        tval: 0,
+        cs: i.groupTitle || '',
+        category: i.category,
+        tgjuKey: i.key,
+        decimals,
+        currencyUnit,
+      };
+    };
 
     // Group by category
     const currencies = instruments.filter((i) => i.category === 'currency').map(toItem);

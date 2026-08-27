@@ -2382,7 +2382,7 @@ function calculateScenarioProbabilities(
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ANALYSIS FUNCTION
 // ═══════════════════════════════════════════════════════════════════════════════
-export function analyze(data: OHLCV[]): TAResult {
+export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   if (!data || data.length < 2) {
     const empty = () => 0;
     const emptyScenario = (): ScenarioResult => ({ name: '', nameEn: '', probability: 20, targetMin: 0, targetMax: 0, description: '' });
@@ -2643,6 +2643,7 @@ export function analyze(data: OHLCV[]): TAResult {
   // ── Scenario Descriptions with ATR-based S/R targets ────────────────────
   const fmt = (n: number) => Math.round(n).toLocaleString('fa-IR');
   const rp = (n: number) => Math.round(n); // round price
+  const unit = currencyUnit || 'ریال';
 
   // Helper: build a target range ≤ 1 ATR around a base level, ensuring ordering
   const bullTargets = buildBullishTargets(price, atr, resistances);
@@ -2656,7 +2657,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR1,
       targetMin: bearTargets[3].min,
       targetMax: bearTargets[3].max,
-      description: `شوک نزولی با هدف ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ریال.`,
+      description: `شوک نزولی با هدف ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ${unit}.`,
     },
     R2: {
       name: 'نزولی شتاب‌دار',
@@ -2664,7 +2665,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR2,
       targetMin: bearTargets[2].min,
       targetMax: bearTargets[2].max,
-      description: `شتاب نزولی با هدف ${fmt(bearTargets[2].min)} تا ${fmt(bearTargets[2].max)} ریال.`,
+      description: `شتاب نزولی با هدف ${fmt(bearTargets[2].min)} تا ${fmt(bearTargets[2].max)} ${unit}.`,
     },
     R3: {
       name: 'نزولی قوی',
@@ -2672,7 +2673,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR3,
       targetMin: bearTargets[1].min,
       targetMax: bearTargets[1].max,
-      description: `نزول قوی تا ${fmt(bearTargets[1].min)} تا ${fmt(bearTargets[1].max)} ریال.`,
+      description: `نزول قوی تا ${fmt(bearTargets[1].min)} تا ${fmt(bearTargets[1].max)} ${unit}.`,
     },
     R4: {
       name: 'نزولی خفیف',
@@ -2680,7 +2681,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR4,
       targetMin: bearTargets[0].min,
       targetMax: bearTargets[0].max,
-      description: `نزول خفیف تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ریال.`,
+      description: `نزول خفیف تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ${unit}.`,
     },
     R5: {
       name: 'رنج',
@@ -2688,7 +2689,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR5,
       targetMin: rangeTarget.min,
       targetMax: rangeTarget.max,
-      description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ریال.`,
+      description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ${unit}.`,
     },
     R6: {
       name: 'صعودی خفیف',
@@ -2696,7 +2697,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR6,
       targetMin: bullTargets[0].min,
       targetMax: bullTargets[0].max,
-      description: `حرکت صعودی خفیف با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ریال.`,
+      description: `حرکت صعودی خفیف با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ${unit}.`,
     },
     R7: {
       name: 'صعودی قوی',
@@ -2704,7 +2705,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR7,
       targetMin: bullTargets[1].min,
       targetMax: bullTargets[1].max,
-      description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ریال.`,
+      description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ${unit}.`,
     },
     R8: {
       name: 'صعودی شتاب‌دار',
@@ -2712,7 +2713,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR8,
       targetMin: bullTargets[2].min,
       targetMax: bullTargets[2].max,
-      description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ریال.`,
+      description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ${unit}.`,
     },
     R9: {
       name: 'شوک صعودی',
@@ -2720,7 +2721,7 @@ export function analyze(data: OHLCV[]): TAResult {
       probability: pR9,
       targetMin: bullTargets[3].min,
       targetMax: bullTargets[3].max,
-      description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ریال.`,
+      description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ${unit}.`,
     },
   };
 

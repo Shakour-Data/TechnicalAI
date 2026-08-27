@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       volume: c.volume,
     }));
 
-    const ta = await analyze(ohlcv, webId);
+    const ta = analyze(ohlcv, 'واحد');
 
     // Get live data from BrsApi
     let liveData: { index: number; change: number; changePercent: number; min: number; max: number } | null = null;
@@ -104,6 +104,9 @@ export async function GET(req: NextRequest) {
         trades: 0,
         eps: 0,
         pe: 0,
+        currencyUnit: 'واحد',
+        decimals: 0,
+        category: 'index',
       },
       ta,
       isIndex: true,

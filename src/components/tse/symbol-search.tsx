@@ -43,6 +43,8 @@ interface InstrumentItem {
   yahooCategory?: string;
   currency?: string;
   unit?: string;
+  decimals?: number;
+  currencyUnit?: string;
   country?: string;
   countryEn?: string;
   exchange?: string;
@@ -241,9 +243,9 @@ function getCountryFlag(country?: string): string {
    Helpers
    ═══════════════════════════════════════════════════════════════ */
 
-function formatNum(num: number): string {
+function formatNum(num: number, decimals?: number): string {
   if (num == null) return '—';
-  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(num);
+  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: decimals ?? 0 }).format(num);
 }
 
 function formatIdx(num: number): string {
@@ -790,6 +792,9 @@ export default function SymbolSearch({
   /* ── Render price ── */
   const renderPrice = (item: InstrumentItem) => {
     const source = getSource(item);
+    const decimals = item.decimals ?? 0;
+    const currencyUnit = item.currencyUnit;
+
     if (item.category === 'index') {
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
@@ -801,12 +806,12 @@ export default function SymbolSearch({
       );
     }
     if (source === 'yahoo') {
-      const cur = item.currency || item.unit || 'USD';
+      const cur = item.currencyUnit || item.currency || item.unit || 'USD';
       if (item.pl === 0) return <div className='flex shrink-0 flex-col items-end gap-0.5'><span className='text-xs text-[#6b7280]'>—</span></div>;
       return (
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
           <div className='flex items-center gap-1'>
-            <span className='text-xs font-semibold text-[#111827]'>{formatIdx(item.pl)}</span>
+            <span className='text-xs font-semibold text-[#111827]'>{formatNum(item.pl, decimals)}</span>
             <span className='text-[9px] text-[#9ca3af]'>{cur}</span>
           </div>
           <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' : item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
@@ -817,9 +822,14 @@ export default function SymbolSearch({
     }
     if (source === 'tgju' && item.pl === 0) return <div className='flex shrink-0 flex-col items-end gap-0.5'><span className='text-xs text-[#6b7280]'>—</span></div>;
     const isUp = item.pcp > 0;
+    // For TGJU, show currency unit if it's not ریال (e.g. تتر, دلار)
+    const showUnit = source === 'tgju' && currencyUnit && currencyUnit !== 'ریال';
     return (
       <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
-        <span className='text-xs font-semibold text-[#111827]'>{formatNum(item.pl)}</span>
+        <div className='flex items-center gap-1'>
+          <span className='text-xs font-semibold text-[#111827]'>{formatNum(item.pl, decimals)}</span>
+          {showUnit && <span className='text-[9px] text-[#9ca3af]'>{currencyUnit}</span>}
+        </div>
         <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', isUp ? 'bg-emerald-50 text-emerald-700' : !isUp && item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
           {isUp ? '+' : ''}{item.pcp?.toFixed(2)}%
         </span>

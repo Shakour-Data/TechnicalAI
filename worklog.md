@@ -1290,3 +1290,55 @@ Stage Summary:
 - Index analysis: FIXED (expired cache fallback, 0.2s response)
 - Console errors: ZERO (verified with agent-browser)
 - Unhandled promises: ZERO (verified with agent-browser)
+---
+Task ID: auto-decimals-currency
+Agent: Main
+Task: Auto-detect decimal places and currency units for all instruments
+
+Work Log:
+- Created `/home/z/my-project/src/lib/format-price.ts` with centralized utilities:
+  - `detectDecimals(price, category, source)` — auto-detects decimal places based on price magnitude and data source
+  - `getCurrencyUnit(category, source, yahooCurrency?)` — auto-detects currency unit (ریال/تومان/دلار/ین/فرانک/لیر/etc.)
+  - `formatPriceFa(price, decimals)` — Persian number formatting with configurable decimals
+  - `formatPriceWithUnit(price, decimals, unit)` — full price + unit formatting
+  - Yahoo currency code → Persian mapping (USD→دلار, EUR→یورو, JPY→ین, GBP→پوند, CHF→فرانک, TRY→لیر, etc.)
+
+- Updated all 3 instrument API routes to include `decimals` and `currencyUnit` per item:
+  - `/api/instruments` (TSE): decimals=0, currencyUnit=ریال (stocks) or واحد (indices)
+  - `/api/tgju-instruments`: auto-detects based on category (currency/gold/silver→تومان with 0 decimals, forex/energy/metal/world_index→دلار with 2-4 decimals, crypto→تتر)
+  - `/api/yahoo-instruments`: uses Yahoo's explicit `currency` field, maps to Persian names, auto-detects decimals from price magnitude
+
+- Updated all 3 analysis API routes to include `currencyUnit` and `decimals` in `info`:
+  - `/api/analysis` (TSE): currencyUnit=ریال/واحد, decimals=0
+  - `/api/tgju-analysis`: auto-detected from category
+  - `/api/yahoo-analysis`: uses Yahoo's currency field + auto-detects decimals
+  - `/api/index-analysis`: currencyUnit=واحد, decimals=0
+  - `/api/finpy-sector`: passes 'واحد' to analyze
+
+- Updated `ta-engine.ts`: `analyze()` now accepts optional `currencyUnit` parameter, used in all 9 scenario descriptions (was hardcoded ریال)
+
+- Updated `vdes-analysis.tsx`: Added `currencyUnit` and `priceDecimals` props, replaced all 20+ hardcoded 'ریال' with dynamic unit
+
+- Updated `symbol-search.tsx`: 
+  - Added `decimals` and `currencyUnit` to InstrumentItem interface
+  - `formatNum` now accepts optional decimals parameter
+  - Yahoo items show Persian currency names (دلار, ین, فرانک, لیر, etc.)
+  - TGJU non-ریال items show currency unit (تتر, دلار)
+
+- Updated `page.tsx`:
+  - AnalysisData.info now includes currencyUnit, decimals, category, currency
+  - Header shows price with currency unit label
+  - Info grid uses dynamic decimals for open/high/low/close prices
+  - Passes priceDecimals to CandlestickChart
+  - Passes currencyUnit and priceDecimals to VdesAnalysis
+
+- Updated `candlestick-chart.tsx`: Added `priceDecimals` prop, used in chart price formatter and all SVG drawing elements
+
+- Updated `analysis-sidebar.tsx`: Shows currency unit next to price
+
+Stage Summary:
+- System now auto-detects decimal places: TSE=0, TGJU toman-based=0, TGJU forex/energy=2-4, Yahoo forex=4, Yahoo stocks=2, Yahoo large indices=0
+- System now auto-detects currency units: TSE=ریال, TSE indices=واحد, TGJU currency/gold/silver=تومان, TGJU crypto=تتر, TGJU USD-based=دلار, Yahoo=maps currency code to Persian
+- No more hardcoded 'ریال' anywhere in the codebase (only as default fallback)
+- All 20+ hardcoded 'ریال' in vdes-analysis.tsx replaced with dynamic unit
+- All 9 scenario descriptions in ta-engine.ts use dynamic unit

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchCandlestick, fetchSymbolData, fetchTsetmcIndexHistory, type CandleData } from '@/lib/tse-api';
 import { analyze, type OHLCV } from '@/lib/ta-engine';
 import { calculateProbabilityTrend } from '@/lib/probability-trend';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
           volume: Number(c.volume) || 0,
         }));
 
-        const ta = analyze(ohlcv);
+        const ta = analyze(ohlcv, 'واحد');
 
         // Compute 30-day probability trend from scenario probabilities
         const probFractions: Record<string, number> = {};
@@ -60,6 +61,9 @@ export async function GET(req: NextRequest) {
             trades: 0,
             eps: 0,
             pe: 0,
+            currencyUnit: 'واحد',
+            decimals: 0,
+            category: 'index',
           },
           ta,
           probabilityTrend,
@@ -97,7 +101,7 @@ export async function GET(req: NextRequest) {
       volume: Number(c.volume) || 0,
     }));
 
-    const ta = analyze(ohlcv);
+    const ta = analyze(ohlcv, 'ریال');
 
     // Compute 30-day probability trend from scenario probabilities
     const probFractions2: Record<string, number> = {};
@@ -117,6 +121,8 @@ export async function GET(req: NextRequest) {
     const lastClose = Number(lastCandle?.close ?? 0);
     const prevClose = Number(prevCandle?.close ?? 0);
     const changePercent = prevClose > 0 ? ((lastClose - prevClose) / prevClose) * 100 : 0;
+    const decimals = detectDecimals(lastClose, 'stock', 'tse');
+    const currencyUnit = getCurrencyUnit('stock', 'tse');
 
     return NextResponse.json({
       symbol,
@@ -137,6 +143,9 @@ export async function GET(req: NextRequest) {
         trades: Number(info.tno ?? 0),
         eps: Number(info.eps ?? 0),
         pe: Number(info.pe ?? 0),
+        currencyUnit,
+        decimals,
+        category: 'stock',
       } : null,
       ta,
       probabilityTrend,

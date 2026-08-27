@@ -23,6 +23,8 @@ interface AnalysisSidebarProps {
       trades: number;
       eps: number;
       pe: number;
+      currencyUnit?: string;
+      decimals?: number;
     } | null;
     ta: import('@/lib/ta-engine').TAResult;
     isTgju?: boolean;
@@ -255,8 +257,11 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
 
           {/* Price & change */}
           <div className="flex items-end justify-between gap-2">
-            <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: C.text }} dir="ltr">
-              {toFa(lastPrice)}
+            <div className="flex items-baseline gap-1">
+              <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: C.text }} dir="ltr">
+                {toFa(lastPrice)}
+              </div>
+              <span className="text-[9px]" style={{ color: C.textDim }}>{info?.currencyUnit || 'ریال'}</span>
             </div>
             <div className="text-xs font-bold" style={{ color: changeColor }}>
               {changeArrow} {Math.abs(change).toLocaleString('fa-IR', { maximumFractionDigits: 2 })}٪

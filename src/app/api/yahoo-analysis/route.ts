@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchYahooHistory, getYahooInstrumentDef, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
 import { analyze } from '@/lib/ta-engine';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,13 +40,14 @@ export async function GET(req: NextRequest) {
       volume: h.volume,
     }));
 
-    // 4. Run TA analysis
-    const ta = analyze(ohlcvData);
-
-    // 5. Get live quote for info and currency unit
+    // 4. Get live quote for info and currency unit
     const quotes = await fetchYahooQuotes();
     const quote = quotes.find((q) => q.symbol === symbol);
-    const currency = quote?.unit || quote?.currency || 'USD';
+    const yahooCurrency = quote?.unit || quote?.currency || 'USD';
+    const currencyUnit = getCurrencyUnit(category, 'yahoo', yahooCurrency);
+
+    // 5. Run TA analysis
+    const ta = analyze(ohlcvData, currencyUnit);
 
     const lastCandle = history[history.length - 1];
     const prevCandle = history.length > 1 ? history[history.length - 2] : lastCandle;
@@ -62,6 +64,9 @@ export async function GET(req: NextRequest) {
       volume: h.volume,
     }));
 
+    const lastPrice = quote?.price || lastCandle.close;
+    const decimals = detectDecimals(lastPrice, category, 'yahoo');
+
     return NextResponse.json({
       symbol,
       candles,
@@ -69,7 +74,7 @@ export async function GET(req: NextRequest) {
         name,
         symbol,
         nameEn,
-        lastPrice: quote?.price || lastCandle.close,
+        lastPrice,
         change: changePercent,
         closePrice: lastCandle.close,
         closeChange: change,
@@ -82,7 +87,9 @@ export async function GET(req: NextRequest) {
         trades: 0,
         eps: 0,
         pe: 0,
-        currency,
+        currencyUnit,
+        decimals,
+        currency: yahooCurrency,
         category,
         groupTitle,
       },

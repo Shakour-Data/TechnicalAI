@@ -88,6 +88,7 @@ interface CandlestickChartProps {
     vwapArray?: number[];
   } | null;
   height?: number;
+  priceDecimals?: number;
 }
 
 /* ----------------------------- CONSTANTS -- */
@@ -193,7 +194,7 @@ export function CandlestickChartSkeleton() {
 
 /* ----------------------------- COMPONENT --- */
 
-export default function CandlestickChart({ data, ta, height = 520 }: CandlestickChartProps) {
+export default function CandlestickChart({ data, ta, height = 520, priceDecimals = 0 }: CandlestickChartProps) {
   const { colors: C, isDark } = useTheme();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -287,7 +288,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const y = csRef.current?.priceToCoordinate(p.price);
           if (y == null) break;
           html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
-          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(0))}</text>`;
+          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(priceDecimals))}</text>`;
           break;
         }
         case 'vline': {
@@ -321,7 +322,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             if (y == null) continue;
             html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
             html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
-            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
+            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(priceDecimals))}</text>`;
           }
           break;
         }
@@ -381,7 +382,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
           const bars = Math.abs(Math.round(p1.time - p0.time));
           const midX = (x0 + x1) / 2;
           const midY = (y0 + y1) / 2;
-          const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(0))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
+          const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(priceDecimals))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
           html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
           html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
           break;
@@ -447,7 +448,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
             const xEnd = isExt ? Math.max(x0, x1) + Math.abs(x1 - x0) * 1.5 : Math.max(x0, x1) + 10;
             html += `<line x1="${xStart}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="${col}" stroke-width="1" opacity="${isExt ? '0.4' : '0.6'}" ${isExt ? 'stroke-dasharray="4,3"' : ''} />`;
             html += `<rect x="${xEnd + 2}" y="${y - 8}" width="64" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
-            html += `<text x="${xEnd + 4}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(0))}</text>`;
+            html += `<text x="${xEnd + 4}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(priceDecimals))}</text>`;
           }
           break;
         }
@@ -582,7 +583,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
     }
 
     svg.innerHTML = html;
-  }, [drawings, currentDrawing]);
+  }, [drawings, currentDrawing, priceDecimals]);
 
   // OHLC change color helper
   const chgColor = useCallback((o: number, c: number) => c >= o ? BULL : BEAR, []);
@@ -605,7 +606,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
 
     // — Persian numeral price formatter —
     const persianPriceFormatter = (price: number) => {
-      return toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: 0 }));
+      return toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: priceDecimals }));
     };
 
     const chart = createChart(chartEl, {
@@ -1054,7 +1055,7 @@ export default function CandlestickChart({ data, ta, height = 520 }: Candlestick
   }, []);
 
   /* - Render ------------------------- */
-  const fmt = (n: number) => toPersianDigits(n.toLocaleString('en', { maximumFractionDigits: 0 }));
+  const fmt = (n: number) => toPersianDigits(n.toLocaleString('en', { maximumFractionDigits: priceDecimals }));
 
   return (
     <div className="w-full">

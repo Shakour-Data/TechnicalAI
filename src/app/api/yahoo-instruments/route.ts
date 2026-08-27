@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchYahooQuotes, ALL_YAHOO_INSTRUMENTS, YahooCategory } from '@/lib/yahoo-finance-api';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 120;
@@ -33,10 +34,14 @@ export async function GET() {
     const toItem = (def: typeof ALL_YAHOO_INSTRUMENTS[number]) => {
       const q = quoteMap.get(def.symbol);
       const displayCategory = CATEGORY_LABEL_MAP[def.category];
+      const yahooCurrency = q?.unit || q?.currency || 'USD';
+      const price = q?.price || 0;
+      const decimals = detectDecimals(price, displayCategory, 'yahoo');
+      const currencyUnit = getCurrencyUnit(displayCategory, 'yahoo', yahooCurrency);
       return {
         l18: def.name,
         l30: `${def.nameEn} (${def.symbol})`,
-        pl: q?.price || 0,
+        pl: price,
         pcp: q?.changePercent || 0,
         tno: 0,
         tvol: q?.volume || 0,
@@ -46,8 +51,10 @@ export async function GET() {
         yahooSymbol: def.symbol,
         yahooCategory: def.category,
         groupTitle: def.groupTitle,
-        currency: q?.unit || q?.currency || 'USD',
-        unit: q?.unit || q?.currency || 'USD',
+        currency: yahooCurrency,
+        unit: yahooCurrency,
+        currencyUnit,
+        decimals,
         country: def.country,
         countryEn: def.countryEn,
         exchange: def.exchange,

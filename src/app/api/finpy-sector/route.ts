@@ -21,7 +21,7 @@ function buildResponse(
     volume: c.volume,
   }));
 
-  const ta = analyze(ohlcv);
+  const ta = analyze(ohlcv, 'واحد');
 
   const lastCandle = candles[candles.length - 1];
   const prevCandle = candles.length > 1 ? candles[candles.length - 2] : lastCandle;

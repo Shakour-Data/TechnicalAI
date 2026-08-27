@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { fetchAllInstruments, fetchTsetmcInstruments } from '@/lib/tse-api';
 import { INDUSTRY_INDICES } from '@/lib/industry-indices';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -27,6 +28,8 @@ interface InstrumentItem {
   indexChangePercent?: number;
   indexMin?: number;
   indexMax?: number;
+  decimals: number;
+  currencyUnit: string;
 }
 
 interface SectorPrice {
@@ -107,17 +110,23 @@ export async function GET() {
     const toItem = (
       s: { l18: string; l30?: string; pl: number; pcp: number; tno: number; tvol: number; tval: number; cs?: string },
       category: string,
-    ): InstrumentItem => ({
-      l18: s.l18,
-      l30: s.l30 || '',
-      pl: s.pl,
-      pcp: s.pcp,
-      tno: s.tno,
-      tvol: s.tvol,
-      tval: s.tval,
-      cs: s.cs || '',
-      category,
-    });
+    ): InstrumentItem => {
+      const decimals = detectDecimals(s.pl, category, 'tse');
+      const currencyUnit = getCurrencyUnit(category, 'tse');
+      return {
+        l18: s.l18,
+        l30: s.l30 || '',
+        pl: s.pl,
+        pcp: s.pcp,
+        tno: s.tno,
+        tvol: s.tvol,
+        tval: s.tval,
+        cs: s.cs || '',
+        category,
+        decimals,
+        currencyUnit,
+      };
+    };
 
     // Try to fetch TSETMC indices — non-blocking, 2s timeout
     const tsetmcIndicesPromise = fetchTsetmcInstruments();
@@ -245,6 +254,9 @@ export async function GET() {
           item.indexChangePercent = sp.pcp;
         }
       }
+      // Set decimals and currencyUnit for all index items
+      if (!item.decimals) item.decimals = detectDecimals(item.pl, 'index', 'tse');
+      if (!item.currencyUnit) item.currencyUnit = getCurrencyUnit('index', 'tse');
     }
 
     return NextResponse.json({

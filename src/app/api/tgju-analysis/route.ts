@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTgjuHistory, fetchTgjuInstruments } from '@/lib/tgju-api';
 import { analyze } from '@/lib/ta-engine';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -33,10 +34,7 @@ export async function GET(req: NextRequest) {
       volume: 0, // TGJU daily data has no volume
     }));
 
-    // 3. Run TA analysis
-    const ta = analyze(ohlcvData);
-
-    // 4. Get instrument info from cached data
+    // 3. Get instrument info from cached data
     const instruments = await fetchTgjuInstruments();
     const instrument = instruments.find((i) => i.key === key);
 
@@ -44,6 +42,13 @@ export async function GET(req: NextRequest) {
     const prevCandle = history.length > 1 ? history[history.length - 2] : lastCandle;
     const change = lastCandle.close - prevCandle.close;
     const changePercent = prevCandle.close > 0 ? (change / prevCandle.close) * 100 : 0;
+
+    const category = instrument?.category || 'currency';
+    const decimals = detectDecimals(lastCandle.close, category, 'tgju');
+    const currencyUnit = getCurrencyUnit(category, 'tgju');
+
+    // 4. Run TA analysis
+    const ta = analyze(ohlcvData, currencyUnit);
 
     // Build candle data for chart (with volume=0)
     const candles = history.map((h) => ({
@@ -74,6 +79,9 @@ export async function GET(req: NextRequest) {
         trades: 0,
         eps: 0,
         pe: 0,
+        currencyUnit,
+        decimals,
+        category,
       },
       ta,
     });
