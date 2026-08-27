@@ -224,3 +224,33 @@ Stage Summary:
 - Per-scenario mini-charts reordered so mirror scenarios (R1↔R9, R2↔R8, etc.) appear side by side
 - No other file sections modified
 - No lint run (pre-existing errors in candlestick-chart.tsx are unrelated)
+---
+Task ID: 3
+Agent: main
+Task: Fix excessive R5 (range/neutral) probability in decision graph scenarios
+
+Work Log:
+- Diagnosed root cause: 3 paths dumped 100% probability into R5 (totaling 43.7% before clamping)
+  - TREND→FLAT→VOL_LOW→R5 (8.9%)
+  - BREAK→NONE→R5 (15.8%)
+  - REVERSAL→NONE→R5 (19.0%)
+- Additionally, N_T_FLAT had excessive weight (~57% of trend branch) and ~12 other nodes had high R5 minimums (5-25%)
+- Applied 21 fixes to decision-graph.ts:
+  1. **N_T_FLAT weight**: Changed formula from `flatUncertainty * (1 - adxNorm*0.7)` to `flatUncertainty * clamp(1 - adxNorm*1.5, 0, 1) * 0.45`
+  2. **N_T_F_VOL_LOW**: Changed from single R5 edge (100%) to 3 edges (R5=66%, R6=18%, R4=16%)
+  3. **N_B_NONE**: Changed from single R5 edge (100%) to 3 edges (R5=57%, R6=22%, R4=21%)
+  4. **N_R_NONE**: Changed from single R5 edge (100%) to 3 edges (R5=62%, R6=20%, R4=18%)
+  5. **N_BREAK noneProb**: Reduced weight from `(1-srProximity)*0.5+0.1` to `(1-srProximity)*0.35+0.05`
+  6. **N_REVERSAL noneRev**: Changed from `1-max*0.7` to `1-max*0.85`
+  7. **ROOT branch weights**: Increased trend weight, reduced breakout/reversal base weights
+  8. **R5 minimums reduced** across 12 nodes: from 5-25% to 2-12%
+  9. **Rounding fix**: Applied clamp([2,35]) to all entries including last-entry residual
+- Added new edges: N_T_F_VOL_LOW→R6, N_T_F_VOL_LOW→R4, N_B_NONE→R4, N_B_NONE→R6, N_R_NONE→R4, N_R_NONE→R6
+
+Stage Summary:
+- R5 probability reduced dramatically across all market conditions:
+  - Neutral: 41%→22%, Slightly Bullish: 42%→22%
+  - Strong Bullish: 33%→13%, Strong Bearish: 34%→14%
+  - Very Strong Trend: ~7%, Very Weak (ADX=12): 33% (reasonable for low ADX)
+- Verified in production with real data (وساپا): R5=10%, Bear=47%, Bull=43%
+- All changes in /home/z/my-project/src/lib/decision-graph.ts

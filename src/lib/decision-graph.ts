@@ -684,12 +684,24 @@ function createEdges(): GraphEdge[] {
       type: 'pullback',
     },
 
-    // ── N_T_F_VOL_LOW → Terminal ──────────────────────────────────────────
+    // ── N_T_F_VOL_LOW → Terminals ─────────────────────────────────────────
     {
       from: 'N_T_F_VOL_LOW',
       to: 'R5',
       label: 'رنج کم‌نوسان',
       type: 'pullback',
+    },
+    {
+      from: 'N_T_F_VOL_LOW',
+      to: 'R6',
+      label: 'صعودی خفیف',
+      type: 'up',
+    },
+    {
+      from: 'N_T_F_VOL_LOW',
+      to: 'R4',
+      label: 'نزولی خفیف',
+      type: 'down',
     },
 
     // ── N_T_F_VOL_HIGH → Terminals ────────────────────────────────────────
@@ -790,8 +802,10 @@ function createEdges(): GraphEdge[] {
     },
     { from: 'N_B_D_VOL_W', to: 'R5', label: 'رنج', type: 'pullback' },
 
-    // ── N_B_NONE → Terminal ───────────────────────────────────────────────
+    // ── N_B_NONE → Terminals ───────────────────────────────────────────────
+    { from: 'N_B_NONE', to: 'R4', label: 'نزولی خفیف', type: 'down' },
     { from: 'N_B_NONE', to: 'R5', label: 'رنج', type: 'pullback' },
+    { from: 'N_B_NONE', to: 'R6', label: 'صعودی خفیف', type: 'up' },
 
     // ── N_REVERSAL → Sub-branches ──────────────────────────────────────────
     {
@@ -928,8 +942,10 @@ function createEdges(): GraphEdge[] {
       type: 'up',
     },
 
-    // ── N_R_NONE → Terminal ───────────────────────────────────────────────
+    // ── N_R_NONE → Terminals ───────────────────────────────────────────────
+    { from: 'N_R_NONE', to: 'R4', label: 'نزولی خفیف', type: 'down' },
     { from: 'N_R_NONE', to: 'R5', label: 'رنج', type: 'pullback' },
+    { from: 'N_R_NONE', to: 'R6', label: 'صعودی خفیف', type: 'up' },
   ];
 }
 
@@ -1051,9 +1067,9 @@ function computeNodeProbabilities(
   switch (nodeId) {
     // ── ROOT → [N_TREND, N_BREAK, N_REVERSAL] ─────────────────────────────
     case 'ROOT': {
-      const trendW = adxNorm * 0.45 + input.mlTrend * 0.15 + 0.12;
-      const breakW = srProximity * 0.35 + (1 - adxNorm) * 0.1 + 0.1;
-      const revW = ctx.divergenceProxy * 0.3 + (1 - adxNorm) * 0.15 + 0.08;
+      const trendW = adxNorm * 0.5 + input.mlTrend * 0.18 + 0.1;
+      const breakW = srProximity * 0.3 + (1 - adxNorm) * 0.08 + 0.08;
+      const revW = ctx.divergenceProxy * 0.35 + (1 - adxNorm) * 0.12 + 0.06;
       return normalize([trendW, breakW, revW]);
     }
 
@@ -1061,8 +1077,8 @@ function computeNodeProbabilities(
     case 'N_TREND': {
       const bull = input.bullConsensus * (adxNorm * 0.4 + 0.6);
       const bear = (1 - input.bullConsensus) * (adxNorm * 0.4 + 0.6);
-      const flat =
-        (1 - Math.abs(input.bullConsensus - 0.5) * 2) * (1 - adxNorm * 0.7);
+      const flatUncertainty = (1 - Math.abs(input.bullConsensus - 0.5) * 2);
+      const flat = flatUncertainty * clamp(1 - adxNorm * 1.5, 0, 1) * 0.45;
       return normalize([bull, bear, flat]);
     }
 
@@ -1093,9 +1109,9 @@ function computeNodeProbabilities(
     // ── N_T_B_MOM_MOD → [R7, R6, R5] ─────────────────────────────────────
     // Moderate bullish — small explicit R5 based on uncertainty
     case 'N_T_B_MOM_MOD': {
-      const pR7 = 0.5 * input.confidenceIndex + 0.2;
-      const pR6 = 0.5 * (1 - input.confidenceIndex) + 0.15;
-      const pR5 = clamp((1 - adxNorm) * 0.35, 0.05, 0.25);
+      const pR7 = 0.55 * input.confidenceIndex + 0.2;
+      const pR6 = 0.55 * (1 - input.confidenceIndex) + 0.15;
+      const pR5 = clamp((1 - adxNorm) * 0.15, 0.02, 0.15);
       return normalize([pR7, pR6, pR5]);
     }
 
@@ -1135,9 +1151,9 @@ function computeNodeProbabilities(
     // ── N_T_BE_MOM_MOD → [R3, R4, R5] ────────────────────────────────────
     // Moderate bearish — small explicit R5 based on uncertainty
     case 'N_T_BE_MOM_MOD': {
-      const pR3 = 0.5 * input.confidenceIndex + 0.2;
-      const pR4 = 0.5 * (1 - input.confidenceIndex) + 0.15;
-      const pR5 = clamp((1 - adxNorm) * 0.35, 0.05, 0.25);
+      const pR3 = 0.55 * input.confidenceIndex + 0.2;
+      const pR4 = 0.55 * (1 - input.confidenceIndex) + 0.15;
+      const pR5 = clamp((1 - adxNorm) * 0.15, 0.02, 0.15);
       return normalize([pR3, pR4, pR5]);
     }
 
@@ -1162,34 +1178,37 @@ function computeNodeProbabilities(
       return normalize([volLow, volHigh, volMod]);
     }
 
-    // ── N_T_F_VOL_LOW → [R5] ─────────────────────────────────────────────
+    // ── N_T_F_VOL_LOW → [R5, R6, R4] ─────────────────────────────────────
     case 'N_T_F_VOL_LOW': {
-      return [1.0];
+      const pR5 = 0.55 + (1 - Math.abs(input.bullConsensus - 0.5) * 2) * 0.15;
+      const pR6 = 0.2 * input.bullConsensus + 0.08;
+      const pR4 = 0.2 * (1 - input.bullConsensus) + 0.08;
+      return normalize([pR5, pR6, pR4]);
     }
 
     // ── N_T_F_VOL_HIGH → [R9, R1, R5] ────────────────────────────────────
-    // High volatility shock — directional shock more likely than range
+    // High volatility shock — directional shock much more likely than range
     case 'N_T_F_VOL_HIGH': {
-      const pR9 = 0.35 * input.bullConsensus + 0.15;
-      const pR1 = 0.35 * (1 - input.bullConsensus) + 0.15;
-      const pR5 = clamp((1 - input.mlVolatility) * 0.2, 0.05, 0.2);
+      const pR9 = 0.4 * input.bullConsensus + 0.15;
+      const pR1 = 0.4 * (1 - input.bullConsensus) + 0.15;
+      const pR5 = clamp((1 - input.mlVolatility) * 0.12, 0.02, 0.12);
       return normalize([pR9, pR1, pR5]);
     }
 
     // ── N_T_F_VOL_MOD → [R6, R4, R5] ─────────────────────────────────────
-    // Moderate volatility — range is plausible but capped
+    // Moderate volatility — directional more likely than range
     case 'N_T_F_VOL_MOD': {
-      const pR6 = 0.35 * input.bullConsensus + 0.12;
-      const pR4 = 0.35 * (1 - input.bullConsensus) + 0.12;
-      const pR5 = clamp((1 - adxNorm) * 0.3, 0.08, 0.25);
+      const pR6 = 0.38 * input.bullConsensus + 0.15;
+      const pR4 = 0.38 * (1 - input.bullConsensus) + 0.15;
+      const pR5 = clamp((1 - adxNorm) * 0.15, 0.03, 0.15);
       return normalize([pR6, pR4, pR5]);
     }
 
     // ── N_BREAK → [N_B_UP, N_B_DOWN, N_B_NONE] ────────────────────────────
     case 'N_BREAK': {
-      const upProb = input.bullConsensus * srProximity * 0.7 + 0.05;
-      const downProb = (1 - input.bullConsensus) * srProximity * 0.7 + 0.05;
-      const noneProb = (1 - srProximity) * 0.5 + 0.1;
+      const upProb = input.bullConsensus * srProximity * 0.75 + 0.08;
+      const downProb = (1 - input.bullConsensus) * srProximity * 0.75 + 0.08;
+      const noneProb = (1 - srProximity) * 0.35 + 0.05;
       return normalize([upProb, downProb, noneProb]);
     }
 
@@ -1221,7 +1240,7 @@ function computeNodeProbabilities(
     case 'N_B_U_VOL_W': {
       const pR6 = 0.4 + input.bullConsensus * 0.15;
       const pR4 = 0.3 + (1 - input.bullConsensus) * 0.15;
-      const pR5 = clamp((1 - input.confidenceIndex) * 0.25, 0.05, 0.2);
+      const pR5 = clamp((1 - input.confidenceIndex) * 0.12, 0.02, 0.12);
       return normalize([pR6, pR4, pR5]);
     }
 
@@ -1251,21 +1270,24 @@ function computeNodeProbabilities(
     case 'N_B_D_VOL_W': {
       const pR4 = 0.4 + (1 - input.bullConsensus) * 0.15;
       const pR6 = 0.3 + input.bullConsensus * 0.15;
-      const pR5 = clamp((1 - input.confidenceIndex) * 0.25, 0.05, 0.2);
+      const pR5 = clamp((1 - input.confidenceIndex) * 0.12, 0.02, 0.12);
       return normalize([pR4, pR6, pR5]);
     }
 
-    // ── N_B_NONE → [R5] ──────────────────────────────────────────────────
+    // ── N_B_NONE → [R4, R5, R6] ──────────────────────────────────────────
     case 'N_B_NONE': {
-      return [1.0];
+      const pR5 = 0.45 + (1 - Math.abs(input.bullConsensus - 0.5) * 2) * 0.15;
+      const pR6 = 0.2 * input.bullConsensus + 0.08;
+      const pR4 = 0.2 * (1 - input.bullConsensus) + 0.08;
+      return normalize([pR4, pR5, pR6]);
     }
 
     // ── N_REVERSAL → [N_R_BULL, N_R_BEAR, N_R_NONE] ──────────────────────
     case 'N_REVERSAL': {
       const bullRev = overboughtRisk;
       const bearRev = oversoldBounce;
-      const noneRev =
-        1 - Math.max(overboughtRisk, oversoldBounce) * 0.7;
+      const maxRevSignal = Math.max(overboughtRisk, oversoldBounce);
+      const noneRev = 1 - maxRevSignal * 0.85;
       return normalize([bullRev, bearRev, noneRev]);
     }
 
@@ -1283,7 +1305,7 @@ function computeNodeProbabilities(
     case 'N_R_B_DIV': {
       const pR6 = 0.5 + (1 - input.mlMomentum) * 0.2;
       const pR8 = 0.2 + input.mlMomentum * 0.15;
-      const pR5 = clamp((1 - adxNorm) * 0.25, 0.05, 0.2);
+      const pR5 = clamp((1 - adxNorm) * 0.1, 0.02, 0.1);
       return normalize([pR6, pR8, pR5]);
     }
 
@@ -1292,7 +1314,7 @@ function computeNodeProbabilities(
     case 'N_R_B_CANDLE': {
       const pR7 = 0.5 * input.confidenceIndex + 0.2;
       const pR6 = 0.5 * (1 - input.confidenceIndex) + 0.15;
-      const pR5 = clamp((1 - input.confidenceIndex) * 0.2, 0.05, 0.18);
+      const pR5 = clamp((1 - input.confidenceIndex) * 0.1, 0.02, 0.1);
       return normalize([pR7, pR6, pR5]);
     }
 
@@ -1302,7 +1324,7 @@ function computeNodeProbabilities(
     case 'N_R_B_SR': {
       const pR6 = 0.5 + input.srAvgStrength * 0.2;
       const pR4 = 0.15 + (1 - input.srAvgStrength) * 0.1;
-      const pR5 = clamp((1 - input.srAvgStrength) * 0.2, 0.05, 0.18);
+      const pR5 = clamp((1 - input.srAvgStrength) * 0.1, 0.02, 0.1);
       // Return in edge order: [R6, R5, R4]
       return normalize([pR6, pR5, pR4]);
     }
@@ -1322,7 +1344,7 @@ function computeNodeProbabilities(
     case 'N_R_BE_DIV': {
       const pR4 = 0.5 + (1 - input.mlMomentum) * 0.2;
       const pR2 = 0.2 + input.mlMomentum * 0.15;
-      const pR5 = clamp((1 - adxNorm) * 0.25, 0.05, 0.2);
+      const pR5 = clamp((1 - adxNorm) * 0.1, 0.02, 0.1);
       return normalize([pR4, pR2, pR5]);
     }
 
@@ -1331,7 +1353,7 @@ function computeNodeProbabilities(
     case 'N_R_BE_CANDLE': {
       const pR3 = 0.5 * input.confidenceIndex + 0.2;
       const pR4 = 0.5 * (1 - input.confidenceIndex) + 0.15;
-      const pR5 = clamp((1 - input.confidenceIndex) * 0.2, 0.05, 0.18);
+      const pR5 = clamp((1 - input.confidenceIndex) * 0.1, 0.02, 0.1);
       return normalize([pR3, pR4, pR5]);
     }
 
@@ -1341,14 +1363,17 @@ function computeNodeProbabilities(
     case 'N_R_BE_SR': {
       const pR4 = 0.5 + input.srAvgStrength * 0.2;
       const pR6 = 0.15 + (1 - input.srAvgStrength) * 0.1;
-      const pR5 = clamp((1 - input.srAvgStrength) * 0.2, 0.05, 0.18);
+      const pR5 = clamp((1 - input.srAvgStrength) * 0.1, 0.02, 0.1);
       // Return in edge order: [R4, R5, R6]
       return normalize([pR4, pR5, pR6]);
     }
 
-    // ── N_R_NONE → [R5] ──────────────────────────────────────────────────
+    // ── N_R_NONE → [R4, R5, R6] ──────────────────────────────────────────
     case 'N_R_NONE': {
-      return [1.0];
+      const pR5 = 0.4 + (1 - Math.abs(input.bullConsensus - 0.5) * 2) * 0.15;
+      const pR6 = 0.2 * input.bullConsensus + 0.1;
+      const pR4 = 0.2 * (1 - input.bullConsensus) + 0.1;
+      return normalize([pR4, pR5, pR6]);
     }
 
     // ── Terminal nodes (R1–R9) have no outgoing edges ─────────────────────
@@ -1514,9 +1539,9 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
     for (let i = 0; i < entries.length; i++) {
       const isLast = i === entries.length - 1;
       if (isLast) {
-        finalPcts[entries[i].key] = Math.round(100 - runningTotal);
+        finalPcts[entries[i].key] = clamp(Math.round(100 - runningTotal), 2, 35);
       } else {
-        const rounded = Math.round(entries[i].raw);
+        const rounded = clamp(Math.round(entries[i].raw), 2, 35);
         finalPcts[entries[i].key] = rounded;
         runningTotal += rounded;
       }
