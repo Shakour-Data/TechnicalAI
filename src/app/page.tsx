@@ -706,7 +706,7 @@ export default function Home() {
                   bullScore={data.ta.bullScore}
                   scenarios={data.ta.scenarios}
                   decisionGraph={data.ta.decisionGraph}
-                  probabilityTrend={data.ta.decisionGraph?.probabilityTrend}
+                  probabilityTrend={data.probabilityTrend}
                 />
               )}
 

@@ -160,3 +160,24 @@ Stage Summary:
 - All 32 graph nodes now render with visible Persian title, English subtitle, and value text
 - Text contrast confirmed excellent (white on dark navy background, fontWeight 800)
 - No lint errors introduced (pre-existing errors in candlestick-chart.tsx unrelated)
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix probability trend chart/table not rendering (showing 'no data')
+
+Work Log:
+- Found bug #1: page.tsx line 709 read `data.ta.decisionGraph?.probabilityTrend` but API returns `data.probabilityTrend` at top level
+- Fixed page.tsx to use `data.probabilityTrend`
+- Found bug #2: `computeHistoricalProbabilities` in ta-engine.ts used undefined `calcEMA` (should be `emaCalc`) causing ReferenceError crash
+- Fixed: replaced `calcEMA(closes, 12)` with `emaCalc(closes, 12)`
+- Found bug #3: `scenarioProbabilities` in GraphData stores percentages (0-100) but `buildTrendFromDailySnapshots` expects fractions (0-1). Chart yOf() mapped 19 → y=-2860 (off-screen), making lines invisible
+- Fixed: in computeHistoricalProbabilities, convert `v / 100` when storing probs
+- Added error logging to API route to catch future issues
+- Verified: API now returns correct 0-1 values (e.g., bullish=0.19, neutral=0.55)
+- Verified with VLM: chart shows 3 colored lines (green bullish, orange neutral, red bearish) with data points
+- Verified with VLM: table shows 30 days of data with individual and cumulative probabilities
+
+Stage Summary:
+- Three bugs fixed: wrong data path (page.tsx), undefined function reference (calcEMA), percentage vs fraction mismatch
+- 30-day probability trend chart and table now render correctly with real computed data
+- Computation takes ~36ms for 300 candles × 30 days — very fast

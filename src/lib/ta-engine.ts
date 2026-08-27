@@ -2852,7 +2852,7 @@ export function computeHistoricalProbabilities(
     const fisher = calcFisherTransform(slice, 9);
     const maAlign = calcMARibbonAlignment(closes);
     const confidence = calcConfidenceIndex(rsi, mfi, macd.line, macd.signal, adxResult.adx, stoch.k, { r2: 0.5 } as any);
-    const strength = calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atrVal, price, calcEMA(closes, 12), calcEMA(closes, 26));
+    const strength = calcStrengthIndex(rsi, macd.histogram, adxResult.adx, atrVal, price, emaCalc(closes, 12), emaCalc(closes, 26));
 
     // Simple bull consensus
     const bullConsensus = clamp((rsi - 50) / 50 * 0.3 + (macd.histogram > 0 ? 0.15 : -0.15) + (adxResult.diPlus > adxResult.diMinus ? 0.15 : -0.15) + 0.5, 0, 1);
@@ -2887,7 +2887,9 @@ export function computeHistoricalProbabilities(
       result.push({
         date: slice[slice.length - 1].date,
         dayIndex: -(today - di),
-        probs: { ...graphData.scenarioProbabilities },
+        probs: Object.fromEntries(
+          Object.entries(graphData.scenarioProbabilities).map(([k, v]) => [k, v / 100])
+        ),
       });
     } catch {
       // Skip days where computation fails

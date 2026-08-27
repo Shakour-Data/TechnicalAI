@@ -36,10 +36,15 @@ export async function GET(req: NextRequest) {
         let probabilityTrend;
         try {
           const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
+          console.log(`[analysis] Historical snapshots for ${symbol}: ${dailySnapshots.length} days (data.length=${ohlcv.length})`);
           probabilityTrend = dailySnapshots.length > 1
             ? buildTrendFromDailySnapshots(dailySnapshots)
             : undefined;
-        } catch {
+          if (probabilityTrend) {
+            console.log(`[analysis] probabilityTrend built: ${probabilityTrend.scenarios.length} scenarios, horizon=${probabilityTrend.horizon}`);
+          }
+        } catch (err) {
+          console.error(`[analysis] Error computing probability trend for ${symbol}:`, err);
           probabilityTrend = undefined;
         }
 
@@ -111,10 +116,15 @@ export async function GET(req: NextRequest) {
     let probabilityTrend;
     try {
       const dailySnapshots2: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
+      console.log(`[analysis] Historical snapshots for ${symbol}: ${dailySnapshots2.length} days (data.length=${ohlcv.length})`);
       probabilityTrend = dailySnapshots2.length > 1
         ? buildTrendFromDailySnapshots(dailySnapshots2)
         : undefined;
-    } catch {
+      if (probabilityTrend) {
+        console.log(`[analysis] probabilityTrend built: ${probabilityTrend.scenarios.length} scenarios, horizon=${probabilityTrend.horizon}`);
+      }
+    } catch (err) {
+      console.error(`[analysis] Error computing probability trend for ${symbol}:`, err);
       probabilityTrend = undefined;
     }
 
