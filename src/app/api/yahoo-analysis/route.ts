@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchYahooHistory, getYahooInstrumentDef, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
-import { analyze } from '@/lib/ta-engine';
+import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
+import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,18 @@ export async function GET(req: NextRequest) {
     // 5. Run TA analysis
     const ta = analyze(ohlcvData, currencyUnit);
 
+    // 6. Compute 30-day probability trend
+    let probabilityTrend;
+    try {
+      const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcvData, 30);
+      probabilityTrend = dailySnapshots.length > 1
+        ? buildTrendFromDailySnapshots(dailySnapshots)
+        : undefined;
+    } catch (err) {
+      console.error(`[yahoo-analysis] Error computing probability trend:`, err);
+      probabilityTrend = undefined;
+    }
+
     const lastCandle = history[history.length - 1];
     const prevCandle = history.length > 1 ? history[history.length - 2] : lastCandle;
     const change = lastCandle.close - prevCandle.close;
@@ -94,6 +107,7 @@ export async function GET(req: NextRequest) {
         groupTitle,
       },
       ta,
+      probabilityTrend,
     });
   } catch (err) {
     console.error('[Yahoo Analysis Error]:', err);

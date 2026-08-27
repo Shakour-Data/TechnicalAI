@@ -181,3 +181,25 @@ Stage Summary:
 - Three bugs fixed: wrong data path (page.tsx), undefined function reference (calcEMA), percentage vs fraction mismatch
 - 30-day probability trend chart and table now render correctly with real computed data
 - Computation takes ~36ms for 300 candles × 30 days — very fast
+---
+Task ID: 3
+Agent: Main Agent
+Task: Add per-scenario individual + cumulative probability trend charts and fix probabilityTrend for all API routes
+
+Work Log:
+- Added `computeHistoricalProbabilities` + `buildTrendFromDailySnapshots` to yahoo-analysis, tgju-analysis, finpy-sector API routes
+- All 4 API routes now return `probabilityTrend` in response
+- Added `PerScenarioTrendCharts` component to vdss-graph.tsx — 9 mini-charts in 3x3 grid
+- Each mini-chart shows: individual probability (solid line) + cumulative probability (dashed line) over 30 days
+- Charts color-coded by group: red for bearish, amber for neutral, green for bullish
+- Each chart has header with scenario name + group badge, SVG chart with grid/axes, footer stats (current ind, current cum, peak ind, peak cum)
+- Added trend direction indicator (↑/↓/→) on each chart header
+- Added interpretation text below each chart
+- Charts placed between CumulativeProbabilityChart and ProbabilityTrendTable
+- Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop
+- No new lint errors introduced
+
+Stage Summary:
+- All API routes (analysis, yahoo-analysis, tgju-analysis, finpy-sector) now compute and return probabilityTrend
+- 9 new per-scenario charts added showing both individual and cumulative probability trends
+- Users can now see how each scenario's probability has evolved over the past 30 days

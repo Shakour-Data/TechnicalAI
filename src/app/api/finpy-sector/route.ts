@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMainIndexHistory, fetchSectorIndexHistory, fetchSectorByName } from '@/lib/tsetmc-index-api';
 import { SECTOR_INDICES, type IndustryIndex } from '@/lib/industry-indices';
-import { analyze, type OHLCV } from '@/lib/ta-engine';
+import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
+import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,18 @@ function buildResponse(
   }));
 
   const ta = analyze(ohlcv, 'واحد');
+
+  // Compute 30-day probability trend
+  let probabilityTrend;
+  try {
+    const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
+    probabilityTrend = dailySnapshots.length > 1
+      ? buildTrendFromDailySnapshots(dailySnapshots)
+      : undefined;
+  } catch (err) {
+    console.error(`[finpy-sector] Error computing probability trend:`, err);
+    probabilityTrend = undefined;
+  }
 
   const lastCandle = candles[candles.length - 1];
   const prevCandle = candles.length > 1 ? candles[candles.length - 2] : lastCandle;
@@ -49,6 +62,7 @@ function buildResponse(
       pe: 0,
     },
     ta,
+    probabilityTrend,
   });
 }
 

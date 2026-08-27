@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTgjuHistory, fetchTgjuInstruments, getTgjuYahooFallback } from '@/lib/tgju-api';
 import { fetchYahooHistory, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
-import { analyze } from '@/lib/ta-engine';
+import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
+import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -78,6 +79,18 @@ export async function GET(req: NextRequest) {
     // 5. Run TA analysis
     const ta = analyze(ohlcvData, currencyUnit);
 
+    // 6. Compute 30-day probability trend
+    let probabilityTrend;
+    try {
+      const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcvData, 30);
+      probabilityTrend = dailySnapshots.length > 1
+        ? buildTrendFromDailySnapshots(dailySnapshots)
+        : undefined;
+    } catch (err) {
+      console.error(`[tgju-analysis] Error computing probability trend:`, err);
+      probabilityTrend = undefined;
+    }
+
     // Build candle data for chart
     const candles = history.map((h) => ({
       date: h.date,
@@ -112,6 +125,7 @@ export async function GET(req: NextRequest) {
         category,
       },
       ta,
+      probabilityTrend,
     };
 
     if (isYahooFallback) {
