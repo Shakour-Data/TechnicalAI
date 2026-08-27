@@ -587,16 +587,21 @@ export default function SymbolSearch({
 
   /* ── Popular ── */
   const getPopular = React.useCallback(async () => {
-    const data = cacheRef.current || await fetchData();
-    const tgju = tgjuCacheRef.current;
-    const yahoo = yahooCacheRef.current;
-    const all = [
-      ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))), ...data.stocks, ...data.etfs,
-      ...(tgju?.currencies || []), ...(tgju?.crypto?.slice(0, 5) || []), ...(tgju?.gold?.slice(0, 3) || []),
-      ...(yahoo?.yahooStocks?.slice(0, 8) || []), ...(yahoo?.yahooIndices?.slice(0, 5) || []),
-    ];
-    const sorted = [...all].sort((a, b) => (b.tval || 0) - (a.tval || 0)).slice(0, 20);
-    setResults(sorted); setTotalMatched(all.length);
+    try {
+      const data = cacheRef.current || await fetchData();
+      const tgju = tgjuCacheRef.current;
+      const yahoo = yahooCacheRef.current;
+      const all = [
+        ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))), ...data.stocks, ...data.etfs,
+        ...(tgju?.currencies || []), ...(tgju?.crypto?.slice(0, 5) || []), ...(tgju?.gold?.slice(0, 3) || []),
+        ...(yahoo?.yahooStocks?.slice(0, 8) || []), ...(yahoo?.yahooIndices?.slice(0, 5) || []),
+      ];
+      const sorted = [...all].sort((a, b) => (b.tval || 0) - (a.tval || 0)).slice(0, 20);
+      setResults(sorted); setTotalMatched(all.length);
+    } catch (err) {
+      console.warn('[Search] getPopular error:', err);
+      setResults([]); setTotalMatched(0);
+    }
   }, [fetchData]);
 
   /* ── Anchor position calculation ── */
@@ -703,7 +708,7 @@ export default function SymbolSearch({
     setQuery(value);
     getItemsForCategory(activeCategory).then((items) => {
       if (value.trim().length === 0) {
-        if (activeCategory === 'all') getPopular();
+        if (activeCategory === 'all') getPopular().catch(() => { setResults([]); setTotalMatched(0); });
         else { setResults(items.slice(0, MAX_RESULTS)); setTotalMatched(items.length); }
       } else doFilter(items, value);
     }).catch((err) => {
@@ -713,7 +718,7 @@ export default function SymbolSearch({
     });
   }, [activeCategory, getItemsForCategory, getPopular, doFilter]);
 
-  const handleFocus = React.useCallback(() => { setLoading(true); showDropdown(query); }, [query, showDropdown]);
+  const handleFocus = React.useCallback(() => { setLoading(true); showDropdown(query).catch(() => {}); }, [query, showDropdown]);
 
   const selectSymbol = React.useCallback((s: InstrumentItem) => {
     setQuery(s.l18); setOpen(false); addRecentSearch(s.l18);

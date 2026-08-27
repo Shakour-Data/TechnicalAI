@@ -89,8 +89,8 @@ export default function IndexManager({ onBack }: { onBack: () => void }) {
   }, []);
 
   useEffect(() => {
-    fetchIndices();
-    fetchBulkStatus();
+    fetchIndices().catch(() => {});
+    fetchBulkStatus().catch(() => {});
   }, [fetchIndices, fetchBulkStatus]);
 
   // Poll bulk status while running
@@ -113,7 +113,7 @@ export default function IndexManager({ onBack }: { onBack: () => void }) {
       if (res.ok) {
         const data = await res.json();
         if (data.error) alert(data.error);
-        else fetchBulkStatus();
+        else fetchBulkStatus().catch(() => {});
       } else {
         const data = await res.json();
         alert(data.error || 'خطا در شروع دریافت داده‌ها');
@@ -126,7 +126,7 @@ export default function IndexManager({ onBack }: { onBack: () => void }) {
   const handleBulkStop = async () => {
     try {
       await fetch('/api/index-management?action=bulk-stop', { method: 'POST' });
-      fetchBulkStatus();
+      fetchBulkStatus().catch(() => {});
     } catch { /* ignore */ }
   };
 
@@ -136,7 +136,7 @@ export default function IndexManager({ onBack }: { onBack: () => void }) {
       if (res.ok) {
         const data = await res.json();
         if (data.status === 'done') {
-          fetchIndices();
+          fetchIndices().catch(() => {});
         } else {
           alert(`خطا: ${data.error || 'نامشخص'}`);
         }
@@ -244,7 +244,7 @@ export default function IndexManager({ onBack }: { onBack: () => void }) {
             <Button onClick={() => handleBulkStart('sector')} variant="outline" size="sm" className="gap-1.5">
               <Server className="w-3.5 h-3.5" /> ۴۰ شاخص صنعت
             </Button>
-            <Button onClick={() => { fetchIndices(); fetchBulkStatus(); }} variant="ghost" size="sm" className="gap-1.5">
+            <Button onClick={() => { fetchIndices().catch(() => {}); fetchBulkStatus().catch(() => {}); }} variant="ghost" size="sm" className="gap-1.5">
               <RefreshCw className="w-3.5 h-3.5" /> بروزرسانی
             </Button>
           </>

@@ -243,23 +243,6 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
   );
 }
 
-// ─── Suppress framework-internal unhandled rejections (HMR, React DevTools, etc.) ─────
-if (typeof window !== 'undefined') {
-  window.addEventListener('unhandledrejection', (e) => {
-    const reason = e.reason;
-    // Suppress internal framework errors that we can't control
-    const msg = reason instanceof Error ? reason.message : String(reason);
-    const isFrameworkInternal =
-      msg.includes('Fast Refresh') ||
-      msg.includes('React DevTools') ||
-      msg.includes('forward-logs') ||
-      (typeof reason === 'object' && reason !== null && !Array.isArray(reason) && !(reason instanceof Error) && Object.keys(reason).length <= 2);
-    if (isFrameworkInternal) {
-      e.preventDefault();
-    }
-  });
-}
-
 // ─── Main Home Component ────────────────────────────────────────
 export default function Home() {
   const [data, setData] = useState<AnalysisData | null>(null);
@@ -334,6 +317,9 @@ export default function Home() {
         if (controller.signal.aborted) return;
         if (!res.ok) {
           let errMsg = 'خطا در دریافت داده‌های تاریخی';
+          if (res.status === 502 || res.status === 503) {
+            errMsg = 'سرور منبع داده (TGJU) در حال حاضر در دسترس نیست. لطفاً چند دقیقه دیگر تلاش کنید.';
+          }
           try { const err = await res.json(); if (err.error) errMsg = err.error; } catch (_) { /* non-JSON error */ }
           throw new Error(errMsg);
         }
