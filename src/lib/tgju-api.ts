@@ -350,13 +350,18 @@ export const TGJU_TO_YAHOO_MAP: Record<string, string> = {
  */
 function parsePersianNum(str: string | null | undefined | number): number {
   if (str === null || str === undefined) return 0;
-  const s = String(str);
-  if (!s || s.trim() === '-' || s.trim() === '') return 0;
-  return Number(s.replace(/[,۰-۹]/g, (c: string) => {
+  let s = String(str).trim();
+  if (!s || s === '-' || s === '') return 0;
+  // Strip trailing % sign (e.g. "0.05%" → "0.05")
+  if (s.endsWith('%')) s = s.slice(0, -1).trim();
+  // Replace commas and Persian digits
+  const cleaned = s.replace(/[,۰-۹]/g, (c: string) => {
     const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
     const idx = persianDigits.indexOf(c);
     return idx >= 0 ? String(idx) : c === ',' ? '' : c;
-  }));
+  });
+  const n = Number(cleaned);
+  return isFinite(n) ? n : 0;
 }
 
 /**
@@ -842,51 +847,37 @@ async function tryDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
  * Slower (~5-15s) but reliable when direct fetch is blocked.
  */
 async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
-  const { execFile } = await import('child_process');
-  const { readFile, unlink } = await import('fs/promises');
-  const path = await import('path');
-  const os = await import('os');
-
-  const tmpFile = path.join(os.tmpdir(), `tgju-${tgjuKey}-${Date.now()}.json`);
   const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
 
   try {
-    // Call z-ai CLI to invoke page_reader
-    await new Promise<void>((resolve, reject) => {
-      execFile(
-        'z-ai',
-        ['function', '-n', 'page_reader', '-a', JSON.stringify({ url: apiUrl }), '-o', tmpFile],
-        { timeout: 45_000, maxBuffer: 50 * 1024 * 1024 },
-        (error) => {
-          if (error) reject(error);
-          else resolve();
-        },
-      );
-    });
+    // Use z-ai-web-dev-sdk directly (works within Next.js process)
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    const zai = await ZAI.create();
+    console.log(`[TGJU] Using z-ai SDK page_reader for ${tgjuKey}...`);
+    const result = await zai.functions.invoke('page_reader', { url: apiUrl });
 
-    // Read the output file
-    const fileContent = await readFile(tmpFile, 'utf-8');
-    const pageData = JSON.parse(fileContent);
-
-    if (pageData.code !== 200 || !pageData.data?.html) {
-      console.warn(`[TGJU] page_reader CLI failed for ${tgjuKey}: code=${pageData.code}`);
+    if (result.code !== 200 || !result.data?.html) {
+      console.warn(`[TGJU] page_reader SDK failed for ${tgjuKey}: code=${result.code}`);
       return null;
     }
 
     // Extract JSON from <pre> tag in the HTML
-    const html = pageData.data.html;
+    const html = result.data.html;
     const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
     if (!preMatch) {
       console.warn(`[TGJU] page_reader: no <pre> block found for ${tgjuKey}`);
       return null;
     }
 
-    // Unescape HTML entities
+    // Unescape HTML entities and strip HTML tags from values (e.g. <span class="high" dir="ltr">1000</span> → 1000)
     const jsonStr = preMatch[1]
+      .replace(/<[^>]*>/g, '')        // Strip ALL HTML tags first
       .replace(/&quot;/g, '"')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')           // Normalize whitespace
+      .trim();
 
     if (!jsonStr.startsWith('{')) {
       console.warn(`[TGJU] page_reader: extracted content is not JSON for ${tgjuKey}`);
@@ -895,11 +886,8 @@ async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[
 
     return parseTgjuChartData(tgjuKey, jsonStr);
   } catch (err) {
-    console.error(`[TGJU] page_reader CLI error for ${tgjuKey}:`, err instanceof Error ? err.message : err);
+    console.error(`[TGJU] page_reader SDK error for ${tgjuKey}:`, err instanceof Error ? err.message : err);
     return null;
-  } finally {
-    // Clean up temp file
-    try { await unlink(tmpFile); } catch {}
   }
 }
 
@@ -910,12 +898,21 @@ async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[
 function parseTgjuChartData(tgjuKey: string, jsonStr: string): TgjuOHLC[] | null {
   try {
     const parsed = JSON.parse(jsonStr);
-    const rows: (string | number)[][] = parsed.data;
+    const rawRows: (string | number)[][] = parsed.data;
 
-    if (!rows || rows.length === 0) {
+    if (!rawRows || rawRows.length === 0) {
       console.warn(`[TGJU] Empty data array for ${tgjuKey}`);
       return null;
     }
+
+    // Sanitize row values: strip any residual HTML tags and trim
+    const rows = rawRows.map(row =>
+      row.map(cell => {
+        const s = String(cell).trim();
+        // Strip HTML tags if any remain (safety for direct fetch path)
+        return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
+      })
+    );
 
     // ── Auto-detect column mapping from first valid row ──
     let colMap = detectColumnMap(rows[0]);

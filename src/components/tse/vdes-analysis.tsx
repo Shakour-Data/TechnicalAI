@@ -126,6 +126,7 @@ export interface VdesAnalysisProps {
   priceTargets: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
   hasVolume?: boolean;
   instrumentType?: string;
+  instrumentCategory?: string;
   currencyUnit?: string;
   priceDecimals?: number;
   probabilityTrend?: {
@@ -199,6 +200,28 @@ const RISK_PROFILE_LABELS: Record<V11Result['riskProfile'], { label: string; col
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// Instrument Category → Persian Terms Mapping
+// ═══════════════════════════════════════════════════════════════════
+
+function getInstrumentTerms(category?: string): { noun: string; typeLabel: string; priceAction: string; tradeAction: string } {
+  switch (category) {
+    case 'currency': return { noun: 'ارز', typeLabel: 'ارز', priceAction: 'نرخ', tradeAction: 'معامله' };
+    case 'gold': return { noun: 'طلا و سکه', typeLabel: 'طلا و سکه', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'silver': return { noun: 'نقره', typeLabel: 'نقره', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'gold_etf': return { noun: 'صندوق طلای بورس', typeLabel: 'صندوق طلا', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'crypto': return { noun: 'ارز دیجیتال', typeLabel: 'ارز دیجیتال', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'forex': return { noun: 'جفت ارز', typeLabel: 'جفت ارز', priceAction: 'نرخ', tradeAction: 'معامله' };
+    case 'world_index': return { noun: 'شاخص بورس جهانی', typeLabel: 'شاخص جهانی', priceAction: 'مقدار', tradeAction: 'سرمایه‌گذاری' };
+    case 'foreign_stock': return { noun: 'سهام خارجی', typeLabel: 'سهام خارجی', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'energy': return { noun: 'کامودیتی انرژی', typeLabel: 'انرژی', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'metal': return { noun: 'فلز جهانی', typeLabel: 'فلز', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'commodity': return { noun: 'کالای جهانی', typeLabel: 'کالا', priceAction: 'قیمت', tradeAction: 'معامله' };
+    case 'index': return { noun: 'شاخص بورس', typeLabel: 'شاخص', priceAction: 'مقدار', tradeAction: 'سرمایه‌گذاری' };
+    default: return { noun: 'سهم', typeLabel: 'سهم', priceAction: 'قیمت', tradeAction: 'معامله' };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Dynamic Analysis Text Generator
 // ═══════════════════════════════════════════════════════════════════
 
@@ -244,6 +267,7 @@ interface AnalysisContext {
   supportStrengths: LevelStrength[];
   v11Result: V11Result;
   instrumentType?: string;
+  instrumentCategory?: string;
   currencyUnit?: string;
 }
 
@@ -257,8 +281,10 @@ function generateAnalysisText(ctx: AnalysisContext) {
     highestKey, highestProb, scenarios, S1, R1, R2,
     hasVolume, resistanceStrengths, supportStrengths,
     v11Result, currencyUnit: ctxCurrencyUnit,
+    instrumentCategory,
   } = ctx;
   const unit = ctxCurrencyUnit || 'ریال';
+  const terms = getInstrumentTerms(instrumentCategory);
 
   const R1_info = resistanceStrengths[0];
   const S1_info = supportStrengths[0];
@@ -306,8 +332,8 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const p1 = (
     <>
       <strong className="text-amber-800">روند کلی و موقعیت قیمت:</strong>{' '}
-      سناریوی غالب برای سهم {symbolName} <b className="text-[#111827]">{dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
-      قیمت در محدوده <b className="text-[#111827]">{toFa(currentPrice)} {unit}</b> معامله می‌شود و روند میان‌مدت{' '}
+      سناریوی غالب برای {terms.noun} {symbolName} <b className="text-[#111827]">{dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
+      {terms.priceAction} در محدوده <b className="text-[#111827]">{toFa(currentPrice)} {unit}</b> معامله می‌شود و روند میان‌مدت{' '}
       <b className={trendColor}>{trendLabel}</b>
       {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={toPersianDigits((trendR2 * 100).toFixed(1))}٪).
       قیمت نسبت به MA21 ({toFa(ma21)} {unit}){' '}
@@ -425,7 +451,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
   ) : (
     <>
       <strong className="text-amber-800">تحلیل نوسان پذیری:</strong>{' '}
-      اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه سهم است؛
+      اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه {terms.noun} است؛
       {atr > currentPrice * 0.03
         ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-800">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
         : <span> نوسان معقول که نشان‌دهنده <b className="text-[#374151]">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
@@ -523,6 +549,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal, scenarios,
     supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
+    instrumentCategory,
     currencyUnit: propCurrencyUnit, priceDecimals: propPriceDecimals,
     probabilityTrend,
   } = props;
@@ -609,6 +636,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       resistanceStrengths, supportStrengths,
       v11Result,
       currencyUnit: propCurrencyUnit,
+      instrumentCategory,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -619,6 +647,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     highestKey, highestProb, scenarios,
     S1_level, R1_level, R2_level, hasVolume,
     resistanceStrengths, supportStrengths, v11Result, propCurrencyUnit,
+    instrumentCategory,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────

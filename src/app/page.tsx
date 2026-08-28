@@ -760,6 +760,7 @@ export default function Home() {
                     priceTargets={data.ta.priceTargets}
                     hasVolume={data.ta.hasVolume}
                     instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
+                    instrumentCategory={data.info?.category}
                     currencyUnit={currencyUnit}
                     priceDecimals={decimals}
                     probabilityTrend={data.probabilityTrend}

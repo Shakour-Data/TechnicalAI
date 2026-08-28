@@ -828,14 +828,48 @@ export default function VdssGraph(props: VdssGraphProps) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Per-Scenario Individual + Cumulative Probability Trend Charts
+// Multi-Select Scenario Trend Charts (Individual & Cumulative)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const SCENARIO_LINE_COLORS: Record<string, string> = {
+  R1: '#b91c1c', R2: '#dc2626', R3: '#ea580c', R4: '#f97316',
+  R5: '#f59e0b',
+  R6: '#65a30d', R7: '#16a34a', R8: '#059669', R9: '#047857',
+};
+
+const SCENARIO_CHART_GROUP_STYLE: Record<string, { borderColor: string; headerBg: string; headerText: string; indColor: string; cumColor: string }> = {
+  bearish: {
+    borderColor: '#fecaca', headerBg: 'rgba(239,68,68,0.06)', headerText: '#dc2626',
+    indColor: '#ef4444', cumColor: '#b91c1c',
+  },
+  neutral: {
+    borderColor: '#fde68a', headerBg: 'rgba(245,158,11,0.06)', headerText: '#b45309',
+    indColor: '#f59e0b', cumColor: '#92400e',
+  },
+  bullish: {
+    borderColor: '#bbf7d0', headerBg: 'rgba(34,197,94,0.06)', headerText: '#16a34a',
+    indColor: '#22c55e', cumColor: '#15803d',
+  },
+};
+
+const GROUP_LABEL_MAP: Record<string, string> = {
+  bearish: 'خرسی', neutral: 'خنثی', bullish: 'گاوی',
+};
 
 function PerScenarioTrendCharts({ data }: { data?: ProbabilityTrendResult | null }) {
   const [open, setOpen] = useState(true);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set(['R1','R2','R3','R4','R5','R6','R7','R8','R9']));
 
   const hasData = !!(data && data.scenarios && data.scenarios.length === 9 &&
     data.scenarios[0]?.trend?.length > 1);
+
+  const toggleKey = (k: string) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
 
   if (!hasData) {
     if (!data || data.scenarios?.length === 0) return null;
@@ -872,220 +906,210 @@ function PerScenarioTrendCharts({ data }: { data?: ProbabilityTrendResult | null
             style={{ boxShadow: 'inset 0 0 22px rgba(124,58,237,.06), 0 0 22px rgba(124,58,237,.04)' }}>📈</div>
           <div className="text-right">
             <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات سناریوها</h2>
-            <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی و تجمعی هر سناریو در ۳۰ روز گذشته</p>
+            <p className="text-[11px] text-[#6b7280]">نمودارهای تفاعلی با قابلیت مولتی‌سِلکت برای مقایسه سناریوها</p>
           </div>
         </div>
         <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
       </CollapsibleTrigger>
 
       <CollapsibleContent>
-        {/* Legend */}
-        <div className="mt-3 flex items-center justify-center gap-6 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-[2px] rounded" style={{ background: '#374151' }} />
-            <span className="text-[11px] font-medium text-[#374151]">اختصاصی</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-[2px] rounded" style={{ background: '#374151', borderStyle: 'dashed', borderWidth: 2 }} />
-            <span className="text-[11px] font-medium text-[#374151]">تجمعی (CDF)</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {(['R1','R9','R2','R8','R3','R7','R4','R6','R5'] as const)
-            .map(key => data.scenarios.find(s => s.scenarioKey === key))
-            .filter(Boolean)
-            .map(sc => <ScenarioMiniChart key={sc!.scenarioKey} scenario={sc!} />)}
+        <div className="mt-3 space-y-3">
+          {/* Chart 1: Individual Probability Trends */}
+          <MultiSelectTrendChart
+            data={data}
+            selectedKeys={selectedKeys}
+            onToggleKey={toggleKey}
+            mode="individual"
+            title="روند احتمالات اختصاصی سناریوها"
+          />
+          {/* Chart 2: Cumulative Probability Trends */}
+          <MultiSelectTrendChart
+            data={data}
+            selectedKeys={selectedKeys}
+            onToggleKey={toggleKey}
+            mode="cumulative"
+            title="روند احتمالات تجمعی سناریوها (CDF)"
+          />
         </div>
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
-const SCENARIO_CHART_GROUP_STYLE: Record<string, { borderColor: string; headerBg: string; headerText: string; indColor: string; cumColor: string }> = {
-  bearish: {
-    borderColor: '#fecaca',
-    headerBg: 'rgba(239,68,68,0.06)',
-    headerText: '#dc2626',
-    indColor: '#ef4444',
-    cumColor: '#b91c1c',
-  },
-  neutral: {
-    borderColor: '#fde68a',
-    headerBg: 'rgba(245,158,11,0.06)',
-    headerText: '#b45309',
-    indColor: '#f59e0b',
-    cumColor: '#92400e',
-  },
-  bullish: {
-    borderColor: '#bbf7d0',
-    headerBg: 'rgba(34,197,94,0.06)',
-    headerText: '#16a34a',
-    indColor: '#22c55e',
-    cumColor: '#15803d',
-  },
-};
+function MultiSelectTrendChart({ data, selectedKeys, onToggleKey, mode, title }: {
+  data: ProbabilityTrendResult;
+  selectedKeys: Set<string>;
+  onToggleKey: (k: string) => void;
+  mode: 'individual' | 'cumulative';
+  title: string;
+}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
 
-const GROUP_LABEL_MAP: Record<string, string> = {
-  bearish: 'خرسی',
-  neutral: 'خنثی',
-  bullish: 'گاوی',
-};
+  const scenarios = data.scenarios.filter(s => selectedKeys.has(s.scenarioKey));
+  const maxDays = data.scenarios[0]?.trend?.length ?? 0;
 
-function ScenarioMiniChart({ scenario }: { scenario: ScenarioTrend & { trend: DayPoint[]; trendDirection: TrendDirection; peakDay: number; peakProbability: number; interpretation: string } }) {
-  const trend = scenario.trend;
-  const maxDays = trend.length;
-  if (maxDays < 2) return null;
+  // Compute Y range
+  let yMax = 0;
+  for (const sc of scenarios) {
+    for (const d of sc.trend) {
+      const v = mode === 'individual' ? d.individualProb : d.cumulativeProb;
+      if (v > yMax) yMax = v;
+    }
+  }
+  yMax = Math.max(yMax * 1.15, 0.01);
+  const yMin = 0;
 
-  const style = SCENARIO_CHART_GROUP_STYLE[scenario.group] || SCENARIO_CHART_GROUP_STYLE.neutral;
-  const groupLabel = GROUP_LABEL_MAP[scenario.group] || '';
-
-  // Chart dimensions
-  const chartW = 340;
-  const chartH = 130;
-  const padL = 38;
-  const padR = 10;
-  const padT = 10;
-  const padB = 22;
+  const chartW = 1100;
+  const chartH = 300;
+  const padL = 50;
+  const padR = 20;
+  const padT = 20;
+  const padB = 40;
   const plotW = chartW - padL - padR;
   const plotH = chartH - padT - padB;
 
-  // Find max value for Y axis scaling
-  let maxInd = 0;
-  let maxCum = 0;
-  for (const d of trend) {
-    if (d.individualProb > maxInd) maxInd = d.individualProb;
-    if (d.cumulativeProb > maxCum) maxCum = d.cumulativeProb;
-  }
-  const yMax = Math.max(maxCum, maxInd) * 1.15;
-  const yMin = 0;
-
-  // X mapping (RTL: day 1 = today on right)
   const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
-  // Y mapping
   const yOf = (v: number) => padT + plotH - ((v - yMin) / Math.max(0.001, yMax - yMin)) * plotH;
 
-  // Build polyline points
-  const indPoints = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.individualProb).toFixed(1)}`).join(' ');
-  const cumPoints = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.cumulativeProb).toFixed(1)}`).join(' ');
-
-  // Current values
-  const curInd = trend[0]?.individualProb ?? 0;
-  const curCum = trend[0]?.cumulativeProb ?? 0;
-  const peakInd = Math.max(...trend.map(d => d.individualProb));
-  const peakCum = Math.max(...trend.map(d => d.cumulativeProb));
-
-  // Grid lines
-  const gridLines: React.JSX.Element[] = [];
-  const gridSteps = 4;
-  for (let i = 0; i <= gridSteps; i++) {
-    const val = yMin + ((yMax - yMin) / gridSteps) * i;
-    const y = yOf(val);
-    gridLines.push(
-      <line key={`g-${i}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#f3f4f6" strokeWidth={0.6} />,
-      <text key={`gl-${i}`} x={padL - 4} y={y + 3} textAnchor="end" fill="#9ca3af" fontSize={7.5} fontFamily="inherit">
-        {toPersianDigits((val * 100).toFixed(0))}%
+  // Grid
+  const gridEls: React.JSX.Element[] = [];
+  for (let p = 0; p <= 100; p += 20) {
+    const y = yOf(p / 100);
+    gridEls.push(
+      <line key={`g${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#f3f4f6" strokeWidth={0.7} />,
+      <text key={`gl${p}`} x={padL - 6} y={y + 3.5} textAnchor="end" fill="#9ca3af" fontSize={9} fontFamily="inherit">
+        {toPersianDigits(String(p))}%
       </text>,
     );
   }
-
-  // X labels (every 5 days)
-  const xLabels: React.JSX.Element[] = [];
   for (let d = 1; d <= maxDays; d += 5) {
-    xLabels.push(
-      <text key={`xl-${d}`} x={xOf(d)} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={7} fontFamily="inherit">
-        {toPersianDigits(d.toString())}
+    gridEls.push(
+      <text key={`xl${d}`} x={xOf(d)} y={chartH - 8} textAnchor="middle" fill="#9ca3af" fontSize={8} fontFamily="inherit">
+        {toPersianDigits(String(d))}
       </text>,
     );
   }
 
-  // Trend direction icon
-  const trendIcon = scenario.trendDirection === 'rising' ? '↑' : scenario.trendDirection === 'falling' ? '↓' : '→';
+  // Vertical hover line
+  const hoverEl = hoveredDay ? (
+    <line x1={xOf(hoveredDay)} y1={padT} x2={xOf(hoveredDay)} y2={chartH - padB} stroke="#94a3b8" strokeWidth={0.8} strokeDasharray="3,3" opacity={0.6} />
+  ) : null;
+
+  // Tooltip
+  const tooltipEl = hoveredDay ? (
+    <div
+      ref={tooltipRef}
+      className="absolute z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-[10px] pointer-events-none"
+      style={{ left: xOf(hoveredDay) + 10, top: padT }}
+      dir="rtl"
+    >
+      <div className="font-bold text-[#374151] mb-1">روز {toPersianDigits(String(hoveredDay))}</div>
+      {scenarios.map(sc => {
+        const dp = sc.trend.find(d => d.day === hoveredDay);
+        if (!dp) return null;
+        const val = mode === 'individual' ? dp.individualProb : dp.cumulativeProb;
+        const color = SCENARIO_LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+        return (
+          <div key={sc.scenarioKey} className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full" style={{ background: color }} />
+              <span>{sc.label}</span>
+            </span>
+            <span className="font-bold" style={{ color }}>{toPersianDigits((val * 100).toFixed(1))}%</span>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
 
   return (
-    <div
-      className="rounded-xl border p-3 overflow-hidden"
-      style={{ borderColor: style.borderColor, background: '#ffffff', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2 px-1">
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: style.indColor }} />
-          <span className="text-[11px] font-bold" style={{ color: style.headerText }}>{scenario.scenarioKey}: {scenario.label}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: style.headerBg, color: style.headerText }}>{groupLabel}</span>
-          <span className="text-[10px]" style={{ color: style.headerText }}>{trendIcon}</span>
-        </div>
-      </div>
-
-      {/* Chart */}
-      <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 260 }}>
-        <rect x={0} y={0} width={chartW} height={chartH} fill="#fafafa" rx={4} />
-        {/* Grid */}
-        {gridLines}
-        {/* Axes */}
-        <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.6} />
-        <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.6} />
-        {/* X labels */}
-        {xLabels}
-        {/* Individual line (solid) */}
-        <polyline
-          points={indPoints}
-          fill="none"
-          stroke={style.indColor}
-          strokeWidth={1.8}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          opacity={0.85}
-        />
-        {/* Cumulative line (dashed) */}
-        <polyline
-          points={cumPoints}
-          fill="none"
-          stroke={style.cumColor}
-          strokeWidth={1.8}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          strokeDasharray="5,3"
-          opacity={0.9}
-        />
-        {/* Current day dot on individual */}
-        {trend[0] && (
-          <circle cx={xOf(1)} cy={yOf(trend[0].individualProb)} r={3} fill={style.indColor} stroke="#ffffff" strokeWidth={1.2} />
-        )}
-        {/* Current day dot on cumulative */}
-        {trend[0] && (
-          <circle cx={xOf(1)} cy={yOf(trend[0].cumulativeProb)} r={3} fill={style.cumColor} stroke="#ffffff" strokeWidth={1.2} />
-        )}
-      </svg>
-
-      {/* Footer stats */}
-      <div className="flex items-center justify-between mt-2 px-1" dir="rtl">
-        <div className="text-center">
-          <div className="text-[8px] text-[#9ca3af]">اختصاصی امروز</div>
-          <div className="text-[11px] font-bold" style={{ color: style.indColor }}>{toPersianDigits((curInd * 100).toFixed(1))}%</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[8px] text-[#9ca3af]">تجمعی امروز</div>
-          <div className="text-[11px] font-bold" style={{ color: style.cumColor }}>{toPersianDigits((curCum * 100).toFixed(1))}%</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[8px] text-[#9ca3af]">بیشینه اختصاصی</div>
-          <div className="text-[11px] font-bold text-[#374151]">{toPersianDigits((peakInd * 100).toFixed(1))}%</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[8px] text-[#9ca3af]">بیشینه تجمعی</div>
-          <div className="text-[11px] font-bold text-[#374151]">{toPersianDigits((peakCum * 100).toFixed(1))}%</div>
+    <div className="rounded-2xl border border-[#e5e7eb] bg-[#ffffff] overflow-hidden"
+      style={{ boxShadow: '0 2px 12px rgba(0,0,0,.05)' }}>
+      {/* Header + Legend row */}
+      <div className="px-4 pt-3 pb-2">
+        <h3 className="text-xs font-bold text-[#111827] mb-2">{title}</h3>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {data.scenarios.map(sc => {
+            const color = SCENARIO_LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+            const isActive = selectedKeys.has(sc.scenarioKey);
+            const trendIcon = sc.trendDirection === 'rising' ? '↑' : sc.trendDirection === 'falling' ? '↓' : '→';
+            const curVal = sc.trend[0] ? (mode === 'individual' ? sc.trend[0].individualProb : sc.trend[0].cumulativeProb) : 0;
+            return (
+              <button
+                key={sc.scenarioKey}
+                onClick={() => onToggleKey(sc.scenarioKey)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all cursor-pointer ${
+                  isActive ? 'border-gray-300 bg-gray-50' : 'border-transparent bg-gray-100 opacity-40'
+                }`}
+              >
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+                <span className="text-[#374151]">{sc.scenarioKey}</span>
+                <span style={{ color }}>{trendIcon}</span>
+                {isActive && <span className="text-[#6b7280]">{toPersianDigits((curVal * 100).toFixed(1))}%</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Interpretation */}
-      {scenario.interpretation && (
-        <div className="mt-1.5 px-1 text-[9px] leading-relaxed text-[#6b7280]" dir="rtl">
-          {scenario.interpretation}
-        </div>
-      )}
+      {/* Chart area */}
+      <div className="relative" style={{ overflowX: 'auto' }}>
+        <svg
+          ref={svgRef}
+          width="100%"
+          viewBox={`0 0 ${chartW} ${chartH}`}
+          style={{ minWidth: 500, display: 'block' }}
+          onMouseMove={(e) => {
+            if (!svgRef.current) return;
+            const rect = svgRef.current.getBoundingClientRect();
+            const scaleX = chartW / rect.width;
+            const svgX = (e.clientX - rect.left) * scaleX;
+            // Find closest day
+            let closestDay = 1;
+            let closestDist = Infinity;
+            for (let d = 1; d <= maxDays; d++) {
+              const dist = Math.abs(xOf(d) - svgX);
+              if (dist < closestDist) { closestDist = dist; closestDay = d; }
+            }
+            if (closestDist < 30) setHoveredDay(closestDay); else setHoveredDay(null);
+          }}
+          onMouseLeave={() => setHoveredDay(null)}
+        >
+          <rect x={0} y={0} width={chartW} height={chartH} fill="#fafafa" />
+          {gridEls}
+          <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.7} />
+          <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.7} />
+          {hoverEl}
+          {scenarios.map(sc => {
+            const color = SCENARIO_LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+            const points = sc.trend.map(d => {
+              const v = mode === 'individual' ? d.individualProb : d.cumulativeProb;
+              return `${xOf(d.day).toFixed(1)},${yOf(v).toFixed(1)}`;
+            }).join(' ');
+            const lastDp = sc.trend[0];
+            const lastV = lastDp ? (mode === 'individual' ? lastDp.individualProb : lastDp.cumulativeProb) : 0;
+            return (
+              <g key={sc.scenarioKey}>
+                <polyline
+                  points={points}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={2.2}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  opacity={0.9}
+                />
+                {lastDp && (
+                  <circle cx={xOf(1)} cy={yOf(lastV)} r={3.5} fill={color} stroke="#ffffff" strokeWidth={1.5} />
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        {tooltipEl}
+      </div>
     </div>
   );
 }
@@ -1150,12 +1174,6 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
 
   const lineColor = (g: 'bullish' | 'neutral' | 'bearish') =>
     g === 'bullish' ? '#16a34a' : g === 'neutral' ? '#b45309' : '#dc2626';
-
-  const SCENARIO_LINE_COLORS: Record<string, string> = {
-    R1: '#fca5a5', R2: '#f87171', R3: '#ef4444', R4: '#dc2626',
-    R5: '#f59e0b',
-    R6: '#4ade80', R7: '#22c55e', R8: '#16a34a', R9: '#15803d',
-  };
 
   const buildGroupLine = (trend: DayPoint[], group: string) => {
     const color = lineColor(group as 'bullish' | 'neutral' | 'bearish');
