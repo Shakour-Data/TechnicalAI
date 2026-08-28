@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchTgjuHistory, fetchTgjuInstruments, getTgjuYahooFallback } from '@/lib/tgju-api';
+import { fetchTgjuHistory, getTgjuYahooFallback, STATIC_INSTRUMENTS } from '@/lib/tgju-api';
 import { fetchYahooHistory, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
 import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
 import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('key');
@@ -62,9 +62,8 @@ export async function GET(req: NextRequest) {
       volume: isYahooFallback ? (history[0] as any).volume || 0 : 0,
     }));
 
-    // 4. Get instrument info
-    const instruments = await fetchTgjuInstruments();
-    const instrument = instruments.find((i) => i.key === key);
+    // 4. Get instrument info (static list for global instruments, key-only for IR-specific)
+    const instrument = STATIC_INSTRUMENTS.find((i) => i.key === key);
 
     const lastCandle = history[history.length - 1];
     const prevCandle = history.length > 1 ? history[history.length - 2] : lastCandle;
@@ -80,9 +79,11 @@ export async function GET(req: NextRequest) {
     const ta = analyze(ohlcvData, currencyUnit);
 
     // 6. Compute 30-day probability trend
+    // Use last 400 candles max for performance (30 days × ~13 candles/day avg)
     let probabilityTrend;
     try {
-      const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcvData, 30);
+      const trendData = ohlcvData.length > 400 ? ohlcvData.slice(-400) : ohlcvData;
+      const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(trendData, 30);
       probabilityTrend = dailySnapshots.length > 1
         ? buildTrendFromDailySnapshots(dailySnapshots)
         : undefined;

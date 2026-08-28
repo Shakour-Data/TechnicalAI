@@ -768,6 +768,15 @@ async function backgroundFetchYahooFallbackPrices(instruments: TgjuInstrument[])
 
 /* ─── Fetch historical OHLC data ── */
 
+/**
+ * Fetch historical OHLC data from TGJU chart API.
+ * Strategy:
+ * 1. Try direct fetch (fast, ~100ms) — works when Cloudflare is not blocking
+ * 2. If 403/blocked, fall back to z-ai page_reader (bypasses Cloudflare, ~3s)
+ * 3. If both fail, return cached data if available
+ *
+ * All results are cached for HISTORY_TTL (30 min) to minimize page_reader calls.
+ */
 export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
   const cached = historyCache.get(tgjuKey);
   const now = Date.now();
@@ -775,50 +784,147 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
     return cached.data;
   }
 
-  try {
-    const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=5000`;
+  // ── Step 1: Try direct fetch (fast path) ──
+  const directResult = await tryDirectFetch(tgjuKey);
+  if (directResult && directResult.length >= 30) {
+    cacheHistory(tgjuKey, directResult, now);
+    return directResult;
+  }
 
-    // Server-side fetch — no CORS issues, no ZAI queue needed
+  // ── Step 2: Fall back to page_reader (bypasses Cloudflare) ──
+  console.log(`[TGJU] Direct fetch returned ${directResult?.length ?? 0} candles for ${tgjuKey}, trying page_reader...`);
+  const pageReaderResult = await fetchTgjuHistoryViaPageReader(tgjuKey);
+  if (pageReaderResult && pageReaderResult.length >= 30) {
+    cacheHistory(tgjuKey, pageReaderResult, now);
+    return pageReaderResult;
+  }
+
+  // ── Step 3: Both failed — return stale cache or empty ──
+  console.warn(`[TGJU] All methods failed for ${tgjuKey}, returning ${cached?.data?.length ?? 0} cached candles`);
+  return cached?.data || [];
+}
+
+/**
+ * Try direct HTTP fetch to TGJU chart API.
+ * Returns parsed candles or null on failure.
+ */
+async function tryDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+  try {
+    const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25_000);
-    let jsonStr: string;
-    try {
-      const res = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      jsonStr = await res.text();
-    } catch (fetchErr) {
-      clearTimeout(timer);
-      // This is a server-side route — no CORS. If direct fetch fails, the API is down.
-      console.warn(`[TGJU] Direct fetch failed for ${tgjuKey}:`, fetchErr instanceof Error ? fetchErr.message : fetchErr);
-      return cached?.data || [];
+    const timer = setTimeout(() => controller.abort(), 12_000);
+
+    const res = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      console.warn(`[TGJU] Direct fetch HTTP ${res.status} for ${tgjuKey}`);
+      return null;
     }
+
+    const jsonStr = await res.text();
+    if (!jsonStr.startsWith('{')) {
+      console.warn(`[TGJU] Direct fetch non-JSON for ${tgjuKey}`);
+      return null;
+    }
+
+    return parseTgjuChartData(tgjuKey, jsonStr);
+  } catch (err) {
+    console.warn(`[TGJU] Direct fetch error for ${tgjuKey}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * Fetch TGJU historical data via z-ai CLI page_reader (bypasses Cloudflare).
+ * Uses child_process to call `z-ai function -n page_reader` which runs
+ * a headless browser internally and can solve Cloudflare challenges.
+ * Slower (~5-15s) but reliable when direct fetch is blocked.
+ */
+async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+  const { execFile } = await import('child_process');
+  const { readFile, unlink } = await import('fs/promises');
+  const path = await import('path');
+  const os = await import('os');
+
+  const tmpFile = path.join(os.tmpdir(), `tgju-${tgjuKey}-${Date.now()}.json`);
+  const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
+
+  try {
+    // Call z-ai CLI to invoke page_reader
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'z-ai',
+        ['function', '-n', 'page_reader', '-a', JSON.stringify({ url: apiUrl }), '-o', tmpFile],
+        { timeout: 45_000, maxBuffer: 50 * 1024 * 1024 },
+        (error) => {
+          if (error) reject(error);
+          else resolve();
+        },
+      );
+    });
+
+    // Read the output file
+    const fileContent = await readFile(tmpFile, 'utf-8');
+    const pageData = JSON.parse(fileContent);
+
+    if (pageData.code !== 200 || !pageData.data?.html) {
+      console.warn(`[TGJU] page_reader CLI failed for ${tgjuKey}: code=${pageData.code}`);
+      return null;
+    }
+
+    // Extract JSON from <pre> tag in the HTML
+    const html = pageData.data.html;
+    const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
+    if (!preMatch) {
+      console.warn(`[TGJU] page_reader: no <pre> block found for ${tgjuKey}`);
+      return null;
+    }
+
+    // Unescape HTML entities
+    const jsonStr = preMatch[1]
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
 
     if (!jsonStr.startsWith('{')) {
-      console.warn(`[TGJU] Non-JSON response for ${tgjuKey}: ${jsonStr.slice(0, 100)}`);
-      return cached?.data || [];
+      console.warn(`[TGJU] page_reader: extracted content is not JSON for ${tgjuKey}`);
+      return null;
     }
 
+    return parseTgjuChartData(tgjuKey, jsonStr);
+  } catch (err) {
+    console.error(`[TGJU] page_reader CLI error for ${tgjuKey}:`, err instanceof Error ? err.message : err);
+    return null;
+  } finally {
+    // Clean up temp file
+    try { await unlink(tmpFile); } catch {}
+  }
+}
+
+/**
+ * Parse the JSON data from TGJU chart API response.
+ * Used by both direct fetch and page_reader paths.
+ */
+function parseTgjuChartData(tgjuKey: string, jsonStr: string): TgjuOHLC[] | null {
+  try {
     const parsed = JSON.parse(jsonStr);
     const rows: (string | number)[][] = parsed.data;
 
     if (!rows || rows.length === 0) {
       console.warn(`[TGJU] Empty data array for ${tgjuKey}`);
-      return cached?.data || [];
+      return null;
     }
 
     // ── Auto-detect column mapping from first valid row ──
     let colMap = detectColumnMap(rows[0]);
-
-    // If auto-detect failed, try a few more rows
     if (!colMap) {
       for (let r = 1; r < Math.min(5, rows.length); r++) {
         colMap = detectColumnMap(rows[r]);
         if (colMap) break;
       }
     }
-
-    // If still no auto-detect, fall back to assumed column order
     if (!colMap) {
       console.warn(`[TGJU] Could not auto-detect columns for ${tgjuKey}, using default order`);
       colMap = { openIdx: 0, highIdx: 2, lowIdx: 1, closeIdx: 3, jalaliDateIdx: 7, gregorianDateIdx: 6 };
@@ -853,29 +959,26 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
     }
 
     if (candles.length === 0) {
-      return cached?.data || [];
+      return null;
     }
 
     // ── Detect and fix data drift ──
-    // Check if prices suddenly jump > 50% between consecutive candles
-    // (could indicate unit change, decimal shift, or API error)
     let driftCount = 0;
     for (let i = 1; i < candles.length; i++) {
       const prevClose = candles[i - 1].close;
       const currClose = candles[i].close;
       if (prevClose > 0) {
         const pctChange = Math.abs(currClose - prevClose) / prevClose;
-        if (pctChange > 0.5) { // > 50% single-day change is suspicious for most instruments
+        if (pctChange > 0.5) {
           driftCount++;
         }
       }
     }
-    if (driftCount > candles.length * 0.1) { // > 10% of candles have suspicious jumps
+    if (driftCount > candles.length * 0.1) {
       console.warn(`[TGJU] ${tgjuKey}: Possible data drift detected (${driftCount} suspicious jumps out of ${candles.length} candles)`);
     }
 
     // Reverse: API returns oldest-first (asc), we want newest-last for charting
-    // But check: if the first date is newer than the last, data is already desc
     const firstDate = candles[0].date;
     const lastDate = candles[candles.length - 1].date;
     if (firstDate > lastDate) {
@@ -884,38 +987,42 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
 
     console.log(`[TGJU] ${tgjuKey}: Parsed ${candles.length} candles (${candles[0]?.date} to ${candles[candles.length - 1]?.date})`);
 
-    // Cache the result
-    historyCache.set(tgjuKey, { data: candles, ts: now });
-
-    // Also update static price cache for this instrument
-    if (candles.length >= 2) {
-      const last = candles[candles.length - 1];
-      const prev = candles[candles.length - 2];
-      staticPriceCache.set(tgjuKey, {
-        close: last.close,
-        high: last.high,
-        low: last.low,
-        prevClose: prev.close,
-        ts: now,
-      });
-
-      // Update live instruments cache if this is a static instrument
-      if (liveInstrumentsCache.data) {
-        const inst = liveInstrumentsCache.data.find((i) => i.key === tgjuKey);
-        if (inst && inst.price === 0) {
-          inst.price = last.close;
-          inst.highPrice = last.high;
-          inst.lowPrice = last.low;
-          inst.change = last.close - prev.close;
-          inst.changePercent = prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : 0;
-        }
-      }
-    }
-
     return candles;
   } catch (err) {
-    console.error(`[TGJU] Failed to fetch history for ${tgjuKey}:`, err);
-    return cached?.data || [];
+    console.error(`[TGJU] Failed to parse chart data for ${tgjuKey}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Cache parsed history data and update related caches.
+ */
+function cacheHistory(tgjuKey: string, candles: TgjuOHLC[], now: number): void {
+  historyCache.set(tgjuKey, { data: candles, ts: now });
+
+  // Also update static price cache for this instrument
+  if (candles.length >= 2) {
+    const last = candles[candles.length - 1];
+    const prev = candles[candles.length - 2];
+    staticPriceCache.set(tgjuKey, {
+      close: last.close,
+      high: last.high,
+      low: last.low,
+      prevClose: prev.close,
+      ts: now,
+    });
+
+    // Update live instruments cache if this is a static instrument
+    if (liveInstrumentsCache.data) {
+      const inst = liveInstrumentsCache.data.find((i) => i.key === tgjuKey);
+      if (inst && inst.price === 0) {
+        inst.price = last.close;
+        inst.highPrice = last.high;
+        inst.lowPrice = last.low;
+        inst.change = last.close - prev.close;
+        inst.changePercent = prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : 0;
+      }
+    }
   }
 }
 
