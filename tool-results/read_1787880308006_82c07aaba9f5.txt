@@ -828,692 +828,710 @@
    828→}
    829→
    830→// ═══════════════════════════════════════════════════════════════════════════════
-   831→// Per-Scenario Individual + Cumulative Probability Trend Charts
+   831→// Multi-Select Scenario Trend Charts (Individual & Cumulative)
    832→// ═══════════════════════════════════════════════════════════════════════════════
    833→
-   834→function PerScenarioTrendCharts({ data }: { data?: ProbabilityTrendResult | null }) {
-   835→  const [open, setOpen] = useState(true);
-   836→
-   837→  const hasData = !!(data && data.scenarios && data.scenarios.length === 9 &&
-   838→    data.scenarios[0]?.trend?.length > 1);
+   834→const SCENARIO_LINE_COLORS: Record<string, string> = {
+   835→  R1: '#b91c1c', R2: '#dc2626', R3: '#ea580c', R4: '#f97316',
+   836→  R5: '#f59e0b',
+   837→  R6: '#65a30d', R7: '#16a34a', R8: '#059669', R9: '#047857',
+   838→};
    839→
-   840→  if (!hasData) {
-   841→    if (!data || data.scenarios?.length === 0) return null;
-   842→    return (
-   843→      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
-   844→        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
-   845→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-   846→          <div className="flex items-center gap-3">
-   847→            <div className="w-10 h-10 rounded-xl border border-violet-200 flex items-center justify-center text-violet-800 text-xl font-bold"
-   848→              style={{ boxShadow: 'inset 0 0 22px rgba(124,58,237,.06), 0 0 22px rgba(124,58,237,.04)' }}>📈</div>
-   849→            <div className="text-right">
-   850→              <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات سناریوها</h2>
-   851→              <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی و تجمعی هر سناریو در ۳۰ روز گذشته</p>
-   852→            </div>
-   853→          </div>
-   854→          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
-   855→        </CollapsibleTrigger>
-   856→        <CollapsibleContent>
-   857→          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
-   858→            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)', minHeight: 200 }}>
-   859→            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
-   860→          </div>
-   861→        </CollapsibleContent>
-   862→      </Collapsible>
-   863→    );
-   864→  }
+   840→const SCENARIO_CHART_GROUP_STYLE: Record<string, { borderColor: string; headerBg: string; headerText: string; indColor: string; cumColor: string }> = {
+   841→  bearish: {
+   842→    borderColor: '#fecaca', headerBg: 'rgba(239,68,68,0.06)', headerText: '#dc2626',
+   843→    indColor: '#ef4444', cumColor: '#b91c1c',
+   844→  },
+   845→  neutral: {
+   846→    borderColor: '#fde68a', headerBg: 'rgba(245,158,11,0.06)', headerText: '#b45309',
+   847→    indColor: '#f59e0b', cumColor: '#92400e',
+   848→  },
+   849→  bullish: {
+   850→    borderColor: '#bbf7d0', headerBg: 'rgba(34,197,94,0.06)', headerText: '#16a34a',
+   851→    indColor: '#22c55e', cumColor: '#15803d',
+   852→  },
+   853→};
+   854→
+   855→const GROUP_LABEL_MAP: Record<string, string> = {
+   856→  bearish: 'خرسی', neutral: 'خنثی', bullish: 'گاوی',
+   857→};
+   858→
+   859→function PerScenarioTrendCharts({ data }: { data?: ProbabilityTrendResult | null }) {
+   860→  const [open, setOpen] = useState(true);
+   861→  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set(['R1','R2','R3','R4','R5','R6','R7','R8','R9']));
+   862→
+   863→  const hasData = !!(data && data.scenarios && data.scenarios.length === 9 &&
+   864→    data.scenarios[0]?.trend?.length > 1);
    865→
-   866→  return (
-   867→    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
-   868→      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
-   869→        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-   870→        <div className="flex items-center gap-3">
-   871→          <div className="w-10 h-10 rounded-xl border border-violet-200 flex items-center justify-center text-violet-800 text-xl font-bold"
-   872→            style={{ boxShadow: 'inset 0 0 22px rgba(124,58,237,.06), 0 0 22px rgba(124,58,237,.04)' }}>📈</div>
-   873→          <div className="text-right">
-   874→            <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات سناریوها</h2>
-   875→            <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی و تجمعی هر سناریو در ۳۰ روز گذشته</p>
-   876→          </div>
-   877→        </div>
-   878→        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
-   879→      </CollapsibleTrigger>
-   880→
-   881→      <CollapsibleContent>
-   882→        {/* Legend */}
-   883→        <div className="mt-3 flex items-center justify-center gap-6 mb-3">
-   884→          <div className="flex items-center gap-2">
-   885→            <span className="inline-block w-4 h-[2px] rounded" style={{ background: '#374151' }} />
-   886→            <span className="text-[11px] font-medium text-[#374151]">اختصاصی</span>
+   866→  const toggleKey = (k: string) => {
+   867→    setSelectedKeys(prev => {
+   868→      const next = new Set(prev);
+   869→      if (next.has(k)) next.delete(k); else next.add(k);
+   870→      return next;
+   871→    });
+   872→  };
+   873→
+   874→  if (!hasData) {
+   875→    if (!data || data.scenarios?.length === 0) return null;
+   876→    return (
+   877→      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+   878→        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+   879→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+   880→          <div className="flex items-center gap-3">
+   881→            <div className="w-10 h-10 rounded-xl border border-violet-200 flex items-center justify-center text-violet-800 text-xl font-bold"
+   882→              style={{ boxShadow: 'inset 0 0 22px rgba(124,58,237,.06), 0 0 22px rgba(124,58,237,.04)' }}>📈</div>
+   883→            <div className="text-right">
+   884→              <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات سناریوها</h2>
+   885→              <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی و تجمعی هر سناریو در ۳۰ روز گذشته</p>
+   886→            </div>
    887→          </div>
-   888→          <div className="flex items-center gap-2">
-   889→            <span className="inline-block w-4 h-[2px] rounded" style={{ background: '#374151', borderStyle: 'dashed', borderWidth: 2 }} />
-   890→            <span className="text-[11px] font-medium text-[#374151]">تجمعی (CDF)</span>
-   891→          </div>
-   892→        </div>
-   893→
-   894→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-   895→          {(['R1','R9','R2','R8','R3','R7','R4','R6','R5'] as const)
-   896→            .map(key => data.scenarios.find(s => s.scenarioKey === key))
-   897→            .filter(Boolean)
-   898→            .map(sc => <ScenarioMiniChart key={sc!.scenarioKey} scenario={sc!} />)}
-   899→        </div>
-   900→      </CollapsibleContent>
-   901→    </Collapsible>
-   902→  );
-   903→}
-   904→
-   905→const SCENARIO_CHART_GROUP_STYLE: Record<string, { borderColor: string; headerBg: string; headerText: string; indColor: string; cumColor: string }> = {
-   906→  bearish: {
-   907→    borderColor: '#fecaca',
-   908→    headerBg: 'rgba(239,68,68,0.06)',
-   909→    headerText: '#dc2626',
-   910→    indColor: '#ef4444',
-   911→    cumColor: '#b91c1c',
-   912→  },
-   913→  neutral: {
-   914→    borderColor: '#fde68a',
-   915→    headerBg: 'rgba(245,158,11,0.06)',
-   916→    headerText: '#b45309',
-   917→    indColor: '#f59e0b',
-   918→    cumColor: '#92400e',
-   919→  },
-   920→  bullish: {
-   921→    borderColor: '#bbf7d0',
-   922→    headerBg: 'rgba(34,197,94,0.06)',
-   923→    headerText: '#16a34a',
-   924→    indColor: '#22c55e',
-   925→    cumColor: '#15803d',
-   926→  },
-   927→};
-   928→
-   929→const GROUP_LABEL_MAP: Record<string, string> = {
-   930→  bearish: 'خرسی',
-   931→  neutral: 'خنثی',
-   932→  bullish: 'گاوی',
-   933→};
-   934→
-   935→function ScenarioMiniChart({ scenario }: { scenario: ScenarioTrend & { trend: DayPoint[]; trendDirection: TrendDirection; peakDay: number; peakProbability: number; interpretation: string } }) {
-   936→  const trend = scenario.trend;
-   937→  const maxDays = trend.length;
-   938→  if (maxDays < 2) return null;
-   939→
-   940→  const style = SCENARIO_CHART_GROUP_STYLE[scenario.group] || SCENARIO_CHART_GROUP_STYLE.neutral;
-   941→  const groupLabel = GROUP_LABEL_MAP[scenario.group] || '';
-   942→
-   943→  // Chart dimensions
-   944→  const chartW = 340;
-   945→  const chartH = 130;
-   946→  const padL = 38;
-   947→  const padR = 10;
-   948→  const padT = 10;
-   949→  const padB = 22;
-   950→  const plotW = chartW - padL - padR;
-   951→  const plotH = chartH - padT - padB;
+   888→          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+   889→        </CollapsibleTrigger>
+   890→        <CollapsibleContent>
+   891→          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
+   892→            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)', minHeight: 200 }}>
+   893→            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
+   894→          </div>
+   895→        </CollapsibleContent>
+   896→      </Collapsible>
+   897→    );
+   898→  }
+   899→
+   900→  return (
+   901→    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+   902→      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+   903→        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+   904→        <div className="flex items-center gap-3">
+   905→          <div className="w-10 h-10 rounded-xl border border-violet-200 flex items-center justify-center text-violet-800 text-xl font-bold"
+   906→            style={{ boxShadow: 'inset 0 0 22px rgba(124,58,237,.06), 0 0 22px rgba(124,58,237,.04)' }}>📈</div>
+   907→          <div className="text-right">
+   908→            <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات سناریوها</h2>
+   909→            <p className="text-[11px] text-[#6b7280]">نمودارهای تفاعلی با قابلیت مولتی‌سِلکت برای مقایسه سناریوها</p>
+   910→          </div>
+   911→        </div>
+   912→        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+   913→      </CollapsibleTrigger>
+   914→
+   915→      <CollapsibleContent>
+   916→        <div className="mt-3 space-y-3">
+   917→          {/* Chart 1: Individual Probability Trends */}
+   918→          <MultiSelectTrendChart
+   919→            data={data}
+   920→            selectedKeys={selectedKeys}
+   921→            onToggleKey={toggleKey}
+   922→            mode="individual"
+   923→            title="روند احتمالات اختصاصی سناریوها"
+   924→          />
+   925→          {/* Chart 2: Cumulative Probability Trends */}
+   926→          <MultiSelectTrendChart
+   927→            data={data}
+   928→            selectedKeys={selectedKeys}
+   929→            onToggleKey={toggleKey}
+   930→            mode="cumulative"
+   931→            title="روند احتمالات تجمعی سناریوها (CDF)"
+   932→          />
+   933→        </div>
+   934→      </CollapsibleContent>
+   935→    </Collapsible>
+   936→  );
+   937→}
+   938→
+   939→function MultiSelectTrendChart({ data, selectedKeys, onToggleKey, mode, title }: {
+   940→  data: ProbabilityTrendResult;
+   941→  selectedKeys: Set<string>;
+   942→  onToggleKey: (k: string) => void;
+   943→  mode: 'individual' | 'cumulative';
+   944→  title: string;
+   945→}) {
+   946→  const svgRef = useRef<SVGSVGElement>(null);
+   947→  const tooltipRef = useRef<HTMLDivElement>(null);
+   948→  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+   949→
+   950→  const scenarios = data.scenarios.filter(s => selectedKeys.has(s.scenarioKey));
+   951→  const maxDays = data.scenarios[0]?.trend?.length ?? 0;
    952→
-   953→  // Find max value for Y axis scaling
-   954→  let maxInd = 0;
-   955→  let maxCum = 0;
-   956→  for (const d of trend) {
-   957→    if (d.individualProb > maxInd) maxInd = d.individualProb;
-   958→    if (d.cumulativeProb > maxCum) maxCum = d.cumulativeProb;
-   959→  }
-   960→  const yMax = Math.max(maxCum, maxInd) * 1.15;
-   961→  const yMin = 0;
-   962→
-   963→  // X mapping (RTL: day 1 = today on right)
-   964→  const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
-   965→  // Y mapping
-   966→  const yOf = (v: number) => padT + plotH - ((v - yMin) / Math.max(0.001, yMax - yMin)) * plotH;
-   967→
-   968→  // Build polyline points
-   969→  const indPoints = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.individualProb).toFixed(1)}`).join(' ');
-   970→  const cumPoints = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.cumulativeProb).toFixed(1)}`).join(' ');
-   971→
-   972→  // Current values
-   973→  const curInd = trend[0]?.individualProb ?? 0;
-   974→  const curCum = trend[0]?.cumulativeProb ?? 0;
-   975→  const peakInd = Math.max(...trend.map(d => d.individualProb));
-   976→  const peakCum = Math.max(...trend.map(d => d.cumulativeProb));
-   977→
-   978→  // Grid lines
-   979→  const gridLines: React.JSX.Element[] = [];
-   980→  const gridSteps = 4;
-   981→  for (let i = 0; i <= gridSteps; i++) {
-   982→    const val = yMin + ((yMax - yMin) / gridSteps) * i;
-   983→    const y = yOf(val);
-   984→    gridLines.push(
-   985→      <line key={`g-${i}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#f3f4f6" strokeWidth={0.6} />,
-   986→      <text key={`gl-${i}`} x={padL - 4} y={y + 3} textAnchor="end" fill="#9ca3af" fontSize={7.5} fontFamily="inherit">
-   987→        {toPersianDigits((val * 100).toFixed(0))}%
-   988→      </text>,
-   989→    );
-   990→  }
-   991→
-   992→  // X labels (every 5 days)
-   993→  const xLabels: React.JSX.Element[] = [];
-   994→  for (let d = 1; d <= maxDays; d += 5) {
-   995→    xLabels.push(
-   996→      <text key={`xl-${d}`} x={xOf(d)} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={7} fontFamily="inherit">
-   997→        {toPersianDigits(d.toString())}
-   998→      </text>,
-   999→    );
-  1000→  }
-  1001→
-  1002→  // Trend direction icon
-  1003→  const trendIcon = scenario.trendDirection === 'rising' ? '↑' : scenario.trendDirection === 'falling' ? '↓' : '→';
-  1004→
-  1005→  return (
-  1006→    <div
-  1007→      className="rounded-xl border p-3 overflow-hidden"
-  1008→      style={{ borderColor: style.borderColor, background: '#ffffff', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}
-  1009→    >
-  1010→      {/* Header */}
-  1011→      <div className="flex items-center justify-between mb-2 px-1">
-  1012→        <div className="flex items-center gap-2">
-  1013→          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: style.indColor }} />
-  1014→          <span className="text-[11px] font-bold" style={{ color: style.headerText }}>{scenario.scenarioKey}: {scenario.label}</span>
-  1015→        </div>
-  1016→        <div className="flex items-center gap-2">
-  1017→          <span className="text-[9px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: style.headerBg, color: style.headerText }}>{groupLabel}</span>
-  1018→          <span className="text-[10px]" style={{ color: style.headerText }}>{trendIcon}</span>
-  1019→        </div>
-  1020→      </div>
-  1021→
-  1022→      {/* Chart */}
-  1023→      <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 260 }}>
-  1024→        <rect x={0} y={0} width={chartW} height={chartH} fill="#fafafa" rx={4} />
-  1025→        {/* Grid */}
-  1026→        {gridLines}
-  1027→        {/* Axes */}
-  1028→        <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.6} />
-  1029→        <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.6} />
-  1030→        {/* X labels */}
-  1031→        {xLabels}
-  1032→        {/* Individual line (solid) */}
-  1033→        <polyline
-  1034→          points={indPoints}
-  1035→          fill="none"
-  1036→          stroke={style.indColor}
-  1037→          strokeWidth={1.8}
-  1038→          strokeLinejoin="round"
-  1039→          strokeLinecap="round"
-  1040→          opacity={0.85}
-  1041→        />
-  1042→        {/* Cumulative line (dashed) */}
-  1043→        <polyline
-  1044→          points={cumPoints}
-  1045→          fill="none"
-  1046→          stroke={style.cumColor}
-  1047→          strokeWidth={1.8}
-  1048→          strokeLinejoin="round"
-  1049→          strokeLinecap="round"
-  1050→          strokeDasharray="5,3"
-  1051→          opacity={0.9}
-  1052→        />
-  1053→        {/* Current day dot on individual */}
-  1054→        {trend[0] && (
-  1055→          <circle cx={xOf(1)} cy={yOf(trend[0].individualProb)} r={3} fill={style.indColor} stroke="#ffffff" strokeWidth={1.2} />
-  1056→        )}
-  1057→        {/* Current day dot on cumulative */}
-  1058→        {trend[0] && (
-  1059→          <circle cx={xOf(1)} cy={yOf(trend[0].cumulativeProb)} r={3} fill={style.cumColor} stroke="#ffffff" strokeWidth={1.2} />
-  1060→        )}
-  1061→      </svg>
-  1062→
-  1063→      {/* Footer stats */}
-  1064→      <div className="flex items-center justify-between mt-2 px-1" dir="rtl">
-  1065→        <div className="text-center">
-  1066→          <div className="text-[8px] text-[#9ca3af]">اختصاصی امروز</div>
-  1067→          <div className="text-[11px] font-bold" style={{ color: style.indColor }}>{toPersianDigits((curInd * 100).toFixed(1))}%</div>
-  1068→        </div>
-  1069→        <div className="text-center">
-  1070→          <div className="text-[8px] text-[#9ca3af]">تجمعی امروز</div>
-  1071→          <div className="text-[11px] font-bold" style={{ color: style.cumColor }}>{toPersianDigits((curCum * 100).toFixed(1))}%</div>
-  1072→        </div>
-  1073→        <div className="text-center">
-  1074→          <div className="text-[8px] text-[#9ca3af]">بیشینه اختصاصی</div>
-  1075→          <div className="text-[11px] font-bold text-[#374151]">{toPersianDigits((peakInd * 100).toFixed(1))}%</div>
-  1076→        </div>
-  1077→        <div className="text-center">
-  1078→          <div className="text-[8px] text-[#9ca3af]">بیشینه تجمعی</div>
-  1079→          <div className="text-[11px] font-bold text-[#374151]">{toPersianDigits((peakCum * 100).toFixed(1))}%</div>
-  1080→        </div>
-  1081→      </div>
-  1082→
-  1083→      {/* Interpretation */}
-  1084→      {scenario.interpretation && (
-  1085→        <div className="mt-1.5 px-1 text-[9px] leading-relaxed text-[#6b7280]" dir="rtl">
-  1086→          {scenario.interpretation}
-  1087→        </div>
-  1088→      )}
-  1089→    </div>
-  1090→  );
-  1091→}
-  1092→
-  1093→// ═══════════════════════════════════════════════════════════════════════════════
-  1094→// Cumulative Probability Line Chart (Pure SVG)
-  1095→// ═══════════════════════════════════════════════════════════════════════════════
-  1096→
-  1097→function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | null }) {
-  1098→  const [open, setOpen] = useState(true);
-  1099→
-  1100→  const hasData = data && data.groups && data.groups.length === 3 &&
-  1101→    data.groups[0].trend.length > 1;
-  1102→
-  1103→  if (!hasData) {
-  1104→    if (!data || data.groups?.length === 0) return null;
-  1105→    return (
-  1106→      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
-  1107→        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
-  1108→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1109→          <div className="flex items-center gap-3">
-  1110→            <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
-  1111→              style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
-  1112→            <div className="text-right">
-  1113→              <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات گروه‌ها</h2>
-  1114→              <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی سناریوها + تجمعی گروه‌ها</p>
-  1115→            </div>
-  1116→          </div>
-  1117→          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
-  1118→        </CollapsibleTrigger>
-  1119→        <CollapsibleContent>
-  1120→          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
-  1121→            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)', minHeight: 200 }}>
-  1122→            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
-  1123→          </div>
-  1124→        </CollapsibleContent>
-  1125→      </Collapsible>
-  1126→    );
-  1127→  }
-  1128→
-  1129→  const groupMap = Object.fromEntries(data.groups.map(g => [g.group, g])) as Record<string, typeof data.groups[number]>;
-  1130→  const scenarioMap = Object.fromEntries(data.scenarios.map(s => [s.scenarioKey, s])) as Record<string, typeof data.scenarios[number]>;
-  1131→  const bull = groupMap['bullish'];
-  1132→  const neut = groupMap['neutral'];
-  1133→  const bear = groupMap['bearish'];
-  1134→  if (!bull || !neut || !bear) return null;
-  1135→
-  1136→  const maxDays = Math.max(bull.trend.length, neut.trend.length, bear.trend.length);
-  1137→
-  1138→  // Chart dimensions
-  1139→  const chartW = 1100;
-  1140→  const chartH = 260;
-  1141→  const padL = 50;
-  1142→  const padR = 20;
-  1143→  const padT = 20;
-  1144→  const padB = 40;
-  1145→  const plotW = chartW - padL - padR;
-  1146→  const plotH = chartH - padT - padB;
-  1147→
-  1148→  const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
-  1149→  const yOf = (pct: number) => padT + plotH - pct * plotH;
-  1150→
-  1151→  const lineColor = (g: 'bullish' | 'neutral' | 'bearish') =>
-  1152→    g === 'bullish' ? '#16a34a' : g === 'neutral' ? '#b45309' : '#dc2626';
-  1153→
-  1154→  const SCENARIO_LINE_COLORS: Record<string, string> = {
-  1155→    R1: '#fca5a5', R2: '#f87171', R3: '#ef4444', R4: '#dc2626',
-  1156→    R5: '#f59e0b',
-  1157→    R6: '#4ade80', R7: '#22c55e', R8: '#16a34a', R9: '#15803d',
-  1158→  };
+   953→  // Compute Y range
+   954→  let yMax = 0;
+   955→  for (const sc of scenarios) {
+   956→    for (const d of sc.trend) {
+   957→      const v = mode === 'individual' ? d.individualProb : d.cumulativeProb;
+   958→      if (v > yMax) yMax = v;
+   959→    }
+   960→  }
+   961→  yMax = Math.max(yMax * 1.15, 0.01);
+   962→  const yMin = 0;
+   963→
+   964→  const chartW = 1100;
+   965→  const chartH = 300;
+   966→  const padL = 50;
+   967→  const padR = 20;
+   968→  const padT = 20;
+   969→  const padB = 40;
+   970→  const plotW = chartW - padL - padR;
+   971→  const plotH = chartH - padT - padB;
+   972→
+   973→  const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
+   974→  const yOf = (v: number) => padT + plotH - ((v - yMin) / Math.max(0.001, yMax - yMin)) * plotH;
+   975→
+   976→  // Grid
+   977→  const gridEls: React.JSX.Element[] = [];
+   978→  for (let p = 0; p <= 100; p += 20) {
+   979→    const y = yOf(p / 100);
+   980→    gridEls.push(
+   981→      <line key={`g${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#f3f4f6" strokeWidth={0.7} />,
+   982→      <text key={`gl${p}`} x={padL - 6} y={y + 3.5} textAnchor="end" fill="#9ca3af" fontSize={9} fontFamily="inherit">
+   983→        {toPersianDigits(String(p))}%
+   984→      </text>,
+   985→    );
+   986→  }
+   987→  for (let d = 1; d <= maxDays; d += 5) {
+   988→    gridEls.push(
+   989→      <text key={`xl${d}`} x={xOf(d)} y={chartH - 8} textAnchor="middle" fill="#9ca3af" fontSize={8} fontFamily="inherit">
+   990→        {toPersianDigits(String(d))}
+   991→      </text>,
+   992→    );
+   993→  }
+   994→
+   995→  // Vertical hover line
+   996→  const hoverEl = hoveredDay ? (
+   997→    <line x1={xOf(hoveredDay)} y1={padT} x2={xOf(hoveredDay)} y2={chartH - padB} stroke="#94a3b8" strokeWidth={0.8} strokeDasharray="3,3" opacity={0.6} />
+   998→  ) : null;
+   999→
+  1000→  // Tooltip
+  1001→  const tooltipEl = hoveredDay ? (
+  1002→    <div
+  1003→      ref={tooltipRef}
+  1004→      className="absolute z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-[10px] pointer-events-none"
+  1005→      style={{ left: xOf(hoveredDay) + 10, top: padT }}
+  1006→      dir="rtl"
+  1007→    >
+  1008→      <div className="font-bold text-[#374151] mb-1">روز {toPersianDigits(String(hoveredDay))}</div>
+  1009→      {scenarios.map(sc => {
+  1010→        const dp = sc.trend.find(d => d.day === hoveredDay);
+  1011→        if (!dp) return null;
+  1012→        const val = mode === 'individual' ? dp.individualProb : dp.cumulativeProb;
+  1013→        const color = SCENARIO_LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+  1014→        return (
+  1015→          <div key={sc.scenarioKey} className="flex items-center justify-between gap-3">
+  1016→            <span className="flex items-center gap-1">
+  1017→              <span className="inline-block w-2 h-2 rounded-full" style={{ background: color }} />
+  1018→              <span>{sc.label}</span>
+  1019→            </span>
+  1020→            <span className="font-bold" style={{ color }}>{toPersianDigits((val * 100).toFixed(1))}%</span>
+  1021→          </div>
+  1022→        );
+  1023→      })}
+  1024→    </div>
+  1025→  ) : null;
+  1026→
+  1027→  return (
+  1028→    <div className="rounded-2xl border border-[#e5e7eb] bg-[#ffffff] overflow-hidden"
+  1029→      style={{ boxShadow: '0 2px 12px rgba(0,0,0,.05)' }}>
+  1030→      {/* Header + Legend row */}
+  1031→      <div className="px-4 pt-3 pb-2">
+  1032→        <h3 className="text-xs font-bold text-[#111827] mb-2">{title}</h3>
+  1033→        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+  1034→          {data.scenarios.map(sc => {
+  1035→            const color = SCENARIO_LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+  1036→            const isActive = selectedKeys.has(sc.scenarioKey);
+  1037→            const trendIcon = sc.trendDirection === 'rising' ? '↑' : sc.trendDirection === 'falling' ? '↓' : '→';
+  1038→            const curVal = sc.trend[0] ? (mode === 'individual' ? sc.trend[0].individualProb : sc.trend[0].cumulativeProb) : 0;
+  1039→            return (
+  1040→              <button
+  1041→                key={sc.scenarioKey}
+  1042→                onClick={() => onToggleKey(sc.scenarioKey)}
+  1043→                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all cursor-pointer ${
+  1044→                  isActive ? 'border-gray-300 bg-gray-50' : 'border-transparent bg-gray-100 opacity-40'
+  1045→                }`}
+  1046→              >
+  1047→                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+  1048→                <span className="text-[#374151]">{sc.scenarioKey}</span>
+  1049→                <span style={{ color }}>{trendIcon}</span>
+  1050→                {isActive && <span className="text-[#6b7280]">{toPersianDigits((curVal * 100).toFixed(1))}%</span>}
+  1051→              </button>
+  1052→            );
+  1053→          })}
+  1054→        </div>
+  1055→      </div>
+  1056→
+  1057→      {/* Chart area */}
+  1058→      <div className="relative" style={{ overflowX: 'auto' }}>
+  1059→        <svg
+  1060→          ref={svgRef}
+  1061→          width="100%"
+  1062→          viewBox={`0 0 ${chartW} ${chartH}`}
+  1063→          style={{ minWidth: 500, display: 'block' }}
+  1064→          onMouseMove={(e) => {
+  1065→            if (!svgRef.current) return;
+  1066→            const rect = svgRef.current.getBoundingClientRect();
+  1067→            const scaleX = chartW / rect.width;
+  1068→            const svgX = (e.clientX - rect.left) * scaleX;
+  1069→            // Find closest day
+  1070→            let closestDay = 1;
+  1071→            let closestDist = Infinity;
+  1072→            for (let d = 1; d <= maxDays; d++) {
+  1073→              const dist = Math.abs(xOf(d) - svgX);
+  1074→              if (dist < closestDist) { closestDist = dist; closestDay = d; }
+  1075→            }
+  1076→            if (closestDist < 30) setHoveredDay(closestDay); else setHoveredDay(null);
+  1077→          }}
+  1078→          onMouseLeave={() => setHoveredDay(null)}
+  1079→        >
+  1080→          <rect x={0} y={0} width={chartW} height={chartH} fill="#fafafa" />
+  1081→          {gridEls}
+  1082→          <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.7} />
+  1083→          <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#d1d5db" strokeWidth={0.7} />
+  1084→          {hoverEl}
+  1085→          {scenarios.map(sc => {
+  1086→            const color = SCENARIO_LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+  1087→            const points = sc.trend.map(d => {
+  1088→              const v = mode === 'individual' ? d.individualProb : d.cumulativeProb;
+  1089→              return `${xOf(d.day).toFixed(1)},${yOf(v).toFixed(1)}`;
+  1090→            }).join(' ');
+  1091→            const lastDp = sc.trend[0];
+  1092→            const lastV = lastDp ? (mode === 'individual' ? lastDp.individualProb : lastDp.cumulativeProb) : 0;
+  1093→            return (
+  1094→              <g key={sc.scenarioKey}>
+  1095→                <polyline
+  1096→                  points={points}
+  1097→                  fill="none"
+  1098→                  stroke={color}
+  1099→                  strokeWidth={2.2}
+  1100→                  strokeLinejoin="round"
+  1101→                  strokeLinecap="round"
+  1102→                  opacity={0.9}
+  1103→                />
+  1104→                {lastDp && (
+  1105→                  <circle cx={xOf(1)} cy={yOf(lastV)} r={3.5} fill={color} stroke="#ffffff" strokeWidth={1.5} />
+  1106→                )}
+  1107→              </g>
+  1108→            );
+  1109→          })}
+  1110→        </svg>
+  1111→        {tooltipEl}
+  1112→      </div>
+  1113→    </div>
+  1114→  );
+  1115→}
+  1116→
+  1117→// ═══════════════════════════════════════════════════════════════════════════════
+  1118→// Cumulative Probability Line Chart (Pure SVG)
+  1119→// ═══════════════════════════════════════════════════════════════════════════════
+  1120→
+  1121→function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | null }) {
+  1122→  const [open, setOpen] = useState(true);
+  1123→
+  1124→  const hasData = data && data.groups && data.groups.length === 3 &&
+  1125→    data.groups[0].trend.length > 1;
+  1126→
+  1127→  if (!hasData) {
+  1128→    if (!data || data.groups?.length === 0) return null;
+  1129→    return (
+  1130→      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+  1131→        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+  1132→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1133→          <div className="flex items-center gap-3">
+  1134→            <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+  1135→              style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
+  1136→            <div className="text-right">
+  1137→              <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات گروه‌ها</h2>
+  1138→              <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی سناریوها + تجمعی گروه‌ها</p>
+  1139→            </div>
+  1140→          </div>
+  1141→          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+  1142→        </CollapsibleTrigger>
+  1143→        <CollapsibleContent>
+  1144→          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
+  1145→            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)', minHeight: 200 }}>
+  1146→            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
+  1147→          </div>
+  1148→        </CollapsibleContent>
+  1149→      </Collapsible>
+  1150→    );
+  1151→  }
+  1152→
+  1153→  const groupMap = Object.fromEntries(data.groups.map(g => [g.group, g])) as Record<string, typeof data.groups[number]>;
+  1154→  const scenarioMap = Object.fromEntries(data.scenarios.map(s => [s.scenarioKey, s])) as Record<string, typeof data.scenarios[number]>;
+  1155→  const bull = groupMap['bullish'];
+  1156→  const neut = groupMap['neutral'];
+  1157→  const bear = groupMap['bearish'];
+  1158→  if (!bull || !neut || !bear) return null;
   1159→
-  1160→  const buildGroupLine = (trend: DayPoint[], group: string) => {
-  1161→    const color = lineColor(group as 'bullish' | 'neutral' | 'bearish');
-  1162→    const points = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.cumulativeProb).toFixed(1)}`).join(' ');
-  1163→    return (
-  1164→      <g key={`grp-${group}`}>
-  1165→        <polyline points={points} fill="none" stroke={color} strokeWidth={2.8} strokeLinejoin="round" strokeLinecap="round" opacity={0.95} />
-  1166→        {trend.map(d => (
-  1167→          <circle key={d.day} cx={xOf(d.day)} cy={yOf(d.cumulativeProb)} r={2.5} fill={color} stroke="#ffffff" strokeWidth={1} />
-  1168→        ))}
-  1169→      </g>
-  1170→    );
-  1171→  };
-  1172→
-  1173→  const buildScenarioLine = (key: string) => {
-  1174→    const sc = scenarioMap[key];
-  1175→    if (!sc) return null;
-  1176→    const color = SCENARIO_LINE_COLORS[key] || '#9ca3af';
-  1177→    const points = sc.trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.individualProb).toFixed(1)}`).join(' ');
-  1178→    return <polyline key={`sc-${key}`} points={points} fill="none" stroke={color} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round" opacity={0.55} strokeDasharray="3,2" />;
-  1179→  };
-  1180→
-  1181→  // Grid
-  1182→  const gridLines: React.JSX.Element[] = [];
-  1183→  for (let p = 0; p <= 100; p += 20) {
-  1184→    const y = yOf(p / 100);
-  1185→    gridLines.push(
-  1186→      <line key={`grid-${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#e5e7eb" strokeWidth={0.8} />,
-  1187→      <text key={`ylbl-${p}`} x={padL - 8} y={y + 3.5} textAnchor="end" fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(p.toString())}٪</text>,
+  1160→  const maxDays = Math.max(bull.trend.length, neut.trend.length, bear.trend.length);
+  1161→
+  1162→  // Chart dimensions
+  1163→  const chartW = 1100;
+  1164→  const chartH = 260;
+  1165→  const padL = 50;
+  1166→  const padR = 20;
+  1167→  const padT = 20;
+  1168→  const padB = 40;
+  1169→  const plotW = chartW - padL - padR;
+  1170→  const plotH = chartH - padT - padB;
+  1171→
+  1172→  const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
+  1173→  const yOf = (pct: number) => padT + plotH - pct * plotH;
+  1174→
+  1175→  const lineColor = (g: 'bullish' | 'neutral' | 'bearish') =>
+  1176→    g === 'bullish' ? '#16a34a' : g === 'neutral' ? '#b45309' : '#dc2626';
+  1177→
+  1178→  const buildGroupLine = (trend: DayPoint[], group: string) => {
+  1179→    const color = lineColor(group as 'bullish' | 'neutral' | 'bearish');
+  1180→    const points = trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.cumulativeProb).toFixed(1)}`).join(' ');
+  1181→    return (
+  1182→      <g key={`grp-${group}`}>
+  1183→        <polyline points={points} fill="none" stroke={color} strokeWidth={2.8} strokeLinejoin="round" strokeLinecap="round" opacity={0.95} />
+  1184→        {trend.map(d => (
+  1185→          <circle key={d.day} cx={xOf(d.day)} cy={yOf(d.cumulativeProb)} r={2.5} fill={color} stroke="#ffffff" strokeWidth={1} />
+  1186→        ))}
+  1187→      </g>
   1188→    );
-  1189→  }
+  1189→  };
   1190→
-  1191→  const xLabels: React.JSX.Element[] = [];
-  1192→  for (let d = 1; d <= maxDays; d += 5) {
-  1193→    xLabels.push(
-  1194→      <text key={`xlbl-${d}`} x={xOf(d)} y={chartH - padB + 18} textAnchor="middle" fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(d.toString())}</text>,
-  1195→    );
-  1196→  }
-  1197→
-  1198→  const bearishKeys = ['R1', 'R2', 'R3', 'R4'];
-  1199→  const bullishKeys = ['R9', 'R8', 'R7', 'R6'];
-  1200→
-  1201→  return (
-  1202→    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
-  1203→      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
-  1204→        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1205→        <div className="flex items-center gap-3">
-  1206→          <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
-  1207→            style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
-  1208→          <div className="text-right">
-  1209→            <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات گروه‌ها</h2>
-  1210→            <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی سناریوها + تجمعی گروه‌ها</p>
-  1211→          </div>
-  1212→        </div>
-  1213→        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
-  1214→      </CollapsibleTrigger>
-  1215→      <CollapsibleContent>
-  1216→        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto" style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1217→          <div className="mb-3">
-  1218→            <div className="flex items-center justify-center gap-5 mb-1.5">
-  1219→              {([
-  1220→                ['bullish', 'گاوی (تجمعی)', '#16a34a'],
-  1221→                ['neutral', 'خنثی (تجمعی)', '#b45309'],
-  1222→                ['bearish', 'خرسی (تجمعی)', '#dc2626'],
-  1223→              ] as const).map(([g, label, color]) => (
-  1224→                <div key={g} className="flex items-center gap-1.5">
-  1225→                  <span className="inline-block w-5 h-[3px] rounded" style={{ background: color }} />
-  1226→                  <span className="text-[10px] font-bold" style={{ color }}>{label}</span>
-  1227→                </div>
-  1228→              ))}
-  1229→            </div>
-  1230→            <div className="flex items-center justify-center gap-3 flex-wrap">
-  1231→              <span className="text-[9px] text-[#9ca3af]">اختصاصی:</span>
-  1232→              {bearishKeys.map(k => (
-  1233→                <div key={k} className="flex items-center gap-1">
-  1234→                  <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS[k], opacity: 0.6 }} />
-  1235→                  <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS[k] }}>{k}</span>
-  1236→                </div>
-  1237→              ))}
-  1238→              <div className="flex items-center gap-1">
-  1239→                <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS['R5'], opacity: 0.6 }} />
-  1240→                <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS['R5'] }}>R5</span>
-  1241→              </div>
-  1242→              {bullishKeys.map(k => (
-  1243→                <div key={k} className="flex items-center gap-1">
-  1244→                  <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS[k], opacity: 0.6 }} />
-  1245→                  <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS[k] }}>{k}</span>
-  1246→                </div>
-  1247→              ))}
-  1248→            </div>
-  1249→          </div>
-  1250→          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 700, maxHeight: 320 }}>
-  1251→            <rect x={0} y={0} width={chartW} height={chartH} fill="#ffffff" rx={4} />
-  1252→            {gridLines}
-  1253→            <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
-  1254→            <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
-  1255→            {xLabels}
-  1256→            <text x={chartW / 2} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={10} fontFamily="inherit">روز (۱ = امروز)</text>
-  1257→            {bearishKeys.map(buildScenarioLine)}
-  1258→            {buildScenarioLine('R5')}
-  1259→            {bullishKeys.map(buildScenarioLine)}
-  1260→            {buildGroupLine(bull.trend, 'bullish')}
-  1261→            {buildGroupLine(neut.trend, 'neutral')}
-  1262→            {buildGroupLine(bear.trend, 'bearish')}
-  1263→          </svg>
-  1264→        </div>
-  1265→      </CollapsibleContent>
-  1266→    </Collapsible>
-  1267→  );
-  1268→}
-  1269→
-  1270→// ═══════════════════════════════════════════════════════════════════════════════
-  1271→// Probability Trend Table (30 days, all scenarios, individual + cumulative)
-  1272→// ═══════════════════════════════════════════════════════════════════════════════
-  1273→
-  1274→const TREND_GROUP_COLOR: Record<string, { bg: string; text: string; badge: string }> = {
-  1275→  bearish: { bg: 'rgba(239,68,68,0.06)', text: '#dc2626', badge: 'rgba(239,68,68,0.12)' },
-  1276→  neutral: { bg: 'rgba(107,114,128,0.06)', text: '#6b7280', badge: 'rgba(107,114,128,0.12)' },
-  1277→  bullish: { bg: 'rgba(22,163,74,0.06)', text: '#16a34a', badge: 'rgba(22,163,74,0.12)' },
-  1278→};
-  1279→
-  1280→const TREND_GROUP_LABEL: Record<string, string> = {
-  1281→  bearish: 'خرسی',
-  1282→  neutral: 'خنثی',
-  1283→  bullish: 'گاوی',
-  1284→};
-  1285→
-  1286→function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null }) {
-  1287→  const { colors: C } = useTheme();
-  1288→  const [open, setOpen] = useState(true);
-  1289→
-  1290→  const hasData = !!(data && data.scenarios && data.scenarios.length > 0 &&
-  1291→    (data.scenarios[0]?.trend?.length ?? 0) > 1);
-  1292→
-  1293→  // Build scenario lookup (computed inline, React Compiler auto-memoizes)
-  1294→  const scenarioMap: Record<string, ProbabilityTrendResult['scenarios'][number]> = {};
-  1295→  if (data?.scenarios) {
-  1296→    for (const s of data.scenarios) scenarioMap[s.scenarioKey] = s;
-  1297→  }
-  1298→
-  1299→  // Group map
-  1300→  const groupMap: Record<string, ProbabilityTrendResult['groups'][number]> = {};
-  1301→  if (data?.groups) {
-  1302→    for (const g of data.groups) groupMap[g.group] = g;
-  1303→  }
-  1304→
-  1305→  const totalDays = data?.scenarios?.[0]?.trend?.length ?? 30;
-  1306→  const allDays = Array.from({ length: totalDays }, (_, i) => i + 1);
-  1307→  const getDay = useCallback((trend: DayPoint[], day: number) =>
-  1308→    trend.find(d => d.day === day), []);
-  1309→  const fmtPct = (v: number) => toPersianDigits((v * 100).toFixed(2)) + '٪';
+  1191→  const buildScenarioLine = (key: string) => {
+  1192→    const sc = scenarioMap[key];
+  1193→    if (!sc) return null;
+  1194→    const color = SCENARIO_LINE_COLORS[key] || '#9ca3af';
+  1195→    const points = sc.trend.map(d => `${xOf(d.day).toFixed(1)},${yOf(d.individualProb).toFixed(1)}`).join(' ');
+  1196→    return <polyline key={`sc-${key}`} points={points} fill="none" stroke={color} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round" opacity={0.55} strokeDasharray="3,2" />;
+  1197→  };
+  1198→
+  1199→  // Grid
+  1200→  const gridLines: React.JSX.Element[] = [];
+  1201→  for (let p = 0; p <= 100; p += 20) {
+  1202→    const y = yOf(p / 100);
+  1203→    gridLines.push(
+  1204→      <line key={`grid-${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#e5e7eb" strokeWidth={0.8} />,
+  1205→      <text key={`ylbl-${p}`} x={padL - 8} y={y + 3.5} textAnchor="end" fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(p.toString())}٪</text>,
+  1206→    );
+  1207→  }
+  1208→
+  1209→  const xLabels: React.JSX.Element[] = [];
+  1210→  for (let d = 1; d <= maxDays; d += 5) {
+  1211→    xLabels.push(
+  1212→      <text key={`xlbl-${d}`} x={xOf(d)} y={chartH - padB + 18} textAnchor="middle" fill="#6b7280" fontSize={10} fontFamily="inherit">{toPersianDigits(d.toString())}</text>,
+  1213→    );
+  1214→  }
+  1215→
+  1216→  const bearishKeys = ['R1', 'R2', 'R3', 'R4'];
+  1217→  const bullishKeys = ['R9', 'R8', 'R7', 'R6'];
+  1218→
+  1219→  return (
+  1220→    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+  1221→      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+  1222→        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1223→        <div className="flex items-center gap-3">
+  1224→          <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+  1225→            style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📊</div>
+  1226→          <div className="text-right">
+  1227→            <h2 className="text-sm font-bold text-[#111827]">نمودار روند احتمالات گروه‌ها</h2>
+  1228→            <p className="text-[11px] text-[#6b7280]">احتمال اختصاصی سناریوها + تجمعی گروه‌ها</p>
+  1229→          </div>
+  1230→        </div>
+  1231→        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+  1232→      </CollapsibleTrigger>
+  1233→      <CollapsibleContent>
+  1234→        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto" style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1235→          <div className="mb-3">
+  1236→            <div className="flex items-center justify-center gap-5 mb-1.5">
+  1237→              {([
+  1238→                ['bullish', 'گاوی (تجمعی)', '#16a34a'],
+  1239→                ['neutral', 'خنثی (تجمعی)', '#b45309'],
+  1240→                ['bearish', 'خرسی (تجمعی)', '#dc2626'],
+  1241→              ] as const).map(([g, label, color]) => (
+  1242→                <div key={g} className="flex items-center gap-1.5">
+  1243→                  <span className="inline-block w-5 h-[3px] rounded" style={{ background: color }} />
+  1244→                  <span className="text-[10px] font-bold" style={{ color }}>{label}</span>
+  1245→                </div>
+  1246→              ))}
+  1247→            </div>
+  1248→            <div className="flex items-center justify-center gap-3 flex-wrap">
+  1249→              <span className="text-[9px] text-[#9ca3af]">اختصاصی:</span>
+  1250→              {bearishKeys.map(k => (
+  1251→                <div key={k} className="flex items-center gap-1">
+  1252→                  <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS[k], opacity: 0.6 }} />
+  1253→                  <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS[k] }}>{k}</span>
+  1254→                </div>
+  1255→              ))}
+  1256→              <div className="flex items-center gap-1">
+  1257→                <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS['R5'], opacity: 0.6 }} />
+  1258→                <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS['R5'] }}>R5</span>
+  1259→              </div>
+  1260→              {bullishKeys.map(k => (
+  1261→                <div key={k} className="flex items-center gap-1">
+  1262→                  <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS[k], opacity: 0.6 }} />
+  1263→                  <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS[k] }}>{k}</span>
+  1264→                </div>
+  1265→              ))}
+  1266→            </div>
+  1267→          </div>
+  1268→          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: 700, maxHeight: 320 }}>
+  1269→            <rect x={0} y={0} width={chartW} height={chartH} fill="#ffffff" rx={4} />
+  1270→            {gridLines}
+  1271→            <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
+  1272→            <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#9ca3af" strokeWidth={1} />
+  1273→            {xLabels}
+  1274→            <text x={chartW / 2} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={10} fontFamily="inherit">روز (۱ = امروز)</text>
+  1275→            {bearishKeys.map(buildScenarioLine)}
+  1276→            {buildScenarioLine('R5')}
+  1277→            {bullishKeys.map(buildScenarioLine)}
+  1278→            {buildGroupLine(bull.trend, 'bullish')}
+  1279→            {buildGroupLine(neut.trend, 'neutral')}
+  1280→            {buildGroupLine(bear.trend, 'bearish')}
+  1281→          </svg>
+  1282→        </div>
+  1283→      </CollapsibleContent>
+  1284→    </Collapsible>
+  1285→  );
+  1286→}
+  1287→
+  1288→// ═══════════════════════════════════════════════════════════════════════════════
+  1289→// Probability Trend Table (30 days, all scenarios, individual + cumulative)
+  1290→// ═══════════════════════════════════════════════════════════════════════════════
+  1291→
+  1292→const TREND_GROUP_COLOR: Record<string, { bg: string; text: string; badge: string }> = {
+  1293→  bearish: { bg: 'rgba(239,68,68,0.06)', text: '#dc2626', badge: 'rgba(239,68,68,0.12)' },
+  1294→  neutral: { bg: 'rgba(107,114,128,0.06)', text: '#6b7280', badge: 'rgba(107,114,128,0.12)' },
+  1295→  bullish: { bg: 'rgba(22,163,74,0.06)', text: '#16a34a', badge: 'rgba(22,163,74,0.12)' },
+  1296→};
+  1297→
+  1298→const TREND_GROUP_LABEL: Record<string, string> = {
+  1299→  bearish: 'خرسی',
+  1300→  neutral: 'خنثی',
+  1301→  bullish: 'گاوی',
+  1302→};
+  1303→
+  1304→function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null }) {
+  1305→  const { colors: C } = useTheme();
+  1306→  const [open, setOpen] = useState(true);
+  1307→
+  1308→  const hasData = !!(data && data.scenarios && data.scenarios.length > 0 &&
+  1309→    (data.scenarios[0]?.trend?.length ?? 0) > 1);
   1310→
-  1311→  if (!hasData) {
-  1312→    return (
-  1313→      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
-  1314→        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
-  1315→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1316→          <div className="flex items-center gap-3">
-  1317→            <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
-  1318→              style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
-  1319→            <div className="text-right">
-  1320→              <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
-  1321→              <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها</p>
-  1322→            </div>
-  1323→          </div>
-  1324→          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
-  1325→        </CollapsibleTrigger>
-  1326→        <CollapsibleContent>
-  1327→          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
-  1328→            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1329→            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
-  1330→          </div>
-  1331→        </CollapsibleContent>
-  1332→      </Collapsible>
-  1333→    );
-  1334→  }
-  1335→
-  1336→  return (
-  1337→    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
-  1338→      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
-  1339→        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1340→        <div className="flex items-center gap-3">
-  1341→          <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
-  1342→            style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
-  1343→          <div className="text-right">
-  1344→            <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
-  1345→            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — احتمال اختصاصی و تجمعی CDF</p>
-  1346→          </div>
-  1347→        </div>
-  1348→        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
-  1349→      </CollapsibleTrigger>
-  1350→
-  1351→      <CollapsibleContent>
-  1352→        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto"
-  1353→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
-  1354→          <Table style={{ fontSize: 10, minWidth: 1200 }}>
-  1355→            <TableHeader>
-  1356→              <TableRow className="border-b border-[#e5e7eb]">
-  1357→                <TableHead className="text-right text-[#374151] font-bold px-2 py-2 min-w-[120px]" style={{ fontSize: 10 }}>سناریو</TableHead>
-  1358→                {allDays.map(day => (
-  1359→                  <TableHead key={day} colSpan={2} className="text-center text-[#374151] font-bold px-0.5 py-1.5 border-r border-[#e5e7eb]" style={{ fontSize: 9 }}>
-  1360→                    {toPersianDigits(day.toString())}
-  1361→                  </TableHead>
-  1362→                ))}
-  1363→              </TableRow>
-  1364→              <TableRow className="border-b border-[#e5e7eb] bg-[#f9fafb]">
-  1365→                <TableHead className="px-2 py-1" style={{ fontSize: 9 }} />
-  1366→                {allDays.map(day => (
-  1367→                  <React.Fragment key={day}>
-  1368→                    <TableHead className="text-center text-[#6b7280] font-medium px-0.5 py-0.5" style={{ fontSize: 8 }}>اختصاصی</TableHead>
-  1369→                    <TableHead className="text-center text-[#6b7280] font-medium px-0.5 py-0.5" style={{ fontSize: 8 }}>تجمعی</TableHead>
-  1370→                  </React.Fragment>
-  1371→                ))}
-  1372→              </TableRow>
-  1373→            </TableHeader>
-  1374→            <TableBody>
-  1375→              {/* Scenario rows */}
-  1376→              {['R1','R2','R3','R4','R5','R6','R7','R8','R9'].map(key => {
-  1377→                const sc = scenarioMap[key];
-  1378→                if (!sc) return null;
-  1379→                const gc = TREND_GROUP_COLOR[sc.group];
-  1380→                return (
-  1381→                  <TableRow key={key} className="border-b border-[#e5e7eb]/60 hover:bg-[#f9fafb]">
-  1382→                    <TableCell className="px-2 py-1 font-bold" style={{ color: gc.text, minWidth: 100, fontSize: 10 }}>
-  1383→                      <span className="inline-block w-2 h-2 rounded-full ml-1" style={{ background: gc.text }} />
-  1384→                      {sc.label}
-  1385→                    </TableCell>
-  1386→                    {allDays.map(day => {
-  1387→                      const dp = getDay(sc.trend, day);
-  1388→                      const isPeak = sc.peakDay === day;
-  1389→                      return (
-  1390→                        <React.Fragment key={day}>
-  1391→                          <TableCell
-  1392→                            className={`text-center px-0.5 py-0.5 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
-  1393→                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 3, fontSize: 9 } : { color: '#374151', fontSize: 9 }}
-  1394→                          >
-  1395→                            {dp ? fmtPct(dp.individualProb) : '—'}
-  1396→                          </TableCell>
-  1397→                          <TableCell
-  1398→                            className={`text-center px-0.5 py-0.5 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
-  1399→                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 3, fontSize: 9 } : { color: '#6b7280', fontSize: 9 }}
-  1400→                          >
-  1401→                            {dp ? fmtPct(dp.cumulativeProb) : '—'}
-  1402→                          </TableCell>
-  1403→                        </React.Fragment>
-  1404→                      );
-  1405→                    })}
-  1406→                  </TableRow>
-  1407→                );
-  1408→              })}
-  1409→
-  1410→              {/* Separator row */}
-  1411→              <TableRow>
-  1412→                <TableCell className="py-1" colSpan={1 + allDays.length * 2} style={{ borderBottom: '2px solid #e5e7eb' }} />
-  1413→              </TableRow>
-  1414→
-  1415→              {/* Group cumulative rows: Bullish, Neutral, Bearish */}
-  1416→              {(['bearish', 'neutral', 'bullish'] as const).map(g => {
-  1417→                const gData = groupMap[g];
-  1418→                if (!gData) return null;
-  1419→                const gc = TREND_GROUP_COLOR[g];
-  1420→                return (
-  1421→                  <TableRow key={`grp-${g}`} className="border-b border-[#e5e7eb]/40">
-  1422→                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text, fontSize: 10 }}>
-  1423→                      <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ background: gc.text }} />
-  1424→                      تجمعی {TREND_GROUP_LABEL[g]}
-  1425→                    </TableCell>
-  1426→                    {allDays.map(day => {
-  1427→                      const dp = getDay(gData.trend, day);
-  1428→                      return (
-  1429→                        <TableCell key={day} colSpan={2} className="text-center px-0.5 py-1 tabular-nums font-bold" style={{ color: gc.text, fontSize: 9 }}>
-  1430→                          {dp ? fmtPct(dp.cumulativeProb) : '—'}
-  1431→                        </TableCell>
-  1432→                      );
-  1433→                    })}
-  1434→                  </TableRow>
-  1435→                );
-  1436→              })}
-  1437→
-  1438→              {/* Sum verification row */}
-  1439→              <TableRow className="bg-[#f3f4f6]">
-  1440→                <TableCell className="px-2 py-1.5 font-black" style={{ color: '#111827', fontSize: 10 }}>
-  1441→                  مجموع سه گروه
-  1442→                </TableCell>
-  1443→                {allDays.map(day => {
-  1444→                  const bCum = getDay(groupMap['bearish']?.trend ?? [], day)?.cumulativeProb ?? 0;
-  1445→                  const nCum = getDay(groupMap['neutral']?.trend ?? [], day)?.cumulativeProb ?? 0;
-  1446→                  const buCum = getDay(groupMap['bullish']?.trend ?? [], day)?.cumulativeProb ?? 0;
-  1447→                  const total = bCum + nCum + buCum;
-  1448→                  const isOk = Math.abs(total - 1.0) < 0.001;
-  1449→                  return (
-  1450→                    <TableCell key={day} colSpan={2} className="text-center px-0.5 py-1 tabular-nums font-black" style={{
-  1451→                      color: isOk ? '#059669' : '#dc2626',
-  1452→                      fontSize: 9,
-  1453→                    }}>
-  1454→                      {fmtPct(total)}
-  1455→                    </TableCell>
-  1456→                  );
-  1457→                })}
-  1458→              </TableRow>
-  1459→            </TableBody>
-  1460→          </Table>
-  1461→
-  1462→          <div className="mt-3 space-y-2">
-  1463→            <div className="px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
-  1464→              <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص.
-  1465→              احتمال تجمعی (CDF) = مجموع احتمال از شدیدترین سناریو تا این سناریو در همان روز.
-  1466→              صعودی: از شوک صعودی (R9) تجمعی تا صعودی خفیف (R6) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
-  1467→              نزولی: از شوک نزولی (R1) تجمعی تا نزولی خفیف (R4) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
-  1468→              ردیف «مجموع سه گروه» باید همیشه ۱۰۰٪ باشد.
-  1469→            </div>
-  1470→            {data.scenarios.filter(s => s.interpretation).map(s => (
-  1471→              <div key={s.scenarioKey} className="px-4 py-1.5 text-[10px] text-[#6b7280]">
-  1472→                <b>{s.label}:</b> {s.interpretation}
-  1473→              </div>
-  1474→            ))}
-  1475→          </div>
-  1476→        </div>
-  1477→      </CollapsibleContent>
-  1478→    </Collapsible>
-  1479→  );
-  1480→}
-  1481→
-  1482→// ═══════════════════════════════════════════════════════════════════════════════
-  1483→// Dark Metric Card
-  1484→// ═══════════════════════════════════════════════════════════════════════════════
-  1485→
-  1486→function DarkMetricCard({ label, value, color }: { label: string; value: string; color: string }) {
-  1487→  return (
-  1488→    <div style={{
-  1489→      padding: '15px 16px',
-  1490→      border: `1px solid ${D.line}`, borderRadius: 14,
-  1491→      background: 'linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86))',
-  1492→    }}>
-  1493→      <small style={{ display: 'block', color: '#ffffff', marginBottom: 8, fontSize: 12 }}>{label}</small>
-  1494→      <strong style={{ fontSize: 18, letterSpacing: 0.2, color }}>{value}</strong>
-  1495→    </div>
-  1496→  );
-  1497→}
-  1498→
-  1499→// ═══════════════════════════════════════════════════════════════════════════════
-  1500→// Loading Skeleton
-  1501→// ═══════════════════════════════════════════════════════════════════════════════
-  1502→
-  1503→export function VdssGraphSkeleton() {
-  1504→  return (
-  1505→    <div className="space-y-3">
-  1506→      <Skeleton className="h-16 w-full rounded-2xl" style={{ background: 'rgba(13,31,47,.90)' }} />
-  1507→      <div className="grid grid-cols-4 gap-3">
-  1508→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
-  1509→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
-  1510→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
-  1511→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
-  1512→      </div>
-  1513→      <Skeleton className="h-10 w-full rounded-t-2xl" style={{ background: 'rgba(9,24,37,.92)' }} />
-  1514→      <Skeleton className="h-[500px] w-full rounded-b-2xl" style={{ background: 'rgba(4,15,25,.72)' }} />
-  1515→      <Skeleton className="h-40 w-full rounded-2xl" style={{ background: 'rgba(8,22,35,.76)' }} />
-  1516→    </div>
-  1517→  );
-  1518→}
-  1519→
+  1311→  // Build scenario lookup (computed inline, React Compiler auto-memoizes)
+  1312→  const scenarioMap: Record<string, ProbabilityTrendResult['scenarios'][number]> = {};
+  1313→  if (data?.scenarios) {
+  1314→    for (const s of data.scenarios) scenarioMap[s.scenarioKey] = s;
+  1315→  }
+  1316→
+  1317→  // Group map
+  1318→  const groupMap: Record<string, ProbabilityTrendResult['groups'][number]> = {};
+  1319→  if (data?.groups) {
+  1320→    for (const g of data.groups) groupMap[g.group] = g;
+  1321→  }
+  1322→
+  1323→  const totalDays = data?.scenarios?.[0]?.trend?.length ?? 30;
+  1324→  const allDays = Array.from({ length: totalDays }, (_, i) => i + 1);
+  1325→  const getDay = useCallback((trend: DayPoint[], day: number) =>
+  1326→    trend.find(d => d.day === day), []);
+  1327→  const fmtPct = (v: number) => toPersianDigits((v * 100).toFixed(2)) + '٪';
+  1328→
+  1329→  if (!hasData) {
+  1330→    return (
+  1331→      <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+  1332→        <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+  1333→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1334→          <div className="flex items-center gap-3">
+  1335→            <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+  1336→              style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
+  1337→            <div className="text-right">
+  1338→              <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
+  1339→              <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها</p>
+  1340→            </div>
+  1341→          </div>
+  1342→          <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+  1343→        </CollapsibleTrigger>
+  1344→        <CollapsibleContent>
+  1345→          <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-6 text-center"
+  1346→            style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1347→            <p className="text-sm text-[#6b7280]">داده کافی برای نمایش روند ۳۰ روزه موجود نیست</p>
+  1348→          </div>
+  1349→        </CollapsibleContent>
+  1350→      </Collapsible>
+  1351→    );
+  1352→  }
+  1353→
+  1354→  return (
+  1355→    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+  1356→      <CollapsibleTrigger className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+  1357→        style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1358→        <div className="flex items-center gap-3">
+  1359→          <div className="w-10 h-10 rounded-xl border border-emerald-200 flex items-center justify-center text-emerald-800 text-xl font-bold"
+  1360→            style={{ boxShadow: 'inset 0 0 22px rgba(5,150,105,.06), 0 0 22px rgba(5,150,105,.04)' }}>📈</div>
+  1361→          <div className="text-right">
+  1362→            <h2 className="text-sm font-bold text-[#111827]">روند ۳۰ روزه احتمالات</h2>
+  1363→            <p className="text-[11px] text-[#6b7280]">توزیع روزانه احتمال سناریوها — احتمال اختصاصی و تجمعی CDF</p>
+  1364→          </div>
+  1365→        </div>
+  1366→        <span className={`text-[#6b7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+  1367→      </CollapsibleTrigger>
+  1368→
+  1369→      <CollapsibleContent>
+  1370→        <div className="mt-2 rounded-2xl border border-[#e5e7eb] bg-[#ffffff] p-4 overflow-x-auto"
+  1371→          style={{ boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+  1372→          <Table style={{ fontSize: 10, minWidth: 1200 }}>
+  1373→            <TableHeader>
+  1374→              <TableRow className="border-b border-[#e5e7eb]">
+  1375→                <TableHead className="text-right text-[#374151] font-bold px-2 py-2 min-w-[120px]" style={{ fontSize: 10 }}>سناریو</TableHead>
+  1376→                {allDays.map(day => (
+  1377→                  <TableHead key={day} colSpan={2} className="text-center text-[#374151] font-bold px-0.5 py-1.5 border-r border-[#e5e7eb]" style={{ fontSize: 9 }}>
+  1378→                    {toPersianDigits(day.toString())}
+  1379→                  </TableHead>
+  1380→                ))}
+  1381→              </TableRow>
+  1382→              <TableRow className="border-b border-[#e5e7eb] bg-[#f9fafb]">
+  1383→                <TableHead className="px-2 py-1" style={{ fontSize: 9 }} />
+  1384→                {allDays.map(day => (
+  1385→                  <React.Fragment key={day}>
+  1386→                    <TableHead className="text-center text-[#6b7280] font-medium px-0.5 py-0.5" style={{ fontSize: 8 }}>اختصاصی</TableHead>
+  1387→                    <TableHead className="text-center text-[#6b7280] font-medium px-0.5 py-0.5" style={{ fontSize: 8 }}>تجمعی</TableHead>
+  1388→                  </React.Fragment>
+  1389→                ))}
+  1390→              </TableRow>
+  1391→            </TableHeader>
+  1392→            <TableBody>
+  1393→              {/* Scenario rows */}
+  1394→              {['R1','R2','R3','R4','R5','R6','R7','R8','R9'].map(key => {
+  1395→                const sc = scenarioMap[key];
+  1396→                if (!sc) return null;
+  1397→                const gc = TREND_GROUP_COLOR[sc.group];
+  1398→                return (
+  1399→                  <TableRow key={key} className="border-b border-[#e5e7eb]/60 hover:bg-[#f9fafb]">
+  1400→                    <TableCell className="px-2 py-1 font-bold" style={{ color: gc.text, minWidth: 100, fontSize: 10 }}>
+  1401→                      <span className="inline-block w-2 h-2 rounded-full ml-1" style={{ background: gc.text }} />
+  1402→                      {sc.label}
+  1403→                    </TableCell>
+  1404→                    {allDays.map(day => {
+  1405→                      const dp = getDay(sc.trend, day);
+  1406→                      const isPeak = sc.peakDay === day;
+  1407→                      return (
+  1408→                        <React.Fragment key={day}>
+  1409→                          <TableCell
+  1410→                            className={`text-center px-0.5 py-0.5 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
+  1411→                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 3, fontSize: 9 } : { color: '#374151', fontSize: 9 }}
+  1412→                          >
+  1413→                            {dp ? fmtPct(dp.individualProb) : '—'}
+  1414→                          </TableCell>
+  1415→                          <TableCell
+  1416→                            className={`text-center px-0.5 py-0.5 tabular-nums ${isPeak ? 'font-black' : 'font-medium'}`}
+  1417→                            style={isPeak ? { background: gc.badge, color: gc.text, borderRadius: 3, fontSize: 9 } : { color: '#6b7280', fontSize: 9 }}
+  1418→                          >
+  1419→                            {dp ? fmtPct(dp.cumulativeProb) : '—'}
+  1420→                          </TableCell>
+  1421→                        </React.Fragment>
+  1422→                      );
+  1423→                    })}
+  1424→                  </TableRow>
+  1425→                );
+  1426→              })}
+  1427→
+  1428→              {/* Separator row */}
+  1429→              <TableRow>
+  1430→                <TableCell className="py-1" colSpan={1 + allDays.length * 2} style={{ borderBottom: '2px solid #e5e7eb' }} />
+  1431→              </TableRow>
+  1432→
+  1433→              {/* Group cumulative rows: Bullish, Neutral, Bearish */}
+  1434→              {(['bearish', 'neutral', 'bullish'] as const).map(g => {
+  1435→                const gData = groupMap[g];
+  1436→                if (!gData) return null;
+  1437→                const gc = TREND_GROUP_COLOR[g];
+  1438→                return (
+  1439→                  <TableRow key={`grp-${g}`} className="border-b border-[#e5e7eb]/40">
+  1440→                    <TableCell className="px-2 py-1.5 font-bold" style={{ color: gc.text, fontSize: 10 }}>
+  1441→                      <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ background: gc.text }} />
+  1442→                      تجمعی {TREND_GROUP_LABEL[g]}
+  1443→                    </TableCell>
+  1444→                    {allDays.map(day => {
+  1445→                      const dp = getDay(gData.trend, day);
+  1446→                      return (
+  1447→                        <TableCell key={day} colSpan={2} className="text-center px-0.5 py-1 tabular-nums font-bold" style={{ color: gc.text, fontSize: 9 }}>
+  1448→                          {dp ? fmtPct(dp.cumulativeProb) : '—'}
+  1449→                        </TableCell>
+  1450→                      );
+  1451→                    })}
+  1452→                  </TableRow>
+  1453→                );
+  1454→              })}
+  1455→
+  1456→              {/* Sum verification row */}
+  1457→              <TableRow className="bg-[#f3f4f6]">
+  1458→                <TableCell className="px-2 py-1.5 font-black" style={{ color: '#111827', fontSize: 10 }}>
+  1459→                  مجموع سه گروه
+  1460→                </TableCell>
+  1461→                {allDays.map(day => {
+  1462→                  const bCum = getDay(groupMap['bearish']?.trend ?? [], day)?.cumulativeProb ?? 0;
+  1463→                  const nCum = getDay(groupMap['neutral']?.trend ?? [], day)?.cumulativeProb ?? 0;
+  1464→                  const buCum = getDay(groupMap['bullish']?.trend ?? [], day)?.cumulativeProb ?? 0;
+  1465→                  const total = bCum + nCum + buCum;
+  1466→                  const isOk = Math.abs(total - 1.0) < 0.001;
+  1467→                  return (
+  1468→                    <TableCell key={day} colSpan={2} className="text-center px-0.5 py-1 tabular-nums font-black" style={{
+  1469→                      color: isOk ? '#059669' : '#dc2626',
+  1470→                      fontSize: 9,
+  1471→                    }}>
+  1472→                      {fmtPct(total)}
+  1473→                    </TableCell>
+  1474→                  );
+  1475→                })}
+  1476→              </TableRow>
+  1477→            </TableBody>
+  1478→          </Table>
+  1479→
+  1480→          <div className="mt-3 space-y-2">
+  1481→            <div className="px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
+  1482→              <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص.
+  1483→              احتمال تجمعی (CDF) = مجموع احتمال از شدیدترین سناریو تا این سناریو در همان روز.
+  1484→              صعودی: از شوک صعودی (R9) تجمعی تا صعودی خفیف (R6) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
+  1485→              نزولی: از شوک نزولی (R1) تجمعی تا نزولی خفیف (R4) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
+  1486→              ردیف «مجموع سه گروه» باید همیشه ۱۰۰٪ باشد.
+  1487→            </div>
+  1488→            {data.scenarios.filter(s => s.interpretation).map(s => (
+  1489→              <div key={s.scenarioKey} className="px-4 py-1.5 text-[10px] text-[#6b7280]">
+  1490→                <b>{s.label}:</b> {s.interpretation}
+  1491→              </div>
+  1492→            ))}
+  1493→          </div>
+  1494→        </div>
+  1495→      </CollapsibleContent>
+  1496→    </Collapsible>
+  1497→  );
+  1498→}
+  1499→
+  1500→// ═══════════════════════════════════════════════════════════════════════════════
+  1501→// Dark Metric Card
+  1502→// ═══════════════════════════════════════════════════════════════════════════════
+  1503→
+  1504→function DarkMetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+  1505→  return (
+  1506→    <div style={{
+  1507→      padding: '15px 16px',
+  1508→      border: `1px solid ${D.line}`, borderRadius: 14,
+  1509→      background: 'linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86))',
+  1510→    }}>
+  1511→      <small style={{ display: 'block', color: '#ffffff', marginBottom: 8, fontSize: 12 }}>{label}</small>
+  1512→      <strong style={{ fontSize: 18, letterSpacing: 0.2, color }}>{value}</strong>
+  1513→    </div>
+  1514→  );
+  1515→}
+  1516→
+  1517→// ═══════════════════════════════════════════════════════════════════════════════
+  1518→// Loading Skeleton
+  1519→// ═══════════════════════════════════════════════════════════════════════════════
+  1520→
+  1521→export function VdssGraphSkeleton() {
+  1522→  return (
+  1523→    <div className="space-y-3">
+  1524→      <Skeleton className="h-16 w-full rounded-2xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+  1525→      <div className="grid grid-cols-4 gap-3">
+  1526→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+  1527→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+  1528→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+  1529→        <Skeleton className="h-16 rounded-xl" style={{ background: 'rgba(13,31,47,.90)' }} />
+  1530→      </div>
+  1531→      <Skeleton className="h-10 w-full rounded-t-2xl" style={{ background: 'rgba(9,24,37,.92)' }} />
+  1532→      <Skeleton className="h-[500px] w-full rounded-b-2xl" style={{ background: 'rgba(4,15,25,.72)' }} />
+  1533→      <Skeleton className="h-40 w-full rounded-2xl" style={{ background: 'rgba(8,22,35,.76)' }} />
+  1534→    </div>
+  1535→  );
+  1536→}
+  1537→

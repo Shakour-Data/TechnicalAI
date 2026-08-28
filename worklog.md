@@ -47,3 +47,29 @@ Stage Summary:
 - Users can compare scenarios side-by-side on the same chart
 - Hover tooltip provides detailed value comparison
 
+---
+Task ID: 5
+Agent: main
+Task: Fix chart-table consistency + dynamic Y-axis, fix decision graph numbers
+
+Work Log:
+- Analyzed data flow: boxes show decisionGraph.scenarioProbabilities (clamped/re-normalized), charts/tables show probabilityTrend (raw historical)
+- Added correctedTrend useMemo in VdssGraph that overrides day 1 values of probabilityTrend with final scenario probabilities from props
+- Recalculated CDF for day 1 using calculateCDF() to ensure cumulative probabilities are consistent
+- Passed correctedTrend to CumulativeProbabilityChart, PerScenarioTrendCharts, and ProbabilityTrendTable
+- Replaced fixed 0-100% Y-axis grid with dynamic grid: computes min/max from selected scenarios, finds nice step intervals (0.01-1.0), rounds boundaries to step multiples
+- Created nodeDisplayValues useMemo that computes meaningful values for each node type
+- ROOT node: no percentage (always 100%, obvious)
+- Main branches (N_TREND/N_BREAK/N_REVERSAL): show absolute probability with Persian digits (e.g., ۶۰٪)
+- Sub-branches (N_T_BULL, etc.): show conditional probability within parent branch with Persian digits
+- Event/assessment nodes (Layer 3): no percentage displayed (they represent conditions, not probability outcomes)
+- Terminal nodes (R1-R9): removed duplicate nodeValue text below the big probability badge
+- Removed nodeValues variable and all references to it
+- Cleaned up detail panel: removed raw nodeValues display, uses node description instead
+
+Stage Summary:
+- Charts/tables/boxes now show identical values for day 1 (today)
+- Y-axis dynamically scales to selected scenarios' range for better visualization
+- Decision graph no longer shows confusing accumulated probabilities on event/assessment nodes
+- All visible numbers use Persian digits (۶۰٪ instead of 60%)
+- Verified via agent browser: ROOT clean, branches show ۶۰٪/۳۴٪/۶٪, event nodes have no numbers

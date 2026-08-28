@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
 import { type GraphData } from '@/lib/decision-graph';
-import { type ProbabilityTrendResult, type DayPoint, type ScenarioTrend, type TrendDirection, SCENARIO_KEYS, SCENARIO_META } from '@/lib/probability-trend';
+import { type ProbabilityTrendResult, type DayPoint, type ScenarioTrend, type TrendDirection, SCENARIO_KEYS, SCENARIO_META, calculateCDF } from '@/lib/probability-trend';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useTheme } from '@/lib/theme-store';
@@ -156,7 +156,6 @@ export default function VdssGraph(props: VdssGraphProps) {
   const branchProbs = decisionGraph?.branchProbabilities ?? { trend: 0.33, breakout: 0.33, reversal: 0.34 };
   const scenarioProbabilities = decisionGraph?.scenarioProbabilities ?? {};
   const pathContributions = decisionGraph?.pathContributions ?? {};
-  const nodeValues = decisionGraph?.nodeValues ?? {};
 
   // Build node lookup map
   const nodeMap = useMemo(() => {
@@ -315,7 +314,7 @@ export default function VdssGraph(props: VdssGraphProps) {
             color: '#ffffff', fontSize: '10px',
             background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
           }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-          <div style={{ fontSize: '12px', color: '#e0eaf0' }} dir="ltr">{nodeValues[selectedNode] ?? '--'}</div>
+          <div style={{ fontSize: '12px', color: meta.color, fontWeight: 700 }}>{toFa(scenarioProb)}٪</div>
 
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${D.line}` }}>
             <p style={{ fontSize: '12px', fontWeight: 700, marginBottom: 8, color: '#ffffff' }}>سهم هر استراتژی:</p>
@@ -350,13 +349,12 @@ export default function VdssGraph(props: VdssGraphProps) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#ffffff' }}>{node.title}</h3>
-        <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: 1.95, margin: 0 }}><b>مقدار / وضعیت:</b> {nodeValues[selectedNode] ?? '--'}</p>
+        <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
         <span style={{
           display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
           color: '#ffffff', fontSize: '10px',
           background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
         }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-        <p style={{ fontSize: '12px', color: '#e0eaf0', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
         {inputs.length > 0 && (
           <div>
             <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#ffffff' }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
@@ -409,7 +407,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         )}
       </div>
     );
-  }, [selectedNode, nodeMap, nodeValues, edges, edgeProbabilities, pathContributions, scenarios]);
+  }, [selectedNode, nodeMap, edges, edgeProbabilities, pathContributions, scenarios]);
 
   // ── All filter buttons ────────────────────────────────────────────
   const allFilters = [
@@ -419,6 +417,119 @@ export default function VdssGraph(props: VdssGraphProps) {
     { key: 'sep2', label: '│', isSep: true as const },
     ...SCENARIO_KEYS.map(k => ({ key: k, label: SCENARIO_META_LOCAL[k].label, scenarioKey: k })),
   ];
+
+  // ── Corrected probabilityTrend: day 1 overridden with final scenario probabilities ──
+  const correctedTrend = useMemo(() => {
+    const raw = props.probabilityTrend;
+    if (!raw || !raw.scenarios || raw.scenarios.length === 0) return raw;
+
+    // Build final individual probabilities (matching boxes) for day 1
+    const day1Individuals: Record<string, number> = {};
+    for (const key of SCENARIO_KEYS) {
+      const s = scenarios[key as keyof typeof scenarios];
+      day1Individuals[key] = (s?.probability ?? 0) / 100;
+    }
+
+    // Corrected scenarios array
+    const correctedScenarios: ScenarioTrend[] = raw.scenarios.map(sc => {
+      const newInd = day1Individuals[sc.scenarioKey] ?? sc.trend[0]?.individualProb ?? 0;
+      const newCum = calculateCDF(sc.scenarioKey, day1Individuals);
+      const newTrend: DayPoint[] = sc.trend.map((dp, i) => {
+        if (i === 0) {
+          return { ...dp, individualProb: newInd, cumulativeProb: newCum };
+        }
+        return dp;
+      });
+      return {
+        ...sc,
+        currentProbability: newInd,
+        trend: newTrend,
+        peakProbability: Math.max(newInd, sc.peakProbability),
+      };
+    });
+
+    // Corrected groups
+    const correctedGroups = raw.groups.map(g => {
+      // Group cumulative for day 1
+      const day1AllInds: Record<string, number> = {};
+      for (const sc of raw.scenarios) {
+        day1AllInds[sc.scenarioKey] = day1Individuals[sc.scenarioKey] ?? sc.trend[0]?.individualProb ?? 0;
+      }
+      let groupCumDay1 = 0;
+      if (g.group === 'bullish') {
+        groupCumDay1 = calculateCDF('R6', day1AllInds);
+      } else if (g.group === 'bearish') {
+        groupCumDay1 = calculateCDF('R4', day1AllInds);
+      } else {
+        groupCumDay1 = day1AllInds['R5'] ?? 0;
+      }
+
+      const newTrend: DayPoint[] = g.trend.map((dp, i) => {
+        if (i === 0) {
+          return { ...dp, individualProb: groupCumDay1, cumulativeProb: groupCumDay1 };
+        }
+        return dp;
+      });
+      return {
+        ...g,
+        trend: newTrend,
+        peakProbability: Math.max(groupCumDay1, g.peakProbability),
+      };
+    });
+
+    return { ...raw, scenarios: correctedScenarios, groups: correctedGroups };
+  }, [props.probabilityTrend, scenarios]);
+
+  // ── Meaningful node display values (Persian-formatted) ──────────
+  const nodeDisplayValues = useMemo(() => {
+    const display: Record<string, string> = {};
+    if (!decisionGraph) return display;
+
+    // Sub-branch parent mapping
+    const subParents: Record<string, string> = {
+      N_T_BULL: 'N_TREND', N_T_BEAR: 'N_TREND', N_T_FLAT: 'N_TREND',
+      N_B_UP: 'N_BREAK', N_B_DOWN: 'N_BREAK', N_B_NONE: 'N_BREAK',
+      N_R_BULL: 'N_REVERSAL', N_R_BEAR: 'N_REVERSAL', N_R_NONE: 'N_REVERSAL',
+    };
+
+    // Find edge probability from parent to child
+    const getEdgeProb = (from: string, to: string): number => {
+      for (let i = 0; i < edges.length; i++) {
+        if (edges[i].from === from && edges[i].to === to) {
+          return edgeProbabilities[i] ?? 0;
+        }
+      }
+      return 0;
+    };
+
+    // ROOT: no numeric value needed
+    display['ROOT'] = '';
+
+    // Main branches: absolute probability from root
+    display['N_TREND'] = toPersianDigits((branchProbs.trend * 100).toFixed(0)) + '٪';
+    display['N_BREAK'] = toPersianDigits((branchProbs.breakout * 100).toFixed(0)) + '٪';
+    display['N_REVERSAL'] = toPersianDigits((branchProbs.reversal * 100).toFixed(0)) + '٪';
+
+    // Sub-branches: conditional probability within parent (meaningful context)
+    for (const [sub, parent] of Object.entries(subParents)) {
+      const condProb = getEdgeProb(parent, sub);
+      display[sub] = toPersianDigits((condProb * 100).toFixed(0)) + '٪';
+    }
+
+    // Event/assessment nodes: no value (they represent conditions, not probability outcomes)
+    for (const node of nodes) {
+      if (node.type === 'event') {
+        display[node.id] = '';
+      }
+    }
+
+    // Terminal nodes (R1-R9): handled by the big badge, no extra text
+    for (const key of SCENARIO_KEYS) {
+      display[key] = '';
+    }
+
+    return display;
+  }, [decisionGraph, edges, edgeProbabilities, branchProbs, nodes]);
 
   // ═══ Design dimensions ═══
   const DESIGN_W = 1500;
@@ -628,7 +739,6 @@ export default function VdssGraph(props: VdssGraphProps) {
                     <>
                       <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>ریشه تصمیم</div>
                       <div style={{ fontSize: 10, color: D.cyan, fontWeight: 700, marginTop: 3 }}>Decision Root</div>
-                      <div style={{ fontSize: 11, color: '#d4e8f0', marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
 
@@ -637,7 +747,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                     <>
                       <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
                       <div style={{ fontSize: 10, color: scenarioColor, fontWeight: 700, marginTop: 2 }}>{node.titleEn}</div>
-                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
+                      <div style={{ fontSize: 11, color: scenarioColor, marginTop: 3, fontWeight: 800 }}>{nodeDisplayValues[node.id] ?? ''}</div>
                     </>
                   )}
 
@@ -646,7 +756,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                     <>
                       <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
                       <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
-                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 2, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
+                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 2 }}>{nodeDisplayValues[node.id] ?? ''}</div>
                     </>
                   )}
 
@@ -655,7 +765,6 @@ export default function VdssGraph(props: VdssGraphProps) {
                     <>
                       <div style={{ fontSize: 11, fontWeight: 800, lineHeight: 1.35, color: '#ffffff' }}>{node.title}</div>
                       <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
-                      <div style={{ fontSize: 9, color: '#d4e8f0', marginTop: 1, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
 
@@ -671,7 +780,6 @@ export default function VdssGraph(props: VdssGraphProps) {
                           textShadow: `0 0 8px ${scenarioColor}88`,
                         }}>{toFa(scenarioProb)}٪</span>
                       )}
-                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 3, direction: 'ltr' }}>{nodeValues[node.id] ?? ''}</div>
                     </>
                   )}
                 </div>
@@ -816,13 +924,13 @@ export default function VdssGraph(props: VdssGraphProps) {
       </div>
 
       {/* ═══ Cumulative Probability Line Chart ═══ */}
-      <CumulativeProbabilityChart data={props.probabilityTrend} />
+      <CumulativeProbabilityChart data={correctedTrend} />
 
       {/* ═══ Per-Scenario Individual + Cumulative Trend Charts ═══ */}
-      <PerScenarioTrendCharts data={props.probabilityTrend} />
+      <PerScenarioTrendCharts data={correctedTrend} />
 
       {/* ═══ Probability Trend Table ═══ */}
-      <ProbabilityTrendTable data={props.probabilityTrend} />
+      <ProbabilityTrendTable data={correctedTrend} />
     </div>
   );
 }
@@ -950,7 +1058,8 @@ function MultiSelectTrendChart({ data, selectedKeys, onToggleKey, mode, title }:
   const scenarios = data.scenarios.filter(s => selectedKeys.has(s.scenarioKey));
   const maxDays = data.scenarios[0]?.trend?.length ?? 0;
 
-  // Compute Y range
+  // Compute Y range — dynamic based on selected scenarios
+  let yMin = 0;
   let yMax = 0;
   for (const sc of scenarios) {
     for (const d of sc.trend) {
@@ -958,12 +1067,30 @@ function MultiSelectTrendChart({ data, selectedKeys, onToggleKey, mode, title }:
       if (v > yMax) yMax = v;
     }
   }
-  yMax = Math.max(yMax * 1.15, 0.01);
-  const yMin = 0;
+  // For cumulative mode, ensure minimum range
+  if (yMax <= 0) yMax = 0.1;
+
+  // Compute nice tick interval for Y-axis
+  const range = yMax - yMin;
+  const padding = range * 0.15;
+  const paddedMax = yMax + padding;
+  const paddedMin = Math.max(0, yMin - padding * 0.3);
+
+  // Find a nice step: aim for ~5 grid lines
+  const niceSteps = [0.01, 0.02, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0];
+  const rawStep = (paddedMax - paddedMin) / 5;
+  let step = niceSteps[0];
+  for (const ns of niceSteps) {
+    if (ns >= rawStep) { step = ns; break; }
+  }
+  // Round yMin down and yMax up to step boundaries
+  const gridYMin = Math.floor(paddedMin / step) * step;
+  const gridYMax = Math.ceil(paddedMax / step) * step;
+  const gridRange = gridYMax - gridYMin;
 
   const chartW = 1100;
   const chartH = 300;
-  const padL = 50;
+  const padL = 55;
   const padR = 20;
   const padT = 20;
   const padB = 40;
@@ -971,16 +1098,19 @@ function MultiSelectTrendChart({ data, selectedKeys, onToggleKey, mode, title }:
   const plotH = chartH - padT - padB;
 
   const xOf = (day: number) => padL + plotW - ((day - 1) / Math.max(1, maxDays - 1)) * plotW;
-  const yOf = (v: number) => padT + plotH - ((v - yMin) / Math.max(0.001, yMax - yMin)) * plotH;
+  const yOf = (v: number) => padT + plotH - ((v - gridYMin) / Math.max(0.001, gridRange)) * plotH;
 
-  // Grid
+  // Dynamic grid lines based on computed range
   const gridEls: React.JSX.Element[] = [];
-  for (let p = 0; p <= 100; p += 20) {
-    const y = yOf(p / 100);
+  for (let v = gridYMin; v <= gridYMax + step * 0.01; v += step) {
+    const y = yOf(v);
+    if (y < padT - 2 || y > chartH - padB + 2) continue;
+    const pctVal = v * 100;
+    const pctLabel = Number.isInteger(pctVal) ? String(pctVal) : pctVal.toFixed(step < 0.05 ? 2 : 1);
     gridEls.push(
-      <line key={`g${p}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#f3f4f6" strokeWidth={0.7} />,
-      <text key={`gl${p}`} x={padL - 6} y={y + 3.5} textAnchor="end" fill="#9ca3af" fontSize={9} fontFamily="inherit">
-        {toPersianDigits(String(p))}%
+      <line key={`g${v}`} x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#f3f4f6" strokeWidth={0.7} />,
+      <text key={`gl${v}`} x={padL - 6} y={y + 3.5} textAnchor="end" fill="#9ca3af" fontSize={9} fontFamily="inherit">
+        {toPersianDigits(pctLabel)}%
       </text>,
     );
   }
