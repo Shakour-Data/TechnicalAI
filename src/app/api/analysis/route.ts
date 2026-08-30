@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCandlestick, fetchSymbolData, fetchTsetmcIndexHistory, type CandleData } from '@/lib/tse-api';
-import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
-import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
+import type { OHLCV } from '@/lib/ta-engine';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -13,12 +12,17 @@ export async function GET(req: NextRequest) {
   const indexInsCode = req.nextUrl.searchParams.get('indexInsCode');
 
   try {
+    // Lazy-load heavy TA engine to avoid Turbopack memory pressure
+    const taEngine = await import('@/lib/ta-engine');
+    const { analyze, computeHistoricalProbabilities } = taEngine;
+    const probTrend = await import('@/lib/probability-trend');
+    const { buildTrendFromDailySnapshots } = probTrend;
+
     // If indexInsCode is provided, fetch from TSETMC instead of BrsApi
     if (indexInsCode) {
       const tsetmcCandles = await fetchTsetmcIndexHistory(indexInsCode);
 
       if (tsetmcCandles && tsetmcCandles.length > 0) {
-        // Build index name from symbol (the Persian name passed as symbol param)
         const indexName = symbol;
 
         const ohlcv: OHLCV[] = tsetmcCandles.map((c) => ({
@@ -32,10 +36,9 @@ export async function GET(req: NextRequest) {
 
         const ta = analyze(ohlcv, 'واحد');
 
-        // Compute 30-day probability trend from historical daily probabilities
         let probabilityTrend;
         try {
-          const dailySnapshots: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
+          const dailySnapshots = computeHistoricalProbabilities(ohlcv, 30);
           console.log(`[analysis] Historical snapshots for ${symbol}: ${dailySnapshots.length} days (data.length=${ohlcv.length})`);
           probabilityTrend = dailySnapshots.length > 1
             ? buildTrendFromDailySnapshots(dailySnapshots)
@@ -79,7 +82,6 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // TSETMC returned no candles — signal to caller
       return NextResponse.json({
         symbol,
         candles: [],
@@ -90,7 +92,7 @@ export async function GET(req: NextRequest) {
 
     // Regular instrument: use BrsApi
     const [candles, symbolInfo] = await Promise.all([
-      fetchCandlestick(symbol, 3), // adjusted daily
+      fetchCandlestick(symbol, 3),
       fetchSymbolData(symbol).catch(() => null),
     ]);
 
@@ -98,7 +100,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No candle data found' }, { status: 404 });
     }
 
-    // API returns newest first — reverse to chronological order for TA
     const reversed = [...candles].reverse();
 
     const ohlcv: OHLCV[] = reversed.map((c: CandleData) => ({
@@ -112,13 +113,12 @@ export async function GET(req: NextRequest) {
 
     const ta = analyze(ohlcv, 'ریال');
 
-    // Compute 30-day probability trend from historical daily probabilities
     let probabilityTrend;
     try {
-      const dailySnapshots2: DailyProbabilitySnapshot[] = computeHistoricalProbabilities(ohlcv, 30);
-      console.log(`[analysis] Historical snapshots for ${symbol}: ${dailySnapshots2.length} days (data.length=${ohlcv.length})`);
-      probabilityTrend = dailySnapshots2.length > 1
-        ? buildTrendFromDailySnapshots(dailySnapshots2)
+      const dailySnapshots = computeHistoricalProbabilities(ohlcv, 30);
+      console.log(`[analysis] Historical snapshots for ${symbol}: ${dailySnapshots.length} days (data.length=${ohlcv.length})`);
+      probabilityTrend = dailySnapshots.length > 1
+        ? buildTrendFromDailySnapshots(dailySnapshots)
         : undefined;
       if (probabilityTrend) {
         console.log(`[analysis] probabilityTrend built: ${probabilityTrend.scenarios.length} scenarios, horizon=${probabilityTrend.horizon}`);
@@ -128,12 +128,10 @@ export async function GET(req: NextRequest) {
       probabilityTrend = undefined;
     }
 
-    // Extract real-time info from symbol data
     const info = symbolInfo && typeof symbolInfo === 'object' && !Array.isArray(symbolInfo)
       ? symbolInfo as Record<string, unknown>
       : null;
 
-    // Calculate change from candle data: last close vs previous close
     const lastCandle = reversed[reversed.length - 1];
     const prevCandle = reversed.length > 1 ? reversed[reversed.length - 2] : lastCandle;
     const lastClose = Number(lastCandle?.close ?? 0);

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMainIndexHistory, fetchSectorIndexHistory, fetchSectorByName } from '@/lib/tsetmc-index-api';
 import { SECTOR_INDICES, type IndustryIndex } from '@/lib/industry-indices';
-import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
-import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
+import type { OHLCV } from '@/lib/ta-engine';
+import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +79,10 @@ function findSectorByName(name: string): IndustryIndex | undefined {
 }
 
 export async function GET(req: NextRequest) {
+  const taEngine = await import('@/lib/ta-engine');
+  const { analyze, computeHistoricalProbabilities } = taEngine;
+  const { buildTrendFromDailySnapshots } = await import('@/lib/probability-trend');
+
   const url = req.nextUrl;
   const sector = url.searchParams.get('sector');
   const indexKey = url.searchParams.get('indexKey');

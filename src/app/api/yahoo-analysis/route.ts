@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchYahooHistory, getYahooInstrumentDef, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
-import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
-import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
+import type { OHLCV } from '@/lib/ta-engine';
+import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +46,10 @@ export async function GET(req: NextRequest) {
     const quote = quotes.find((q) => q.symbol === symbol);
     const yahooCurrency = quote?.unit || quote?.currency || 'USD';
     const currencyUnit = getCurrencyUnit(category, 'yahoo', yahooCurrency);
+
+    const taEngine = await import('@/lib/ta-engine');
+    const { analyze, computeHistoricalProbabilities } = taEngine;
+    const { buildTrendFromDailySnapshots } = await import('@/lib/probability-trend');
 
     // 5. Run TA analysis
     const ta = analyze(ohlcvData, currencyUnit);

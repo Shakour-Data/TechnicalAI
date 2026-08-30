@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTgjuHistory, getTgjuYahooFallback, STATIC_INSTRUMENTS } from '@/lib/tgju-api';
 import { fetchYahooHistory, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
-import { analyze, computeHistoricalProbabilities, type OHLCV } from '@/lib/ta-engine';
-import { buildTrendFromDailySnapshots, type DailyProbabilitySnapshot } from '@/lib/probability-trend';
+import type { OHLCV } from '@/lib/ta-engine';
+import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -75,10 +75,15 @@ export async function GET(req: NextRequest) {
     const decimals = detectDecimals(lastCandle.close, category, source);
     const currencyUnit = getCurrencyUnit(category, source);
 
-    // 5. Run TA analysis
+    // 5. Dynamically import heavy TA engine and probability modules
+    const taEngine = await import('@/lib/ta-engine');
+    const { analyze, computeHistoricalProbabilities } = taEngine;
+    const { buildTrendFromDailySnapshots } = await import('@/lib/probability-trend');
+
+    // 6. Run TA analysis
     const ta = analyze(ohlcvData, currencyUnit);
 
-    // 6. Compute 30-day probability trend
+    // 7. Compute 30-day probability trend
     // Use last 400 candles max for performance (30 days × ~13 candles/day avg)
     let probabilityTrend;
     try {

@@ -149,3 +149,20 @@ Stage Summary:
 - decision-graph.ts: Fixed isTerminal to match SC1-SC9 (length 3, starts with 'SC')
 - decision-graph.ts: Changed scenario init keys from R${i} to SC${i} (3 locations)
 - Root cause: R→SC rename was applied to edges and nodes but NOT to the traversal/accumulation code
+---
+Task ID: 6
+Agent: Main
+Task: Fix dev server crash during analysis API compilation
+
+Work Log:
+- Diagnosed: Turbopack OOM when compiling analysis routes (ta-engine.ts 2900 lines + decision-graph.ts 1619 lines)
+- Fix: Converted static imports of ta-engine and probability-trend to dynamic await import() in 5 API routes
+- Results: Route compile time dropped from 5+ seconds to 94ms (first) / 7ms (cached)
+- Set NODE_OPTIONS=--max-old-space-size=3072 in dev script
+- Verified: consecutive requests completed, server stayed alive
+- Verified: Probabilities now varied instead of uniform 11%
+
+Stage Summary:
+- 5 API routes now use dynamic imports for ta-engine
+- Compile time reduced by ~98%
+- Server no longer crashes on analysis requests

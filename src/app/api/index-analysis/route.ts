@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { analyze, type OHLCV } from '@/lib/ta-engine';
+import type { OHLCV } from '@/lib/ta-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
       volume: c.volume,
     }));
 
+    const { analyze } = await import('@/lib/ta-engine');
     const ta = analyze(ohlcv, 'واحد');
 
     // Get live data from BrsApi
