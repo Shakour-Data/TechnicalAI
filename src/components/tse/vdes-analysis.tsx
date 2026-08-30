@@ -38,8 +38,11 @@ import { formatPriceFa } from '@/lib/format-price';
 import { useTheme } from '@/lib/theme-store';
 
 function renderAIText(text: string): string {
+  // Remove CJK (Chinese/Japanese/Korean) characters — prohibited in output
+  const noCjk = text.replace(/[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\uff00-\uffef]/g, '');
+
   // Normalize zero-width and look-alike characters that may interfere with regex
-  const normalized = text.replace(/[\u200c\u200d\u200b\ufeff]/g, '');
+  const normalized = noCjk.replace(/[\u200c\u200d\u200b\ufeff]/g, '');
 
   // Color syntax: {color:hex}text{/color} or {color:named}text{/color} → <span>
   const colorMap: Record<string, string> = {
@@ -111,15 +114,15 @@ export interface VdesAnalysisProps {
   trendR2: number;
   overallSignal: string;
   scenarios: {
-    R1: Scenario;
-    R2: Scenario;
-    R3: Scenario;
-    R4: Scenario;
-    R5: Scenario;
-    R6: Scenario;
-    R7: Scenario;
-    R8: Scenario;
-    R9: Scenario;
+    SC1: Scenario;
+    SC2: Scenario;
+    SC3: Scenario;
+    SC4: Scenario;
+    SC5: Scenario;
+    SC6: Scenario;
+    SC7: Scenario;
+    SC8: Scenario;
+    SC9: Scenario;
   };
   supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
   resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
@@ -141,26 +144,26 @@ export interface VdesAnalysisProps {
 
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
 
-const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+const SCENARIO_KEYS = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
 
 type ScenarioKey = (typeof SCENARIO_KEYS)[number];
 
 const SCENARIO_NUMBER: Record<string, string> = {
-  R1: '\u06f1', R2: '\u06f2', R3: '\u06f3', R4: '\u06f4', R5: '\u06f5',
-  R6: '\u06f6', R7: '\u06f7', R8: '\u06f8', R9: '\u06f9',
+  SC1: '\u06f1', SC2: '\u06f2', SC3: '\u06f3', SC4: '\u06f4', SC5: '\u06f5',
+  SC6: '\u06f6', SC7: '\u06f7', SC8: '\u06f8', SC9: '\u06f9',
 };
 
-// Convention: R1-R4=bearish, R5=neutral, R6-R9=bullish (matches decision-graph.ts & ta-engine.ts)
+// Convention: SC1-SC4=bearish, SC5=neutral, SC6-SC9=bullish (matches decision-graph.ts & ta-engine.ts)
 const SCENARIO_META: Record<string, { label: string; type: string; border: string; badgeBg: string; badgeColor: string }> = {
-  R1: { label: '\u0634\u0648\u06a9 \u0646\u0632\u0648\u0644\u06cc', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
-  R2: { label: '\u0646\u0632\u0648\u0644\u06cc \u0634\u062a\u0627\u0628\u200c\u062f\u0627\u0631', type: 'down', border: '#dc2626', badgeBg: 'rgba(220,38,38,0.1)', badgeColor: '#dc2626' },
-  R3: { label: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc', type: 'down', border: '#ea580c', badgeBg: 'rgba(234,88,12,0.1)', badgeColor: '#ea580c' },
-  R4: { label: '\u0646\u0632\u0648\u0644\u06cc \u062e\u0641\u06cc\u0641', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
-  R5: { label: '\u0631\u0646\u062c', type: 'neutral', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
-  R6: { label: '\u0635\u0639\u0648\u062f\u06cc \u062e\u0641\u06cc\u0641', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
-  R7: { label: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', type: 'up', border: '#059669', badgeBg: 'rgba(5,150,105,0.1)', badgeColor: '#059669' },
-  R8: { label: '\u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u0628\u062f\u0627\u0631', type: 'up', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
-  R9: { label: '\u0634\u0648\u06a9 \u0635\u0639\u0648\u062f\u06cc', type: 'up', border: '#0891b2', badgeBg: 'rgba(8,145,178,0.1)', badgeColor: '#0891b2' },
+  SC1: { label: '\u0634\u0648\u06a9 \u0646\u0632\u0648\u0644\u06cc', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
+  SC2: { label: '\u0646\u0632\u0648\u0644\u06cc \u0634\u062a\u0627\u0628\u200c\u062f\u0627\u0631', type: 'down', border: '#dc2626', badgeBg: 'rgba(220,38,38,0.1)', badgeColor: '#dc2626' },
+  SC3: { label: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc', type: 'down', border: '#ea580c', badgeBg: 'rgba(234,88,12,0.1)', badgeColor: '#ea580c' },
+  SC4: { label: '\u0646\u0632\u0648\u0644\u06cc \u062e\u0641\u06cc\u0641', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
+  SC5: { label: '\u0631\u0646\u062c', type: 'neutral', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
+  SC6: { label: '\u0635\u0639\u0648\u062f\u06cc \u062e\u0641\u06cc\u0641', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
+  SC7: { label: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', type: 'up', border: '#059669', badgeBg: 'rgba(5,150,105,0.1)', badgeColor: '#059669' },
+  SC8: { label: '\u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u0628\u062f\u0627\u0631', type: 'up', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
+  SC9: { label: '\u0634\u0648\u06a9 \u0635\u0639\u0648\u062f\u06cc', type: 'up', border: '#0891b2', badgeBg: 'rgba(8,145,178,0.1)', badgeColor: '#0891b2' },
 };
 
 const GRADE_MAP: Record<string, { label: string; color: string }> = {
@@ -180,15 +183,15 @@ function GradeBadge({ grade }: { grade: string }) {
 }
 
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
-  R1: { text: 'سناریوی ۱: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
-  R2: { text: 'سناریوی ۲: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
-  R3: { text: 'سناریوی ۳: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
-  R4: { text: 'سناریوی ۴: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
-  R5: { text: 'سناریوی ۵: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
-  R6: { text: 'سناریوی ۶: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
-  R7: { text: 'سناریوی ۷: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
-  R8: { text: 'سناریوی ۸: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
-  R9: { text: 'سناریوی ۹: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
+  SC1: { text: 'سناریوی ۱: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+  SC2: { text: 'سناریوی ۲: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
+  SC3: { text: 'سناریوی ۳: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
+  SC4: { text: 'سناریوی ۴: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+  SC5: { text: 'سناریوی ۵: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
+  SC6: { text: 'سناریوی ۶: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+  SC7: { text: 'سناریوی ۷: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
+  SC8: { text: 'سناریوی ۸: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
+  SC9: { text: 'سناریوی ۹: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
 };
 
 const RISK_PROFILE_LABELS: Record<V11Result['riskProfile'], { label: string; color: string; bg: string }> = {
@@ -260,8 +263,8 @@ interface AnalysisContext {
   highestProb: number;
   scenarios: VdesAnalysisProps['scenarios'];
   S1: number;
-  R1: number;
-  R2: number;
+  SC1: number;
+  SC2: number;
   hasVolume: boolean;
   resistanceStrengths: LevelStrength[];
   supportStrengths: LevelStrength[];
@@ -325,8 +328,8 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const adxColor = adx > 40 ? 'text-emerald-700' : adx > 25 ? 'text-amber-800' : 'text-[#6b7280]';
 
   // Helper: is bullish scenario?
-  const isBull = (k: string) => ['R6','R7','R8','R9'].includes(k);
-  const isBear = (k: string) => ['R1','R2','R3','R4'].includes(k);
+  const isBull = (k: string) => ['SC6','SC7','SC8','SC9'].includes(k);
+  const isBear = (k: string) => ['SC1','SC2','SC3','SC4'].includes(k);
 
   // ── PARAGRAPH 1: General Trend & Price Position ──
   const p1 = (
@@ -354,13 +357,13 @@ function generateAnalysisText(ctx: AnalysisContext) {
   // ── PARAGRAPH 2: Oscillator & Momentum (scenario-aware) ──
   let p2: React.ReactNode;
   if (isBull(highestKey)) {
-    const isStrongBull = highestKey === 'R8' || highestKey === 'R9';
+    const isStrongBull = highestKey === 'SC8' || highestKey === 'SC9';
     p2 = (
       <>
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — مومنتوم صعودی{isStrongBull ? ' قوی' : ''}:</strong>{' '}
         اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
         <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b>
-        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز {highestKey === 'R9' ? 'شوک' : 'شتابدار'} صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
+        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز {highestKey === 'SC9' ? 'شوک' : 'شتابدار'} صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
         {' '}قرار دارد.
         {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.</span>}
         CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
@@ -374,7 +377,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         {!isStrongBull && bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده بایاس صعودی قوی در بازار است.</span>}
       </>
     );
-  } else if (highestKey === 'R5') {
+  } else if (highestKey === 'SC5') {
     p2 = (
       <>
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — بازار بدون جهت:</strong>{' '}
@@ -391,7 +394,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       </>
     );
   } else if (isBear(highestKey)) {
-    const isStrongBear = highestKey === 'R1' || highestKey === 'R2';
+    const isStrongBear = highestKey === 'SC1' || highestKey === 'SC2';
     p2 = (
       <>
         <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — {isStrongBear ? 'تضعیف شدید ساختار' : 'هشدار اصلاح'}:</strong>{' '}
@@ -426,7 +429,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
       {isBull(highestKey) && ' فاصله قیمت از باند بالایی نشان‌دهنده شتاب صعودی است.'}
       {isBear(highestKey) && ' نزدیکی به باند پایینی هشدار ادامه فشار نزولی است.'}
-      {highestKey === 'R5' && ' نوسان در محدوده باندها تأییدکننده فاز رنج بازار است.'}
+      {highestKey === 'SC5' && ' نوسان در محدوده باندها تأییدکننده فاز رنج بازار است.'}
     </>
   );
 
@@ -438,12 +441,12 @@ function generateAnalysisText(ctx: AnalysisContext) {
       {obv > 0
         ? <span> که <b className="text-emerald-700">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است.
           {isBull(highestKey) ? ' این حجم مثبت تأیید‌کننده سناریوی صعودی است.' : ''}
-          {highestKey === 'R5' ? ' اما در فاز رنج، حجم مثبت الزاماً سیگنال صعودی نیست.' : ''}
+          {highestKey === 'SC5' ? ' اما در فاز رنج، حجم مثبت الزاماً سیگنال صعودی نیست.' : ''}
           {isBear(highestKey) ? ' اما با وجود حجم مثبت، ساختار قیمت ضعیف است — این تناقض قابل توجه است.' : ''}
         </span>
         : <span> که <b className="text-red-700">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد.
           {isBull(highestKey) ? ' خروج پول با سناریوی صعودی در تضاد است — احتیاط توصیه می‌شود.' : ''}
-          {highestKey === 'R5' ? ' خروج پول در فاز رنج معمولاً پیش‌نشاننده شکست به سمت پایین است.' : ''}
+          {highestKey === 'SC5' ? ' خروج پول در فاز رنج معمولاً پیش‌نشاننده شکست به سمت پایین است.' : ''}
           {isBear(highestKey) ? ' این خروج پول تأیید‌کننده سناریوی نزولی و ضرورت حفظ سرمایه است.' : ''}
         </span>
       }
@@ -462,7 +465,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
   // ── PARAGRAPH 5: Risk/Reward & Confluence (scenario-aware) ──
   let p5: React.ReactNode;
   if (isBull(highestKey)) {
-    const isStrong = highestKey === 'R3' || highestKey === 'R4';
+    const isStrong = highestKey === 'SC3' || highestKey === 'SC4';
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
@@ -479,7 +482,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
         {' '}است. {isStrong ? 'مومنتوم بالا مدیریت ریسک دقیق‌تری را ایجاب می‌کند.' : `توصیه: در صورت شکست مقاومت ${toFa(R1)}، هدف بعدی ${toFa(R2)} ${unit} تعیین می‌شود.`}
       </>
     );
-  } else if (highestKey === 'R5') {
+  } else if (highestKey === 'SC5') {
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
@@ -497,8 +500,8 @@ function generateAnalysisText(ctx: AnalysisContext) {
       </>
     );
   } else {
-    // Bearish R6-R9
-    const isStrong = highestKey === 'R8' || highestKey === 'R9';
+    // Bearish SC6-SC9
+    const isStrong = highestKey === 'SC8' || highestKey === 'SC9';
     p5 = (
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
@@ -566,8 +569,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const S3_level = supports[2] ?? currentPrice * 0.85;
 
   // Use the dominant bullish scenario's target range (consistent with scenario cards below)
-  const bullishScenarios = ['R1', 'R2', 'R3', 'R4'] as const;
-  let dominantBullKey: string = 'R1';
+  const bullishScenarios = ['SC1', 'SC2', 'SC3', 'SC4'] as const;
+  let dominantBullKey: string = 'SC1';
   let dominantBullProb = 0;
   for (const k of bullishScenarios) {
     if ((scenarios[k]?.probability ?? 0) > dominantBullProb) {
@@ -581,21 +584,21 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   // ── V11 Computation ──────────────────────────────────────────
   const v11Result: V11Result = useMemo(() => {
     const input = {
-      R1: scenarios.R1.probability,
-      R2: scenarios.R2.probability,
-      R3: scenarios.R3.probability,
-      R4: scenarios.R4.probability,
-      R5: scenarios.R5.probability,
-      R6: scenarios.R6.probability,
-      R7: scenarios.R7.probability,
-      R8: scenarios.R8.probability,
-      R9: scenarios.R9.probability,
+      SC1: scenarios.SC1.probability,
+      SC2: scenarios.SC2.probability,
+      SC3: scenarios.SC3.probability,
+      SC4: scenarios.SC4.probability,
+      SC5: scenarios.SC5.probability,
+      SC6: scenarios.SC6.probability,
+      SC7: scenarios.SC7.probability,
+      SC8: scenarios.SC8.probability,
+      SC9: scenarios.SC9.probability,
     };
     return computeV11Probabilities(input);
   }, [scenarios]);
 
   // ── Dominant scenario ──────────────────────────────────────────
-  let highestKey = 'R5';
+  let highestKey = 'SC5';
   let highestProb = 0;
   for (const key of SCENARIO_KEYS) {
     const prob = scenarios[key]?.probability ?? 0;
@@ -631,7 +634,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       bollingerUpper, bollingerMiddle, bollingerLower,
       trendDirection, trendAngle, trendR2, overallSignal,
       highestKey, highestProb, scenarios,
-      S1: S1_level, R1: R1_level, R2: R2_level,
+      S1: S1_level, SC1: R1_level, SC2: R2_level,
       hasVolume: hasVolume ?? false,
       resistanceStrengths, supportStrengths,
       v11Result,

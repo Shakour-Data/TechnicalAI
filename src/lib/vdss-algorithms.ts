@@ -36,11 +36,11 @@ export interface NodePosition {
 
 // ── Scenario Keys ────────────────────────────────────────────────────────────
 
-export const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+export const SCENARIO_KEYS = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
 
 // ── Edge Definitions ─────────────────────────────────────────────────────────
 // [fromNode, toNode, label, type]
-// Graph: A→{B,C,D} → {E,F,G,H,I,J} → {K,L} → {R1..R9}
+// Graph: A→{B,C,D} → {E,F,G,H,I,J} → {K,L} → {SC1..SC9}
 // 3-branch topology with cross-branch consolidation/volatility nodes
 
 export const EDGE_DEFS: [string, string, string, EdgeType][] = [
@@ -54,12 +54,12 @@ export const EDGE_DEFS: [string, string, string, EdgeType][] = [
   ['B', 'F', 'ضعف روند', 'down'],
   ['B', 'K', 'ورود به رنج', 'risk'],
 
-  ['E', 'R1', 'تثبیت صعود قوی', 'up'],
+  ['E', 'SC1', 'تثبیت صعود قوی', 'up'],
   ['E', 'K', 'تثبیت رنج', 'pullback'],
   ['E', 'F', 'کاهش شتاب', 'pullback'],
 
-  ['F', 'R4', 'شروع نزول قوی', 'down'],
-  ['F', 'R7', 'ورود به رنج کم‌نوسان', 'pullback'],
+  ['F', 'SC4', 'شروع نزول قوی', 'down'],
+  ['F', 'SC7', 'ورود به رنج کم‌نوسان', 'pullback'],
   ['F', 'E', 'بازیابی مجدد', 'risk'],
 
   // ── Branch 2: Breakout (C) → G, H ─────────────────────────────────────
@@ -67,12 +67,12 @@ export const EDGE_DEFS: [string, string, string, EdgeType][] = [
   ['C', 'H', 'شکست نزولی', 'down'],
   ['C', 'L', 'واکنش نوسانی', 'risk'],
 
-  ['G', 'R2', 'تداوم شتاب صعودی', 'up'],
+  ['G', 'SC2', 'تداوم شتاب صعودی', 'up'],
   ['G', 'L', 'کاهش شتاب', 'pullback'],
   ['G', 'H', 'توقف شکست', 'pullback'],
 
-  ['H', 'R5', 'تداوم نزول شتاب‌دار', 'down'],
-  ['H', 'R9', 'شوک بازار', 'risk'],
+  ['H', 'SC5', 'تداوم نزول شتاب‌دار', 'down'],
+  ['H', 'SC9', 'شوک بازار', 'risk'],
   ['H', 'G', 'بازگشت شتاب', 'risk'],
 
   // ── Branch 3: Reversal (D) → I, J ──────────────────────────────────────
@@ -80,12 +80,12 @@ export const EDGE_DEFS: [string, string, string, EdgeType][] = [
   ['D', 'J', 'تخریب ساختار', 'down'],
   ['D', 'L', 'نوسان شدید', 'risk'],
 
-  ['I', 'R3', 'صعود احتیاطی', 'up'],
+  ['I', 'SC3', 'صعود احتیاطی', 'up'],
   ['I', 'L', 'تثبیت نوسانی', 'pullback'],
   ['I', 'J', 'توقف بازگشت', 'pullback'],
 
-  ['J', 'R6', 'نزول احتیاطی', 'down'],
-  ['J', 'R8', 'رنج پرنوسان', 'pullback'],
+  ['J', 'SC6', 'نزول احتیاطی', 'down'],
+  ['J', 'SC8', 'رنج پرنوسان', 'pullback'],
   ['J', 'I', 'بازگشت مجدد', 'risk'],
 
   // ── Cross-branch: Consolidation (K) ────────────────────────────────────
@@ -168,47 +168,47 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     description: 'گره رویداد شانسی — اسپایک نوسان و عدم قطعیت',
   },
   // Terminal nodes
-  R1: {
+  SC1: {
     label: 'روند صعودی قوی',
     type: 'terminal',
     description: 'سناریو نهایی — صعود قوی و پایدار',
   },
-  R2: {
+  SC2: {
     label: 'صعودی شتاب‌دار',
     type: 'terminal',
     description: 'سناریو نهایی — حرکت شتاب‌دار صعودی',
   },
-  R3: {
+  SC3: {
     label: 'صعودی با احتیاط',
     type: 'terminal',
     description: 'سناریو نهایی — صعود کند و محتاطانه',
   },
-  R4: {
+  SC4: {
     label: 'روند نزولی قوی',
     type: 'terminal',
     description: 'سناریو نهایی — نزول قوی و پایدار',
   },
-  R5: {
+  SC5: {
     label: 'نزولی شتاب‌دار',
     type: 'terminal',
     description: 'سناریو نهایی — حرکت شتاب‌دار نزولی',
   },
-  R6: {
+  SC6: {
     label: 'نزولی با احتیاط',
     type: 'terminal',
     description: 'سناریو نهایی — نزول کند و محتاطانه',
   },
-  R7: {
+  SC7: {
     label: 'رنج کم‌نوسان',
     type: 'terminal',
     description: 'سناریو نهایی — محدوده رنج با نوسان کم',
   },
-  R8: {
+  SC8: {
     label: 'رنج پرنوسان',
     type: 'terminal',
     description: 'سناریو نهایی — محدوده رنج با نوسان بالا',
   },
-  R9: {
+  SC9: {
     label: 'حالت شوک',
     type: 'terminal',
     description: 'سناریو نهایی — شوک ناگهانی و غیرمنتظره',
@@ -221,7 +221,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
 // Level 1 (x=1050): Branch nodes B, C, D
 // Level 2 (x=750):  Intermediate event nodes E, F, G, H, I, J
 // Level 3 (x=450):  Cross-branch nodes K, L
-// Level 4 (x=150):  Terminal scenario nodes R1–R9
+// Level 4 (x=150):  Terminal scenario nodes SC1–SC9
 
 export const NODE_POSITIONS: Record<string, NodePosition> = {
   // Root
@@ -243,15 +243,15 @@ export const NODE_POSITIONS: Record<string, NodePosition> = {
   K:  { x: 450, y: 250 },
   L:  { x: 450, y: 550 },
   // Terminals
-  R1: { x: 150, y: 30 },
-  R2: { x: 150, y: 110 },
-  R3: { x: 150, y: 190 },
-  R4: { x: 150, y: 280 },
-  R5: { x: 150, y: 360 },
-  R6: { x: 150, y: 440 },
-  R7: { x: 150, y: 530 },
-  R8: { x: 150, y: 610 },
-  R9: { x: 150, y: 690 },
+  SC1: { x: 150, y: 30 },
+  SC2: { x: 150, y: 110 },
+  SC3: { x: 150, y: 190 },
+  SC4: { x: 150, y: 280 },
+  SC5: { x: 150, y: 360 },
+  SC6: { x: 150, y: 440 },
+  SC7: { x: 150, y: 530 },
+  SC8: { x: 150, y: 610 },
+  SC9: { x: 150, y: 690 },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -281,7 +281,7 @@ export interface ScenarioMeta {
 // ── Bullish Labels (market trending up) ──────────────────────────────────────
 
 const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
-  R1: {
+  SC1: {
     label: 'روند صعودی قوی',
     nodeTitle: 'صعود قوی',
     nodeDesc: 'تداوم روند صعودی با قدرت بالا و حجم مناسب.',
@@ -290,7 +290,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'صعودی قوی — احتمال بالای عبور از مقاومت‌ها',
     strategyTag: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   },
-  R2: {
+  SC2: {
     label: 'صعودی شتاب‌دار',
     nodeTitle: 'شتاب صعودی',
     nodeDesc: 'افزایش شتاب صعودی با شکست سطوح کلیدی.',
@@ -299,7 +299,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شتاب‌دار صعودی — ورود سریع با تریلینگ استاپ',
     strategyTag: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
   },
-  R3: {
+  SC3: {
     label: 'صعودی با احتیاط',
     nodeTitle: 'صعود محتاطانه',
     nodeDesc: 'حرکت صعودی آرام و کنترل‌شده با پولبک‌های مکرر.',
@@ -308,7 +308,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'صعودی محتاطانه — ورود در پولبک با حجم کم',
     strategyTag: 'bg-green-500/15 text-green-400 border-green-500/30',
   },
-  R4: {
+  SC4: {
     label: 'نزولی قوی (اصلاح عمیق)',
     nodeTitle: 'اصلاح عمیق',
     nodeDesc: 'آغاز یک اصلاح عمیق و سریع در روند صعودی.',
@@ -317,7 +317,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'اصلاحی عمیق — خروج موقت و انتظار تثبیت',
     strategyTag: 'bg-red-500/15 text-red-400 border-red-500/30',
   },
-  R5: {
+  SC5: {
     label: 'نزولی شتاب‌دار (شوک نزولی)',
     nodeTitle: 'شوک نزولی',
     nodeDesc: 'سقوط ناگهانی قیمت با حجم بالا.',
@@ -326,7 +326,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شوک نزولی — خروج فوری و انتظار آرامش بازار',
     strategyTag: 'bg-red-400/15 text-red-300 border-red-400/30',
   },
-  R6: {
+  SC6: {
     label: 'نزولی با احتیاط (اصلاح خفیف)',
     nodeTitle: 'اصلاح خفیف',
     nodeDesc: 'اصلاح ملایم و کنترل‌شده در روند صعودی.',
@@ -335,7 +335,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'اصلاح خفیف — کاهش حجم و انتظار فرصت خرید',
     strategyTag: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
   },
-  R7: {
+  SC7: {
     label: 'رنج کم‌نوسان (تثبیت)',
     nodeTitle: 'تثبیت رنج',
     nodeDesc: 'ورود به محدوده رنج با نوسان بسیار کم.',
@@ -344,7 +344,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'رنج کم‌نوسان — انتظار خروج از محدوده',
     strategyTag: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   },
-  R8: {
+  SC8: {
     label: 'شوک صعودی',
     nodeTitle: 'شوک صعودی',
     nodeDesc: 'حرکت فوق‌العاده صعودی فراتر از سطوح عادی.',
@@ -353,7 +353,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شوک صعودی — ورود با احتیاط و حد ضرر نزدیک',
     strategyTag: 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30',
   },
-  R9: {
+  SC9: {
     label: 'شوک نزولی',
     nodeTitle: 'شوک نزولی',
     nodeDesc: 'سقوط ناگهانی و شدید فراتر از سطوح عادی.',
@@ -367,7 +367,7 @@ const LABELS_BULLISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
 // ── Bearish Labels (market trending down) ────────────────────────────────────
 
 const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
-  R1: {
+  SC1: {
     label: 'بازگشت صعودی قوی',
     nodeTitle: 'بازگشت قوی',
     nodeDesc: 'واگرایی مثبت و شروع روند صعودی جدید.',
@@ -376,7 +376,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'بازگشت صعودی — فرصت ورود در کف',
     strategyTag: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   },
-  R2: {
+  SC2: {
     label: 'بازگشت شتاب‌دار',
     nodeTitle: 'بازگشت شتاب‌دار',
     nodeDesc: 'پوشش سریع سطوح از دست‌رفته با حجم بالا.',
@@ -385,7 +385,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شتاب‌دار صعودی — ورود تهاجمی با توقف نزدیک',
     strategyTag: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
   },
-  R3: {
+  SC3: {
     label: 'بازگشت با احتیاط',
     nodeTitle: 'بازگشت محتاطانه',
     nodeDesc: 'سیگنال بازگشت ضعیف و نیازمند تایید بیشتر.',
@@ -394,7 +394,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'بازگشت محتاطانه — ورود با حجم بسیار کم',
     strategyTag: 'bg-green-500/15 text-green-400 border-green-500/30',
   },
-  R4: {
+  SC4: {
     label: 'روند نزولی قوی',
     nodeTitle: 'نزول قوی',
     nodeDesc: 'تداوم روند نزولی با فشار فروش بالا.',
@@ -403,7 +403,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'نزولی قوی — خروج فوری توصیه می‌شود',
     strategyTag: 'bg-red-500/15 text-red-400 border-red-500/30',
   },
-  R5: {
+  SC5: {
     label: 'نزولی شتاب‌دار',
     nodeTitle: 'نزول شتاب‌دار',
     nodeDesc: 'افزایش سرعت سقوط با شکست حمایت‌ها.',
@@ -412,7 +412,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'نزولی شتاب‌دار — خروج فوری و پوزیشن‌های_short_',
     strategyTag: 'bg-red-400/15 text-red-300 border-red-400/30',
   },
-  R6: {
+  SC6: {
     label: 'نزولی با احتیاط',
     nodeTitle: 'نزول محتاطانه',
     nodeDesc: 'نزول آرام و کنترل‌شده با بازگشت‌های کوچک.',
@@ -421,7 +421,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'نزولی محتاطانه — احتیاط و کاهش حجم معاملات',
     strategyTag: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
   },
-  R7: {
+  SC7: {
     label: 'رنج کم‌نوسان',
     nodeTitle: 'تثبیت رنج',
     nodeDesc: 'ورود به محدوده تثبیت با نوسان کم.',
@@ -430,7 +430,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'رنج کم‌نوسان — منتظر خروج از محدوده بمانید',
     strategyTag: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   },
-  R8: {
+  SC8: {
     label: 'شوک نزولی',
     nodeTitle: 'شوک نزولی',
     nodeDesc: 'سقوط شدید فراتر از سطوح حمایت اصلی.',
@@ -439,7 +439,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شوک نزولی — خروج فوری تا زمان تثبیت',
     strategyTag: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   },
-  R9: {
+  SC9: {
     label: 'شوک صعودی',
     nodeTitle: 'شوک صعودی',
     nodeDesc: 'جهش ناگهانی فراتر از سطوح مقاومت اصلی.',
@@ -453,7 +453,7 @@ const LABELS_BEARISH: Record<string, Omit<ScenarioMeta, 'color'>> = {
 // ── Neutral Labels (no clear trend) ──────────────────────────────────────────
 
 const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
-  R1: {
+  SC1: {
     label: 'روند صعودی قوی',
     nodeTitle: 'صعود قوی',
     nodeDesc: 'شروع روند صعودی قوی و پایدار.',
@@ -462,7 +462,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'صعودی قوی — احتمال بالای عبور از مقاومت‌ها',
     strategyTag: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   },
-  R2: {
+  SC2: {
     label: 'صعودی شتاب‌دار',
     nodeTitle: 'شتاب صعودی',
     nodeDesc: 'حرکت صعودی سریع با شکست سطوح.',
@@ -471,7 +471,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شتاب‌دار صعودی — ورود سریع با تریلینگ استاپ',
     strategyTag: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
   },
-  R3: {
+  SC3: {
     label: 'صعودی با احتیاط',
     nodeTitle: 'صعود محتاطانه',
     nodeDesc: 'حرکت صعودی کند و نامطمئن.',
@@ -480,7 +480,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'صعودی محتاطانه — ورود با حجم کم',
     strategyTag: 'bg-green-500/15 text-green-400 border-green-500/30',
   },
-  R4: {
+  SC4: {
     label: 'روند نزولی قوی',
     nodeTitle: 'نزول قوی',
     nodeDesc: 'شروع روند نزولی قوی و پایدار.',
@@ -489,7 +489,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'نزولی قوی — خروج فوری توصیه می‌شود',
     strategyTag: 'bg-red-500/15 text-red-400 border-red-500/30',
   },
-  R5: {
+  SC5: {
     label: 'نزولی شتاب‌دار',
     nodeTitle: 'نزول شتاب‌دار',
     nodeDesc: 'حرکت نزولی سریع با شکست حمایت‌ها.',
@@ -498,7 +498,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'نزولی شتاب‌دار — خروج فوری توصیه می‌شود',
     strategyTag: 'bg-red-400/15 text-red-300 border-red-400/30',
   },
-  R6: {
+  SC6: {
     label: 'نزولی با احتیاط',
     nodeTitle: 'نزول محتاطانه',
     nodeDesc: 'نزول کند و کنترل‌شده.',
@@ -507,7 +507,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'نزولی محتاطانه — احتیاط و کاهش حجم معاملات',
     strategyTag: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
   },
-  R7: {
+  SC7: {
     label: 'رنج کم‌نوسان',
     nodeTitle: 'رنج کم‌نوسان',
     nodeDesc: 'بازار در یک محدوده باریک با نوسان کم.',
@@ -516,7 +516,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'رنج کم‌نوسان — منتظر خروج از محدوده بمانید',
     strategyTag: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   },
-  R8: {
+  SC8: {
     label: 'شوک صعودی',
     nodeTitle: 'شوک صعودی',
     nodeDesc: 'حرکت فوق‌العاده صعودی و غیرمنتظره.',
@@ -525,7 +525,7 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
     strategyText: 'شوک صعودی — ورود با احتیاط و حد ضرر نزدیک',
     strategyTag: 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30',
   },
-  R9: {
+  SC9: {
     label: 'شوک نزولی',
     nodeTitle: 'شوک نزولی',
     nodeDesc: 'حرکت فوق‌العاده نزولی و غیرمنتظره.',
@@ -539,15 +539,15 @@ const LABELS_NEUTRAL: Record<string, Omit<ScenarioMeta, 'color'>> = {
 // ── Color Map (fixed per scenario) ───────────────────────────────────────────
 
 const COLORS_MAP: Record<string, string> = {
-  R1: '#34c98b',
-  R2: '#2dd4a8',
-  R3: '#86efac',
-  R4: '#ef4d62',
-  R5: '#f87171',
-  R6: '#fca5a5',
-  R7: '#fbbf24',
-  R8: '#fb923c',
-  R9: '#a855f7',
+  SC1: '#34c98b',
+  SC2: '#2dd4a8',
+  SC3: '#86efac',
+  SC4: '#ef4d62',
+  SC5: '#f87171',
+  SC6: '#fca5a5',
+  SC7: '#fbbf24',
+  SC8: '#fb923c',
+  SC9: '#a855f7',
 };
 
 /**
@@ -574,15 +574,15 @@ export function getDynamicScenarioMeta(signal: string): Record<string, ScenarioM
 
 // ── Legacy static SCENARIO_META (kept for backward compat, prefer getDynamicScenarioMeta) ──
 export const SCENARIO_META: Record<string, { label: string; color: string }> = {
-  R1: { label: 'روند صعودی قوی', color: '#34c98b' },
-  R2: { label: 'صعودی شتاب‌دار', color: '#2dd4a8' },
-  R3: { label: 'صعودی با احتیاط', color: '#86efac' },
-  R4: { label: 'روند نزولی قوی', color: '#ef4d62' },
-  R5: { label: 'نزولی شتاب‌دار', color: '#f87171' },
-  R6: { label: 'نزولی با احتیاط', color: '#fca5a5' },
-  R7: { label: 'رنج (تثبیت)', color: '#fbbf24' },
-  R8: { label: 'شوک صعودی', color: '#10b981' },
-  R9: { label: 'شوک نزولی', color: '#a855f7' },
+  SC1: { label: 'روند صعودی قوی', color: '#34c98b' },
+  SC2: { label: 'صعودی شتاب‌دار', color: '#2dd4a8' },
+  SC3: { label: 'صعودی با احتیاط', color: '#86efac' },
+  SC4: { label: 'روند نزولی قوی', color: '#ef4d62' },
+  SC5: { label: 'نزولی شتاب‌دار', color: '#f87171' },
+  SC6: { label: 'نزولی با احتیاط', color: '#fca5a5' },
+  SC7: { label: 'رنج (تثبیت)', color: '#fbbf24' },
+  SC8: { label: 'شوک صعودی', color: '#10b981' },
+  SC9: { label: 'شوک نزولی', color: '#a855f7' },
 };
 
 // ── Graph Algorithms ─────────────────────────────────────────────────────────
@@ -627,7 +627,7 @@ export function calcEdgeProbabilities(
 }
 
 /**
- * Find all paths from 'A' to terminal scenario nodes (R1–R9) using DFS.
+ * Find all paths from 'A' to terminal scenario nodes (SC1–SC9) using DFS.
  * Returns up to 200 paths sorted by probability (highest first).
  */
 export function findAllPaths(edgeProbs: Record<string, number>): PathInfo[] {

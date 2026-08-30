@@ -189,7 +189,7 @@ function buildDataSection(body: VdesRequest, v12Extra: V12ExtraData, dominantKey
   const isSKeyScenarios = Object.keys(scenarios).some(k => k.startsWith('S'));
   const SCENARIO_ORDER = isSKeyScenarios
     ? ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9'] as const
-    : ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+    : ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
   const probTable = SCENARIO_ORDER
     .filter(k => scenarios[k] && (scenarios[k].probability || 0) > 0.5)
     .map((k) => {
@@ -434,8 +434,8 @@ export async function POST(req: NextRequest) {
     // Find dominant (highest individual) and highest cumulative keys
     const ALL_KEYS = isSKeyScenarios
       ? ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9'] as const
-      : ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
-    let dominantKey = isSKeyScenarios ? 'S5' : 'R3';
+      : ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
+    let dominantKey = isSKeyScenarios ? 'S5' : 'SC3';
     let dominantProb = 0;
     for (const k of ALL_KEYS) {
       const p = body.scenarios[k]?.probability ?? 0;

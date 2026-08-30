@@ -552,7 +552,7 @@ export interface DecisionGraphContext {
 export function calculateScenarioProbabilities(
   bullConsensus: number,
   price: number,
-  R1: number,
+  SC1: number,
   S1: number,
   MA100: number,
   rsi: number,
@@ -562,7 +562,7 @@ export function calculateScenarioProbabilities(
   mlResult: AdaptiveModelResult | null,
   adx: number = 25,
   atr: number = 0,
-): { pR1: number; pR2: number; pR3: number; pR4: number; pR5: number; pR6: number; pR7: number; pR8: number; pR9: number; factors: { momentum: number; volatility: number; trend: number } } {
+): { pSC1: number; pSC2: number; pSC3: number; pSC4: number; pSC5: number; pSC6: number; pSC7: number; pSC8: number; pSC9: number; factors: { momentum: number; volatility: number; trend: number } } {
   // ── Adaptive ML factors ──
   const mlParams = mlResult?.adaptiveParams;
   const factors = {
@@ -728,45 +728,45 @@ export function calculateScenarioProbabilities(
 
   // CP_i|Bull: Bull scenarios dominate, range scenarios limited
   const cpBull = [
-    // R1: Strong Bull — ADX strength and trend quality
+    // SC1: Strong Bull — ADX strength and trend quality
     0.28 * adxTrend * (0.5 + 0.5 * adxNormVal),
-    // R2: Accelerating Bull — momentum + volatility
+    // SC2: Accelerating Bull — momentum + volatility
     0.15 * adxTrend * (0.3 + 0.7 * factors.momentum),
-    // R3: Cautious Bull — reduced by overbought risk
+    // SC3: Cautious Bull — reduced by overbought risk
     0.12 * (1 - overbought * 0.6) * adxTrend,
-    // R4: Strong Bear — small probability in bull market, driven by divergence
+    // SC4: Strong Bear — small probability in bull market, driven by divergence
     0.03 * (1 + divBear),
-    // R5: Accelerating Bear — very small in bull market
+    // SC5: Accelerating Bear — very small in bull market
     0.02,
-    // R6: Cautious Bear — driven by divergence warning
+    // SC6: Cautious Bear — driven by divergence warning
     0.03 * (1 + divBear),
-    // R7: Low-Vol Range — bounded, not dominant
+    // SC7: Low-Vol Range — bounded, not dominant
     adxRange * 0.45 * volLow,
-    // R8: High-Vol Range — bounded
+    // SC8: High-Vol Range — bounded
     adxRange * 0.30 * volHigh,
-    // R9: Shock — fixed small probability
+    // SC9: Shock — fixed small probability
     0.04 * (1 + overbought * 0.5 + volHigh * 0.5),
   ];
 
   // CP_i|Bear: Mirror of bull (bear scenarios dominate)
   const cpBear = [
-    // R1: Strong Bull — small in bear market
+    // SC1: Strong Bull — small in bear market
     0.03 * (1 + divBull),
-    // R2: Accelerating Bull — very small
+    // SC2: Accelerating Bull — very small
     0.02,
-    // R3: Cautious Bull — divergence-driven
+    // SC3: Cautious Bull — divergence-driven
     0.03 * (1 + divBull),
-    // R4: Strong Bear — ADX strength
+    // SC4: Strong Bear — ADX strength
     0.28 * adxTrend * (0.5 + 0.5 * adxNormVal),
-    // R5: Accelerating Bear — momentum
+    // SC5: Accelerating Bear — momentum
     0.15 * adxTrend * (0.3 + 0.7 * factors.momentum),
-    // R6: Cautious Bear — reduced by oversold risk
+    // SC6: Cautious Bear — reduced by oversold risk
     0.12 * (1 - oversold * 0.6) * adxTrend,
-    // R7: Low-Vol Range — bounded
+    // SC7: Low-Vol Range — bounded
     adxRange * 0.45 * volLow,
-    // R8: High-Vol Range — bounded
+    // SC8: High-Vol Range — bounded
     adxRange * 0.30 * volHigh,
-    // R9: Shock
+    // SC9: Shock
     0.04 * (1 + oversold * 0.5 + volHigh * 0.5),
   ];
 
@@ -774,23 +774,23 @@ export function calculateScenarioProbabilities(
   // Per attachment: neutral market has trend signals too, just weaker
   // Range gets adxRange but trend scenarios get reasonable weight
   const cpNeutral = [
-    // R1: Mild Bull — smaller in neutral
+    // SC1: Mild Bull — smaller in neutral
     0.08 * adxTrend * (0.5 + 0.5 * adxNormVal),
-    // R2: Bull Acceleration
+    // SC2: Bull Acceleration
     0.04 * adxTrend * (0.3 + 0.7 * factors.momentum),
-    // R3: Cautious Bull
+    // SC3: Cautious Bull
     0.07 * adxTrend,
-    // R4: Mild Bear
+    // SC4: Mild Bear
     0.08 * adxTrend * (0.5 + 0.5 * adxNormVal),
-    // R5: Bear Acceleration
+    // SC5: Bear Acceleration
     0.04 * adxTrend * (0.3 + 0.7 * factors.momentum),
-    // R6: Cautious Bear
+    // SC6: Cautious Bear
     0.07 * adxTrend,
-    // R7: Low-Vol Range — adxRange weighted, split between vol states
+    // SC7: Low-Vol Range — adxRange weighted, split between vol states
     adxRange * 0.50 * volLow,
-    // R8: High-Vol Range
+    // SC8: High-Vol Range
     adxRange * 0.35 * volHigh,
-    // R9: Shock — small fixed
+    // SC9: Shock — small fixed
     0.04,
   ];
 
@@ -813,21 +813,21 @@ export function calculateScenarioProbabilities(
   const totalRaw = rawS.reduce((a, b) => a + b, 0);
   if (totalRaw <= 0) {
     return {
-      pR1: 12, pR2: 10, pR3: 8, pR4: 12, pR5: 10, pR6: 8,
-      pR7: 15, pR8: 15, pR9: 10, factors,
+      pSC1: 12, pSC2: 10, pSC3: 8, pSC4: 12, pSC5: 10, pSC6: 8,
+      pSC7: 15, pSC8: 15, pSC9: 10, factors,
     };
   }
 
-  const pR1 = Math.round(rawS[0] / totalRaw * 100);
-  const pR2 = Math.round(rawS[1] / totalRaw * 100);
-  const pR3 = Math.round(rawS[2] / totalRaw * 100);
-  const pR4 = Math.round(rawS[3] / totalRaw * 100);
-  const pR5 = Math.round(rawS[4] / totalRaw * 100);
-  const pR6 = Math.round(rawS[5] / totalRaw * 100);
-  const pR7 = Math.round(rawS[6] / totalRaw * 100);
-  const pR8 = Math.round(rawS[7] / totalRaw * 100);
-  const pR9 = Math.max(1, 100 - (pR1 + pR2 + pR3 + pR4 + pR5 + pR6 + pR7 + pR8));
-  return { pR1, pR2, pR3, pR4, pR5, pR6, pR7, pR8, pR9, factors };
+  const pSC1 = Math.round(rawS[0] / totalRaw * 100);
+  const pSC2 = Math.round(rawS[1] / totalRaw * 100);
+  const pSC3 = Math.round(rawS[2] / totalRaw * 100);
+  const pSC4 = Math.round(rawS[3] / totalRaw * 100);
+  const pSC5 = Math.round(rawS[4] / totalRaw * 100);
+  const pSC6 = Math.round(rawS[5] / totalRaw * 100);
+  const pSC7 = Math.round(rawS[6] / totalRaw * 100);
+  const pSC8 = Math.round(rawS[7] / totalRaw * 100);
+  const pSC9 = Math.max(1, 100 - (pSC1 + pSC2 + pSC3 + pSC4 + pSC5 + pSC6 + pSC7 + pSC8));
+  return { pSC1, pSC2, pSC3, pSC4, pSC5, pSC6, pSC7, pSC8, pSC9, factors };
 }
 
 export function calculateEdgeWeights(

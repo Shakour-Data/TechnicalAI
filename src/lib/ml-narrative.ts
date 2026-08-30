@@ -61,8 +61,8 @@ export interface NarrativeInput {
   bbPosition: number;      // 0-100, where price sits in Bollinger Bands
   bbUpper: number;
   bbLower: number;
-  dominantScenarioKey: string;  // 'R1'-'R5'
-  scenarioProbabilities: Record<string, number>;  // R1-R5 probabilities (0-100)
+  dominantScenarioKey: string;  // 'SC1'-'SC5'
+  scenarioProbabilities: Record<string, number>;  // SC1-SC9 probabilities (0-100)
   nearResistance: boolean;  // price within 3% of resistance
    nearSupport: boolean;     // price within 3% of support
   priceVsMa21: 'above' | 'below';
@@ -477,7 +477,7 @@ function scoreTone(item: ToneDef, input: NarrativeInput): number {
   if (id === 'mysterious') {
     if (adx < 20) s += 4;
     if ((macdHist > 0 && rsi < 50) || (macdHist < 0 && rsi > 50)) s += 3;
-    if (dominantScenarioKey === 'R3') s += 2;
+    if (dominantScenarioKey === 'SC3') s += 2;
   }
 
   if (id === 'educational') {
@@ -499,7 +499,7 @@ function scoreTone(item: ToneDef, input: NarrativeInput): number {
 
   if (id === 'conclusive') {
     if (adx > 25 && (rsi > 60 || rsi < 40)) s += 4;
-    if (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') s += 2;
+    if (dominantScenarioKey === 'SC1' || dominantScenarioKey === 'SC2') s += 2;
   }
 
   return s + 1;
@@ -563,9 +563,9 @@ export function buildNarrativeInput(body: {
   const S1 = body.supports[0] || body.currentPrice * 0.95;
 
   // Find dominant scenario
-  let dominantKey = 'R3';
+  let dominantKey = 'SC3';
   let dominantProb = 0;
-  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5'] as const) {
+  for (const k of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5'] as const) {
     const p = body.scenarios[k]?.probability ?? 0;
     if (p > dominantProb) { dominantProb = p; dominantKey = k; }
   }
@@ -592,11 +592,11 @@ export function buildNarrativeInput(body: {
     bbLower: body.bollingerLower,
     dominantScenarioKey: dominantKey,
     scenarioProbabilities: {
-      R1: body.scenarios.R1?.probability ?? 0,
-      R2: body.scenarios.R2?.probability ?? 0,
-      R3: body.scenarios.R3?.probability ?? 0,
-      R4: body.scenarios.R4?.probability ?? 0,
-      R5: body.scenarios.R5?.probability ?? 0,
+      SC1: body.scenarios.SC1?.probability ?? 0,
+      SC2: body.scenarios.SC2?.probability ?? 0,
+      SC3: body.scenarios.SC3?.probability ?? 0,
+      SC4: body.scenarios.SC4?.probability ?? 0,
+      SC5: body.scenarios.SC5?.probability ?? 0,
     },
     nearResistance: R1 > 0 ? Math.abs(body.currentPrice - R1) / R1 < 0.03 : false,
     nearSupport: S1 > 0 ? Math.abs(body.currentPrice - S1) / S1 < 0.03 : false,

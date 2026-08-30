@@ -207,15 +207,15 @@ ${S2 ? `- حمایت **S2** در ${fmtGrouped(S2)} ${unit}${supportStrengths?.[1
 - میانگین نوسان روزانه (ATR): ${fmtGrouped(atr)} ${unit}
 
 **سناریوهای محتمل (با احتمالات):**
-- **سناریوی ۱ – ${scenarios.R1?.name || '—'}:** ${fmt(scenarios.R1?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R1?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R1?.targetMax ?? 0)} ${unit})
-- **سناریوی ۲ – ${scenarios.R2?.name || '—'}:** ${fmt(scenarios.R2?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R2?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R2?.targetMax ?? 0)} ${unit})
-- **سناریوی ۳ – ${scenarios.R3?.name || '—'}:** ${fmt(scenarios.R3?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R3?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R3?.targetMax ?? 0)} ${unit})
-- **سناریوی ۴ – ${scenarios.R4?.name || '—'}:** ${fmt(scenarios.R4?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R4?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R4?.targetMax ?? 0)} ${unit})
-- **سناریوی ۵ – ${scenarios.R5?.name || '—'}:** ${fmt(scenarios.R5?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R5?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R5?.targetMax ?? 0)} ${unit})
-- **سناریوی ۶ – ${scenarios.R6?.name || '—'}:** ${fmt(scenarios.R6?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R6?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R6?.targetMax ?? 0)} ${unit})
-- **سناریوی ۷ – ${scenarios.R7?.name || '—'}:** ${fmt(scenarios.R7?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R7?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R7?.targetMax ?? 0)} ${unit})
-- **سناریوی ۸ – ${scenarios.R8?.name || '—'}:** ${fmt(scenarios.R8?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R8?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R8?.targetMax ?? 0)} ${unit})
-- **سناریوی ۹ – ${scenarios.R9?.name || '—'}:** ${fmt(scenarios.R9?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.R9?.targetMin ?? 0)} — ${fmtGrouped(scenarios.R9?.targetMax ?? 0)} ${unit})
+- **سناریوی ۱ – ${scenarios.SC1?.name || '—'}:** ${fmt(scenarios.SC1?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC1?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC1?.targetMax ?? 0)} ${unit})
+- **سناریوی ۲ – ${scenarios.SC2?.name || '—'}:** ${fmt(scenarios.SC2?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC2?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC2?.targetMax ?? 0)} ${unit})
+- **سناریوی ۳ – ${scenarios.SC3?.name || '—'}:** ${fmt(scenarios.SC3?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC3?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC3?.targetMax ?? 0)} ${unit})
+- **سناریوی ۴ – ${scenarios.SC4?.name || '—'}:** ${fmt(scenarios.SC4?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC4?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC4?.targetMax ?? 0)} ${unit})
+- **سناریوی ۵ – ${scenarios.SC5?.name || '—'}:** ${fmt(scenarios.SC5?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC5?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC5?.targetMax ?? 0)} ${unit})
+- **سناریوی ۶ – ${scenarios.SC6?.name || '—'}:** ${fmt(scenarios.SC6?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC6?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC6?.targetMax ?? 0)} ${unit})
+- **سناریوی ۷ – ${scenarios.SC7?.name || '—'}:** ${fmt(scenarios.SC7?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC7?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC7?.targetMax ?? 0)} ${unit})
+- **سناریوی ۸ – ${scenarios.SC8?.name || '—'}:** ${fmt(scenarios.SC8?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC8?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC8?.targetMax ?? 0)} ${unit})
+- **سناریوی ۹ – ${scenarios.SC9?.name || '—'}:** ${fmt(scenarios.SC9?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC9?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC9?.targetMax ?? 0)} ${unit})
 `;
 }
 

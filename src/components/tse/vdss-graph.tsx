@@ -35,15 +35,15 @@ export interface VdssGraphProps {
   trendDirection: string;
   bullScore: number;
   scenarios: {
-    R1: Scenario;
-    R2: Scenario;
-    R3: Scenario;
-    R4: Scenario;
-    R5: Scenario;
-    R6: Scenario;
-    R7: Scenario;
-    R8: Scenario;
-    R9: Scenario;
+    SC1: Scenario;
+    SC2: Scenario;
+    SC3: Scenario;
+    SC4: Scenario;
+    SC5: Scenario;
+    SC6: Scenario;
+    SC7: Scenario;
+    SC8: Scenario;
+    SC9: Scenario;
   };
   decisionGraph: GraphData | null;
   probabilityTrend?: ProbabilityTrendResult | null;
@@ -94,24 +94,24 @@ const EDGE_COLORS: Record<string, string> = {
 };
 
 const SCENARIO_META_LOCAL: Record<string, { label: string; color: string }> = {
-  R1: { label: 'شوک نزولی', color: '#b91c1c' },
-  R2: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
-  R3: { label: 'نزولی قوی', color: '#ea580c' },
-  R4: { label: 'نزولی خفیف', color: '#c2410c' },
-  R5: { label: 'رنج', color: '#b45309' },
-  R6: { label: 'صعودی خفیف', color: '#047857' },
-  R7: { label: 'صعودی قوی', color: '#059669' },
-  R8: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
-  R9: { label: 'شوک صعودی', color: '#0891b2' },
+  SC1: { label: 'شوک نزولی', color: '#b91c1c' },
+  SC2: { label: 'نزولی شتاب‌دار', color: '#dc2626' },
+  SC3: { label: 'نزولی قوی', color: '#ea580c' },
+  SC4: { label: 'نزولی خفیف', color: '#c2410c' },
+  SC5: { label: 'رنج', color: '#b45309' },
+  SC6: { label: 'صعودی خفیف', color: '#047857' },
+  SC7: { label: 'صعودی قوی', color: '#059669' },
+  SC8: { label: 'صعودی شتاب‌دار', color: '#0e7490' },
+  SC9: { label: 'شوک صعودی', color: '#0891b2' },
 };
 
 const SCENARIO_DISPLAY: Record<string, string> = {
   ROOT: 'ریشه',
   BR1: 'پیروی از روند', BR2: 'شکست', BR3: 'بازگشت',
   EA: 'وضعیت روند', EB: 'وضعیت شکست', EC: 'وضعیت واگرایی',
-  R1: 'سناریوی ۱', R2: 'سناریوی ۲', R3: 'سناریوی ۳',
-  R4: 'سناریوی ۴', R5: 'سناریوی ۵', R6: 'سناریوی ۶',
-  R7: 'سناریوی ۷', R8: 'سناریوی ۸', R9: 'سناریوی ۹',
+  SC1: 'سناریوی ۱', SC2: 'سناریوی ۲', SC3: 'سناریوی ۳',
+  SC4: 'سناریوی ۴', SC5: 'سناریوی ۵', SC6: 'سناریوی ۶',
+  SC7: 'سناریوی ۷', SC8: 'سناریوی ۸', SC9: 'سناریوی ۹',
 };
 
 const BRANCH_META: Record<string, { label: string; color: string }> = {
@@ -457,11 +457,11 @@ export default function VdssGraph(props: VdssGraphProps) {
       }
       let groupCumDay1 = 0;
       if (g.group === 'bullish') {
-        groupCumDay1 = calculateCDF('R6', day1AllInds);
+        groupCumDay1 = calculateCDF('SC6', day1AllInds);
       } else if (g.group === 'bearish') {
-        groupCumDay1 = calculateCDF('R4', day1AllInds);
+        groupCumDay1 = calculateCDF('SC4', day1AllInds);
       } else {
-        groupCumDay1 = day1AllInds['R5'] ?? 0;
+        groupCumDay1 = day1AllInds['SC5'] ?? 0;
       }
 
       const newTrend: DayPoint[] = g.trend.map((dp, i) => {
@@ -523,7 +523,7 @@ export default function VdssGraph(props: VdssGraphProps) {
       }
     }
 
-    // Terminal nodes (R1-R9): handled by the big badge, no extra text
+    // Terminal nodes (SC1-SC9): handled by the big badge, no extra text
     for (const key of SCENARIO_KEYS) {
       display[key] = '';
     }
@@ -768,7 +768,7 @@ export default function VdssGraph(props: VdssGraphProps) {
                     </>
                   )}
 
-                  {/* Terminal result nodes (R1-R9) */}
+                  {/* Terminal result nodes (SC1-SC9) */}
                   {isResultNode && (
                     <>
                       <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.4, color: '#ffffff' }}>{SCENARIO_META_LOCAL[node.id]?.label ?? node.title}</div>
@@ -940,9 +940,9 @@ export default function VdssGraph(props: VdssGraphProps) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SCENARIO_LINE_COLORS: Record<string, string> = {
-  R1: '#b91c1c', R2: '#dc2626', R3: '#ea580c', R4: '#f97316',
-  R5: '#f59e0b',
-  R6: '#65a30d', R7: '#16a34a', R8: '#059669', R9: '#047857',
+  SC1: '#b91c1c', SC2: '#dc2626', SC3: '#ea580c', SC4: '#f97316',
+  SC5: '#f59e0b',
+  SC6: '#65a30d', SC7: '#16a34a', SC8: '#059669', SC9: '#047857',
 };
 
 const SCENARIO_CHART_GROUP_STYLE: Record<string, { borderColor: string; headerBg: string; headerText: string; indColor: string; cumColor: string }> = {
@@ -966,7 +966,7 @@ const GROUP_LABEL_MAP: Record<string, string> = {
 
 function PerScenarioTrendCharts({ data }: { data?: ProbabilityTrendResult | null }) {
   const [open, setOpen] = useState(true);
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set(['R1','R2','R3','R4','R5','R6','R7','R8','R9']));
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set(['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9']));
 
   const hasData = !!(data && data.scenarios && data.scenarios.length === 9 &&
     data.scenarios[0]?.trend?.length > 1);
@@ -1343,8 +1343,8 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
     );
   }
 
-  const bearishKeys = ['R1', 'R2', 'R3', 'R4'];
-  const bullishKeys = ['R9', 'R8', 'R7', 'R6'];
+  const bearishKeys = ['SC1', 'SC2', 'SC3', 'SC4'];
+  const bullishKeys = ['SC9', 'SC8', 'SC7', 'SC6'];
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
@@ -1384,8 +1384,8 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
                 </div>
               ))}
               <div className="flex items-center gap-1">
-                <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS['R5'], opacity: 0.6 }} />
-                <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS['R5'] }}>R5</span>
+                <span className="inline-block w-3 h-[1px] rounded" style={{ background: SCENARIO_LINE_COLORS['SC5'], opacity: 0.6 }} />
+                <span className="text-[8px]" style={{ color: SCENARIO_LINE_COLORS['SC5'] }}>SC5</span>
               </div>
               {bullishKeys.map(k => (
                 <div key={k} className="flex items-center gap-1">
@@ -1403,7 +1403,7 @@ function CumulativeProbabilityChart({ data }: { data?: ProbabilityTrendResult | 
             {xLabels}
             <text x={chartW / 2} y={chartH - 4} textAnchor="middle" fill="#9ca3af" fontSize={10} fontFamily="inherit">روز (۱ = امروز)</text>
             {bearishKeys.map(buildScenarioLine)}
-            {buildScenarioLine('R5')}
+            {buildScenarioLine('SC5')}
             {bullishKeys.map(buildScenarioLine)}
             {buildGroupLine(bull.trend, 'bullish')}
             {buildGroupLine(neut.trend, 'neutral')}
@@ -1521,7 +1521,7 @@ function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null 
             </TableHeader>
             <TableBody>
               {/* Scenario rows */}
-              {['R1','R2','R3','R4','R5','R6','R7','R8','R9'].map(key => {
+              {['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9'].map(key => {
                 const sc = scenarioMap[key];
                 if (!sc) return null;
                 const gc = TREND_GROUP_COLOR[sc.group];
@@ -1611,8 +1611,8 @@ function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null 
             <div className="px-4 py-2.5 rounded-lg border-r-3 border-emerald-700/60 bg-emerald-50 text-[11px] text-[#374151] leading-relaxed">
               <b>توضیح:</b> احتمال اختصاصی = احتمال وقوع سناریو در آن روز خاص.
               احتمال تجمعی (CDF) = مجموع احتمال از شدیدترین سناریو تا این سناریو در همان روز.
-              صعودی: از شوک صعودی (R9) تجمعی تا صعودی خفیف (R6) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
-              نزولی: از شوک نزولی (R1) تجمعی تا نزولی خفیف (R4) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
+              صعودی: از شوک صعودی (SC9) تجمعی تا صعودی خفیف (SC6) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
+              نزولی: از شوک نزولی (SC1) تجمعی تا نزولی خفیف (SC4) — هرچه قوی‌تر، احتمال تجمعی بیشتر.
               ردیف «مجموع سه گروه» باید همیشه ۱۰۰٪ باشد.
             </div>
             {data.scenarios.filter(s => s.interpretation).map(s => (

@@ -151,7 +151,7 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
         timeVisible: false,
         tickMarkFormatter: (time: Time) => {
           const idx = time as number;
-          return jalaliMap.get(idx) || String(idx);
+          return jalaliMap.get(idx) || toPersianDigits(String(idx));
         },
       },
       localization: {
@@ -238,14 +238,14 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     const validSupports = (supportStrengths || []).filter(s => s.price > 0);
     validSupports.forEach((s, i) => {
       const style = srLineStyle(s.strength, s.isTarget);
-      addPriceLine(candleSeries, s.price, s.isTarget ? '#16a34a' : SUPPORT_COLOR, style.lineWidth, style.lineStyle, `S${i + 1} (${s.strength}/10)`, i < 6);
+      addPriceLine(candleSeries, s.price, s.isTarget ? '#16a34a' : SUPPORT_COLOR, style.lineWidth, style.lineStyle, `S${toPersianDigits(String(i + 1))} (${toPersianDigits(String(s.strength))}/۱۰)`, i < 6);
     });
 
     // ── Resistance levels (with strength) ─────────────────────
     const validResistances = (resistanceStrengths || []).filter(r => r.price > 0);
     validResistances.forEach((r, i) => {
       const style = srLineStyle(r.strength, r.isTarget);
-      addPriceLine(candleSeries, r.price, r.isTarget ? '#dc2626' : RESISTANCE_COLOR, style.lineWidth, style.lineStyle, `R${i + 1} (${r.strength}/10)`, i < 6);
+      addPriceLine(candleSeries, r.price, r.isTarget ? '#dc2626' : RESISTANCE_COLOR, style.lineWidth, style.lineStyle, `R${toPersianDigits(String(i + 1))} (${toPersianDigits(String(r.strength))}/۱۰)`, i < 6);
     });
 
     // ── Price targets from scenarios ───────────────────────────
@@ -290,8 +290,9 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
   const legendItems = [
     { color: RESISTANCE_COLOR, label: 'مقاومت (با قدرت)' },
     { color: SUPPORT_COLOR, label: 'حمایت (با قدرت)' },
-    { color: MA100_COLOR, label: 'MA100' },
-    { color: MA21_COLOR, label: 'MA21' },
+    { color: MA100_COLOR, label: 'MA۱۰۰' },
+    { color: MA21_COLOR, label: 'MA۲۱' },
+
     { color: '#d97706', label: 'هدف قیمتی' },
   ];
 

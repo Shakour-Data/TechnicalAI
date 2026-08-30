@@ -53,11 +53,11 @@ function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
   const bbRange = bollingerUpper - bollingerLower;
   const bbPosition = bbRange > 0 ? Math.min(100, Math.max(0, Math.round((price - bollingerLower) / bbRange * 100))) : 50;
 
-  // Find dominant scenario across ALL R1-R9
+  // Find dominant scenario across ALL SC1-SC9
   const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
-  let dominantKey = 'R5';
+  let dominantKey = 'SC5';
   let dominantProb = 0;
-  for (const k of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const) {
+  for (const k of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const) {
     const p = scenarios?.[k]?.probability ?? 0;
     if (p > dominantProb) { dominantProb = p; dominantKey = k; }
   }
@@ -88,7 +88,7 @@ function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
   } else {
     const scenarios = body.scenarios as Record<string, { name?: string; probability: number }> | undefined;
     let maxProb = 0;
-    for (const k of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9']) {
+    for (const k of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9']) {
       const p = scenarios?.[k]?.probability ?? 0;
       if (p > maxProb) { maxProb = p; dominantScenario = scenarios?.[k]?.name ?? k; }
     }
@@ -144,8 +144,8 @@ function extractProbTrendSignals(body: Record<string, unknown>): MSLV4Context['p
 
   // Find dominant scenario trend
   const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
-  let domKey = 'R5'; let domProb = 0;
-  for (const k of ['R1','R2','R3','R4','R5','R6','R7','R8','R9']) {
+  let domKey = 'SC5'; let domProb = 0;
+  for (const k of ['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9']) {
     const p = scenarios?.[k]?.probability ?? 0;
     if (p > domProb) { domProb = p; domKey = k; }
   }
@@ -233,7 +233,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   }
 
   // Top 5 scenarios by probability
-  const allScenarios = (['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const)
+  const allScenarios = (['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const)
     .map((k, i) => ({
       key: k,
       name: scenarios?.[k]?.name || getScenarioName(k),

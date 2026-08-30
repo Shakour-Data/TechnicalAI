@@ -723,7 +723,7 @@ function scoreStyle(st: StyleDef, inp: NarrativeInput): number {
   switch (st.id) {
     case 'executive': s_ = adx > 25 ? 7 : 4; break;
     case 'technical': s_ = 6; break;
-    case 'trading': s_ = (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') ? 9 : 4; break;
+    case 'trading': s_ = (dominantScenarioKey === 'SC1' || dominantScenarioKey === 'SC2') ? 9 : 4; break;
     case 'forecast': s_ = 6; break;
     case 'educational': s_ = 5; break;
   }
@@ -741,7 +741,7 @@ function scoreTone(t: ToneDef, inp: NarrativeInput): number {
     case 'optimistic': s_ = 3; if (trendDirection === 'up' && macdHist > 0) s_ += 4; break;
     case 'realistic': s_ = 6; break;
   }
-  if (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') s_ += 2;
+  if (dominantScenarioKey === 'SC1' || dominantScenarioKey === 'SC2') s_ += 2;
   return s_ + 1;
 }
 
@@ -782,8 +782,8 @@ export function buildNarrativeInput(body: {
   const bbPosition = bbRange > 0 ? Math.max(0, Math.min(100, ((body.currentPrice - body.bollingerLower) / bbRange) * 100)) : 50;
   const R1 = body.resistances[0] || body.currentPrice * 1.05;
   const S1 = body.supports[0] || body.currentPrice * 0.95;
-  let dominantKey = 'R3'; let dominantProb = 0;
-  const allScenarioKeys = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+  let dominantKey = 'SC3'; let dominantProb = 0;
+  const allScenarioKeys = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
   for (const k of allScenarioKeys) {
     const p = body.scenarios[k]?.probability ?? 0;
     if (p > dominantProb) { dominantProb = p; dominantKey = k; }

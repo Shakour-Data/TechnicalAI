@@ -487,7 +487,7 @@ export default function MLForecast({ symbolName, candles, currentPrice }: MLFore
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-gray-900">{model.model_name}</span>
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${r2Color(model.cv_r2)} bg-gray-100`}>
-                            R²: {model.cv_r2.toFixed(4)} ({r2Label(model.cv_r2)})
+                            R²: {toPersianDigits(model.cv_r2.toFixed(4))} ({r2Label(model.cv_r2)})
                           </span>
                           <span className="text-[10px] text-gray-400">RMSE: {toFaDecimal(model.cv_rmse_pct)}%</span>
                         </div>

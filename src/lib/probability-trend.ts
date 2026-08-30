@@ -6,47 +6,47 @@
 //   - NO decay factor. Each day is independent.
 //   - Individual prob: P_ind(s) for each scenario s, sum = 1 for all 9.
 //   - Cumulative prob (CDF within group, same day only):
-//     Bullish (most severe → least): R9, R8, R7, R6
-//       Cum(R9) = R9
-//       Cum(R8) = R9 + R8
-//       Cum(R7) = R9 + R8 + R7
-//       Cum(R6) = R9 + R8 + R7 + R6  (total bullish)
-//     Neutral: Cum(R5) = R5
-//     Bearish (most severe → least): R1, R2, R3, R4
-//       Cum(R1) = R1
-//       Cum(R2) = R1 + R2
-//       Cum(R3) = R1 + R2 + R3
-//       Cum(R4) = R1 + R2 + R3 + R4  (total bearish)
+//     Bullish (most severe → least): SC9, SC8, SC7, SC6
+//       Cum(SC9) = SC9
+//       Cum(SC8) = SC9 + SC8
+//       Cum(SC7) = SC9 + SC8 + SC7
+//       Cum(SC6) = SC9 + SC8 + SC7 + SC6  (total bullish)
+//     Neutral: Cum(SC5) = SC5
+//     Bearish (most severe → least): SC1, SC2, SC3, SC4
+//       Cum(SC1) = SC1
+//       Cum(SC2) = SC1 + SC2
+//       Cum(SC3) = SC1 + SC2 + SC3
+//       Cum(SC4) = SC1 + SC2 + SC3 + SC4  (total bearish)
 //
 //   - Group cumulative: Bullish_Cum + Neutral_Cum + Bearish_Cum = 1.0
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Scenario keys ─────────────────────────────────────────────────────────────
 export const SCENARIO_KEYS = [
-  'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9',
+  'SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9',
 ] as const;
 
 export const SCENARIO_META: Record<string, { label: string; group: 'bearish' | 'neutral' | 'bullish' }> = {
-  R1: { label: 'شوک نزولی', group: 'bearish' },
-  R2: { label: 'نزولی شتاب‌دار', group: 'bearish' },
-  R3: { label: 'نزولی قوی', group: 'bearish' },
-  R4: { label: 'نزولی خفیف', group: 'bearish' },
-  R5: { label: 'رنج', group: 'neutral' },
-  R6: { label: 'صعودی خفیف', group: 'bullish' },
-  R7: { label: 'صعودی قوی', group: 'bullish' },
-  R8: { label: 'صعودی شتاب‌دار', group: 'bullish' },
-  R9: { label: 'شوک صعودی', group: 'bullish' },
+  SC1: { label: 'شوک نزولی', group: 'bearish' },
+  SC2: { label: 'نزولی شتاب‌دار', group: 'bearish' },
+  SC3: { label: 'نزولی قوی', group: 'bearish' },
+  SC4: { label: 'نزولی خفیف', group: 'bearish' },
+  SC5: { label: 'رنج', group: 'neutral' },
+  SC6: { label: 'صعودی خفیف', group: 'bullish' },
+  SC7: { label: 'صعودی قوی', group: 'bullish' },
+  SC8: { label: 'صعودی شتاب‌دار', group: 'bullish' },
+  SC9: { label: 'شوک صعودی', group: 'bullish' },
 };
 
 // ── CDF order: most severe → least severe (per documentation §4) ──────────────
-const BULLISH_CDF_ORDER = ['R9', 'R8', 'R7', 'R6'] as const;
-const BEARISH_CDF_ORDER = ['R1', 'R2', 'R3', 'R4'] as const;
-const NEUTRAL_CDF_ORDER = ['R5'] as const;
+const BULLISH_CDF_ORDER = ['SC9', 'SC8', 'SC7', 'SC6'] as const;
+const BEARISH_CDF_ORDER = ['SC1', 'SC2', 'SC3', 'SC4'] as const;
+const NEUTRAL_CDF_ORDER = ['SC5'] as const;
 
 const CDF_ORDER_MAP: Record<string, readonly string[]> = {
-  R9: BULLISH_CDF_ORDER, R8: BULLISH_CDF_ORDER, R7: BULLISH_CDF_ORDER, R6: BULLISH_CDF_ORDER,
-  R1: BEARISH_CDF_ORDER, R2: BEARISH_CDF_ORDER, R3: BEARISH_CDF_ORDER, R4: BEARISH_CDF_ORDER,
-  R5: NEUTRAL_CDF_ORDER,
+  SC9: BULLISH_CDF_ORDER, SC8: BULLISH_CDF_ORDER, SC7: BULLISH_CDF_ORDER, SC6: BULLISH_CDF_ORDER,
+  SC1: BEARISH_CDF_ORDER, SC2: BEARISH_CDF_ORDER, SC3: BEARISH_CDF_ORDER, SC4: BEARISH_CDF_ORDER,
+  SC5: NEUTRAL_CDF_ORDER,
 };
 
 // ── Interfaces ─────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ export interface ProbabilityTrendResult {
 export interface DailyProbabilitySnapshot {
   date: string;
   dayIndex: number;  // 0 = today, -1 = yesterday, -2, ..., -29
-  probs: Record<string, number>; // R1-R9, sum = 1
+  probs: Record<string, number>; // SC1-SC9, sum = 1
 }
 
 type ScenarioProbabilities = Record<string, number>;
@@ -129,9 +129,9 @@ export function calculateCDF(
 export function calculateGroupCumulatives(
   allDayIndividuals: Record<string, number>,
 ): { bullishCum: number; neutralCum: number; bearishCum: number } {
-  const bullishCum = calculateCDF('R6', allDayIndividuals); // R6 is least severe bullish, so CDF = total
-  const neutralCum = allDayIndividuals['R5'] ?? 0;
-  const bearishCum = calculateCDF('R4', allDayIndividuals); // R4 is least severe bearish, so CDF = total
+  const bullishCum = calculateCDF('SC6', allDayIndividuals); // SC6 is least severe bullish, so CDF = total
+  const neutralCum = allDayIndividuals['SC5'] ?? 0;
+  const bearishCum = calculateCDF('SC4', allDayIndividuals); // SC4 is least severe bearish, so CDF = total
   return { bullishCum, neutralCum, bearishCum };
 }
 
@@ -338,7 +338,7 @@ function computeDominance(scenarios: ScenarioTrend[]): ScenarioDominance[] {
   const horizon = scenarios[0]?.trend.length ?? 30;
   return DOMINANCE_PERIODS.map(p => {
     const end = Math.min(p.end, horizon);
-    let bestKey = 'R1';
+    let bestKey = 'SC1';
     let bestSum = 0;
     for (const s of scenarios) {
       const periodSum = s.trend

@@ -413,15 +413,15 @@ export function selectMLCombination(data: MLSelectorInput): MLSelection {
   }
 
   // ── Tone overrides based on scenario dominance ──
-  if (data.scenarioDominant === 'R9' || data.scenarioDominant === 'R8') {
+  if (data.scenarioDominant === 'SC9' || data.scenarioDominant === 'SC8') {
     tone = 'هشداردهنده';
     reasoning += ' (بازنویسی: سناریوی نزولی شدید، لحن به هشداردهنده تغییر یافت)';
   }
-  if (data.scenarioDominant === 'R4') {
+  if (data.scenarioDominant === 'SC4') {
     tone = 'تهاجمی';
     reasoning += ' (بازنویسی: سناریوی شوک صعودی، لحن به تهاجمی تغییر یافت)';
   }
-  if (data.scenarioDominant === 'R5') {
+  if (data.scenarioDominant === 'SC5') {
     tone = 'محافظه‌کارانه';
     reasoning += ' (بازنویسی: سناریوی رنج، لحن به محافظه‌کارانه تغییر یافت)';
   }
@@ -462,15 +462,15 @@ export function selectPersona(date: string, instrument: string, school: string, 
 // ═══════════════════════════════════════════════════════════════
 
 export const SCENARIO_NAMES: Record<string, string> = {
-  R1: 'شوک صعودی',
-  R2: 'صعودی شتاب‌دار',
-  R3: 'صعودی شتابدار',
-  R4: 'صعودی خفیف',
-  R5: 'رنج',
-  R6: 'نزولی خفیف',
-  R7: 'نزولی قوی',
-  R8: 'نزولی شتاب‌دار',
-  R9: 'شوک نزولی',
+  SC1: 'شوک صعودی',
+  SC2: 'صعودی شتاب‌دار',
+  SC3: 'صعودی شتابدار',
+  SC4: 'صعودی خفیف',
+  SC5: 'رنج',
+  SC6: 'نزولی خفیف',
+  SC7: 'نزولی قوی',
+  SC8: 'نزولی شتاب‌دار',
+  SC9: 'شوک نزولی',
 };
 
 export function getScenarioName(key: string): string {

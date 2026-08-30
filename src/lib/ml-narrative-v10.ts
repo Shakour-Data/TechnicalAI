@@ -723,7 +723,7 @@ function scoreStyle(st: StyleDef, inp: NarrativeInput): number {
   switch (st.id) {
     case 'executive': s_ = adx > 25 ? 7 : 4; break;
     case 'technical': s_ = 6; break;
-    case 'trading': s_ = (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') ? 9 : 4; break;
+    case 'trading': s_ = (dominantScenarioKey === 'SC1' || dominantScenarioKey === 'SC2') ? 9 : 4; break;
     case 'forecast': s_ = 6; break;
     case 'educational': s_ = 5; break;
   }
@@ -741,7 +741,7 @@ function scoreTone(t: ToneDef, inp: NarrativeInput): number {
     case 'optimistic': s_ = 3; if (trendDirection === 'up' && macdHist > 0) s_ += 4; break;
     case 'realistic': s_ = 6; break;
   }
-  if (dominantScenarioKey === 'R1' || dominantScenarioKey === 'R2') s_ += 2;
+  if (dominantScenarioKey === 'SC1' || dominantScenarioKey === 'SC2') s_ += 2;
   return s_ + 1;
 }
 
@@ -785,7 +785,7 @@ export function buildNarrativeInput(body: {
   // Detect scenario keys from the data itself
   const allScenarioKeys = (isV10Scenarios || Object.keys(body.scenarios).some(k => k.startsWith('S')))
     ? ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9'] as const
-    : ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+    : ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
   let dominantKey = allScenarioKeys[0]; let dominantProb = 0;
   for (const k of allScenarioKeys) {
     const p = body.scenarios[k]?.probability ?? 0;

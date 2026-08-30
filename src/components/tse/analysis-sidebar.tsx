@@ -45,8 +45,8 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
-const toFa1 = (n: number) => n.toFixed(1).replace(/\./g, '/').replace(/-/g, '−');
-const toFa2 = (n: number) => n.toFixed(2).replace(/\./g, '/').replace(/-/g, '−');
+const toFa1 = (n: number) => toPersianDigits(n.toFixed(1)).replace(/\./g, '٫').replace(/-/g, '−');
+const toFa2 = (n: number) => toPersianDigits(n.toFixed(2)).replace(/\./g, '٫').replace(/-/g, '−');
 
 function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
   if (v > 70) return 'bearish';
@@ -99,9 +99,9 @@ function gradeStyle(grade: string, bearColor: string, neutralColor: string, prim
 }
 
 function formatNumber(n: number): string {
-  if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  if (Math.abs(n) >= 1e9) return toPersianDigits((n / 1e9).toFixed(1)) + 'B';
+  if (Math.abs(n) >= 1e6) return toPersianDigits((n / 1e6).toFixed(1)) + 'M';
+  if (Math.abs(n) >= 1e3) return toPersianDigits((n / 1e3).toFixed(1)) + 'K';
   return toFa(n);
 }
 
@@ -186,7 +186,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
   // ── Top 3 scenarios (sorted by probability desc) ──
   const top3Scenarios = useMemo(() => {
     if (!ta) return [];
-    const keys = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+    const keys = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
     return keys
       .map(k => ({ key: k, ...ta.scenarios[k] }))
       .sort((a, b) => b.probability - a.probability)

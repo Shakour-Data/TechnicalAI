@@ -17,11 +17,11 @@ interface Scenario {
 
 interface VdssVdesProps {
   scenarios: {
-    R1: Scenario;
-    R2: Scenario;
-    R3: Scenario;
-    R4: Scenario;
-    R5: Scenario;
+    SC1: Scenario;
+    SC2: Scenario;
+    SC3: Scenario;
+    SC4: Scenario;
+    SC5: Scenario;
   } | null;
   currentPrice: number;
 }
@@ -29,22 +29,22 @@ interface VdssVdesProps {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const SCENARIO_COLORS: Record<string, { border: string; bg: string; text: string; badge: string; badgeText: string }> = {
-  R1: { border: '#34c98b', bg: 'rgba(52,201,139,0.08)', text: 'text-emerald-400', badge: 'bg-emerald-500/15 border-emerald-500/30', badgeText: 'text-emerald-400' },
-  R2: { border: '#3ad5db', bg: 'rgba(58,213,219,0.08)', text: 'text-cyan-400', badge: 'bg-cyan-500/15 border-cyan-500/30', badgeText: 'text-cyan-400' },
-  R3: { border: '#ffb11b', bg: 'rgba(255,177,27,0.08)', text: 'text-yellow-400', badge: 'bg-yellow-500/15 border-yellow-500/30', badgeText: 'text-yellow-400' },
-  R4: { border: '#ff7b32', bg: 'rgba(255,123,50,0.08)', text: 'text-orange-400', badge: 'bg-orange-500/15 border-orange-500/30', badgeText: 'text-orange-400' },
-  R5: { border: '#ef4d62', bg: 'rgba(239,77,98,0.08)', text: 'text-red-400', badge: 'bg-red-500/15 border-red-500/30', badgeText: 'text-red-400' },
+  SC1: { border: '#34c98b', bg: 'rgba(52,201,139,0.08)', text: 'text-emerald-400', badge: 'bg-emerald-500/15 border-emerald-500/30', badgeText: 'text-emerald-400' },
+  SC2: { border: '#3ad5db', bg: 'rgba(58,213,219,0.08)', text: 'text-cyan-400', badge: 'bg-cyan-500/15 border-cyan-500/30', badgeText: 'text-cyan-400' },
+  SC3: { border: '#ffb11b', bg: 'rgba(255,177,27,0.08)', text: 'text-yellow-400', badge: 'bg-yellow-500/15 border-yellow-500/30', badgeText: 'text-yellow-400' },
+  SC4: { border: '#ff7b32', bg: 'rgba(255,123,50,0.08)', text: 'text-orange-400', badge: 'bg-orange-500/15 border-orange-500/30', badgeText: 'text-orange-400' },
+  SC5: { border: '#ef4d62', bg: 'rgba(239,77,98,0.08)', text: 'text-red-400', badge: 'bg-red-500/15 border-red-500/30', badgeText: 'text-red-400' },
 };
 
 const STRATEGY_MAP: Record<string, { text: string; color: string }> = {
-  R1: { text: 'سیگنال صعودی قوی', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
-  R2: { text: 'صعود تدریجی - ورود در اصلاح', color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
-  R3: { text: 'بازار رنج - منتظر خروج از محدوده', color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
-  R4: { text: 'سیگنال اصلاح - احتیاط', color: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
-  R5: { text: 'سیگنال فروش - خروج فوری', color: 'text-red-400 border-red-500/30 bg-red-500/10' },
+  SC1: { text: 'سیگنال صعودی قوی', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
+  SC2: { text: 'صعود تدریجی - ورود در اصلاح', color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
+  SC3: { text: 'بازار رنج - منتظر خروج از محدوده', color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
+  SC4: { text: 'سیگنال اصلاح - احتیاط', color: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
+  SC5: { text: 'سیگنال فروش - خروج فوری', color: 'text-red-400 border-red-500/30 bg-red-500/10' },
 };
 
-const SCENARIO_KEYS = ['R1', 'R2', 'R3', 'R4', 'R5'] as const;
+const SCENARIO_KEYS = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5'] as const;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ function VdesAnalysis({
   scenarios: NonNullable<VdssVdesProps['scenarios']>;
 }) {
   // Find highest probability scenario
-  let highestKey = 'R3';
+  let highestKey = 'SC3';
   let highestProb = 0;
   for (const key of SCENARIO_KEYS) {
     if (scenarios[key].probability > highestProb) {

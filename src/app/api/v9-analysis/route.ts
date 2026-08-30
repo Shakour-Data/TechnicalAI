@@ -375,8 +375,8 @@ export async function POST(req: NextRequest) {
     const combo = selectNarrativeCombination(narrativeInput);
 
     // Find dominant scenario from VDSS decision graph
-    const allKeys = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
-    let dominantKey = 'R3';
+    const allKeys = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
+    let dominantKey = 'SC3';
     let dominantProb = 0;
     for (const k of allKeys) {
       const p = body.scenarios[k]?.probability ?? 0;

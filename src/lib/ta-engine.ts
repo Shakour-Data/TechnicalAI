@@ -105,15 +105,15 @@ export interface TAResult {
   };
   // VDss / VDes Scenarios (probabilities sum to 100)
   scenarios: {
-    R1: ScenarioResult;
-    R2: ScenarioResult;
-    R3: ScenarioResult;
-    R4: ScenarioResult;
-    R5: ScenarioResult;
-    R6: ScenarioResult;
-    R7: ScenarioResult;
-    R8: ScenarioResult;
-    R9: ScenarioResult;
+    SC1: ScenarioResult;
+    SC2: ScenarioResult;
+    SC3: ScenarioResult;
+    SC4: ScenarioResult;
+    SC5: ScenarioResult;
+    SC6: ScenarioResult;
+    SC7: ScenarioResult;
+    SC8: ScenarioResult;
+    SC9: ScenarioResult;
   };
   // Summary
   bullScore: number;
@@ -1890,7 +1890,7 @@ function computeFeaturesAtBar(data: OHLCV[], barIdx: number): Record<string, num
     (Math.max(0, Math.min(1, (trendResult.angle + 45) / 90)) * 0.3);
 
   // s_sr — Support/Resistance proximity
-  const dR1 = (sr.R1 - price) / (price > eps ? price : 1);
+  const dR1 = (sr.SC1 - price) / (price > eps ? price : 1);
   const dS1 = (price - sr.S1) / (price > eps ? price : 1);
   const s_sr = clamp(0.5 - dR1 * 1.5 + dS1 * 1.0, 0, 1);
 
@@ -2028,27 +2028,27 @@ function createTrainingData(
 /**
  * VDss Graph: Each node represents a market state.
  * Edges represent transitions with types: 'up', 'down', 'pullback', 'risk', 'terminal'.
- * Terminal nodes map to scenario results (R1=strong bullish, R5=deep correction).
+ * Terminal nodes map to scenario results (SC1=strong bullish, SC5=deep correction).
  */
 const VDSS_GRAPH = {
   // outgoing edges from each node: [target, type]
-  // v11: 9 scenario terminals — R1(most bullish) to R9(most bearish)
+  // v11: 9 scenario terminals — SC1(most bullish) to SC9(most bearish)
   outgoing: {
     A: [['B', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    B: [['C', 'up'], ['G', 'pullback'], ['A', 'risk'], ['R3', 'terminal']] as [string, string][],
+    B: [['C', 'up'], ['G', 'pullback'], ['A', 'risk'], ['SC3', 'terminal']] as [string, string][],
     C: [['D', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    D: [['E', 'up'], ['B', 'pullback'], ['G', 'pullback'], ['L', 'risk'], ['R3', 'terminal']] as [string, string][],
-    E: [['F', 'up'], ['D', 'pullback'], ['G', 'pullback'], ['H', 'down'], ['R2', 'terminal']] as [string, string][],
-    F: [['R1', 'terminal'], ['E', 'pullback'], ['D', 'down'], ['G', 'risk']] as [string, string][],
-    G: [['B', 'up'], ['A', 'pullback'], ['H', 'down'], ['L', 'risk'], ['R4', 'terminal']] as [string, string][],
-    H: [['G', 'pullback'], ['I', 'down'], ['B', 'up'], ['L', 'risk'], ['R5', 'terminal']] as [string, string][],
-    I: [['H', 'pullback'], ['J', 'down'], ['G', 'up'], ['L', 'risk'], ['R6', 'terminal']] as [string, string][],
-    J: [['I', 'pullback'], ['K', 'down'], ['H', 'up'], ['L', 'risk'], ['R7', 'terminal']] as [string, string][],
-    K: [['J', 'pullback'], ['I', 'up'], ['L', 'risk'], ['R8', 'terminal'], ['R9', 'terminal']] as [string, string][],
-    L: [['C', 'up'], ['H', 'pullback'], ['J', 'down'], ['K', 'risk'], ['R9', 'terminal']] as [string, string][],
+    D: [['E', 'up'], ['B', 'pullback'], ['G', 'pullback'], ['L', 'risk'], ['SC3', 'terminal']] as [string, string][],
+    E: [['F', 'up'], ['D', 'pullback'], ['G', 'pullback'], ['H', 'down'], ['SC2', 'terminal']] as [string, string][],
+    F: [['SC1', 'terminal'], ['E', 'pullback'], ['D', 'down'], ['G', 'risk']] as [string, string][],
+    G: [['B', 'up'], ['A', 'pullback'], ['H', 'down'], ['L', 'risk'], ['SC4', 'terminal']] as [string, string][],
+    H: [['G', 'pullback'], ['I', 'down'], ['B', 'up'], ['L', 'risk'], ['SC5', 'terminal']] as [string, string][],
+    I: [['H', 'pullback'], ['J', 'down'], ['G', 'up'], ['L', 'risk'], ['SC6', 'terminal']] as [string, string][],
+    J: [['I', 'pullback'], ['K', 'down'], ['H', 'up'], ['L', 'risk'], ['SC7', 'terminal']] as [string, string][],
+    K: [['J', 'pullback'], ['I', 'up'], ['L', 'risk'], ['SC8', 'terminal'], ['SC9', 'terminal']] as [string, string][],
+    L: [['C', 'up'], ['H', 'pullback'], ['J', 'down'], ['K', 'risk'], ['SC9', 'terminal']] as [string, string][],
   },
   // which result scenario each terminal node maps to
-  terminalMap: { R1: 'R1', R2: 'R2', R3: 'R3', R4: 'R4', R5: 'R5', R6: 'R6', R7: 'R7', R8: 'R8', R9: 'R9' } as Record<string, string>,
+  terminalMap: { SC1: 'SC1', SC2: 'SC2', SC3: 'SC3', SC4: 'SC4', SC5: 'SC5', SC6: 'SC6', SC7: 'SC7', SC8: 'SC8', SC9: 'SC9' } as Record<string, string>,
   startNode: 'A' as string,
 };
 
@@ -2179,7 +2179,7 @@ function calculatePathProbabilities(
 
       if (edgeType === 'terminal') {
         // Reached a terminal node
-        const scenario = terminalMap[target] ?? 'R3';
+        const scenario = terminalMap[target] ?? 'SC3';
         rawPaths.push({ path: newPath, scenario, prob: newProb });
       } else {
         // Continue DFS
@@ -2189,14 +2189,14 @@ function calculatePathProbabilities(
   }
 
   // Group raw probabilities by scenario
-  const rawSums: Record<string, number> = { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0, R9: 0 };
+  const rawSums: Record<string, number> = { SC1: 0, SC2: 0, SC3: 0, SC4: 0, SC5: 0, SC6: 0, SC7: 0, SC8: 0, SC9: 0 };
   for (const rp of rawPaths) {
     rawSums[rp.scenario] = (rawSums[rp.scenario] ?? 0) + rp.prob;
   }
 
   // Compute calibration factors: scenarioProbs[scenario] / rawSum[scenario]
   const calibrationFactors: Record<string, number> = {};
-  for (const scenario of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9']) {
+  for (const scenario of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9']) {
     const rawSum = rawSums[scenario] ?? 0;
     const targetProb = (scenarioProbs[scenario] ?? 20) / 100; // convert from percentage
     calibrationFactors[scenario] = rawSum > 1e-10 ? targetProb / rawSum : 1.0;
@@ -2281,26 +2281,26 @@ function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Calculates the 9 VDss scenario probabilities (R1-R9) that sum to 100.
+ * Calculates the 9 VDss scenario probabilities (SC1-SC9) that sum to 100.
  * Uses bull/bear consensus, key indicator values, S/R levels, and
  * ML-derived adaptive factors for fine-tuning.
  *
- * R1=شوک صعودی, R2=صعودی شتاب‌دار, R3=صعودی قوی, R4=صعودی خفیف,
- * R5=رنج,
- * R6=نزولی خفیف, R7=نزولی قوی, R8=نزولی شتاب‌دار, R9=شوک نزولی
+ * SC1=شوک صعودی, SC2=صعودی شتاب‌دار, SC3=صعودی قوی, SC4=صعودی خفیف,
+ * SC5=رنج,
+ * SC6=نزولی خفیف, SC7=نزولی قوی, SC8=نزولی شتاب‌دار, SC9=شوک نزولی
 
  */
 function calculateScenarioProbabilities(
   bullConsensus: number,
   price: number,
-  R1: number,
+  SC1: number,
   S1: number,
   MA100: number,
   rsi: number,
   mfi: number,
   stochK: number,
   mlModel: AdaptiveWeightModel
-): { R1: number; R2: number; R3: number; R4: number; R5: number; R6: number; R7: number; R8: number; R9: number; factors: { momentum: number; volatility: number; trend: number } } {
+): { SC1: number; SC2: number; SC3: number; SC4: number; SC5: number; SC6: number; SC7: number; SC8: number; SC9: number; factors: { momentum: number; volatility: number; trend: number } } {
   // Distance metrics to key levels (spec uses exp(-3 * ...))
   const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
   const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
@@ -2324,35 +2324,35 @@ function calculateScenarioProbabilities(
 
   // ── Raw probabilities ───────────────────────────────────────────────
 
-  // R1: شوک صعودی — explosive breakout (was old R4)
-  const raw_R1 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
+  // SC1: شوک صعودی — explosive breakout (was old R4)
+  const raw_SC1 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
 
-  // R2: صعودی شتاب‌دار — strong momentum (was old R3)
-  const raw_R2 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
+  // SC2: صعودی شتاب‌دار — strong momentum (was old R3)
+  const raw_SC2 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
 
-  // R3: صعودی قوی — solid uptrend (was old R2)
-  const raw_R3 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
+  // SC3: صعودی قوی — solid uptrend (was old R2)
+  const raw_SC3 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
 
-  // R4: صعودی خفیف — mild bull, needs confirmation (was old R1)
-  const raw_R4 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
+  // SC4: صعودی خفیف — mild bull, needs confirmation (was old R1)
+  const raw_SC4 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
 
-  // R5: رنج — neutral
-  const raw_R5 = (1 - Math.abs(bullConsensus - 0.5) * 2) * 0.45 * (1 + (1 - volatility) * 0.4);
+  // SC5: رنج — neutral
+  const raw_SC5 = (1 - Math.abs(bullConsensus - 0.5) * 2) * 0.45 * (1 + (1 - volatility) * 0.4);
 
-  // R6: نزولی خفیف — mild bear (was old R6)
-  const raw_R6 = bearish * 0.4 * trend * (1 - oversoldBounce * 0.3);
+  // SC6: نزولی خفیف — mild bear (was old R6)
+  const raw_SC6 = bearish * 0.4 * trend * (1 - oversoldBounce * 0.3);
 
-  // R7: نزولی قوی — solid downtrend
-  const raw_R7 = bearish ** 1.3 * 0.5 * trend * (1 - oversoldBounce * 0.4);
+  // SC7: نزولی قوی — solid downtrend
+  const raw_SC7 = bearish ** 1.3 * 0.5 * trend * (1 - oversoldBounce * 0.4);
 
-  // R8: نزولی شتاب‌دار — strong bearish momentum
-  const raw_R8 = bearish ** 1.6 * 0.35 * momentum * (1 - oversoldBounce * 0.5);
+  // SC8: نزولی شتاب‌دار — strong bearish momentum
+  const raw_SC8 = bearish ** 1.6 * 0.35 * momentum * (1 - oversoldBounce * 0.5);
 
-  // R9: شوک نزولی — crash
-  const raw_R9 = bearish ** 2 * distS1 * 0.25 * (1 + belowMA100 * 0.5) + overboughtRisk * 0.15 * momentum;
+  // SC9: شوک نزولی — crash
+  const raw_SC9 = bearish ** 2 * distS1 * 0.25 * (1 + belowMA100 * 0.5) + overboughtRisk * 0.15 * momentum;
 
   // ── Normalize to sum = 100, clamp to [2, 35] per spec ──────────
-  const raw = [raw_R1, raw_R2, raw_R3, raw_R4, raw_R5, raw_R6, raw_R7, raw_R8, raw_R9];
+  const raw = [raw_SC1, raw_SC2, raw_SC3, raw_SC4, raw_SC5, raw_SC6, raw_SC7, raw_SC8, raw_SC9];
   const sum = raw.reduce((a, b) => a + b, 0) || 1;
   // First pass: percentage with spec bounds (min 2%, max 35%)
   let clamped = raw.map(r => Math.min(35, Math.max(2, Math.round(r / sum * 100))));
@@ -2370,11 +2370,11 @@ function calculateScenarioProbabilities(
     const finalSum = clamped.reduce((a, b) => a + b, 0);
     clamped[8] = Math.min(35, Math.max(2, clamped[8] + (100 - finalSum)));
   }
-  const [pR1, pR2, pR3, pR4, pR5, pR6, pR7, pR8, pR9] = clamped;
+  const [pSC1, pSC2, pSC3, pSC4, pSC5, pSC6, pSC7, pSC8, pSC9] = clamped;
 
   return {
-    R1: pR1, R2: pR2, R3: pR3, R4: pR4, R5: pR5,
-    R6: pR6, R7: pR7, R8: pR8, R9: pR9,
+    SC1: pSC1, SC2: pSC2, SC3: pSC3, SC4: pSC4, SC5: pSC5,
+    SC6: pSC6, SC7: pSC7, SC8: pSC8, SC9: pSC9,
     factors: { momentum, volatility, trend },
   };
 }
@@ -2404,12 +2404,12 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
         medium: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
         long: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
       },
-      scenarios: { R1: emptyScenario(), R2: emptyScenario(), R3: emptyScenario(), R4: emptyScenario(), R5: emptyScenario(), R6: emptyScenario(), R7: emptyScenario(), R8: emptyScenario(), R9: emptyScenario() },
+      scenarios: { SC1: emptyScenario(), SC2: emptyScenario(), SC3: emptyScenario(), SC4: emptyScenario(), SC5: emptyScenario(), SC6: emptyScenario(), SC7: emptyScenario(), SC8: emptyScenario(), SC9: emptyScenario() },
       bullScore: 0.5, bearScore: 0.5, overallSignal: 'neutral',
       bullConsensus: 0.5, isMLTrained: false, mlAccuracy: 0.5, mlWeights: null,
       edgeWeights: { up: 0.3, down: 0.3, pullback: 0.25, risk: 0.15 },
-      calibrationFactors: { R1: 1, R2: 1, R3: 1, R4: 1, R5: 1, R6: 1, R7: 1, R8: 1, R9: 1 },
-      scenarioSums: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0, R9: 0 },
+      calibrationFactors: { SC1: 1, SC2: 1, SC3: 1, SC4: 1, SC5: 1, SC6: 1, SC7: 1, SC8: 1, SC9: 1 },
+      scenarioSums: { SC1: 0, SC2: 0, SC3: 0, SC4: 0, SC5: 0, SC6: 0, SC7: 0, SC8: 0, SC9: 0 },
       adaptiveFactors: { momentum: 0.7, volatility: 0.5, trend: 0.6 },
       hasVolume: false,
       decisionGraph: null,
@@ -2611,15 +2611,15 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   });
 
   // Use decision graph scenario probabilities (sum to 100)
-  const pR1 = graphData.scenarioProbabilities.R1 ?? 11;
-  const pR2 = graphData.scenarioProbabilities.R2 ?? 11;
-  const pR3 = graphData.scenarioProbabilities.R3 ?? 11;
-  const pR4 = graphData.scenarioProbabilities.R4 ?? 11;
-  const pR5 = graphData.scenarioProbabilities.R5 ?? 11;
-  const pR6 = graphData.scenarioProbabilities.R6 ?? 11;
-  const pR7 = graphData.scenarioProbabilities.R7 ?? 11;
-  const pR8 = graphData.scenarioProbabilities.R8 ?? 11;
-  const pR9 = graphData.scenarioProbabilities.R9 ?? 11;
+  const pSC1 = graphData.scenarioProbabilities.SC1 ?? 11;
+  const pSC2 = graphData.scenarioProbabilities.SC2 ?? 11;
+  const pSC3 = graphData.scenarioProbabilities.SC3 ?? 11;
+  const pSC4 = graphData.scenarioProbabilities.SC4 ?? 11;
+  const pSC5 = graphData.scenarioProbabilities.SC5 ?? 11;
+  const pSC6 = graphData.scenarioProbabilities.SC6 ?? 11;
+  const pSC7 = graphData.scenarioProbabilities.SC7 ?? 11;
+  const pSC8 = graphData.scenarioProbabilities.SC8 ?? 11;
+  const pSC9 = graphData.scenarioProbabilities.SC9 ?? 11;
 
   // Keep edge weights for backward compat (derive from graph)
   const edgeWeights = {
@@ -2651,74 +2651,74 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   const rangeTarget = buildRangeTarget(price, atr, supports[0], resistances[0]);
 
   const scenarios = {
-    R1: {
+    SC1: {
       name: 'شوک نزولی',
       nameEn: 'Bearish Shock',
-      probability: pR1,
+      probability: pSC1,
       targetMin: bearTargets[3].min,
       targetMax: bearTargets[3].max,
       description: `شوک نزولی با هدف ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ${unit}.`,
     },
-    R2: {
+    SC2: {
       name: 'نزولی شتاب‌دار',
       nameEn: 'Accelerating Bearish',
-      probability: pR2,
+      probability: pSC2,
       targetMin: bearTargets[2].min,
       targetMax: bearTargets[2].max,
       description: `شتاب نزولی با هدف ${fmt(bearTargets[2].min)} تا ${fmt(bearTargets[2].max)} ${unit}.`,
     },
-    R3: {
+    SC3: {
       name: 'نزولی قوی',
       nameEn: 'Strong Bearish',
-      probability: pR3,
+      probability: pSC3,
       targetMin: bearTargets[1].min,
       targetMax: bearTargets[1].max,
       description: `نزول قوی تا ${fmt(bearTargets[1].min)} تا ${fmt(bearTargets[1].max)} ${unit}.`,
     },
-    R4: {
+    SC4: {
       name: 'نزولی خفیف',
       nameEn: 'Weak Bearish',
-      probability: pR4,
+      probability: pSC4,
       targetMin: bearTargets[0].min,
       targetMax: bearTargets[0].max,
       description: `نزول خفیف تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ${unit}.`,
     },
-    R5: {
+    SC5: {
       name: 'رنج',
       nameEn: 'Range-bound',
-      probability: pR5,
+      probability: pSC5,
       targetMin: rangeTarget.min,
       targetMax: rangeTarget.max,
       description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ${unit}.`,
     },
-    R6: {
+    SC6: {
       name: 'صعودی خفیف',
       nameEn: 'Weak Bullish',
-      probability: pR6,
+      probability: pSC6,
       targetMin: bullTargets[0].min,
       targetMax: bullTargets[0].max,
       description: `حرکت صعودی خفیف با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ${unit}.`,
     },
-    R7: {
+    SC7: {
       name: 'صعودی قوی',
       nameEn: 'Strong Bullish',
-      probability: pR7,
+      probability: pSC7,
       targetMin: bullTargets[1].min,
       targetMax: bullTargets[1].max,
       description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ${unit}.`,
     },
-    R8: {
+    SC8: {
       name: 'صعودی شتاب‌دار',
       nameEn: 'Accelerating Bullish',
-      probability: pR8,
+      probability: pSC8,
       targetMin: bullTargets[2].min,
       targetMax: bullTargets[2].max,
       description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ${unit}.`,
     },
-    R9: {
+    SC9: {
       name: 'شوک صعودی',
       nameEn: 'Bullish Shock',
-      probability: pR9,
+      probability: pSC9,
       targetMin: bullTargets[3].min,
       targetMax: bullTargets[3].max,
       description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ${unit}.`,
@@ -2814,7 +2814,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
 export interface DailyProbSnapshot {
   date: string;
   dayIndex: number; // 0=today, -1=yesterday, ...
-  probs: Record<string, number>; // R1-R9, sum=100
+  probs: Record<string, number>; // SC1-SC9, sum=100
 }
 
 export function computeHistoricalProbabilities(

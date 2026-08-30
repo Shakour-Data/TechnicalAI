@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { toPersianDigits } from '@/lib/jalali';
 import {
   Search, X, TrendingUp, TrendingDown,
   BarChart3, Landmark, Building2, FileText,
@@ -803,7 +804,7 @@ export default function SymbolSearch({
         <div className='flex shrink-0 flex-col items-end gap-0.5 tabular-nums'>
           <span className='text-xs font-semibold text-[#111827]'>{formatIdx(item.pl)}</span>
           <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' : item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
-            {item.pcp > 0 ? '+' : ''}{item.pcp?.toFixed(2)}%
+            {item.pcp > 0 ? '+' : ''}{toPersianDigits(item.pcp?.toFixed(2) ?? '0')}%
           </span>
         </div>
       );
@@ -818,7 +819,7 @@ export default function SymbolSearch({
             <span className='text-[9px] text-[#9ca3af]'>{cur}</span>
           </div>
           <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', item.pcp > 0 ? 'bg-emerald-50 text-emerald-700' : item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
-            {item.pcp > 0 ? '+' : ''}{item.pcp?.toFixed(2)}%
+            {item.pcp > 0 ? '+' : ''}{toPersianDigits(item.pcp?.toFixed(2) ?? '0')}%
           </span>
         </div>
       );
@@ -834,7 +835,7 @@ export default function SymbolSearch({
           {showUnit && <span className='text-[9px] text-[#9ca3af]'>{currencyUnit}</span>}
         </div>
         <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded', isUp ? 'bg-emerald-50 text-emerald-700' : !isUp && item.pcp < 0 ? 'bg-red-50 text-red-700' : 'text-[#6b7280]')}>
-          {isUp ? '+' : ''}{item.pcp?.toFixed(2)}%
+          {isUp ? '+' : ''}{toPersianDigits(item.pcp?.toFixed(2) ?? '0')}%
         </span>
       </div>
     );

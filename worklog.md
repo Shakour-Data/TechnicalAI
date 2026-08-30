@@ -73,3 +73,44 @@ Stage Summary:
 - Decision graph no longer shows confusing accumulated probabilities on event/assessment nodes
 - All visible numbers use Persian digits (۶۰٪ instead of 60%)
 - Verified via agent browser: ROOT clean, branches show ۶۰٪/۳۴٪/۶٪, event nodes have no numbers
+
+---
+Task ID: 6
+Agent: general-purpose
+Task: Fix remaining R1-R9 scenario references → SC1-SC9
+
+Work Log:
+- Scanned all .ts/.tsx files under src/ with `rg '[^a-zA-Z_]R[1-9]'`
+- Identified 30 scenario R→SC renames needed across 8 files (all in comments)
+- Preserved 50+ legitimate resistance/pivot R references (const R1, R1_level, R1_nearest, distR1, Pivot_R1, مقاومت R1, etc.)
+- Fixed decision-graph.ts: 23 comment annotations like `[SC8, R9, R7]` → `[SC8, SC9, SC7]`
+- Fixed vdss-algorithms.ts: `{R1..SC9}` → `{SC1..SC9}`
+- Fixed vdss-graph.tsx: `Terminal nodes (R1-R9)` → `(SC1-SC9)`
+- Fixed ml-narrative-v11.ts: `R5=neutral` → `SC5=neutral`
+- Fixed ml-narrative.ts + ml-narrative-v8.ts: `R1-R5 probabilities` → `SC1-SC9 probabilities`
+- Fixed ai-analysis/route.ts: `across ALL R1-R9` → `across ALL SC1-SC9`
+- Fixed v10-analysis/route.ts: 2x `V9 (R1-R9)` → `V9 (SC1-SC9)`
+- Verified: `rg "['\"]R[1-9]['\"]"` returns zero results (no string literals)
+- Verified: all remaining R1-R9 matches are legitimate resistance/pivot references
+
+Stage Summary:
+- All 30 remaining scenario R1-R9 comment references renamed to SC1-SC9
+- Zero string literals contain old R1-R9 scenario names
+- All resistance/pivot R1-R3 variable names and Persian text preserved correctly
+---
+Task ID: 7
+Agent: explore
+Task: Audit for unformatted Western digits (0-9) in UI across specified files
+
+Work Log:
+- Read worklog.md for context on prior fixes
+- Audited vdss-vdes.tsx: all numbers use toFa() ✅
+- Audited tradingview-chart.tsx: priceFormatter uses toPersianDigits ✅, but found S/R price line titles and legend labels with Western digits
+- Audited symbol-search.tsx: formatNum/formatIdx use fa-IR ✅, but found 3 instances of pcp.toFixed(2) without Persian conversion
+- Audited homepage.tsx: most constants use Persian digits, but found Western digits in ML_FEATURES strings and TOOLS/ARCHITECTURE descriptions
+- Audited index-manager.tsx: many JSX expressions render bare numbers without fa-IR conversion
+- tv-widget.tsx: wrapper only, no user-visible numbers ✅
+
+Stage Summary:
+- Found 18 locations across 4 files with unformatted Western digits displayed to users
+- See detailed report below for each location with file, line, and code

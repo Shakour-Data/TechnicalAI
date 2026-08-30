@@ -199,11 +199,11 @@ export function applyBayesianAdjustment(
       if (!w) continue;
       totalWeight += w;
 
-      if (scenario.startsWith('R1') || scenario.startsWith('R2') || scenario.startsWith('R3')) {
+      if (scenario.startsWith('SC1') || scenario.startsWith('SC2') || scenario.startsWith('SC3')) {
         // Bullish scenarios
         if (signal === 'up') upSupport += w;
         if (signal === 'down') downSupport += w;
-      } else if (scenario.startsWith('R4') || scenario.startsWith('R5') || scenario.startsWith('R6')) {
+      } else if (scenario.startsWith('SC4') || scenario.startsWith('SC5') || scenario.startsWith('SC6')) {
         // Bearish scenarios
         if (signal === 'down') upSupport += w; // renamed for clarity
         if (signal === 'up') downSupport += w;
@@ -226,10 +226,10 @@ export function applyBayesianAdjustment(
 
   // Fill adjusted probabilities in result
   const bullProb = Object.entries(adjusted)
-    .filter(([k]) => ['R1', 'R2', 'R3'].some(p => k.startsWith(p)))
+    .filter(([k]) => ['SC1', 'SC2', 'SC3'].some(p => k.startsWith(p)))
     .reduce((s, [, v]) => s + v, 0);
   const bearProb = Object.entries(adjusted)
-    .filter(([k]) => ['R4', 'R5', 'R6'].some(p => k.startsWith(p)))
+    .filter(([k]) => ['SC4', 'SC5', 'SC6'].some(p => k.startsWith(p)))
     .reduce((s, [, v]) => s + v, 0);
   const neutralProb = 1 - bullProb - bearProb;
 
