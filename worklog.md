@@ -114,3 +114,20 @@ Work Log:
 Stage Summary:
 - Found 18 locations across 4 files with unformatted Western digits displayed to users
 - See detailed report below for each location with file, line, and code
+---
+Task ID: 1
+Agent: Main
+Task: Fix all outstanding issues from previous sessions
+
+Work Log:
+- Fixed runtime TypeError: null.toFixed() in analysis-sidebar.tsx by adding safeNum() null-guard to all .toFixed() call sites (bullScore, bearScore, sc.probability, dist, ProgressBar values, gauge needle)
+- Verified R→SC scenario rename was already completed in prior session (zero R1-R9 scenario labels found)
+- Verified Chinese character removal is still working (two-layer: server prompt prohibition + client CJK regex filter)
+- Fixed Persian numerals on charts: (a) Fixed buggy toFa() regex in vdes-analysis.tsx export template, (b) Added toPD/toFa/formatVol helpers to export chart, (c) Added Persian volume formatter to candlestick-chart.tsx, (d) Fixed chg.toFixed(2) in export legend to use toPD()
+- Fixed stale cache: Changed AI text cache to placeholder-only mode (always fetches fresh, cache shown while loading)
+
+Stage Summary:
+- analysis-sidebar.tsx: Added safeNum() guard for all potentially-null numeric fields
+- vdes-analysis.tsx: Fixed export template toFa (was only matching thousands positions), added proper toPD/toFa/formatVol, fixed chg.toFixed(2), added volume Persian formatter, fixed localization.priceFormatter to preserve decimals, removed cache-blocking of fresh fetches
+- candlestick-chart.tsx: Added persianVolFormatter for volume axis (replaced type:'volume' with custom formatter)
+- All five tasks completed, dev server compiles successfully

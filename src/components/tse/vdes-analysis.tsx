@@ -686,7 +686,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 
   // ── localStorage helpers for AI text caching ──
 
-  // On mount: check localStorage for today's text first (instant, no loading)
+  // On mount: show cached text as placeholder while fresh data loads
   useEffect(() => {
     if (!currentPrice) return;
     try {
@@ -697,13 +697,11 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         if (parsed.text && parsed.text.length > 50) {
           setAiText(parsed.text);
           setAiIsFallback(!!parsed.isFallback);
-          setAiLoading(false);
-          return;
+          // Do NOT set aiLoading=false — always fetch fresh data in background
         }
       }
     } catch { /* ignore */ }
-    // No localStorage cache → will fetch from API
-  }, [symbolName]); // Only symbolName matters — one cache per symbol per day
+  }, [symbolName]);
 
   // Stable key: only re-fetch when symbol changes (not on every indicator update)
   const aiFetchKey = symbolName;
@@ -711,8 +709,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   // Fetch from API when symbol changes or retry is triggered
   useEffect(() => {
     if (!currentPrice) return;
-    // If we already have text from localStorage, don't re-fetch (unless retry)
-    if (aiText && aiRetryKey === 0) return;
+    // Always fetch fresh analysis; cache is used as placeholder only
     let cancelled = false;
     const controller = new AbortController();
 
@@ -965,7 +962,10 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
   var dl = ${dateLabelsJSON};
   var pl = ${priceLinesJSON};
 
-  function toFa(n){return String(Math.round(n)).replace(/\\d(?=(?:\\d{3})+(?!\\d))/g,function(m){return '\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'[+m]})}
+  var PD='\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669';
+  function toPD(s){return String(s).replace(/\d/g,function(m){return PD[+m]})}
+  function toFa(n){return toPD(Math.round(n))}
+  function formatVol(v){if(v>=1e9)return toPD((v/1e9).toFixed(1))+'B';if(v>=1e6)return toPD((v/1e6).toFixed(1))+'M';if(v>=1e3)return toPD((v/1e3).toFixed(1))+'K';return toFa(v)}
 
   var chartEl = document.getElementById('chart-container');
   var legendEl = document.getElementById('chart-legend');
@@ -977,7 +977,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'${crosshairColor}',labelBackgroundColor:'${chartBg}'},horzLine:{color:'${crosshairColor}',labelBackgroundColor:'${chartBg}'}},
     rightPriceScale:{borderColor:'${chartBorder}',scaleMargins:{top:0.05,bottom:0.3}},
     timeScale:{borderColor:'${chartBorder}',rightOffset:5,barSpacing:6,tickMarkFormatter:function(t){return dl[t]||String(t)}},
-    localization:{priceFormatter:function(p){return toFa(p)}},
+    localization:{priceFormatter:function(p){return toPD(p.toLocaleString('en',{maximumFractionDigits:${decimals}}))}},
     width:chartEl.clientWidth,height:520
   });
 
@@ -986,7 +986,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
   });
   cs.setData(cd.map(function(d){return{time:d.time,open:d.o,high:d.h,low:d.l,close:d.c}}));
 
-  var vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'vol'});
+  var vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'custom',formatter:formatVol},priceScaleId:'vol'});
   vol.setData(cd.map(function(d){return{time:d.time,value:d.v,color:d.c>=d.o?BULL:BEAR}}));
   chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
 
@@ -1000,7 +1000,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     var prev=p.time>0?cd[p.time-1]:d;
     var chg=prev.c>0?((d.c-prev.c)/prev.c*100):0;
     var cls=chg>=0?'up':'dn';
-    legendEl.innerHTML='<span>'+dl[p.time]+'</span> <span>O: '+toFa(d.o)+'</span> <span>H: '+toFa(d.h)+'</span> <span>L: '+toFa(d.l)+'</span> <span>C: <b class="'+cls+'">'+toFa(d.c)+'</b></span> <span>Vol: '+toFa(d.v)+'</span> <span class="'+cls+'">'+chg.toFixed(2)+'%</span>';
+    legendEl.innerHTML='<span>'+dl[p.time]+'</span> <span>O: '+toFa(d.o)+'</span> <span>H: '+toFa(d.h)+'</span> <span>L: '+toFa(d.l)+'</span> <span>C: <b class="'+cls+'">'+toFa(d.c)+'</b></span> <span>Vol: '+formatVol(d.v)+'</span> <span class="'+cls+'">'+toPD(chg.toFixed(2))+'%</span>';
   });
 
   chart.timeScale().fitContent();

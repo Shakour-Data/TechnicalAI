@@ -44,9 +44,10 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
-const toFa1 = (n: number) => toPersianDigits(n.toFixed(1)).replace(/\./g, '٫').replace(/-/g, '−');
-const toFa2 = (n: number) => toPersianDigits(n.toFixed(2)).replace(/\./g, '٫').replace(/-/g, '−');
+const safeNum = (n: number | null | undefined, fallback = 0) => (n ?? fallback);
+const toFa = (n: number | null | undefined) => Math.round(safeNum(n)).toLocaleString('fa-IR');
+const toFa1 = (n: number | null | undefined) => toPersianDigits(safeNum(n).toFixed(1)).replace(/\./g, '٫').replace(/-/g, '−');
+const toFa2 = (n: number | null | undefined) => toPersianDigits(safeNum(n).toFixed(2)).replace(/\./g, '٫').replace(/-/g, '−');
 
 function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
   if (v > 70) return 'bearish';
@@ -98,11 +99,12 @@ function gradeStyle(grade: string, bearColor: string, neutralColor: string, prim
   }
 }
 
-function formatNumber(n: number): string {
-  if (Math.abs(n) >= 1e9) return toPersianDigits((n / 1e9).toFixed(1)) + 'B';
-  if (Math.abs(n) >= 1e6) return toPersianDigits((n / 1e6).toFixed(1)) + 'M';
-  if (Math.abs(n) >= 1e3) return toPersianDigits((n / 1e3).toFixed(1)) + 'K';
-  return toFa(n);
+function formatNumber(n: number | null | undefined): string {
+  const v = safeNum(n);
+  if (Math.abs(v) >= 1e9) return toPersianDigits((v / 1e9).toFixed(1)) + 'B';
+  if (Math.abs(v) >= 1e6) return toPersianDigits((v / 1e6).toFixed(1)) + 'M';
+  if (Math.abs(v) >= 1e3) return toPersianDigits((v / 1e3).toFixed(1)) + 'K';
+  return toFa(v);
 }
 
 function pctDistance(from: number, to: number): number {
@@ -338,8 +340,10 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
                 />
                 {/* Needle */}
                 {(() => {
-                  const totalScore = ta.bullScore + ta.bearScore || 1;
-                  const ratio = ta.bullScore / totalScore;
+                  const bull = safeNum(ta.bullScore);
+                  const bear = safeNum(ta.bearScore);
+                  const totalScore = bull + bear || 1;
+                  const ratio = bull / totalScore;
                   const angle = -180 + ratio * 180;
                   const rad = (angle * Math.PI) / 180;
                   const cx = 50, cy = 45;
@@ -366,16 +370,16 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bull }}>خرید</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toPersianDigits(ta.bullScore.toFixed(2))}</span>
+                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toFa2(ta.bullScore)}</span>
               </div>
-              <ProgressBar value={ta.bullScore} max={100} color={C.bull} />
+              <ProgressBar value={safeNum(ta.bullScore)} max={100} color={C.bull} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bear }}>فروش</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toPersianDigits(ta.bearScore.toFixed(2))}</span>
+                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toFa2(ta.bearScore)}</span>
               </div>
-              <ProgressBar value={ta.bearScore} max={100} color={C.bear} />
+              <ProgressBar value={safeNum(ta.bearScore)} max={100} color={C.bear} />
             </div>
           </div>
         </GlassCard>
@@ -567,7 +571,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
                         {toFa(r.price)}
                       </span>
                       <span className="text-[8px] font-bold tabular-nums shrink-0" style={{ color: C.bear }} dir="ltr">
-                        +{toPersianDigits(Math.abs(dist).toFixed(1))}٪
+                        +{toPersianDigits(Math.abs(safeNum(dist)).toFixed(1))}٪
                       </span>
                       <span className="text-[8px] px-1.5 py-0.5 rounded-xl shrink-0 font-bold" style={gradeStyle(r.grade, C.bear, C.neutral, C.primary, C.cardBg, C.textSec)}>
                         {gradeLabel(r.grade)}
@@ -612,7 +616,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
                         {toFa(s.price)}
                       </span>
                       <span className="text-[8px] font-bold tabular-nums shrink-0" style={{ color: C.bull }} dir="ltr">
-                        {toPersianDigits(dist.toFixed(1))}٪
+                        {toPersianDigits(safeNum(dist).toFixed(1))}٪
                       </span>
                       <span className="text-[8px] px-1.5 py-0.5 rounded-xl shrink-0 font-bold" style={gradeStyle(s.grade, C.bear, C.neutral, C.primary, C.cardBg, C.textSec)}>
                         {gradeLabel(s.grade)}
@@ -653,10 +657,10 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
                     {sc.name}
                   </span>
                   <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: scColor }} dir="ltr">
-                    {toPersianDigits(sc.probability.toFixed(0))}٪
+                    {toPersianDigits(safeNum(sc.probability).toFixed(0))}٪
                   </span>
                 </div>
-                <ProgressBar value={sc.probability} max={100} color={scColor} height={3} />
+                <ProgressBar value={safeNum(sc.probability)} max={100} color={scColor} height={3} />
                 <div className="flex items-center justify-between px-1">
                   <span className="text-[8px] tabular-nums" style={{ color: C.textDim }} dir="ltr">
                     {toFa(sc.targetMin)}

@@ -681,8 +681,14 @@ export default function CandlestickChart({ data, ta, height = 520, priceDecimals
     csRef.current = cs;
 
     // Volume
+    const persianVolFormatter = (v: number) => {
+      if (v >= 1e9) return toPersianDigits((v / 1e9).toFixed(1)) + 'B';
+      if (v >= 1e6) return toPersianDigits((v / 1e6).toFixed(1)) + 'M';
+      if (v >= 1e3) return toPersianDigits((v / 1e3).toFixed(1)) + 'K';
+      return toPersianDigits(String(Math.round(v)));
+    };
     const vol = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: 'volume' },
+      priceFormat: { type: 'custom', formatter: persianVolFormatter },
       priceScaleId: 'vol',
     });
     vol.setData(
