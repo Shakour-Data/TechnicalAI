@@ -1429,12 +1429,13 @@ function traverseGraph(
 
     const childPathProb = pathProb * prob;
 
-    // Check if target is a terminal node
+    // Check if target is a terminal node (SC1–SC9)
     const isTerminal =
-      edge.to.length === 2 &&
-      edge.to[0] === 'R' &&
-      edge.to[1] >= '1' &&
-      edge.to[1] <= '9';
+      edge.to.length === 3 &&
+      edge.to[0] === 'S' &&
+      edge.to[1] === 'C' &&
+      edge.to[2] >= '1' &&
+      edge.to[2] <= '9';
 
     if (isTerminal) {
       // Accumulate scenario probability
@@ -1490,7 +1491,7 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
   > = {};
 
   for (let i = 1; i <= 9; i++) {
-    const key = `R${i}`;
+    const key = `SC${i}`;
     scenarios[key] = 0;
     contributions[key] = { trend: 0, breakout: 0, reversal: 0 };
   }
@@ -1513,7 +1514,7 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
   // Convert to percentage, clamp [2, 35], re-normalize to sum=100
   const rawPcts: Record<string, number> = {};
   for (let i = 1; i <= 9; i++) {
-    const key = `R${i}`;
+    const key = `SC${i}`;
     rawPcts[key] = Math.round((scenarios[key] || 0) * 100);
   }
 
@@ -1579,7 +1580,7 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
     { trend: number; breakout: number; reversal: number }
   > = {};
   for (let i = 1; i <= 9; i++) {
-    const key = `R${i}`;
+    const key = `SC${i}`;
     const c = contributions[key];
     const total = c.trend + c.breakout + c.reversal;
     if (total > 0) {

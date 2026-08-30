@@ -131,3 +131,21 @@ Stage Summary:
 - vdes-analysis.tsx: Fixed export template toFa (was only matching thousands positions), added proper toPD/toFa/formatVol, fixed chg.toFixed(2), added volume Persian formatter, fixed localization.priceFormatter to preserve decimals, removed cache-blocking of fresh fetches
 - candlestick-chart.tsx: Added persianVolFormatter for volume axis (replaced type:'volume' with custom formatter)
 - All five tasks completed, dev server compiles successfully
+---
+Task ID: 2
+Agent: Main
+Task: Fix 11% uniform probability bug from incomplete R→SC rename
+
+Work Log:
+- Diagnosed that decision-graph.ts had 4 places still using R${i} instead of SC${i}
+- The isTerminal check used length===2 && char==='R' but SC nodes have length 3 and start with 'S'
+- This caused NO terminal nodes to be detected, so all scenario probabilities stayed at 0
+- The ta-engine.ts ?? 11 fallback then kicked in for ALL scenarios, giving uniform 11%
+- Fixed all 4 locations: isTerminal pattern, scenarios init, rawPcts reading, pathContributions
+- Verified fix with git diff — clean 4-line change
+- Dev server crashes during analysis route compilation (pre-existing 4GB memory limit issue with Turbopack compiling ta-engine.ts + decision-graph.ts)
+
+Stage Summary:
+- decision-graph.ts: Fixed isTerminal to match SC1-SC9 (length 3, starts with 'SC')
+- decision-graph.ts: Changed scenario init keys from R${i} to SC${i} (3 locations)
+- Root cause: R→SC rename was applied to edges and nodes but NOT to the traversal/accumulation code
