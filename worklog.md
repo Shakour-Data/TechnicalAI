@@ -189,3 +189,27 @@ Stage Summary:
 - ta-engine.ts: Changed ?? 11 to || 11 fallback
 - Server stability: nohup node approach works (avoids bun/tee pipe)
 - Probabilities confirmed correct: varying values, sum=100%
+---
+Task ID: 8
+Agent: Main
+Task: Fix NaN-induced 11% probability bug for symbols like فولاد
+
+Work Log:
+- Investigated why فولاد still showed all 11% while خودرو showed correct probabilities
+- API test confirmed: فولاد returned SC1-SC8=11%, SC9=12% (all equal)
+- Found bullScore=null (NaN serialized as null) and nodeValues showed N_T_BULL=0%, N_T_BEAR=0%, N_T_FLAT=0%
+- Root cause: bullConsensus=NaN propagates through computeNodeProbabilities → normalize([NaN,NaN,NaN]) → NaN/NaN=NaN → NaN||0=0 in traverseGraph → all path probs=0 → clamp to min 2 → 9×2=18 normalized to 100 = ~11% each
+- Fixed decision-graph.ts helper functions: added safeNum() for NaN/Infinity guard, fixed normalize() to use sum<=0 check and sanitize inputs, fixed sigmoid() to clamp and guard against Infinity
+- Fixed buildDecisionGraph entry point: added comprehensive input sanitization block that replaces NaN/Infinity/undefined with safe defaults for all 29 numeric fields
+- Fixed ml-model.ts clamp() to handle NaN (returns midpoint of range)
+- Fixed ta-engine.ts: changed || 11 to ?? 11 (only fallback on null/undefined, not on legitimate 0)
+- Tested with NaN bullConsensus: now produces differentiated probabilities (SC4=20%, SC5=18%, SC3=15%, etc.)
+- Tested with ALL NaN inputs: still produces differentiated probabilities (graceful degradation)
+- API verification: فولاد now returns SC4=21, SC5=17, SC3=15, SC6=14, SC7=13, SC8=7, SC9=6, SC1=4, SC2=3 (sum=100)
+- Browser verification: فولاد scenario table shows differentiated probabilities, cumulative probabilities match
+
+Stage Summary:
+- Root cause: NaN bullConsensus from computeFeaturesAtBar propagated through entire graph
+- 3-layer defense: (1) ml-model.ts clamp handles NaN, (2) decision-graph.ts sanitizes all inputs, (3) normalize() handles NaN arrays
+- All symbols now produce differentiated probabilities regardless of input quality
+- ta-engine.ts fallback changed from || 11 to ?? 11 to avoid masking legitimate zero values

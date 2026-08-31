@@ -292,7 +292,8 @@ export class AdaptiveWeightModel {
 // ─── Utility Functions ────────────────────────────────────────────────────────
 
 export function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+  const v = (typeof value === 'number' && isFinite(value)) ? value : (min + max) / 2;
+  return Math.max(min, Math.min(max, v));
 }
 
 export function sigmoid(x: number): number {

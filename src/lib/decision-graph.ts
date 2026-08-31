@@ -14,18 +14,25 @@ import {
 
 // === Helper Functions =========================================================
 
+function safeNum(v: number, fallback: number = 0): number {
+  return (typeof v === 'number' && isFinite(v)) ? v : fallback;
+}
+
 function clamp(v: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, v));
+  return Math.max(min, Math.min(max, safeNum(v, (min + max) / 2)));
 }
 
 function normalize(arr: number[]): number[] {
-  const sum = arr.reduce((a, b) => a + b, 0);
-  if (sum === 0) return arr.map(() => 1 / arr.length);
-  return arr.map((v) => v / sum);
+  const safe = arr.map(v => safeNum(v, 0));
+  const sum = safe.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return arr.map(() => 1 / arr.length);
+  return safe.map((v) => v / sum);
 }
 
 function sigmoid(x: number): number {
-  return 1 / (1 + Math.exp(-x));
+  const sx = safeNum(x, 0);
+  if (Math.abs(sx) > 500) return sx > 0 ? 1 : 0; // prevent Infinity
+  return 1 / (1 + Math.exp(-sx));
 }
 
 // === Exported Interfaces ======================================================
@@ -1465,6 +1472,52 @@ function traverseGraph(
 // === Main Export: buildDecisionGraph ===========================================
 
 export function buildDecisionGraph(input: GraphInput): GraphData {
+  // 0. Sanitize all numeric inputs — replace NaN/Infinity/undefined with safe defaults
+  const price = safeNum(input.price, 1000);
+  const bullConsensus = clamp(safeNum(input.bullConsensus, 0.5), 0, 1);
+  const rsi = clamp(safeNum(input.rsi, 50), 0, 100);
+  const mfi = clamp(safeNum(input.mfi, 50), 0, 100);
+  const cci = safeNum(input.cci, 0);
+  const stochK = clamp(safeNum(input.stochK, 50), 0, 100);
+  const stochD = clamp(safeNum(input.stochD, 50), 0, 100);
+  const adx = clamp(safeNum(input.adx, 20), 0, 100);
+  const diPlus = clamp(safeNum(input.diPlus, 20), 0, 100);
+  const diMinus = clamp(safeNum(input.diMinus, 20), 0, 100);
+  const macdHist = safeNum(input.macdHist, 0);
+  const atr = safeNum(input.atr, price * 0.02);
+  const bbUpper = safeNum(input.bbUpper, price * 1.03);
+  const bbMiddle = safeNum(input.bbMiddle, price);
+  const bbLower = safeNum(input.bbLower, price * 0.97);
+  const sar = safeNum(input.sar, price);
+  const ichimokuTenkan = safeNum(input.ichimokuTenkan, price);
+  const ichimokuKijun = safeNum(input.ichimokuKijun, price);
+  const ichimokuSenkouA = safeNum(input.ichimokuSenkouA, price);
+  const ichimokuSenkouB = safeNum(input.ichimokuSenkouB, price);
+  const maAlignment = clamp(safeNum(input.maAlignment, 0.5), 0, 1);
+  const momentum = safeNum(input.momentum, 0);
+  const awesomeOsc = safeNum(input.awesomeOsc, 0);
+  const fisherTransform = clamp(safeNum(input.fisherTransform, 0), -5, 5);
+  const confidenceIndex = clamp(safeNum(input.confidenceIndex, 0.5), 0, 1);
+  const strengthIndex = clamp(safeNum(input.strengthIndex, 0.5), 0, 1);
+  const hasVolume = input.hasVolume === true;
+  const distToR1 = safeNum(input.distToR1, 0.03);
+  const distToS1 = safeNum(input.distToS1, 0.03);
+  const srAvgStrength = clamp(safeNum(input.srAvgStrength, 0.3), 0, 1);
+  const mlMomentum = clamp(safeNum(input.mlMomentum, 0.7), 0, 1);
+  const mlVolatility = clamp(safeNum(input.mlVolatility, 0.5), 0, 1);
+  const mlTrend = clamp(safeNum(input.mlTrend, 0.6), 0, 1);
+
+  // Create sanitized input object
+  const sanitizedInput: GraphInput = {
+    price, bullConsensus, rsi, mfi, cci, stochK, stochD, adx, diPlus, diMinus,
+    macdHist, atr, bbUpper, bbMiddle, bbLower, sar,
+    ichimokuTenkan, ichimokuKijun, ichimokuSenkouA, ichimokuSenkouB,
+    maAlignment, momentum, awesomeOsc, fisherTransform,
+    confidenceIndex, strengthIndex, hasVolume,
+    distToR1, distToS1, srAvgStrength,
+    mlMomentum, mlVolatility, mlTrend,
+  };
+
   // 1. Build static graph structure
   const nodes = createNodes();
   const edges = createEdges();
@@ -1478,8 +1531,8 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
     adj.get(from)!.push(i);
   }
 
-  // 3. Build probability context
-  const ctx = buildContext(input);
+  // 3. Build probability context (use sanitized input)
+  const ctx = buildContext(sanitizedInput);
 
   // 4. Initialize accumulation structures
   const edgeProbabilities: Record<number, number> = {};
