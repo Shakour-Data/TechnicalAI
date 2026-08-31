@@ -166,3 +166,26 @@ Stage Summary:
 - 5 API routes now use dynamic imports for ta-engine
 - Compile time reduced by ~98%
 - Server no longer crashes on analysis requests
+---
+Task ID: 3
+Agent: Main
+Task: Fix probability display (all 11%) and server stability
+
+Work Log:
+- Read uploaded reference docs (TechnicalAnalysisDssGraph_CumProb.txt, CumProbTrend.txt) confirming correct probability calculation spec
+- Ran diagnostic test: buildDecisionGraph() produces correct varying probabilities (SC5=19%, SC6=17%, SC7=17%, etc., sum=100)
+- Found R→SC position bug: createPositions() line 1009 still used R${i+1} instead of SC${i+1}, causing all SC terminal nodes to have MISSING positions
+- Fixed decision-graph.ts: R${i+1} → SC${i+1} in createPositions()
+- Fixed ta-engine.ts: Changed ?? 11 to || 11 on lines 2614-2622 as safety net against zero probabilities
+- Verified probability-trend.ts CDF calculation matches spec (Bullish: SC9→SC6, Bearish: SC1→SC4)
+- Investigated server stability: bun run dev (with tee pipe) dies between Bash tool invocations
+- Solution: Start server directly with 'nohup node node_modules/.bin/next dev -p 3000' (bypasses bun + tee pipeline)
+- Verified server persists between Bash tool invocations and responds HTTP 200
+- Verified via API: SC6=23%, SC7=14%, SC1-5/8-9=9%, Sum=100%
+- Verified via browser eval: Same correct probabilities returned to client
+
+Stage Summary:
+- decision-graph.ts: Fixed SC node positions (R→SC in createPositions)
+- ta-engine.ts: Changed ?? 11 to || 11 fallback
+- Server stability: nohup node approach works (avoids bun/tee pipe)
+- Probabilities confirmed correct: varying values, sum=100%

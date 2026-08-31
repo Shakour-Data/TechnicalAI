@@ -2611,15 +2611,15 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   });
 
   // Use decision graph scenario probabilities (sum to 100)
-  const pSC1 = graphData.scenarioProbabilities.SC1 ?? 11;
-  const pSC2 = graphData.scenarioProbabilities.SC2 ?? 11;
-  const pSC3 = graphData.scenarioProbabilities.SC3 ?? 11;
-  const pSC4 = graphData.scenarioProbabilities.SC4 ?? 11;
-  const pSC5 = graphData.scenarioProbabilities.SC5 ?? 11;
-  const pSC6 = graphData.scenarioProbabilities.SC6 ?? 11;
-  const pSC7 = graphData.scenarioProbabilities.SC7 ?? 11;
-  const pSC8 = graphData.scenarioProbabilities.SC8 ?? 11;
-  const pSC9 = graphData.scenarioProbabilities.SC9 ?? 11;
+  const pSC1 = graphData.scenarioProbabilities.SC1 || 11;
+  const pSC2 = graphData.scenarioProbabilities.SC2 || 11;
+  const pSC3 = graphData.scenarioProbabilities.SC3 || 11;
+  const pSC4 = graphData.scenarioProbabilities.SC4 || 11;
+  const pSC5 = graphData.scenarioProbabilities.SC5 || 11;
+  const pSC6 = graphData.scenarioProbabilities.SC6 || 11;
+  const pSC7 = graphData.scenarioProbabilities.SC7 || 11;
+  const pSC8 = graphData.scenarioProbabilities.SC8 || 11;
+  const pSC9 = graphData.scenarioProbabilities.SC9 || 11;
 
   // Keep edge weights for backward compat (derive from graph)
   const edgeWeights = {

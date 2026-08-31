@@ -1006,7 +1006,7 @@ function createPositions(): Record<string, { right: number; top: number }> {
 
   // Layer 4 (leftmost): Terminal nodes SC1–SC9 (height 84px, gap 35px)
   for (let i = 0; i < 9; i++) {
-    p[`R${i + 1}`] = { right: 1050, top: i * 119 + 30 };
+    p[`SC${i + 1}`] = { right: 1050, top: i * 119 + 30 };
   }
 
   return p;
