@@ -1,0 +1,1672 @@
+     1→// =============================================================================
+     2→// Decision Graph Probability Engine — Technical Analysis System
+     3→// =============================================================================
+     4→// This module replaces the old 12-node graph and heuristic probability system.
+     5→// The decision graph IS the primary probability engine — all 9 scenario
+     6→// probabilities (SC1–SC9) are derived from aggregating path probabilities through
+     7→// this directed acyclic graph (DAG).
+     8→// =============================================================================
+     9→
+    10→import {
+    11→  calculateProbabilityTrend as calcTrendFromProbs,
+    12→  type ProbabilityTrendResult as ProbTrendResult,
+    13→} from './probability-trend';
+    14→
+    15→// === Helper Functions =========================================================
+    16→
+    17→function safeNum(v: number, fallback: number = 0): number {
+    18→  return (typeof v === 'number' && isFinite(v)) ? v : fallback;
+    19→}
+    20→
+    21→function clamp(v: number, min: number, max: number): number {
+    22→  return Math.max(min, Math.min(max, safeNum(v, (min + max) / 2)));
+    23→}
+    24→
+    25→function normalize(arr: number[]): number[] {
+    26→  const safe = arr.map(v => safeNum(v, 0));
+    27→  const sum = safe.reduce((a, b) => a + b, 0);
+    28→  if (sum <= 0) return arr.map(() => 1 / arr.length);
+    29→  return safe.map((v) => v / sum);
+    30→}
+    31→
+    32→function sigmoid(x: number): number {
+    33→  const sx = safeNum(x, 0);
+    34→  if (Math.abs(sx) > 500) return sx > 0 ? 1 : 0; // prevent Infinity
+    35→  return 1 / (1 + Math.exp(-sx));
+    36→}
+    37→
+    38→// === Exported Interfaces ======================================================
+    39→
+    40→export interface GraphNode {
+    41→  id: string;
+    42→  title: string;
+    43→  titleEn: string;
+    44→  type: 'decision' | 'event' | 'terminal';
+    45→  desc: string;
+    46→  color: string;
+    47→  branch?: 'trend' | 'breakout' | 'reversal';
+    48→  isTerminal?: boolean;
+    49→}
+    50→
+    51→export interface GraphEdge {
+    52→  from: string;
+    53→  to: string;
+    54→  label: string;
+    55→  type:
+    56→    | 'up'
+    57→    | 'down'
+    58→    | 'pullback'
+    59→    | 'risk'
+    60→    | 'branch-trend'
+    61→    | 'branch-breakout'
+    62→    | 'branch-reversal';
+    63→}
+    64→
+    65→export interface GraphInput {
+    66→  price: number;
+    67→  bullConsensus: number;
+    68→  rsi: number;
+    69→  mfi: number;
+    70→  cci: number;
+    71→  stochK: number;
+    72→  stochD: number;
+    73→  adx: number;
+    74→  diPlus: number;
+    75→  diMinus: number;
+    76→  macdHist: number;
+    77→  atr: number;
+    78→  bbUpper: number;
+    79→  bbMiddle: number;
+    80→  bbLower: number;
+    81→  sar: number;
+    82→  ichimokuTenkan: number;
+    83→  ichimokuKijun: number;
+    84→  ichimokuSenkouA: number;
+    85→  ichimokuSenkouB: number;
+    86→  maAlignment: number;
+    87→  momentum: number;
+    88→  awesomeOsc: number;
+    89→  fisherTransform: number;
+    90→  confidenceIndex: number;
+    91→  strengthIndex: number;
+    92→  hasVolume: boolean;
+    93→  distToR1: number;
+    94→  distToS1: number;
+    95→  srAvgStrength: number;
+    96→  mlMomentum: number;
+    97→  mlVolatility: number;
+    98→  mlTrend: number;
+    99→}
+   100→
+   101→export interface GraphData {
+   102→  nodes: GraphNode[];
+   103→  edges: GraphEdge[];
+   104→  nodePositions: Record<string, { right: number; top: number }>;
+   105→  edgeProbabilities: Record<number, number>;
+   106→  nodeValues: Record<string, string>;
+   107→  branchProbabilities: { trend: number; breakout: number; reversal: number };
+   108→  scenarioProbabilities: Record<string, number>;
+   109→  pathContributions: Record<
+   110→    string,
+   111→    { trend: number; breakout: number; reversal: number }
+   112→  >;
+   113→  /** 30-day probability trend computed from scenarioProbabilities */
+   114→  probabilityTrend?: ProbTrendResult;
+   115→}
+   116→
+   117→// === Internal Types ===========================================================
+   118→
+   119→interface ProbContext {
+   120→  input: GraphInput;
+   121→  adxNorm: number;
+   122→  srProximity: number;
+   123→  oscillatorExtreme: number;
+   124→  divergenceProxy: number;
+   125→  overboughtRisk: number;
+   126→  oversoldBounce: number;
+   127→}
+   128→
+   129→// === Color Constants ==========================================================
+   130→
+   131→const TERMINAL_COLORS: Record<string, string> = {
+   132→  SC1: '#b91c1c',
+   133→  SC2: '#dc2626',
+   134→  SC3: '#ea580c',
+   135→  SC4: '#c2410c',
+   136→  SC5: '#b45309',
+   137→  SC6: '#047857',
+   138→  SC7: '#059669',
+   139→  SC8: '#0e7490',
+   140→  SC9: '#0891b2',
+   141→};
+   142→
+   143→const BRANCH_COLORS: Record<string, string> = {
+   144→  trend: '#3ad5db',
+   145→  breakout: '#ffb11b',
+   146→  reversal: '#a04ac5',
+   147→};
+   148→
+   149→// === Static Node Definitions ==================================================
+   150→
+   151→function createNodes(): GraphNode[] {
+   152→  return [
+   153→    // ── Layer 0: ROOT ──────────────────────────────────────────────────────
+   154→    {
+   155→      id: 'ROOT',
+   156→      title: 'ریشه تصمیم',
+   157→      titleEn: 'Decision Root',
+   158→      type: 'decision',
+   159→      desc: 'نقطه شروع تحلیل — توزیع احتمال بین سه استراتژی اصلی',
+   160→      color: '#374151',
+   161→    },
+   162→
+   163→    // ── Layer 1: Main Branches ─────────────────────────────────────────────
+   164→    {
+   165→      id: 'N_TREND',
+   166→      title: 'پیروی از روند',
+   167→      titleEn: 'Trend Following',
+   168→      type: 'decision',
+   169→      desc: 'استراتژی پیروی از روند بر اساس ADX و قدرت روند',
+   170→      color: BRANCH_COLORS.trend,
+   171→      branch: 'trend',
+   172→    },
+   173→    {
+   174→      id: 'N_BREAK',
+   175→      title: 'شکست',
+   176→      titleEn: 'Breakout',
+   177→      type: 'decision',
+   178→      desc: 'استراتژی شکست بر اساس فاصله از حمایت/مقاومت و حجم',
+   179→      color: BRANCH_COLORS.breakout,
+   180→      branch: 'breakout',
+   181→    },
+   182→    {
+   183→      id: 'N_REVERSAL',
+   184→      title: 'بازگشت',
+   185→      titleEn: 'Reversal',
+   186→      type: 'decision',
+   187→      desc: 'استراتژی بازگشت بر اساس واگرایی‌ها و اسیلاتورهای افراطی',
+   188→      color: BRANCH_COLORS.reversal,
+   189→      branch: 'reversal',
+   190→    },
+   191→
+   192→    // ── Layer 2: Trend Sub-branches ────────────────────────────────────────
+   193→    {
+   194→      id: 'N_T_BULL',
+   195→      title: 'روند صعودی',
+   196→      titleEn: 'Bullish Trend',
+   197→      type: 'decision',
+   198→      desc: 'شناسایی روند صعودی غالب',
+   199→      color: BRANCH_COLORS.trend,
+   200→      branch: 'trend',
+   201→    },
+   202→    {
+   203→      id: 'N_T_BEAR',
+   204→      title: 'روند نزولی',
+   205→      titleEn: 'Bearish Trend',
+   206→      type: 'decision',
+   207→      desc: 'شناسایی روند نزولی غالب',
+   208→      color: BRANCH_COLORS.trend,
+   209→      branch: 'trend',
+   210→    },
+   211→    {
+   212→      id: 'N_T_FLAT',
+   213→      title: 'بدون روند واضح',
+   214→      titleEn: 'No Clear Trend',
+   215→      type: 'decision',
+   216→      desc: 'بازار بدون روند مشخص',
+   217→      color: BRANCH_COLORS.trend,
+   218→      branch: 'trend',
+   219→    },
+   220→
+   221→    // ── Layer 2: Breakout Sub-branches ─────────────────────────────────────
+   222→    {
+   223→      id: 'N_B_UP',
+   224→      title: 'شکست صعودی بالقوه',
+   225→      titleEn: 'Potential Bullish Breakout',
+   226→      type: 'decision',
+   227→      desc: 'احتمال شکست صعودی از مقاومت',
+   228→      color: BRANCH_COLORS.breakout,
+   229→      branch: 'breakout',
+   230→    },
+   231→    {
+   232→      id: 'N_B_DOWN',
+   233→      title: 'شکست نزولی بالقوه',
+   234→      titleEn: 'Potential Bearish Breakout',
+   235→      type: 'decision',
+   236→      desc: 'احتمال شکست نزولی از حمایت',
+   237→      color: BRANCH_COLORS.breakout,
+   238→      branch: 'breakout',
+   239→    },
+   240→    {
+   241→      id: 'N_B_NONE',
+   242→      title: 'بدون شکست بالقوه',
+   243→      titleEn: 'No Breakout',
+   244→      type: 'decision',
+   245→      desc: 'بدون سیگنال شکست قابل توجه',
+   246→      color: BRANCH_COLORS.breakout,
+   247→      branch: 'breakout',
+   248→    },
+   249→
+   250→    // ── Layer 2: Reversal Sub-branches ─────────────────────────────────────
+   251→    {
+   252→      id: 'N_R_BULL',
+   253→      title: 'سیگنال بازگشت صعودی',
+   254→      titleEn: 'Bullish Reversal Signal',
+   255→      type: 'decision',
+   256→      desc: 'شناسایی سیگنال بازگشت به صعود',
+   257→      color: BRANCH_COLORS.reversal,
+   258→      branch: 'reversal',
+   259→    },
+   260→    {
+   261→      id: 'N_R_BEAR',
+   262→      title: 'سیگنال بازگشت نزولی',
+   263→      titleEn: 'Bearish Reversal Signal',
+   264→      type: 'decision',
+   265→      desc: 'شناسایی سیگنال بازگشت به نزول',
+   266→      color: BRANCH_COLORS.reversal,
+   267→      branch: 'reversal',
+   268→    },
+   269→    {
+   270→      id: 'N_R_NONE',
+   271→      title: 'بدون سیگنال بازگشت',
+   272→      titleEn: 'No Reversal Signal',
+   273→      type: 'decision',
+   274→      desc: 'بدون سیگنال بازگشت قابل توجه',
+   275→      color: BRANCH_COLORS.reversal,
+   276→      branch: 'reversal',
+   277→    },
+   278→
+   279→    // ── Layer 3: Trend-Bull Assessment ─────────────────────────────────────
+   280→    {
+   281→      id: 'N_T_B_MOM_HIGH',
+   282→      title: 'مومنتوم صعودی بالا',
+   283→      titleEn: 'High Bullish Momentum',
+   284→      type: 'event',
+   285→      desc: 'مومنتوم صعودی قوی — شتاب بالای قیمت',
+   286→      color: BRANCH_COLORS.trend,
+   287→      branch: 'trend',
+   288→    },
+   289→    {
+   290→      id: 'N_T_B_MOM_MOD',
+   291→      title: 'مومنتوم صعودی متوسط',
+   292→      titleEn: 'Moderate Bullish Momentum',
+   293→      type: 'event',
+   294→      desc: 'مومنتوم صعودی متوسط — روند ملایم',
+   295→      color: BRANCH_COLORS.trend,
+   296→      branch: 'trend',
+   297→    },
+   298→    {
+   299→      id: 'N_T_B_OVERBOUGHT',
+   300→      title: 'اشباع خرید',
+   301→      titleEn: 'Overbought',
+   302→      type: 'event',
+   303→      desc: 'اشباع خرید — احتمال اصلاح یا بازگشت',
+   304→      color: BRANCH_COLORS.trend,
+   305→      branch: 'trend',
+   306→    },
+   307→
+   308→    // ── Layer 3: Trend-Bear Assessment ─────────────────────────────────────
+   309→    {
+   310→      id: 'N_T_BE_MOM_LOW',
+   311→      title: 'مومنتوم نزولی بالا',
+   312→      titleEn: 'High Bearish Momentum',
+   313→      type: 'event',
+   314→      desc: 'مومنتوم نزولی قوی — شتاب نزولی بالای قیمت',
+   315→      color: BRANCH_COLORS.trend,
+   316→      branch: 'trend',
+   317→    },
+   318→    {
+   319→      id: 'N_T_BE_MOM_MOD',
+   320→      title: 'مومنتوم نزولی متوسط',
+   321→      titleEn: 'Moderate Bearish Momentum',
+   322→      type: 'event',
+   323→      desc: 'مومنتوم نزولی متوسط — روند نزولی ملایم',
+   324→      color: BRANCH_COLORS.trend,
+   325→      branch: 'trend',
+   326→    },
+   327→    {
+   328→      id: 'N_T_BE_OVERSOLD',
+   329→      title: 'اشباع فروش',
+   330→      titleEn: 'Oversold',
+   331→      type: 'event',
+   332→      desc: 'اشباع فروش — احتمال بازگشت صعودی',
+   333→      color: BRANCH_COLORS.trend,
+   334→      branch: 'trend',
+   335→    },
+   336→
+   337→    // ── Layer 3: Trend-Flat Assessment ─────────────────────────────────────
+   338→    {
+   339→      id: 'N_T_F_VOL_LOW',
+   340→      title: 'نوسان کم',
+   341→      titleEn: 'Low Volatility',
+   342→      type: 'event',
+   343→      desc: 'نوسان بسیار کم — بازار آرام',
+   344→      color: BRANCH_COLORS.trend,
+   345→      branch: 'trend',
+   346→    },
+   347→    {
+   348→      id: 'N_T_F_VOL_HIGH',
+   349→      title: 'نوسان بالا',
+   350→      titleEn: 'High Volatility',
+   351→      type: 'event',
+   352→      desc: 'نوسان بالا بدون روند — شوک احتمالی',
+   353→      color: BRANCH_COLORS.trend,
+   354→      branch: 'trend',
+   355→    },
+   356→    {
+   357→      id: 'N_T_F_VOL_MOD',
+   358→      title: 'نوسان متوسط',
+   359→      titleEn: 'Moderate Volatility',
+   360→      type: 'event',
+   361→      desc: 'نوسان متوسط — حرکت محتاطانه',
+   362→      color: BRANCH_COLORS.trend,
+   363→      branch: 'trend',
+   364→    },
+   365→
+   366→    // ── Layer 3: Breakout-Up Assessment ────────────────────────────────────
+   367→    {
+   368→      id: 'N_B_U_VOL_C',
+   369→      title: 'تأیید حجم صعودی',
+   370→      titleEn: 'Bullish Volume Confirmed',
+   371→      type: 'event',
+   372→      desc: 'شکست صعودی با تأیید حجم معاملات',
+   373→      color: BRANCH_COLORS.breakout,
+   374→      branch: 'breakout',
+   375→    },
+   376→    {
+   377→      id: 'N_B_U_VOL_W',
+   378→      title: 'حجم ضعیف صعودی',
+   379→      titleEn: 'Weak Bullish Volume',
+   380→      type: 'event',
+   381→      desc: 'شکست صعودی بدون تأیید حجم — شکست کاذب محتمل',
+   382→      color: BRANCH_COLORS.breakout,
+   383→      branch: 'breakout',
+   384→    },
+   385→
+   386→    // ── Layer 3: Breakout-Down Assessment ──────────────────────────────────
+   387→    {
+   388→      id: 'N_B_D_VOL_C',
+   389→      title: 'تأیید حجم نزولی',
+   390→      titleEn: 'Bearish Volume Confirmed',
+   391→      type: 'event',
+   392→      desc: 'شکست نزولی با تأیید حجم معاملات',
+   393→      color: BRANCH_COLORS.breakout,
+   394→      branch: 'breakout',
+   395→    },
+   396→    {
+   397→      id: 'N_B_D_VOL_W',
+   398→      title: 'حجم ضعیف نزولی',
+   399→      titleEn: 'Weak Bearish Volume',
+   400→      type: 'event',
+   401→      desc: 'شکست نزولی بدون تأیید حجم — شکست کاذب محتمل',
+   402→      color: BRANCH_COLORS.breakout,
+   403→      branch: 'breakout',
+   404→    },
+   405→
+   406→    // ── Layer 3: Reversal-Bull Assessment ──────────────────────────────────
+   407→    {
+   408→      id: 'N_R_B_DIV',
+   409→      title: 'واگرایی صعودی',
+   410→      titleEn: 'Bullish Divergence',
+   411→      type: 'event',
+   412→      desc: 'واگرایی مثبت قیمت و اسیلاتور',
+   413→      color: BRANCH_COLORS.reversal,
+   414→      branch: 'reversal',
+   415→    },
+   416→    {
+   417→      id: 'N_R_B_CANDLE',
+   418→      title: 'الگوی کندلی صعودی',
+   419→      titleEn: 'Bullish Candle Pattern',
+   420→      type: 'event',
+   421→      desc: 'الگوی کندلی بازگشتی صعودی',
+   422→      color: BRANCH_COLORS.reversal,
+   423→      branch: 'reversal',
+   424→    },
+   425→    {
+   426→      id: 'N_R_B_SR',
+   427→      title: 'بازگشت از حمایت',
+   428→      titleEn: 'Support Bounce',
+   429→      type: 'event',
+   430→      desc: 'بازگشت قیمت از سطح حمایت',
+   431→      color: BRANCH_COLORS.reversal,
+   432→      branch: 'reversal',
+   433→    },
+   434→
+   435→    // ── Layer 3: Reversal-Bear Assessment ──────────────────────────────────
+   436→    {
+   437→      id: 'N_R_BE_DIV',
+   438→      title: 'واگرایی نزولی',
+   439→      titleEn: 'Bearish Divergence',
+   440→      type: 'event',
+   441→      desc: 'واگرایی منفی قیمت و اسیلاتور',
+   442→      color: BRANCH_COLORS.reversal,
+   443→      branch: 'reversal',
+   444→    },
+   445→    {
+   446→      id: 'N_R_BE_CANDLE',
+   447→      title: 'الگوی کندلی نزولی',
+   448→      titleEn: 'Bearish Candle Pattern',
+   449→      type: 'event',
+   450→      desc: 'الگوی کندلی بازگشتی نزولی',
+   451→      color: BRANCH_COLORS.reversal,
+   452→      branch: 'reversal',
+   453→    },
+   454→    {
+   455→      id: 'N_R_BE_SR',
+   456→      title: 'بازگشت از مقاومت',
+   457→      titleEn: 'Resistance Rejection',
+   458→      type: 'event',
+   459→      desc: 'بازگشت قیمت از سطح مقاومت',
+   460→      color: BRANCH_COLORS.reversal,
+   461→      branch: 'reversal',
+   462→    },
+   463→
+   464→    // ── Layer 4: Terminal Nodes (SC1–SC9) ────────────────────────────────────
+   465→    // VDES spec: SC1=شوک نزولی(weakest/bearish) → SC9=شوک صعودی(strongest/bullish)
+   466→    {
+   467→      id: 'SC1',
+   468→      title: 'شوک نزولی',
+   469→      titleEn: 'Bearish Shock',
+   470→      type: 'terminal',
+   471→      desc: 'شوک منفی ناگهانی در بازار',
+   472→      color: TERMINAL_COLORS.SC1,
+   473→      isTerminal: true,
+   474→    },
+   475→    {
+   476→      id: 'SC2',
+   477→      title: 'نزولی شتابدار',
+   478→      titleEn: 'Accelerating Bearish',
+   479→      type: 'terminal',
+   480→      desc: 'شتاب نزولی شدید با ترس در بازار',
+   481→      color: TERMINAL_COLORS.SC2,
+   482→      isTerminal: true,
+   483→    },
+   484→    {
+   485→      id: 'SC3',
+   486→      title: 'نزولی قوی',
+   487→      titleEn: 'Strong Bearish',
+   488→      type: 'terminal',
+   489→      desc: 'روند نزولی قوی با فشار فروش',
+   490→      color: TERMINAL_COLORS.SC3,
+   491→      isTerminal: true,
+   492→    },
+   493→    {
+   494→      id: 'SC4',
+   495→      title: 'نزولی خفیف',
+   496→      titleEn: 'Weak Bearish',
+   497→      type: 'terminal',
+   498→      desc: 'روند نزولی ملایم با احتمال بازگشت',
+   499→      color: TERMINAL_COLORS.SC4,
+   500→      isTerminal: true,
+   501→    },
+   502→    {
+   503→      id: 'SC5',
+   504→      title: 'رنج',
+   505→      titleEn: 'Range-bound',
+   506→      type: 'terminal',
+   507→      desc: 'بازار بدون جهت مشخص — نوسان در محدوده',
+   508→      color: TERMINAL_COLORS.SC5,
+   509→      isTerminal: true,
+   510→    },
+   511→    {
+   512→      id: 'SC6',
+   513→      title: 'صعودی خفیف',
+   514→      titleEn: 'Weak Bullish',
+   515→      type: 'terminal',
+   516→      desc: 'روند صعودی ملایم با ریسک اصلاح',
+   517→      color: TERMINAL_COLORS.SC6,
+   518→      isTerminal: true,
+   519→    },
+   520→    {
+   521→      id: 'SC7',
+   522→      title: 'صعودی قوی',
+   523→      titleEn: 'Strong Bullish',
+   524→      type: 'terminal',
+   525→      desc: 'روند صعودی قوی با پشتوانه',
+   526→      color: TERMINAL_COLORS.SC7,
+   527→      isTerminal: true,
+   528→    },
+   529→    {
+   530→      id: 'SC8',
+   531→      title: 'صعودی شتابدار',
+   532→      titleEn: 'Accelerating Bullish',
+   533→      type: 'terminal',
+   534→      desc: 'شتاب صعودی شدید با مومنتوم بالا',
+   535→      color: TERMINAL_COLORS.SC8,
+   536→      isTerminal: true,
+   537→    },
+   538→    {
+   539→      id: 'SC9',
+   540→      title: 'شوک صعودی',
+   541→      titleEn: 'Bullish Shock',
+   542→      type: 'terminal',
+   543→      desc: 'شوک مثبت ناگهانی در بازار',
+   544→      color: TERMINAL_COLORS.SC9,
+   545→      isTerminal: true,
+   546→    },
+   547→  ];
+   548→}
+   549→
+   550→// === Static Edge Definitions ==================================================
+   551→
+   552→function createEdges(): GraphEdge[] {
+   553→  return [
+   554→    // ── ROOT → Main Branches ───────────────────────────────────────────────
+   555→    { from: 'ROOT', to: 'N_TREND', label: 'روند', type: 'branch-trend' },
+   556→    { from: 'ROOT', to: 'N_BREAK', label: 'شکست', type: 'branch-breakout' },
+   557→    {
+   558→      from: 'ROOT',
+   559→      to: 'N_REVERSAL',
+   560→      label: 'بازگشت',
+   561→      type: 'branch-reversal',
+   562→    },
+   563→
+   564→    // ── N_TREND → Sub-branches ─────────────────────────────────────────────
+   565→    { from: 'N_TREND', to: 'N_T_BULL', label: 'صعودی', type: 'up' },
+   566→    { from: 'N_TREND', to: 'N_T_BEAR', label: 'نزولی', type: 'down' },
+   567→    { from: 'N_TREND', to: 'N_T_FLAT', label: 'خنثی', type: 'pullback' },
+   568→
+   569→    // ── N_T_BULL → Assessment ──────────────────────────────────────────────
+   570→    {
+   571→      from: 'N_T_BULL',
+   572→      to: 'N_T_B_MOM_HIGH',
+   573→      label: 'مومنتوم بالا',
+   574→      type: 'up',
+   575→    },
+   576→    {
+   577→      from: 'N_T_BULL',
+   578→      to: 'N_T_B_MOM_MOD',
+   579→      label: 'مومنتوم متوسط',
+   580→      type: 'up',
+   581→    },
+   582→    {
+   583→      from: 'N_T_BULL',
+   584→      to: 'N_T_B_OVERBOUGHT',
+   585→      label: 'اشباع خرید',
+   586→      type: 'risk',
+   587→    },
+   588→
+   589→    // ── N_T_B_MOM_HIGH → Terminals ────────────────────────────────────────
+   590→    {
+   591→      from: 'N_T_B_MOM_HIGH',
+   592→      to: 'SC8',
+   593→      label: 'صعودی شتابدار',
+   594→      type: 'up',
+   595→    },
+   596→    { from: 'N_T_B_MOM_HIGH', to: 'SC9', label: 'شوک صعودی', type: 'up' },
+   597→    { from: 'N_T_B_MOM_HIGH', to: 'SC7', label: 'صعودی قوی', type: 'up' },
+   598→
+   599→    // ── N_T_B_MOM_MOD → Terminals ─────────────────────────────────────────
+   600→    { from: 'N_T_B_MOM_MOD', to: 'SC7', label: 'صعودی قوی', type: 'up' },
+   601→    {
+   602→      from: 'N_T_B_MOM_MOD',
+   603→      to: 'SC6',
+   604→      label: 'صعودی خفیف',
+   605→      type: 'up',
+   606→    },
+   607→    { from: 'N_T_B_MOM_MOD', to: 'SC5', label: 'رنج', type: 'pullback' },
+   608→
+   609→    // ── N_T_B_OVERBOUGHT → Terminals ──────────────────────────────────────
+   610→    {
+   611→      from: 'N_T_B_OVERBOUGHT',
+   612→      to: 'SC4',
+   613→      label: 'نزولی خفیف',
+   614→      type: 'down',
+   615→    },
+   616→    { from: 'N_T_B_OVERBOUGHT', to: 'SC1', label: 'شوک نزولی', type: 'down' },
+   617→    { from: 'N_T_B_OVERBOUGHT', to: 'SC9', label: 'ادامه صعودی شدید', type: 'up' },
+   618→
+   619→    // ── N_T_BEAR → Assessment ──────────────────────────────────────────────
+   620→    {
+   621→      from: 'N_T_BEAR',
+   622→      to: 'N_T_BE_MOM_LOW',
+   623→      label: 'مومنتوم بالا',
+   624→      type: 'down',
+   625→    },
+   626→    {
+   627→      from: 'N_T_BEAR',
+   628→      to: 'N_T_BE_MOM_MOD',
+   629→      label: 'مومنتوم متوسط',
+   630→      type: 'down',
+   631→    },
+   632→    {
+   633→      from: 'N_T_BEAR',
+   634→      to: 'N_T_BE_OVERSOLD',
+   635→      label: 'اشباع فروش',
+   636→      type: 'risk',
+   637→    },
+   638→
+   639→    // ── N_T_BE_MOM_LOW → Terminals ────────────────────────────────────────
+   640→    {
+   641→      from: 'N_T_BE_MOM_LOW',
+   642→      to: 'SC2',
+   643→      label: 'نزولی شتابدار',
+   644→      type: 'down',
+   645→    },
+   646→    { from: 'N_T_BE_MOM_LOW', to: 'SC1', label: 'شوک نزولی', type: 'down' },
+   647→    { from: 'N_T_BE_MOM_LOW', to: 'SC3', label: 'نزولی قوی', type: 'down' },
+   648→
+   649→    // ── N_T_BE_MOM_MOD → Terminals ────────────────────────────────────────
+   650→    {
+   651→      from: 'N_T_BE_MOM_MOD',
+   652→      to: 'SC3',
+   653→      label: 'نزولی قوی',
+   654→      type: 'down',
+   655→    },
+   656→    {
+   657→      from: 'N_T_BE_MOM_MOD',
+   658→      to: 'SC4',
+   659→      label: 'نزولی خفیف',
+   660→      type: 'down',
+   661→    },
+   662→    { from: 'N_T_BE_MOM_MOD', to: 'SC5', label: 'رنج', type: 'pullback' },
+   663→
+   664→    // ── N_T_BE_OVERSOLD → Terminals ───────────────────────────────────────
+   665→    {
+   666→      from: 'N_T_BE_OVERSOLD',
+   667→      to: 'SC6',
+   668→      label: 'صعودی خفیف',
+   669→      type: 'up',
+   670→    },
+   671→    { from: 'N_T_BE_OVERSOLD', to: 'SC9', label: 'شوک صعودی', type: 'up' },
+   672→    { from: 'N_T_BE_OVERSOLD', to: 'SC4', label: 'ادامه نزولی ملایم', type: 'down' },
+   673→
+   674→    // ── N_T_FLAT → Assessment ─────────────────────────────────────────────
+   675→    {
+   676→      from: 'N_T_FLAT',
+   677→      to: 'N_T_F_VOL_LOW',
+   678→      label: 'نوسان کم',
+   679→      type: 'pullback',
+   680→    },
+   681→    {
+   682→      from: 'N_T_FLAT',
+   683→      to: 'N_T_F_VOL_HIGH',
+   684→      label: 'نوسان بالا',
+   685→      type: 'risk',
+   686→    },
+   687→    {
+   688→      from: 'N_T_FLAT',
+   689→      to: 'N_T_F_VOL_MOD',
+   690→      label: 'نوسان متوسط',
+   691→      type: 'pullback',
+   692→    },
+   693→
+   694→    // ── N_T_F_VOL_LOW → Terminals ─────────────────────────────────────────
+   695→    {
+   696→      from: 'N_T_F_VOL_LOW',
+   697→      to: 'SC5',
+   698→      label: 'رنج کم‌نوسان',
+   699→      type: 'pullback',
+   700→    },
+   701→    {
+   702→      from: 'N_T_F_VOL_LOW',
+   703→      to: 'SC6',
+   704→      label: 'صعودی خفیف',
+   705→      type: 'up',
+   706→    },
+   707→    {
+   708→      from: 'N_T_F_VOL_LOW',
+   709→      to: 'SC4',
+   710→      label: 'نزولی خفیف',
+   711→      type: 'down',
+   712→    },
+   713→
+   714→    // ── N_T_F_VOL_HIGH → Terminals ────────────────────────────────────────
+   715→    { from: 'N_T_F_VOL_HIGH', to: 'SC9', label: 'شوک صعودی', type: 'up' },
+   716→    { from: 'N_T_F_VOL_HIGH', to: 'SC1', label: 'شوک نزولی', type: 'down' },
+   717→    { from: 'N_T_F_VOL_HIGH', to: 'SC5', label: 'رنج', type: 'pullback' },
+   718→
+   719→    // ── N_T_F_VOL_MOD → Terminals ─────────────────────────────────────────
+   720→    {
+   721→      from: 'N_T_F_VOL_MOD',
+   722→      to: 'SC6',
+   723→      label: 'صعودی خفیف',
+   724→      type: 'up',
+   725→    },
+   726→    {
+   727→      from: 'N_T_F_VOL_MOD',
+   728→      to: 'SC4',
+   729→      label: 'نزولی خفیف',
+   730→      type: 'down',
+   731→    },
+   732→    { from: 'N_T_F_VOL_MOD', to: 'SC5', label: 'رنج', type: 'pullback' },
+   733→
+   734→    // ── N_BREAK → Sub-branches ─────────────────────────────────────────────
+   735→    { from: 'N_BREAK', to: 'N_B_UP', label: 'صعودی', type: 'up' },
+   736→    { from: 'N_BREAK', to: 'N_B_DOWN', label: 'نزولی', type: 'down' },
+   737→    { from: 'N_BREAK', to: 'N_B_NONE', label: 'بدون شکست', type: 'pullback' },
+   738→
+   739→    // ── N_B_UP → Assessment ────────────────────────────────────────────────
+   740→    {
+   741→      from: 'N_B_UP',
+   742→      to: 'N_B_U_VOL_C',
+   743→      label: 'تأیید حجم',
+   744→      type: 'up',
+   745→    },
+   746→    { from: 'N_B_UP', to: 'N_B_U_VOL_W', label: 'حجم ضعیف', type: 'risk' },
+   747→
+   748→    // ── N_B_U_VOL_C → Terminals ───────────────────────────────────────────
+   749→    { from: 'N_B_U_VOL_C', to: 'SC7', label: 'صعودی قوی', type: 'up' },
+   750→    {
+   751→      from: 'N_B_U_VOL_C',
+   752→      to: 'SC8',
+   753→      label: 'صعودی شتابدار',
+   754→      type: 'up',
+   755→    },
+   756→    { from: 'N_B_U_VOL_C', to: 'SC9', label: 'شوک صعودی', type: 'up' },
+   757→
+   758→    // ── N_B_U_VOL_W → Terminals ───────────────────────────────────────────
+   759→    {
+   760→      from: 'N_B_U_VOL_W',
+   761→      to: 'SC6',
+   762→      label: 'صعودی خفیف',
+   763→      type: 'up',
+   764→    },
+   765→    {
+   766→      from: 'N_B_U_VOL_W',
+   767→      to: 'SC4',
+   768→      label: 'شکست کاذب',
+   769→      type: 'down',
+   770→    },
+   771→    { from: 'N_B_U_VOL_W', to: 'SC5', label: 'رنج', type: 'pullback' },
+   772→
+   773→    // ── N_B_DOWN → Assessment ──────────────────────────────────────────────
+   774→    {
+   775→      from: 'N_B_DOWN',
+   776→      to: 'N_B_D_VOL_C',
+   777→      label: 'تأیید حجم',
+   778→      type: 'down',
+   779→    },
+   780→    {
+   781→      from: 'N_B_DOWN',
+   782→      to: 'N_B_D_VOL_W',
+   783→      label: 'حجم ضعیف',
+   784→      type: 'risk',
+   785→    },
+   786→
+   787→    // ── N_B_D_VOL_C → Terminals ───────────────────────────────────────────
+   788→    { from: 'N_B_D_VOL_C', to: 'SC3', label: 'نزولی قوی', type: 'down' },
+   789→    {
+   790→      from: 'N_B_D_VOL_C',
+   791→      to: 'SC2',
+   792→      label: 'نزولی شتابدار',
+   793→      type: 'down',
+   794→    },
+   795→    { from: 'N_B_D_VOL_C', to: 'SC1', label: 'شوک نزولی', type: 'down' },
+   796→
+   797→    // ── N_B_D_VOL_W → Terminals ───────────────────────────────────────────
+   798→    {
+   799→      from: 'N_B_D_VOL_W',
+   800→      to: 'SC4',
+   801→      label: 'نزولی خفیف',
+   802→      type: 'down',
+   803→    },
+   804→    {
+   805→      from: 'N_B_D_VOL_W',
+   806→      to: 'SC6',
+   807→      label: 'شکست کاذب معکوس',
+   808→      type: 'up',
+   809→    },
+   810→    { from: 'N_B_D_VOL_W', to: 'SC5', label: 'رنج', type: 'pullback' },
+   811→
+   812→    // ── N_B_NONE → Terminals ───────────────────────────────────────────────
+   813→    { from: 'N_B_NONE', to: 'SC4', label: 'نزولی خفیف', type: 'down' },
+   814→    { from: 'N_B_NONE', to: 'SC5', label: 'رنج', type: 'pullback' },
+   815→    { from: 'N_B_NONE', to: 'SC6', label: 'صعودی خفیف', type: 'up' },
+   816→
+   817→    // ── N_REVERSAL → Sub-branches ──────────────────────────────────────────
+   818→    {
+   819→      from: 'N_REVERSAL',
+   820→      to: 'N_R_BULL',
+   821→      label: 'بازگشت صعودی',
+   822→      type: 'up',
+   823→    },
+   824→    {
+   825→      from: 'N_REVERSAL',
+   826→      to: 'N_R_BEAR',
+   827→      label: 'بازگشت نزولی',
+   828→      type: 'down',
+   829→    },
+   830→    {
+   831→      from: 'N_REVERSAL',
+   832→      to: 'N_R_NONE',
+   833→      label: 'بدون بازگشت',
+   834→      type: 'pullback',
+   835→    },
+   836→
+   837→    // ── N_R_BULL → Assessment ─────────────────────────────────────────────
+   838→    {
+   839→      from: 'N_R_BULL',
+   840→      to: 'N_R_B_DIV',
+   841→      label: 'واگرایی',
+   842→      type: 'up',
+   843→    },
+   844→    {
+   845→      from: 'N_R_BULL',
+   846→      to: 'N_R_B_CANDLE',
+   847→      label: 'الگوی کندلی',
+   848→      type: 'up',
+   849→    },
+   850→    { from: 'N_R_BULL', to: 'N_R_B_SR', label: 'بازگشت از حمایت', type: 'up' },
+   851→
+   852→    // ── N_R_B_DIV → Terminals ─────────────────────────────────────────────
+   853→    {
+   854→      from: 'N_R_B_DIV',
+   855→      to: 'SC6',
+   856→      label: 'صعودی خفیف',
+   857→      type: 'up',
+   858→    },
+   859→    {
+   860→      from: 'N_R_B_DIV',
+   861→      to: 'SC8',
+   862→      label: 'صعودی شتابدار',
+   863→      type: 'up',
+   864→    },
+   865→    { from: 'N_R_B_DIV', to: 'SC5', label: 'رنج', type: 'pullback' },
+   866→
+   867→    // ── N_R_B_CANDLE → Terminals ──────────────────────────────────────────
+   868→    { from: 'N_R_B_CANDLE', to: 'SC7', label: 'صعودی قوی', type: 'up' },
+   869→    {
+   870→      from: 'N_R_B_CANDLE',
+   871→      to: 'SC6',
+   872→      label: 'صعودی خفیف',
+   873→      type: 'up',
+   874→    },
+   875→    { from: 'N_R_B_CANDLE', to: 'SC5', label: 'رنج', type: 'pullback' },
+   876→
+   877→    // ── N_R_B_SR → Terminals ──────────────────────────────────────────────
+   878→    {
+   879→      from: 'N_R_B_SR',
+   880→      to: 'SC6',
+   881→      label: 'صعودی خفیف',
+   882→      type: 'up',
+   883→    },
+   884→    { from: 'N_R_B_SR', to: 'SC5', label: 'رنج', type: 'pullback' },
+   885→    {
+   886→      from: 'N_R_B_SR',
+   887→      to: 'SC4',
+   888→      label: 'عدم موفقیت',
+   889→      type: 'down',
+   890→    },
+   891→
+   892→    // ── N_R_BEAR → Assessment ─────────────────────────────────────────────
+   893→    {
+   894→      from: 'N_R_BEAR',
+   895→      to: 'N_R_BE_DIV',
+   896→      label: 'واگرایی',
+   897→      type: 'down',
+   898→    },
+   899→    {
+   900→      from: 'N_R_BEAR',
+   901→      to: 'N_R_BE_CANDLE',
+   902→      label: 'الگوی کندلی',
+   903→      type: 'down',
+   904→    },
+   905→    {
+   906→      from: 'N_R_BEAR',
+   907→      to: 'N_R_BE_SR',
+   908→      label: 'بازگشت از مقاومت',
+   909→      type: 'down',
+   910→    },
+   911→
+   912→    // ── N_R_BE_DIV → Terminals ────────────────────────────────────────────
+   913→    {
+   914→      from: 'N_R_BE_DIV',
+   915→      to: 'SC4',
+   916→      label: 'نزولی خفیف',
+   917→      type: 'down',
+   918→    },
+   919→    {
+   920→      from: 'N_R_BE_DIV',
+   921→      to: 'SC2',
+   922→      label: 'نزولی شتابدار',
+   923→      type: 'down',
+   924→    },
+   925→    { from: 'N_R_BE_DIV', to: 'SC5', label: 'رنج', type: 'pullback' },
+   926→
+   927→    // ── N_R_BE_CANDLE → Terminals ────────────────────────────────────────
+   928→    { from: 'N_R_BE_CANDLE', to: 'SC3', label: 'نزولی قوی', type: 'down' },
+   929→    {
+   930→      from: 'N_R_BE_CANDLE',
+   931→      to: 'SC4',
+   932→      label: 'نزولی خفیف',
+   933→      type: 'down',
+   934→    },
+   935→    { from: 'N_R_BE_CANDLE', to: 'SC5', label: 'رنج', type: 'pullback' },
+   936→
+   937→    // ── N_R_BE_SR → Terminals ─────────────────────────────────────────────
+   938→    {
+   939→      from: 'N_R_BE_SR',
+   940→      to: 'SC4',
+   941→      label: 'نزولی خفیف',
+   942→      type: 'down',
+   943→    },
+   944→    { from: 'N_R_BE_SR', to: 'SC5', label: 'رنج', type: 'pullback' },
+   945→    {
+   946→      from: 'N_R_BE_SR',
+   947→      to: 'SC6',
+   948→      label: 'عدم موفقیت',
+   949→      type: 'up',
+   950→    },
+   951→
+   952→    // ── N_R_NONE → Terminals ───────────────────────────────────────────────
+   953→    { from: 'N_R_NONE', to: 'SC4', label: 'نزولی خفیف', type: 'down' },
+   954→    { from: 'N_R_NONE', to: 'SC5', label: 'رنج', type: 'pullback' },
+   955→    { from: 'N_R_NONE', to: 'SC6', label: 'صعودی خفیف', type: 'up' },
+   956→  ];
+   957→}
+   958→
+   959→// === Static Node Positions (RTL Layout) =======================================
+   960→
+   961→function createPositions(): Record<string, { right: number; top: number }> {
+   962→  const p: Record<string, { right: number; top: number }> = {};
+   963→  // DESIGN_H is now 1200. Event nodes: 56px, Branch nodes: 74px, Terminal: 84px
+   964→  // No overlaps — each group separated by 14px, siblings by 4px
+   965→
+   966→  // Layer 0 (rightmost): ROOT
+   967→  p['ROOT'] = { right: 30, top: 590 };
+   968→
+   969→  // Layer 1: Main branches (centered on their children)
+   970→  p['N_TREND'] = { right: 200, top: 268 };
+   971→  p['N_BREAK'] = { right: 200, top: 690 };
+   972→  p['N_REVERSAL'] = { right: 200, top: 1010 };
+   973→
+   974→  // Layer 2: Sub-branches (centered on their Layer-3 children groups)
+   975→  p['N_T_BULL'] = { right: 390, top: 50 };
+   976→  p['N_T_BEAR'] = { right: 390, top: 240 };
+   977→  p['N_T_FLAT'] = { right: 390, top: 430 };
+   978→  p['N_B_UP'] = { right: 390, top: 590 };
+   979→  p['N_B_DOWN'] = { right: 390, top: 720 };
+   980→  p['N_B_NONE'] = { right: 390, top: 532 };
+   981→  p['N_R_BULL'] = { right: 390, top: 880 };
+   982→  p['N_R_BEAR'] = { right: 390, top: 1070 };
+   983→  p['N_R_NONE'] = { right: 390, top: 790 };
+   984→
+   985→  // Layer 3: Assessment nodes (19 nodes, 7 groups, no overlaps)
+   986→  // Event node height: 56px, within-group gap: 4px, between-group gap: 14px
+   987→  // Trend-Bull (3 nodes)
+   988→  p['N_T_B_MOM_HIGH'] = { right: 570, top: 2 };
+   989→  p['N_T_B_MOM_MOD'] = { right: 570, top: 62 };
+   990→  p['N_T_B_OVERBOUGHT'] = { right: 570, top: 122 };
+   991→  // Trend-Bear (3 nodes)
+   992→  p['N_T_BE_MOM_LOW'] = { right: 570, top: 192 };
+   993→  p['N_T_BE_MOM_MOD'] = { right: 570, top: 252 };
+   994→  p['N_T_BE_OVERSOLD'] = { right: 570, top: 312 };
+   995→  // Trend-Flat (3 nodes)
+   996→  p['N_T_F_VOL_LOW'] = { right: 570, top: 382 };
+   997→  p['N_T_F_VOL_HIGH'] = { right: 570, top: 442 };
+   998→  p['N_T_F_VOL_MOD'] = { right: 570, top: 502 };
+   999→  // Breakout-Up (2 nodes)
+  1000→  p['N_B_U_VOL_C'] = { right: 570, top: 572 };
+  1001→  p['N_B_U_VOL_W'] = { right: 570, top: 632 };
+  1002→  // Breakout-Down (2 nodes)
+  1003→  p['N_B_D_VOL_C'] = { right: 570, top: 702 };
+  1004→  p['N_B_D_VOL_W'] = { right: 570, top: 762 };
+  1005→  // Reversal-Bull (3 nodes)
+  1006→  p['N_R_B_DIV'] = { right: 570, top: 832 };
+  1007→  p['N_R_B_CANDLE'] = { right: 570, top: 892 };
+  1008→  p['N_R_B_SR'] = { right: 570, top: 952 };
+  1009→  // Reversal-Bear (3 nodes)
+  1010→  p['N_R_BE_DIV'] = { right: 570, top: 1022 };
+  1011→  p['N_R_BE_CANDLE'] = { right: 570, top: 1082 };
+  1012→  p['N_R_BE_SR'] = { right: 570, top: 1142 };
+  1013→
+  1014→  // Layer 4 (leftmost): Terminal nodes SC1–SC9 (height 84px, gap 35px)
+  1015→  for (let i = 0; i < 9; i++) {
+  1016→    p[`SC${i + 1}`] = { right: 1050, top: i * 119 + 30 };
+  1017→  }
+  1018→
+  1019→  return p;
+  1020→}
+  1021→
+  1022→// === Probability Context Builder ==============================================
+  1023→
+  1024→function buildContext(input: GraphInput): ProbContext {
+  1025→  const adxNorm = clamp(input.adx / 60, 0, 1);
+  1026→  const srProximity = clamp(
+  1027→    1 - Math.min(input.distToR1, input.distToS1) * 10,
+  1028→    0,
+  1029→    1
+  1030→  );
+  1031→  const oscillatorExtreme = clamp(
+  1032→    (Math.abs(input.rsi - 50) / 50 + Math.abs(input.cci) / 200) / 2,
+  1033→    0,
+  1034→    1
+  1035→  );
+  1036→  const divergenceProxy = oscillatorExtreme * (1 - adxNorm);
+  1037→
+  1038→  // Pre-compute for reuse across N_T_BULL and N_REVERSAL
+  1039→  const overboughtRisk =
+  1040→    clamp((input.rsi - 60) / 30, 0, 1) * 0.3 +
+  1041→    clamp((input.mfi - 70) / 30, 0, 1) * 0.2 +
+  1042→    clamp((input.stochK - 75) / 25, 0, 1) * 0.2;
+  1043→
+  1044→  // Pre-compute for reuse across N_T_BEAR and N_REVERSAL
+  1045→  const oversoldBounce =
+  1046→    clamp((30 - input.rsi) / 30, 0, 1) * 0.3 +
+  1047→    clamp((20 - input.mfi) / 20, 0, 1) * 0.2 +
+  1048→    clamp((20 - input.stochK) / 20, 0, 1) * 0.2;
+  1049→
+  1050→  return {
+  1051→    input,
+  1052→    adxNorm,
+  1053→    srProximity,
+  1054→    oscillatorExtreme,
+  1055→    divergenceProxy,
+  1056→    overboughtRisk,
+  1057→    oversoldBounce,
+  1058→  };
+  1059→}
+  1060→
+  1061→// === Node Probability Computation =============================================
+  1062→// For each non-terminal node, returns an array of probabilities for its
+  1063→// outgoing edges. The order MUST match the order of edges in createEdges().
+  1064→// =============================================================================
+  1065→
+  1066→function computeNodeProbabilities(
+  1067→  nodeId: string,
+  1068→  ctx: ProbContext,
+  1069→  _numChildren: number
+  1070→): number[] {
+  1071→  const { input, adxNorm, srProximity, overboughtRisk, oversoldBounce } = ctx;
+  1072→  const atrSafe = input.atr > 0 ? input.atr : 0.0001;
+  1073→
+  1074→  switch (nodeId) {
+  1075→    // ── ROOT → [N_TREND, N_BREAK, N_REVERSAL] ─────────────────────────────
+  1076→    case 'ROOT': {
+  1077→      const trendW = adxNorm * 0.5 + input.mlTrend * 0.18 + 0.1;
+  1078→      const breakW = srProximity * 0.3 + (1 - adxNorm) * 0.08 + 0.08;
+  1079→      const revW = ctx.divergenceProxy * 0.35 + (1 - adxNorm) * 0.12 + 0.06;
+  1080→      return normalize([trendW, breakW, revW]);
+  1081→    }
+  1082→
+  1083→    // ── N_TREND → [N_T_BULL, N_T_BEAR, N_T_FLAT] ──────────────────────────
+  1084→    case 'N_TREND': {
+  1085→      const bull = input.bullConsensus * (adxNorm * 0.4 + 0.6);
+  1086→      const bear = (1 - input.bullConsensus) * (adxNorm * 0.4 + 0.6);
+  1087→      const flatUncertainty = (1 - Math.abs(input.bullConsensus - 0.5) * 2);
+  1088→      const flat = flatUncertainty * clamp(1 - adxNorm * 1.5, 0, 1) * 0.45;
+  1089→      return normalize([bull, bear, flat]);
+  1090→    }
+  1091→
+  1092→    // ── N_T_BULL → [N_T_B_MOM_HIGH, N_T_B_MOM_MOD, N_T_B_OVERBOUGHT] ─────
+  1093→    case 'N_T_BULL': {
+  1094→      const momHigh =
+  1095→        clamp(
+  1096→          (input.momentum > 0 ? input.momentum / 50 : 0) +
+  1097→            (input.macdHist > 0
+  1098→              ? (input.macdHist / (atrSafe * 0.5)) * 0.3
+  1099→              : 0),
+  1100→          0,
+  1101→          1
+  1102→        ) * input.mlMomentum;
+  1103→      const momMod = (1 - momHigh) * 0.6 * input.mlMomentum;
+  1104→      return normalize([momHigh, momMod, overboughtRisk]);
+  1105→    }
+  1106→
+  1107→    // ── N_T_B_MOM_HIGH → [SC8, SC9, SC7] ────────────────────────────────────
+  1108→    // Strong bullish momentum — all three outcomes are bullish (no range)
+  1109→    case 'N_T_B_MOM_HIGH': {
+  1110→      const pSC8 = 0.45 * input.mlTrend + input.confidenceIndex * 0.2;
+  1111→      const pSC9 = 0.15 + input.strengthIndex * 0.2;
+  1112→      const pSC7 = 0.35 * input.confidenceIndex + 0.15;
+  1113→      return normalize([pSC8, pSC9, pSC7]);
+  1114→    }
+  1115→
+  1116→    // ── N_T_B_MOM_MOD → [SC7, SC6, SC5] ─────────────────────────────────────
+  1117→    // Moderate bullish — small explicit SC5 based on uncertainty
+  1118→    case 'N_T_B_MOM_MOD': {
+  1119→      const pSC7 = 0.55 * input.confidenceIndex + 0.2;
+  1120→      const pSC6 = 0.55 * (1 - input.confidenceIndex) + 0.15;
+  1121→      const pSC5 = clamp((1 - adxNorm) * 0.15, 0.02, 0.15);
+  1122→      return normalize([pSC7, pSC6, pSC5]);
+  1123→    }
+  1124→
+  1125→    // ── N_T_B_OVERBOUGHT → [SC4, SC1, SC9] ──────────────────────────────────
+  1126→    // Overbought in uptrend — correction or last-gasp surge (no range)
+  1127→    case 'N_T_B_OVERBOUGHT': {
+  1128→      const pSC4 = 0.5 + (1 - input.mlMomentum) * 0.2;
+  1129→      const pSC1 = 0.15 + input.strengthIndex * 0.15;
+  1130→      const pSC9 = 0.1 + input.mlMomentum * 0.2;
+  1131→      return normalize([pSC4, pSC1, pSC9]);
+  1132→    }
+  1133→
+  1134→    // ── N_T_BEAR → [N_T_BE_MOM_LOW, N_T_BE_MOM_MOD, N_T_BE_OVERSOLD] ────
+  1135→    case 'N_T_BEAR': {
+  1136→      const momLow =
+  1137→        clamp(
+  1138→          (input.momentum < 0 ? Math.abs(input.momentum) / 50 : 0) +
+  1139→            (input.macdHist < 0
+  1140→              ? (Math.abs(input.macdHist) / (atrSafe * 0.5)) * 0.3
+  1141→              : 0),
+  1142→          0,
+  1143→          1
+  1144→        ) * input.mlMomentum;
+  1145→      const momMod = (1 - momLow) * 0.6 * input.mlMomentum;
+  1146→      return normalize([momLow, momMod, oversoldBounce]);
+  1147→    }
+  1148→
+  1149→    // ── N_T_BE_MOM_LOW → [SC2, SC1, SC3] ────────────────────────────────────
+  1150→    // Strong bearish momentum — all three outcomes are bearish (no range)
+  1151→    case 'N_T_BE_MOM_LOW': {
+  1152→      const pSC2 = 0.45 * input.mlTrend + input.confidenceIndex * 0.2;
+  1153→      const pSC1 = 0.15 + input.strengthIndex * 0.2;
+  1154→      const pSC3 = 0.35 * input.confidenceIndex + 0.15;
+  1155→      return normalize([pSC2, pSC1, pSC3]);
+  1156→    }
+  1157→
+  1158→    // ── N_T_BE_MOM_MOD → [SC3, SC4, SC5] ────────────────────────────────────
+  1159→    // Moderate bearish — small explicit SC5 based on uncertainty
+  1160→    case 'N_T_BE_MOM_MOD': {
+  1161→      const pSC3 = 0.55 * input.confidenceIndex + 0.2;
+  1162→      const pSC4 = 0.55 * (1 - input.confidenceIndex) + 0.15;
+  1163→      const pSC5 = clamp((1 - adxNorm) * 0.15, 0.02, 0.15);
+  1164→      return normalize([pSC3, pSC4, pSC5]);
+  1165→    }
+  1166→
+  1167→    // ── N_T_BE_OVERSOLD → [SC6, SC9, SC4] ───────────────────────────────────
+  1168→    // Oversold in downtrend — bounce or mild continuation (no range)
+  1169→    case 'N_T_BE_OVERSOLD': {
+  1170→      const pSC6 = 0.55 + (1 - input.mlMomentum) * 0.2;
+  1171→      const pSC9 = 0.15 + input.strengthIndex * 0.15;
+  1172→      const pSC4 = 0.1 + input.mlMomentum * 0.2;
+  1173→      return normalize([pSC6, pSC9, pSC4]);
+  1174→    }
+  1175→
+  1176→    // ── N_T_FLAT → [N_T_F_VOL_LOW, N_T_F_VOL_HIGH, N_T_F_VOL_MOD] ────────
+  1177→    case 'N_T_FLAT': {
+  1178→      const volLow =
+  1179→        clamp(1 - (input.atr / input.price) * 20, 0, 1) *
+  1180→        (1 - input.mlVolatility) *
+  1181→        0.7;
+  1182→      const volHigh =
+  1183→        clamp((input.atr / input.price) * 20, 0, 1) * input.mlVolatility * 0.7;
+  1184→      const volMod = (1 - volLow - volHigh) * 0.5 + 0.1;
+  1185→      return normalize([volLow, volHigh, volMod]);
+  1186→    }
+  1187→
+  1188→    // ── N_T_F_VOL_LOW → [SC5, SC6, SC4] ─────────────────────────────────────
+  1189→    case 'N_T_F_VOL_LOW': {
+  1190→      const pSC5 = 0.55 + (1 - Math.abs(input.bullConsensus - 0.5) * 2) * 0.15;
+  1191→      const pSC6 = 0.2 * input.bullConsensus + 0.08;
+  1192→      const pSC4 = 0.2 * (1 - input.bullConsensus) + 0.08;
+  1193→      return normalize([pSC5, pSC6, pSC4]);
+  1194→    }
+  1195→
+  1196→    // ── N_T_F_VOL_HIGH → [SC9, SC1, SC5] ────────────────────────────────────
+  1197→    // High volatility shock — directional shock much more likely than range
+  1198→    case 'N_T_F_VOL_HIGH': {
+  1199→      const pSC9 = 0.4 * input.bullConsensus + 0.15;
+  1200→      const pSC1 = 0.4 * (1 - input.bullConsensus) + 0.15;
+  1201→      const pSC5 = clamp((1 - input.mlVolatility) * 0.12, 0.02, 0.12);
+  1202→      return normalize([pSC9, pSC1, pSC5]);
+  1203→    }
+  1204→
+  1205→    // ── N_T_F_VOL_MOD → [SC6, SC4, SC5] ─────────────────────────────────────
+  1206→    // Moderate volatility — directional more likely than range
+  1207→    case 'N_T_F_VOL_MOD': {
+  1208→      const pSC6 = 0.38 * input.bullConsensus + 0.15;
+  1209→      const pSC4 = 0.38 * (1 - input.bullConsensus) + 0.15;
+  1210→      const pSC5 = clamp((1 - adxNorm) * 0.15, 0.03, 0.15);
+  1211→      return normalize([pSC6, pSC4, pSC5]);
+  1212→    }
+  1213→
+  1214→    // ── N_BREAK → [N_B_UP, N_B_DOWN, N_B_NONE] ────────────────────────────
+  1215→    case 'N_BREAK': {
+  1216→      const upProb = input.bullConsensus * srProximity * 0.75 + 0.08;
+  1217→      const downProb = (1 - input.bullConsensus) * srProximity * 0.75 + 0.08;
+  1218→      const noneProb = (1 - srProximity) * 0.35 + 0.05;
+  1219→      return normalize([upProb, downProb, noneProb]);
+  1220→    }
+  1221→
+  1222→    // ── N_B_UP → [N_B_U_VOL_C, N_B_U_VOL_W] ─────────────────────────────
+  1223→    case 'N_B_UP': {
+  1224→      let volConfirm: number;
+  1225→      let volWeak: number;
+  1226→      if (input.hasVolume) {
+  1227→        volConfirm = clamp(input.mfi / 60, 0, 1) * 0.6 + 0.2;
+  1228→        volWeak = 1 - volConfirm;
+  1229→      } else {
+  1230→        volConfirm = 0.4;
+  1231→        volWeak = 0.6;
+  1232→      }
+  1233→      return normalize([volConfirm, volWeak]);
+  1234→    }
+  1235→
+  1236→    // ── N_B_U_VOL_C → [SC7, SC8, SC9] ──────────────────────────────────────
+  1237→    // Confirmed bullish breakout — all bullish, no range
+  1238→    case 'N_B_U_VOL_C': {
+  1239→      const pSC7 = 0.45 + input.confidenceIndex * 0.15;
+  1240→      const pSC8 = 0.2 + input.strengthIndex * 0.15;
+  1241→      const pSC9 = 0.15 + input.strengthIndex * 0.1;
+  1242→      return normalize([pSC7, pSC8, pSC9]);
+  1243→    }
+  1244→
+  1245→    // ── N_B_U_VOL_W → [SC6, SC4, SC5] ──────────────────────────────────────
+  1246→    // Weak volume breakout — fake breakout risk, capped SC5
+  1247→    case 'N_B_U_VOL_W': {
+  1248→      const pSC6 = 0.4 + input.bullConsensus * 0.15;
+  1249→      const pSC4 = 0.3 + (1 - input.bullConsensus) * 0.15;
+  1250→      const pSC5 = clamp((1 - input.confidenceIndex) * 0.12, 0.02, 0.12);
+  1251→      return normalize([pSC6, pSC4, pSC5]);
+  1252→    }
+  1253→
+  1254→    // ── N_B_DOWN → [N_B_D_VOL_C, N_B_D_VOL_W] ────────────────────────────
+  1255→    case 'N_B_DOWN': {
+  1256→      let volConfirm: number;
+  1257→      if (input.hasVolume) {
+  1258→        volConfirm = clamp((100 - input.mfi) / 60, 0, 1) * 0.6 + 0.2;
+  1259→      } else {
+  1260→        volConfirm = 0.4;
+  1261→      }
+  1262→      const volWeak = 1 - volConfirm;
+  1263→      return normalize([volConfirm, volWeak]);
+  1264→    }
+  1265→
+  1266→    // ── N_B_D_VOL_C → [SC3, SC2, SC1] ──────────────────────────────────────
+  1267→    // Confirmed bearish breakout — all bearish, no range
+  1268→    case 'N_B_D_VOL_C': {
+  1269→      const pSC3 = 0.45 + input.confidenceIndex * 0.15;
+  1270→      const pSC2 = 0.2 + input.strengthIndex * 0.15;
+  1271→      const pSC1 = 0.15 + input.strengthIndex * 0.1;
+  1272→      return normalize([pSC3, pSC2, pSC1]);
+  1273→    }
+  1274→
+  1275→    // ── N_B_D_VOL_W → [SC4, SC6, SC5] ──────────────────────────────────────
+  1276→    // Weak volume bearish breakout — fake breakout risk, capped SC5
+  1277→    case 'N_B_D_VOL_W': {
+  1278→      const pSC4 = 0.4 + (1 - input.bullConsensus) * 0.15;
+  1279→      const pSC6 = 0.3 + input.bullConsensus * 0.15;
+  1280→      const pSC5 = clamp((1 - input.confidenceIndex) * 0.12, 0.02, 0.12);
+  1281→      return normalize([pSC4, pSC6, pSC5]);
+  1282→    }
+  1283→
+  1284→    // ── N_B_NONE → [SC4, SC5, SC6] ──────────────────────────────────────────
+  1285→    case 'N_B_NONE': {
+  1286→      const pSC5 = 0.45 + (1 - Math.abs(input.bullConsensus - 0.5) * 2) * 0.15;
+  1287→      const pSC6 = 0.2 * input.bullConsensus + 0.08;
+  1288→      const pSC4 = 0.2 * (1 - input.bullConsensus) + 0.08;
+  1289→      return normalize([pSC4, pSC5, pSC6]);
+  1290→    }
+  1291→
+  1292→    // ── N_REVERSAL → [N_R_BULL, N_R_BEAR, N_R_NONE] ──────────────────────
+  1293→    case 'N_REVERSAL': {
+  1294→      const bullRev = overboughtRisk;
+  1295→      const bearRev = oversoldBounce;
+  1296→      const maxRevSignal = Math.max(overboughtRisk, oversoldBounce);
+  1297→      const noneRev = 1 - maxRevSignal * 0.85;
+  1298→      return normalize([bullRev, bearRev, noneRev]);
+  1299→    }
+  1300→
+  1301→    // ── N_R_BULL → [N_R_B_DIV, N_R_B_CANDLE, N_R_B_SR] ──────────────────
+  1302→    case 'N_R_BULL': {
+  1303→      const divProb = clamp(Math.abs(input.cci) / 150, 0, 1) * 0.5;
+  1304→      const candleProb =
+  1305→        clamp(Math.abs(input.fisherTransform) / 2, 0, 1) * 0.3;
+  1306→      const srProb = clamp(input.srAvgStrength, 0, 1) * 0.3;
+  1307→      return normalize([divProb, candleProb, srProb]);
+  1308→    }
+  1309→
+  1310→    // ── N_R_B_DIV → [SC6, SC8, SC5] ────────────────────────────────────────
+  1311→    // Bullish divergence — explicit small SC5
+  1312→    case 'N_R_B_DIV': {
+  1313→      const pSC6 = 0.5 + (1 - input.mlMomentum) * 0.2;
+  1314→      const pSC8 = 0.2 + input.mlMomentum * 0.15;
+  1315→      const pSC5 = clamp((1 - adxNorm) * 0.1, 0.02, 0.1);
+  1316→      return normalize([pSC6, pSC8, pSC5]);
+  1317→    }
+  1318→
+  1319→    // ── N_R_B_CANDLE → [SC7, SC6, SC5] ─────────────────────────────────────
+  1320→    // Bullish candle pattern — explicit small SC5
+  1321→    case 'N_R_B_CANDLE': {
+  1322→      const pSC7 = 0.5 * input.confidenceIndex + 0.2;
+  1323→      const pSC6 = 0.5 * (1 - input.confidenceIndex) + 0.15;
+  1324→      const pSC5 = clamp((1 - input.confidenceIndex) * 0.1, 0.02, 0.1);
+  1325→      return normalize([pSC7, pSC6, pSC5]);
+  1326→    }
+  1327→
+  1328→    // ── N_R_B_SR → [SC6, SC5, SC4] ─────────────────────────────────────────
+  1329→    // Support bounce — explicit small SC5
+  1330→    // Edge order: SC6, SC5, SC4 — probabilities computed then reordered
+  1331→    case 'N_R_B_SR': {
+  1332→      const pSC6 = 0.5 + input.srAvgStrength * 0.2;
+  1333→      const pSC4 = 0.15 + (1 - input.srAvgStrength) * 0.1;
+  1334→      const pSC5 = clamp((1 - input.srAvgStrength) * 0.1, 0.02, 0.1);
+  1335→      // Return in edge order: [SC6, SC5, SC4]
+  1336→      return normalize([pSC6, pSC5, pSC4]);
+  1337→    }
+  1338→
+  1339→    // ── N_R_BEAR → [N_R_BE_DIV, N_R_BE_CANDLE, N_R_BE_SR] ───────────────
+  1340→    // Mirror of N_R_BULL
+  1341→    case 'N_R_BEAR': {
+  1342→      const divProb = clamp(Math.abs(input.cci) / 150, 0, 1) * 0.5;
+  1343→      const candleProb =
+  1344→        clamp(Math.abs(input.fisherTransform) / 2, 0, 1) * 0.3;
+  1345→      const srProb = clamp(input.srAvgStrength, 0, 1) * 0.3;
+  1346→      return normalize([divProb, candleProb, srProb]);
+  1347→    }
+  1348→
+  1349→    // ── N_R_BE_DIV → [SC4, SC2, SC5] ───────────────────────────────────────
+  1350→    // Bearish divergence — explicit small SC5
+  1351→    case 'N_R_BE_DIV': {
+  1352→      const pSC4 = 0.5 + (1 - input.mlMomentum) * 0.2;
+  1353→      const pSC2 = 0.2 + input.mlMomentum * 0.15;
+  1354→      const pSC5 = clamp((1 - adxNorm) * 0.1, 0.02, 0.1);
+  1355→      return normalize([pSC4, pSC2, pSC5]);
+  1356→    }
+  1357→
+  1358→    // ── N_R_BE_CANDLE → [SC3, SC4, SC5] ────────────────────────────────────
+  1359→    // Bearish candle pattern — explicit small SC5
+  1360→    case 'N_R_BE_CANDLE': {
+  1361→      const pSC3 = 0.5 * input.confidenceIndex + 0.2;
+  1362→      const pSC4 = 0.5 * (1 - input.confidenceIndex) + 0.15;
+  1363→      const pSC5 = clamp((1 - input.confidenceIndex) * 0.1, 0.02, 0.1);
+  1364→      return normalize([pSC3, pSC4, pSC5]);
+  1365→    }
+  1366→
+  1367→    // ── N_R_BE_SR → [SC4, SC5, SC6] ─────────────────────────────────────────
+  1368→    // Resistance rejection — explicit small SC5
+  1369→    // Edge order: SC4, SC5, SC6 — probabilities computed then reordered
+  1370→    case 'N_R_BE_SR': {
+  1371→      const pSC4 = 0.5 + input.srAvgStrength * 0.2;
+  1372→      const pSC6 = 0.15 + (1 - input.srAvgStrength) * 0.1;
+  1373→      const pSC5 = clamp((1 - input.srAvgStrength) * 0.1, 0.02, 0.1);
+  1374→      // Return in edge order: [SC4, SC5, SC6]
+  1375→      return normalize([pSC4, pSC5, pSC6]);
+  1376→    }
+  1377→
+  1378→    // ── N_R_NONE → [SC4, SC5, SC6] ──────────────────────────────────────────
+  1379→    case 'N_R_NONE': {
+  1380→      const pSC5 = 0.4 + (1 - Math.abs(input.bullConsensus - 0.5) * 2) * 0.15;
+  1381→      const pSC6 = 0.2 * input.bullConsensus + 0.1;
+  1382→      const pSC4 = 0.2 * (1 - input.bullConsensus) + 0.1;
+  1383→      return normalize([pSC4, pSC5, pSC6]);
+  1384→    }
+  1385→
+  1386→    // ── Terminal nodes (SC1–SC9) have no outgoing edges ─────────────────────
+  1387→    default:
+  1388→      return [];
+  1389→  }
+  1390→}
+  1391→
+  1392→// === Graph Traversal ==========================================================
+  1393→// Recursive DFS from ROOT, accumulating path probabilities at terminal nodes.
+  1394→// =============================================================================
+  1395→
+  1396→function traverseGraph(
+  1397→  nodeId: string,
+  1398→  pathProb: number,
+  1399→  currentBranch: 'trend' | 'breakout' | 'reversal' | null,
+  1400→  ctx: ProbContext,
+  1401→  adj: Map<string, number[]>,
+  1402→  edges: GraphEdge[],
+  1403→  edgeProbabilities: Record<number, number>,
+  1404→  nodeAccum: Record<string, number>,
+  1405→  scenarios: Record<string, number>,
+  1406→  contributions: Record<string, { trend: number; breakout: number; reversal: number }>
+  1407→): void {
+  1408→  // Accumulate path probability at this node
+  1409→  nodeAccum[nodeId] = (nodeAccum[nodeId] || 0) + pathProb;
+  1410→
+  1411→  const outEdgeIndices = adj.get(nodeId);
+  1412→  if (!outEdgeIndices || outEdgeIndices.length === 0) return;
+  1413→
+  1414→  // Compute outgoing edge probabilities for this node
+  1415→  const probs = computeNodeProbabilities(
+  1416→    nodeId,
+  1417→    ctx,
+  1418→    outEdgeIndices.length
+  1419→  );
+  1420→
+  1421→  for (let i = 0; i < outEdgeIndices.length; i++) {
+  1422→    const edgeIdx = outEdgeIndices[i];
+  1423→    const edge = edges[edgeIdx];
+  1424→    const prob = probs[i] || 0;
+  1425→
+  1426→    // Store edge probability
+  1427→    edgeProbabilities[edgeIdx] = prob;
+  1428→
+  1429→    // Determine branch for child nodes
+  1430→    let childBranch = currentBranch;
+  1431→    if (nodeId === 'ROOT') {
+  1432→      if (edge.to === 'N_TREND') childBranch = 'trend';
+  1433→      else if (edge.to === 'N_BREAK') childBranch = 'breakout';
+  1434→      else if (edge.to === 'N_REVERSAL') childBranch = 'reversal';
+  1435→    }
+  1436→
+  1437→    const childPathProb = pathProb * prob;
+  1438→
+  1439→    // Check if target is a terminal node (SC1–SC9)
+  1440→    const isTerminal =
+  1441→      edge.to.length === 3 &&
+  1442→      edge.to[0] === 'S' &&
+  1443→      edge.to[1] === 'C' &&
+  1444→      edge.to[2] >= '1' &&
+  1445→      edge.to[2] <= '9';
+  1446→
+  1447→    if (isTerminal) {
+  1448→      // Accumulate scenario probability
+  1449→      scenarios[edge.to] = (scenarios[edge.to] || 0) + childPathProb;
+  1450→      // Accumulate branch contribution
+  1451→      if (childBranch) {
+  1452→        contributions[edge.to][childBranch] += childPathProb;
+  1453→      }
+  1454→    }
+  1455→
+  1456→    // Recurse into child
+  1457→    traverseGraph(
+  1458→      edge.to,
+  1459→      childPathProb,
+  1460→      childBranch,
+  1461→      ctx,
+  1462→      adj,
+  1463→      edges,
+  1464→      edgeProbabilities,
+  1465→      nodeAccum,
+  1466→      scenarios,
+  1467→      contributions
+  1468→    );
+  1469→  }
+  1470→}
+  1471→
+  1472→// === Main Export: buildDecisionGraph ===========================================
+  1473→
+  1474→export function buildDecisionGraph(input: GraphInput): GraphData {
+  1475→  // 0. Sanitize all numeric inputs — replace NaN/Infinity/undefined with safe defaults
+  1476→  const price = safeNum(input.price, 1000);
+  1477→  const bullConsensus = clamp(safeNum(input.bullConsensus, 0.5), 0, 1);
+  1478→  const rsi = clamp(safeNum(input.rsi, 50), 0, 100);
+  1479→  const mfi = clamp(safeNum(input.mfi, 50), 0, 100);
+  1480→  const cci = safeNum(input.cci, 0);
+  1481→  const stochK = clamp(safeNum(input.stochK, 50), 0, 100);
+  1482→  const stochD = clamp(safeNum(input.stochD, 50), 0, 100);
+  1483→  const adx = clamp(safeNum(input.adx, 20), 0, 100);
+  1484→  const diPlus = clamp(safeNum(input.diPlus, 20), 0, 100);
+  1485→  const diMinus = clamp(safeNum(input.diMinus, 20), 0, 100);
+  1486→  const macdHist = safeNum(input.macdHist, 0);
+  1487→  const atr = safeNum(input.atr, price * 0.02);
+  1488→  const bbUpper = safeNum(input.bbUpper, price * 1.03);
+  1489→  const bbMiddle = safeNum(input.bbMiddle, price);
+  1490→  const bbLower = safeNum(input.bbLower, price * 0.97);
+  1491→  const sar = safeNum(input.sar, price);
+  1492→  const ichimokuTenkan = safeNum(input.ichimokuTenkan, price);
+  1493→  const ichimokuKijun = safeNum(input.ichimokuKijun, price);
+  1494→  const ichimokuSenkouA = safeNum(input.ichimokuSenkouA, price);
+  1495→  const ichimokuSenkouB = safeNum(input.ichimokuSenkouB, price);
+  1496→  const maAlignment = clamp(safeNum(input.maAlignment, 0.5), 0, 1);
+  1497→  const momentum = safeNum(input.momentum, 0);
+  1498→  const awesomeOsc = safeNum(input.awesomeOsc, 0);
+  1499→  const fisherTransform = clamp(safeNum(input.fisherTransform, 0), -5, 5);
+  1500→  const confidenceIndex = clamp(safeNum(input.confidenceIndex, 0.5), 0, 1);
+  1501→  const strengthIndex = clamp(safeNum(input.strengthIndex, 0.5), 0, 1);
+  1502→  const hasVolume = input.hasVolume === true;
+  1503→  const distToR1 = safeNum(input.distToR1, 0.03);
+  1504→  const distToS1 = safeNum(input.distToS1, 0.03);
+  1505→  const srAvgStrength = clamp(safeNum(input.srAvgStrength, 0.3), 0, 1);
+  1506→  const mlMomentum = clamp(safeNum(input.mlMomentum, 0.7), 0, 1);
+  1507→  const mlVolatility = clamp(safeNum(input.mlVolatility, 0.5), 0, 1);
+  1508→  const mlTrend = clamp(safeNum(input.mlTrend, 0.6), 0, 1);
+  1509→
+  1510→  // Create sanitized input object
+  1511→  const sanitizedInput: GraphInput = {
+  1512→    price, bullConsensus, rsi, mfi, cci, stochK, stochD, adx, diPlus, diMinus,
+  1513→    macdHist, atr, bbUpper, bbMiddle, bbLower, sar,
+  1514→    ichimokuTenkan, ichimokuKijun, ichimokuSenkouA, ichimokuSenkouB,
+  1515→    maAlignment, momentum, awesomeOsc, fisherTransform,
+  1516→    confidenceIndex, strengthIndex, hasVolume,
+  1517→    distToR1, distToS1, srAvgStrength,
+  1518→    mlMomentum, mlVolatility, mlTrend,
+  1519→  };
+  1520→
+  1521→  // 1. Build static graph structure
+  1522→  const nodes = createNodes();
+  1523→  const edges = createEdges();
+  1524→  const nodePositions = createPositions();
+  1525→
+  1526→  // 2. Build adjacency map: nodeId → array of edge indices
+  1527→  const adj = new Map<string, number[]>();
+  1528→  for (let i = 0; i < edges.length; i++) {
+  1529→    const from = edges[i].from;
+  1530→    if (!adj.has(from)) adj.set(from, []);
+  1531→    adj.get(from)!.push(i);
+  1532→  }
+  1533→
+  1534→  // 3. Build probability context (use sanitized input)
+  1535→  const ctx = buildContext(sanitizedInput);
+  1536→
+  1537→  // 4. Initialize accumulation structures
+  1538→  const edgeProbabilities: Record<number, number> = {};
+  1539→  const nodeAccum: Record<string, number> = {};
+  1540→  const scenarios: Record<string, number> = {};
+  1541→  const contributions: Record<
+  1542→    string,
+  1543→    { trend: number; breakout: number; reversal: number }
+  1544→  > = {};
+  1545→
+  1546→  for (let i = 1; i <= 9; i++) {
+  1547→    const key = `SC${i}`;
+  1548→    scenarios[key] = 0;
+  1549→    contributions[key] = { trend: 0, breakout: 0, reversal: 0 };
+  1550→  }
+  1551→
+  1552→  // 5. Traverse graph from ROOT
+  1553→  traverseGraph(
+  1554→    'ROOT',
+  1555→    1.0,
+  1556→    null,
+  1557→    ctx,
+  1558→    adj,
+  1559→    edges,
+  1560→    edgeProbabilities,
+  1561→    nodeAccum,
+  1562→    scenarios,
+  1563→    contributions
+  1564→  );
+  1565→
+  1566→  // 6. Post-process scenario probabilities
+  1567→  // Convert to percentage, clamp [2, 35], re-normalize to sum=100
+  1568→  const rawPcts: Record<string, number> = {};
+  1569→  for (let i = 1; i <= 9; i++) {
+  1570→    const key = `SC${i}`;
+  1571→    rawPcts[key] = Math.round((scenarios[key] || 0) * 100);
+  1572→  }
+  1573→
+  1574→  // Clamp each to [2, 35]
+  1575→  const clamped = Object.entries(rawPcts).map(([k, v]) => ({
+  1576→    key: k,
+  1577→    value: clamp(v, 2, 35),
+  1578→  }));
+  1579→
+  1580→  // Re-normalize to sum=100
+  1581→  const clampedSum = clamped.reduce((s, c) => s + c.value, 0);
+  1582→  const finalPcts: Record<string, number> = {};
+  1583→  if (clampedSum > 0) {
+  1584→    // Distribute proportionally and round, then fix rounding errors
+  1585→    let runningTotal = 0;
+  1586→    const entries = clamped
+  1587→      .map((c) => {
+  1588→        const raw = (c.value / clampedSum) * 100;
+  1589→        return { key: c.key, raw };
+  1590→      })
+  1591→      .sort((a, b) => b.raw - a.raw);
+  1592→
+  1593→    for (let i = 0; i < entries.length; i++) {
+  1594→      const isLast = i === entries.length - 1;
+  1595→      if (isLast) {
+  1596→        finalPcts[entries[i].key] = clamp(Math.round(100 - runningTotal), 2, 35);
+  1597→      } else {
+  1598→        const rounded = clamp(Math.round(entries[i].raw), 2, 35);
+  1599→        finalPcts[entries[i].key] = rounded;
+  1600→        runningTotal += rounded;
+  1601→      }
+  1602→    }
+  1603→  }
+  1604→
+  1605→  // Ensure no negative values due to rounding
+  1606→  for (const key of Object.keys(finalPcts)) {
+  1607→    if (finalPcts[key] < 0) finalPcts[key] = 0;
+  1608→  }
+  1609→
+  1610→  // 7. Compute branch probabilities (from ROOT outgoing edges)
+  1611→  const rootEdgeIndices = adj.get('ROOT') || [];
+  1612→  const rootProbs = computeNodeProbabilities('ROOT', ctx, rootEdgeIndices.length);
+  1613→  const branchProbabilities = {
+  1614→    trend: rootProbs[0] || 0,
+  1615→    breakout: rootProbs[1] || 0,
+  1616→    reversal: rootProbs[2] || 0,
+  1617→  };
+  1618→
+  1619→  // 8. Build node display values (path probability as percentage)
+  1620→  const nodeValues: Record<string, string> = {};
+  1621→  for (const [nodeId, accum] of Object.entries(nodeAccum)) {
+  1622→    nodeValues[nodeId] = `${Math.round(accum * 100)}%`;
+  1623→  }
+  1624→
+  1625→  // Override terminal node values with final post-processed percentages
+  1626→  for (const [key, pct] of Object.entries(finalPcts)) {
+  1627→    nodeValues[key] = `${pct}%`;
+  1628→  }
+  1629→
+  1630→  // 9. Build path contributions (as percentages)
+  1631→  const pathContributions: Record<
+  1632→    string,
+  1633→    { trend: number; breakout: number; reversal: number }
+  1634→  > = {};
+  1635→  for (let i = 1; i <= 9; i++) {
+  1636→    const key = `SC${i}`;
+  1637→    const c = contributions[key];
+  1638→    const total = c.trend + c.breakout + c.reversal;
+  1639→    if (total > 0) {
+  1640→      pathContributions[key] = {
+  1641→        trend: Math.round((c.trend / total) * 100),
+  1642→        breakout: Math.round((c.breakout / total) * 100),
+  1643→        reversal: Math.round((c.reversal / total) * 100),
+  1644→      };
+  1645→    } else {
+  1646→      pathContributions[key] = { trend: 33, breakout: 34, reversal: 33 };
+  1647→    }
+  1648→  }
+  1649→
+  1650→  // 10. Compute 30-day probability trend
+  1651→  const probFractions: Record<string, number> = {};
+  1652→  for (const [k, v] of Object.entries(finalPcts)) {
+  1653→    probFractions[k] = v / 100;
+  1654→  }
+  1655→  const probabilityTrend = calcTrendFromProbs(probFractions, 30);
+  1656→
+  1657→  // 11. Return complete GraphData
+  1658→  return {
+  1659→    nodes,
+  1660→    edges,
+  1661→    nodePositions,
+  1662→    edgeProbabilities,
+  1663→    nodeValues,
+  1664→    branchProbabilities,
+  1665→    scenarioProbabilities: finalPcts,
+  1666→    pathContributions,
+  1667→    probabilityTrend,
+  1668→  };
+  1669→}
+  1670→
+  1671→
+  1672→

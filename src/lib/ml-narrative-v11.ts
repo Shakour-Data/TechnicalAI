@@ -49,7 +49,87 @@ const SCENARIO_META: {
 ];
 
 /**
+ * Enforce integer probabilities that sum to EXACTLY 100, each in [minVal, maxVal].
+ * Uses Largest Remainder Method (LRM) + iterative bound enforcement.
+ * This is the frontend safety net — the backend (decision-graph.ts) also has
+ * its own enforceSumTo100. Having it here guarantees correct display even
+ * if the backend data is stale or from an older version.
+ */
+function enforceSumTo100(
+  rawFloats: number[],
+  minVal: number,
+  maxVal: number
+): number[] {
+  const n = rawFloats.length;
+  const floatSum = rawFloats.reduce((a, b) => a + b, 0);
+  const normalized =
+    floatSum > 0
+      ? rawFloats.map((v) => (v / floatSum) * 100)
+      : rawFloats.map(() => 100 / n);
+
+  const result = normalized.map((v) => Math.max(Math.floor(v), 0));
+  let deficit = 100 - result.reduce((a, b) => a + b, 0);
+
+  const byFrac = Array.from({ length: n }, (_, i) => ({
+    idx: i,
+    frac: normalized[i] - Math.floor(normalized[i]),
+  })).sort((a, b) => b.frac - a.frac);
+
+  for (let d = 0; d < deficit && d < n; d++) {
+    result[byFrac[d].idx]++;
+  }
+
+  let changed = true;
+  let safety = 0;
+  while (changed && safety < 100) {
+    changed = false;
+    safety++;
+    for (let i = 0; i < n; i++) {
+      while (result[i] < minVal) {
+        let donor = -1;
+        for (let j = 0; j < n; j++) {
+          if (j !== i && result[j] > minVal && (donor === -1 || result[j] > result[donor])) donor = j;
+        }
+        if (donor === -1) break;
+        result[donor]--;
+        result[i]++;
+        changed = true;
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      while (result[i] > maxVal) {
+        let receiver = -1;
+        for (let j = 0; j < n; j++) {
+          if (j !== i && result[j] < maxVal && (receiver === -1 || result[j] < result[receiver])) receiver = j;
+        }
+        if (receiver === -1) break;
+        result[i]--;
+        result[receiver]++;
+        changed = true;
+      }
+    }
+  }
+
+  const finalSum = result.reduce((a, b) => a + b, 0);
+  if (finalSum !== 100 && n > 0) {
+    const diff = 100 - finalSum;
+    let bestIdx = 0;
+    let bestRoom = -1;
+    for (let i = 0; i < n; i++) {
+      const room = diff > 0 ? maxVal - result[i] : result[i] - minVal;
+      if (room > bestRoom) { bestRoom = room; bestIdx = i; }
+    }
+    result[bestIdx] += diff;
+  }
+
+  return result;
+}
+
+/**
  * Compute V11 probabilities from raw scenario inputs.
+ *
+ * IRON LAW: The returned rawProbability values ALWAYS sum to exactly 100.
+ * Each value is an integer in [2, 35].
  *
  * Convention: SC1-SC4=bearish, SC5=neutral, SC6-SC9=bullish
  * Cumulative resets at SC5 and accumulates outward in each direction:
@@ -58,7 +138,10 @@ const SCENARIO_META: {
  *   Bullish (SC6→SC9): cum[i] = sum(raw[i..8])  — this or more bullish
  */
 export function computeV11Probabilities(input: V11ScenarioInput): V11Result {
-  const raw = [input.SC1, input.SC2, input.SC3, input.SC4, input.SC5, input.SC6, input.SC7, input.SC8, input.SC9];
+  const rawInput = [input.SC1, input.SC2, input.SC3, input.SC4, input.SC5, input.SC6, input.SC7, input.SC8, input.SC9];
+
+  // IRON LAW: Enforce sum=100 before any further computation
+  const raw = enforceSumTo100(rawInput, 2, 35);
 
   // Cumulative: outward from SC5 in both directions
   const cumulative: number[] = [];

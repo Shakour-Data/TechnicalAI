@@ -213,3 +213,31 @@ Stage Summary:
 - 3-layer defense: (1) ml-model.ts clamp handles NaN, (2) decision-graph.ts sanitizes all inputs, (3) normalize() handles NaN arrays
 - All symbols now produce differentiated probabilities regardless of input quality
 - ta-engine.ts fallback changed from || 11 to ?? 11 to avoid masking legitimate zero values
+
+---
+Task ID: 9
+Agent: Main
+Task: Enforce IRON LAW — scenario probabilities must always sum to exactly 100%
+
+Work Log:
+- Analyzed the probability rounding pipeline: decision-graph.ts (post-processing) → ta-engine.ts (pass-through) → ml-narrative-v11.ts (pass-through) → vdes-analysis.tsx (display)
+- Found the bug in decision-graph.ts buildDecisionGraph(): old algorithm did round→clamp[2,35]→renormalize→round with last-entry-residual, but the clamp on the last entry (clamp(100-runningTotal, 2, 35)) could break the sum=100 invariant when runningTotal was too high or too low
+- Example failure case: [83.2, 2.1×8] → after sorting and rounding, runningTotal of first 8 entries could leave last entry needing 50 but clamped to 35 → sum=84
+- Implemented enforceSumTo100(): Largest Remainder Method (LRM) + iterative bound enforcement
+  - Step 1: Normalize floats to sum=100, floor all, distribute deficit by largest fractional part (classic LRM)
+  - Step 2: Iteratively enforce [minVal, maxVal] bounds by moving 1 from violator to suitable partner
+  - Step 3: Safety net adjustment if sum still ≠ 100 (should never trigger)
+- Replaced old post-processing in buildDecisionGraph (lines 1667-1709) with single enforceSumTo100(rawFloats, 2, 35) call
+- Added frontend safety net: enforceSumTo100 also in ml-narrative-v11.ts computeV11Probabilities()
+- Changed totalProb in vdes-analysis.tsx to compute from V11-enforced rawProbability values (always 100)
+- Tested enforceSumTo100 with 10 edge cases: normal, all-zeros, one-dominant (83.2 vs 2.1×8), raw floats, all-equal, below-min, above-max, already-valid, sum-99, sum-101 — ALL PASS
+- API verification: خودرو (sum=100 ✓), فولاد (sum=100 ✓), انرژی (sum=100 ✓)
+- Browser verification: scenario table shows sum=100, total display shows 'مجموع: ۱۰۰٪', no console errors
+
+Stage Summary:
+- decision-graph.ts: Added enforceSumTo100() with LRM + iterative bound enforcement
+- decision-graph.ts: Replaced broken post-processing with enforceSumTo100(rawFloats, 2, 35)
+- ml-narrative-v11.ts: Added enforceSumTo100() as frontend safety net, called before any computation
+- vdes-analysis.tsx: totalProb now computed from V11-enforced values (always 100)
+- IRON LAW GUARANTEED: Backend (decision-graph) + Frontend (ml-narrative-v11) both enforce sum=100
+- SC codes already in use from previous session (lines 186-194, 1051, 1448, 657)

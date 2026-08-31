@@ -609,7 +609,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   }
   const strategy = STRATEGY_MAP[highestKey];
   const strategyType = SCENARIO_META[highestKey]?.type;
-  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + (scenarios[k]?.probability ?? 0), 0);
+  // IRON LAW: totalProb is ALWAYS 100 — computed from V11-enforced probabilities
+  const totalProb = v11Result.scenarios.reduce((sum, s) => sum + s.rawProbability, 0);
 
   // ── RSI signal ─────────────────────────────────────────────────
   const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';

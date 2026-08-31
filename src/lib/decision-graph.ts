@@ -35,6 +35,107 @@ function sigmoid(x: number): number {
   return 1 / (1 + Math.exp(-sx));
 }
 
+/**
+ * IRON LAW: Round proportional floats to integers that sum to EXACTLY 100,
+ * with each value constrained to [minVal, maxVal].
+ *
+ * Algorithm: Largest Remainder Method (LRM) + iterative bound enforcement.
+ * This function GUARANTEES sum(result) === 100 and minVal <= result[i] <= maxVal
+ * for all i, as long as n*minVal <= 100 <= n*maxVal.
+ *
+ * ⚠️  NEVER bypass this function when producing integer scenario percentages.
+ */
+function enforceSumTo100(
+  rawFloats: number[],
+  minVal: number,
+  maxVal: number
+): number[] {
+  const n = rawFloats.length;
+
+  // Normalize floats to sum exactly to 100 first
+  const floatSum = rawFloats.reduce((a, b) => a + b, 0);
+  const normalized =
+    floatSum > 0
+      ? rawFloats.map((v) => (v / floatSum) * 100)
+      : rawFloats.map(() => 100 / n);
+
+  // Step 1: LRM — floor all, distribute deficit by largest fractional part
+  const result = normalized.map((v) => Math.max(Math.floor(v), 0));
+  let deficit = 100 - result.reduce((a, b) => a + b, 0);
+
+  const byFrac = Array.from({ length: n }, (_, i) => ({
+    idx: i,
+    frac: normalized[i] - Math.floor(normalized[i]),
+  })).sort((a, b) => b.frac - a.frac);
+
+  // Give +1 to top `deficit` entries (LRM)
+  for (let d = 0; d < deficit && d < n; d++) {
+    result[byFrac[d].idx]++;
+  }
+  // Now result sums to exactly 100
+
+  // Step 2: Iteratively enforce [minVal, maxVal] bounds while preserving sum = 100
+  // Each iteration: move 1 from a violator to a suitable partner.
+  // Converges because each move strictly reduces the total violation magnitude.
+  let changed = true;
+  let safety = 0;
+  while (changed && safety < 100) {
+    changed = false;
+    safety++;
+
+    // Enforce minimum: raise any value below minVal by taking from the largest above minVal
+    for (let i = 0; i < n; i++) {
+      while (result[i] < minVal) {
+        let donor = -1;
+        for (let j = 0; j < n; j++) {
+          if (j !== i && result[j] > minVal && (donor === -1 || result[j] > result[donor])) {
+            donor = j;
+          }
+        }
+        if (donor === -1) break; // no donor available — shouldn't happen if n*minVal <= 100
+        result[donor]--;
+        result[i]++;
+        changed = true;
+      }
+    }
+
+    // Enforce maximum: lower any value above maxVal by giving to the smallest below maxVal
+    for (let i = 0; i < n; i++) {
+      while (result[i] > maxVal) {
+        let receiver = -1;
+        for (let j = 0; j < n; j++) {
+          if (j !== i && result[j] < maxVal && (receiver === -1 || result[j] < result[receiver])) {
+            receiver = j;
+          }
+        }
+        if (receiver === -1) break; // no receiver — shouldn't happen if 100 <= n*maxVal
+        result[i]--;
+        result[receiver]++;
+        changed = true;
+      }
+    }
+  }
+
+  // Step 3: Final assertion — sum MUST be 100 (safety net, should never trigger)
+  const finalSum = result.reduce((a, b) => a + b, 0);
+  if (finalSum !== 100 && n > 0) {
+    // Adjust the entry farthest from its bound
+    const diff = 100 - finalSum;
+    let bestIdx = 0;
+    let bestRoom = -1;
+    for (let i = 0; i < n; i++) {
+      const room = diff > 0 ? maxVal - result[i] : result[i] - minVal;
+      if (room > bestRoom) {
+        bestRoom = room;
+        bestIdx = i;
+      }
+    }
+    result[bestIdx] += diff;
+  }
+
+  return result;
+}
+
 // === Exported Interfaces ======================================================
 
 export interface GraphNode {
@@ -1563,48 +1664,21 @@ export function buildDecisionGraph(input: GraphInput): GraphData {
     contributions
   );
 
-  // 6. Post-process scenario probabilities
-  // Convert to percentage, clamp [2, 35], re-normalize to sum=100
-  const rawPcts: Record<string, number> = {};
+  // 6. Post-process scenario probabilities — IRON LAW: integers summing to EXACTLY 100
+  // Convert raw traversal fractions to percentages, then use enforceSumTo100 for
+  // guaranteed sum=100 with each value in [2, 35].
+  const rawFloats: number[] = [];
   for (let i = 1; i <= 9; i++) {
     const key = `SC${i}`;
-    rawPcts[key] = Math.round((scenarios[key] || 0) * 100);
+    rawFloats.push(safeNum(scenarios[key], 0) * 100);
   }
 
-  // Clamp each to [2, 35]
-  const clamped = Object.entries(rawPcts).map(([k, v]) => ({
-    key: k,
-    value: clamp(v, 2, 35),
-  }));
+  const roundedInts = enforceSumTo100(rawFloats, 2, 35);
 
-  // Re-normalize to sum=100
-  const clampedSum = clamped.reduce((s, c) => s + c.value, 0);
   const finalPcts: Record<string, number> = {};
-  if (clampedSum > 0) {
-    // Distribute proportionally and round, then fix rounding errors
-    let runningTotal = 0;
-    const entries = clamped
-      .map((c) => {
-        const raw = (c.value / clampedSum) * 100;
-        return { key: c.key, raw };
-      })
-      .sort((a, b) => b.raw - a.raw);
-
-    for (let i = 0; i < entries.length; i++) {
-      const isLast = i === entries.length - 1;
-      if (isLast) {
-        finalPcts[entries[i].key] = clamp(Math.round(100 - runningTotal), 2, 35);
-      } else {
-        const rounded = clamp(Math.round(entries[i].raw), 2, 35);
-        finalPcts[entries[i].key] = rounded;
-        runningTotal += rounded;
-      }
-    }
-  }
-
-  // Ensure no negative values due to rounding
-  for (const key of Object.keys(finalPcts)) {
-    if (finalPcts[key] < 0) finalPcts[key] = 0;
+  for (let i = 1; i <= 9; i++) {
+    const key = `SC${i}`;
+    finalPcts[key] = roundedInts[i - 1];
   }
 
   // 7. Compute branch probabilities (from ROOT outgoing edges)

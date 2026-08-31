@@ -1,0 +1,710 @@
+     1→'use client';
+     2→
+     3→import React, { useMemo } from 'react';
+     4→import { Activity, TrendingUp, TrendingDown, ChevronRight, ChevronLeft, ArrowUpRight, ArrowDownRight, Minus, Target } from 'lucide-react';
+     5→import { toPersianDigits } from '@/lib/jalali';
+     6→import { useTheme } from '@/lib/theme-store';
+     7→
+     8→// ─── Types ─────────────────────────────────────────────────────────────────────
+     9→
+    10→interface AnalysisSidebarProps {
+    11→  data: {
+    12→    symbol: string;
+    13→    info: {
+    14→      name: string;
+    15→      lastPrice: number;
+    16→      change: number;
+    17→      closePrice: number;
+    18→      openPrice: number;
+    19→      minPrice: number;
+    20→      maxPrice: number;
+    21→      volume: number;
+    22→      value: number;
+    23→      trades: number;
+    24→      eps: number;
+    25→      pe: number;
+    26→      currencyUnit?: string;
+    27→      decimals?: number;
+    28→    } | null;
+    29→    ta: import('@/lib/ta-engine').TAResult;
+    30→    isTgju?: boolean;
+    31→    isYahoo?: boolean;
+    32→    candles: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>;
+    33→  } | null;
+    34→  collapsed: boolean;
+    35→  setCollapsed: (collapsed: boolean) => void;
+    36→}
+    37→
+    38→// ─── Helpers ───────────────────────────────────────────────────────────────────
+    39→
+    40→function hexToRgba(hex: string, alpha: number): string {
+    41→  const r = parseInt(hex.slice(1, 3), 16);
+    42→  const g = parseInt(hex.slice(3, 5), 16);
+    43→  const b = parseInt(hex.slice(5, 7), 16);
+    44→  return `rgba(${r},${g},${b},${alpha})`;
+    45→}
+    46→
+    47→const safeNum = (n: number | null | undefined, fallback = 0) => (n ?? fallback);
+    48→const toFa = (n: number | null | undefined) => Math.round(safeNum(n)).toLocaleString('fa-IR');
+    49→const toFa1 = (n: number | null | undefined) => toPersianDigits(safeNum(n).toFixed(1)).replace(/\./g, '٫').replace(/-/g, '−');
+    50→const toFa2 = (n: number | null | undefined) => toPersianDigits(safeNum(n).toFixed(2)).replace(/\./g, '٫').replace(/-/g, '−');
+    51→
+    52→function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
+    53→  if (v > 70) return 'bearish';
+    54→  if (v < 30) return 'bullish';
+    55→  return 'neutral';
+    56→}
+    57→
+    58→function macdSignal(h: number): 'bullish' | 'bearish' | 'neutral' {
+    59→  if (h > 0) return 'bullish';
+    60→  if (h < 0) return 'bearish';
+    61→  return 'neutral';
+    62→}
+    63→
+    64→function adxSignal(v: number): 'strong' | 'neutral' {
+    65→  if (v > 25) return 'strong';
+    66→  return 'neutral';
+    67→}
+    68→
+    69→function stochSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
+    70→  if (v > 80) return 'bearish';
+    71→  if (v < 20) return 'bullish';
+    72→  return 'neutral';
+    73→}
+    74→
+    75→function signalDotBg(signal: 'bullish' | 'bearish' | 'neutral' | 'strong', bullColor: string, bearColor: string, neutralColor: string, cardSubFg: string): string {
+    76→  switch (signal) {
+    77→    case 'bullish': return bullColor;
+    78→    case 'bearish': return bearColor;
+    79→    case 'strong': return neutralColor;
+    80→    default: return cardSubFg;
+    81→  }
+    82→}
+    83→
+    84→function gradeLabel(grade: string): string {
+    85→  switch (grade) {
+    86→    case 'Very Strong': return 'بسیار قوی';
+    87→    case 'Strong': return 'قوی';
+    88→    case 'Moderate': return 'متوسط';
+    89→    default: return 'ضعیف';
+    90→  }
+    91→}
+    92→
+    93→function gradeStyle(grade: string, bearColor: string, neutralColor: string, primary: string, cardBg: string, cardSubFg: string): React.CSSProperties {
+    94→  switch (grade) {
+    95→    case 'Very Strong': return { background: hexToRgba(bearColor, 0.15), color: bearColor };
+    96→    case 'Strong': return { background: hexToRgba(neutralColor, 0.15), color: neutralColor };
+    97→    case 'Moderate': return { background: hexToRgba(primary, 0.15), color: primary };
+    98→    default: return { background: hexToRgba(cardSubFg, 0.1), color: cardSubFg };
+    99→  }
+   100→}
+   101→
+   102→function formatNumber(n: number | null | undefined): string {
+   103→  const v = safeNum(n);
+   104→  if (Math.abs(v) >= 1e9) return toPersianDigits((v / 1e9).toFixed(1)) + 'B';
+   105→  if (Math.abs(v) >= 1e6) return toPersianDigits((v / 1e6).toFixed(1)) + 'M';
+   106→  if (Math.abs(v) >= 1e3) return toPersianDigits((v / 1e3).toFixed(1)) + 'K';
+   107→  return toFa(v);
+   108→}
+   109→
+   110→function pctDistance(from: number, to: number): number {
+   111→  if (from === 0) return 0;
+   112→  return ((to - from) / from) * 100;
+   113→}
+   114→
+   115→function trendDirectionLabel(dir: string, bullColor: string, bearColor: string, neutralColor: string): { label: string; color: string } {
+   116→  const d = dir?.toLowerCase() ?? '';
+   117→  if (d.includes('up') || d === 'صعودی') return { label: 'صعودی', color: bullColor };
+   118→  if (d.includes('down') || d === 'نزولی') return { label: 'نزولی', color: bearColor };
+   119→  return { label: 'خنثی', color: neutralColor };
+   120→}
+   121→
+   122→// ─── Sub-components ────────────────────────────────────────────────────────────
+   123→
+   124→function SectionTitle({ children }: { children: React.ReactNode }) {
+   125→  const { colors: C } = useTheme();
+   126→  return (
+   127→    <div className="text-[10px] font-bold px-1 mb-2" style={{ color: C.cardSubFg }}>
+   128→      {children}
+   129→    </div>
+   130→  );
+   131→}
+   132→
+   133→function GlassCard({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+   134→  const { colors: C } = useTheme();
+   135→  return (
+   136→    <div
+   137→      className={`rounded-2xl ${className}`}
+   138→      style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, backdropFilter: 'blur(12px)', ...style }}
+   139→    >
+   140→      {children}
+   141→    </div>
+   142→  );
+   143→}
+   144→
+   145→function ProgressBar({ value, max, color, height = 4 }: { value: number; max: number; color: string; height?: number }) {
+   146→  const { colors: C } = useTheme();
+   147→  const pct = Math.min(100, Math.max(0, (value / max) * 100));
+   148→  return (
+   149→    <div className="w-full rounded-full overflow-hidden" style={{ height, background: C.cardBorder }}>
+   150→      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
+   151→    </div>
+   152→  );
+   153→}
+   154→
+   155→// ─── Component ──────────────────────────────────────────────────────────────────
+   156→
+   157→export default function AnalysisSidebar({ data, collapsed, setCollapsed }: AnalysisSidebarProps) {
+   158→  const { colors: TC } = useTheme();
+   159→
+   160→  // Local color aliases matching original C.* property names
+   161→  const C = {
+   162→    text: TC.cardFg,
+   163→    textSec: TC.cardSubFg,
+   164→    textDim: TC.cardSubFg,
+   165→    bull: TC.bullColor,
+   166→    bear: TC.bearColor,
+   167→    neutral: TC.neutralColor,
+   168→    cardBg: TC.cardBg,
+   169→    cardBorder: TC.cardBorder,
+   170→    border: TC.border,
+   171→    primary: TC.primary,
+   172→  };
+   173→
+   174→  const ta = data?.ta;
+   175→  const info = data?.info;
+   176→  const lastPrice = info?.lastPrice ?? 0;
+   177→  const change = info?.change ?? 0;
+   178→  const changeColor = change > 0 ? C.bull : change < 0 ? C.bear : C.neutral;
+   179→  const changeArrow = change > 0 ? '▲' : change < 0 ? '▼' : '—';
+   180→
+   181→  // Signal
+   182→  const signalLabel = !ta ? '' : ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی';
+   183→  const signalColor = !ta ? C.neutral : ta.overallSignal === 'bullish' ? C.bull : ta.overallSignal === 'bearish' ? C.bear : C.neutral;
+   184→  const signalBg = !ta ? hexToRgba(C.neutral, 0.1) : ta.overallSignal === 'bullish' ? hexToRgba(C.bull, 0.1) : ta.overallSignal === 'bearish' ? hexToRgba(C.bear, 0.1) : hexToRgba(C.neutral, 0.1);
+   185→  const signalBorderColor = !ta ? hexToRgba(C.neutral, 0.25) : ta.overallSignal === 'bullish' ? hexToRgba(C.bull, 0.25) : ta.overallSignal === 'bearish' ? hexToRgba(C.bear, 0.25) : hexToRgba(C.neutral, 0.25);
+   186→  const SignalIcon = !ta ? Activity : ta.overallSignal === 'bullish' ? TrendingUp : ta.overallSignal === 'bearish' ? TrendingDown : Activity;
+   187→
+   188→  // ── Top 3 scenarios (sorted by probability desc) ──
+   189→  const top3Scenarios = useMemo(() => {
+   190→    if (!ta) return [];
+   191→    const keys = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
+   192→    return keys
+   193→      .map(k => ({ key: k, ...ta.scenarios[k] }))
+   194→      .sort((a, b) => b.probability - a.probability)
+   195→      .slice(0, 3);
+   196→  }, [ta]);
+   197→
+   198→  // ── Bollinger Band position ──
+   199→  const bbPos = useMemo(() => {
+   200→    if (!ta) return 50;
+   201→    const { upper, lower } = ta.bollingerBands;
+   202→    if (upper === lower) return 50;
+   203→    return Math.round(((lastPrice - lower) / (upper - lower)) * 100);
+   204→  }, [ta, lastPrice]);
+   205→
+   206→  // ── Closest S/R levels ──
+   207→  const closestResistance = useMemo(() => {
+   208→    if (!ta) return null;
+   209→    const levels = ta.resistanceStrengths ?? [];
+   210→    if (!levels.length) return null;
+   211→    return levels.reduce((closest, r) =>
+   212→      Math.abs(r.price - lastPrice) < Math.abs(closest.price - lastPrice) ? r : closest
+   213→    );
+   214→  }, [ta, lastPrice]);
+   215→
+   216→  const closestSupport = useMemo(() => {
+   217→    if (!ta) return null;
+   218→    const levels = ta.supportStrengths ?? [];
+   219→    if (!levels.length) return null;
+   220→    return levels.reduce((closest, s) =>
+   221→      Math.abs(s.price - lastPrice) < Math.abs(closest.price - lastPrice) ? s : closest
+   222→    );
+   223→  }, [ta, lastPrice]);
+   224→
+   225→  if (!data || !ta) return null;
+   226→
+   227→  return (
+   228→    <aside className={`shrink-0 transition-all duration-300 ${collapsed ? 'w-0 overflow-hidden opacity-0' : 'w-[280px]'} hidden lg:block`}>
+   229→      <div
+   230→        className="sticky top-[76px] space-y-3 max-h-[calc(100vh-92px)] overflow-y-auto pb-4 pl-1"
+   231→        style={{
+   232→          scrollbarWidth: 'thin',
+   233→          scrollbarColor: `${C.cardBorder} transparent`,
+   234→        }}
+   235→      >
+   236→
+   237→        {/* ══════════════════════════════════════════════════════════════════
+   238→            ۱. Symbol Header (sticky)
+   239→        ══════════════════════════════════════════════════════════════════ */}
+   240→        <GlassCard className="sticky top-0 z-10 p-3.5 space-y-2.5">
+   241→          {/* Name, code, signal badge */}
+   242→          <div className="flex items-center justify-between">
+   243→            <div className="min-w-0 flex-1">
+   244→              <div className="text-xs font-bold truncate" style={{ color: C.text }}>
+   245→                {info?.name || data.symbol}
+   246→              </div>
+   247→              <div className="text-[10px] truncate" style={{ color: C.textSec }}>
+   248→                {data.symbol}
+   249→              </div>
+   250→            </div>
+   251→            <div
+   252→              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-bold"
+   253→              style={{ background: signalBg, border: `1px solid ${signalBorderColor}`, color: signalColor }}
+   254→            >
+   255→              <SignalIcon className="w-3 h-3" />
+   256→              {signalLabel}
+   257→            </div>
+   258→          </div>
+   259→
+   260→          {/* Price & change */}
+   261→          <div className="flex items-end justify-between gap-2">
+   262→            <div className="flex items-baseline gap-1">
+   263→              <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: C.text }} dir="ltr">
+   264→                {toFa(lastPrice)}
+   265→              </div>
+   266→              <span className="text-[9px]" style={{ color: C.textDim }}>{info?.currencyUnit || 'ریال'}</span>
+   267→            </div>
+   268→            <div className="text-xs font-bold" style={{ color: changeColor }}>
+   269→              {changeArrow} {Math.abs(change).toLocaleString('fa-IR', { maximumFractionDigits: 2 })}٪
+   270→            </div>
+   271→          </div>
+   272→
+   273→          {/* Volume & Value */}
+   274→          <div className="flex items-center justify-between gap-3">
+   275→            <div>
+   276→              <div className="text-[8px]" style={{ color: C.textDim }}>حجم</div>
+   277→              <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
+   278→                {formatNumber(info?.volume ?? 0)}
+   279→              </div>
+   280→            </div>
+   281→            <div>
+   282→              <div className="text-[8px]" style={{ color: C.textDim }}>ارزش</div>
+   283→              <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
+   284→                {formatNumber(info?.value ?? 0)}
+   285→              </div>
+   286→            </div>
+   287→          </div>
+   288→
+   289→          {/* Mini info grid: O / H / L / YC */}
+   290→          <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+   291→            {[
+   292→              { label: 'باز', value: info?.openPrice },
+   293→              { label: 'بالا', value: info?.maxPrice },
+   294→              { label: 'پایین', value: info?.minPrice },
+   295→              { label: 'دیروز', value: info?.yesterdayClose },
+   296→            ].map(item => (
+   297→              <div key={item.label} className="flex items-center justify-between">
+   298→                <span className="text-[9px]" style={{ color: C.textDim }}>{item.label}</span>
+   299→                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
+   300→                  {toFa(item.value ?? 0)}
+   301→                </span>
+   302→              </div>
+   303→            ))}
+   304→          </div>
+   305→        </GlassCard>
+   306→
+   307→        {/* ══════════════════════════════════════════════════════════════════
+   308→            ۲. Signal Overview Card
+   309→        ══════════════════════════════════════════════════════════════════ */}
+   310→        <GlassCard className="p-3 space-y-3">
+   311→          <SectionTitle>خلاصه سیگنال</SectionTitle>
+   312→
+   313→          {/* Gauge */}
+   314→          <div className="flex items-center justify-center">
+   315→            <div className="relative w-24 h-12 overflow-hidden">
+   316→              <svg viewBox="0 0 100 50" className="w-full h-full">
+   317→                {/* Background arc */}
+   318→                <path
+   319→                  d="M 10 45 A 40 40 0 0 1 90 45"
+   320→                  fill="none"
+   321→                  stroke={C.cardBorder}
+   322→                  strokeWidth="6"
+   323→                  strokeLinecap="round"
+   324→                />
+   325→                {/* Bearish zone (left) */}
+   326→                <path
+   327→                  d="M 10 45 A 40 40 0 0 1 30 12"
+   328→                  fill="none"
+   329→                  stroke={hexToRgba(C.bear, 0.15)}
+   330→                  strokeWidth="6"
+   331→                  strokeLinecap="round"
+   332→                />
+   333→                {/* Bullish zone (right) */}
+   334→                <path
+   335→                  d="M 70 12 A 40 40 0 0 1 90 45"
+   336→                  fill="none"
+   337→                  stroke={hexToRgba(C.bull, 0.15)}
+   338→                  strokeWidth="6"
+   339→                  strokeLinecap="round"
+   340→                />
+   341→                {/* Needle */}
+   342→                {(() => {
+   343→                  const bull = safeNum(ta.bullScore);
+   344→                  const bear = safeNum(ta.bearScore);
+   345→                  const totalScore = bull + bear || 1;
+   346→                  const ratio = bull / totalScore;
+   347→                  const angle = -180 + ratio * 180;
+   348→                  const rad = (angle * Math.PI) / 180;
+   349→                  const cx = 50, cy = 45;
+   350→                  const len = 30;
+   351→                  const nx = cx + Math.cos(rad) * len;
+   352→                  const ny = cy + Math.sin(rad) * len;
+   353→                  return (
+   354→                    <line
+   355→                      x1={cx} y1={cy} x2={nx} y2={ny}
+   356→                      stroke={signalColor}
+   357→                      strokeWidth="2"
+   358→                      strokeLinecap="round"
+   359→                    />
+   360→                  );
+   361→                })()}
+   362→                {/* Center dot */}
+   363→                <circle cx="50" cy="45" r="3" fill={signalColor} />
+   364→              </svg>
+   365→            </div>
+   366→          </div>
+   367→
+   368→          {/* Bull / Bear progress bars */}
+   369→          <div className="space-y-2">
+   370→            <div>
+   371→              <div className="flex items-center justify-between mb-1">
+   372→                <span className="text-[10px] font-medium" style={{ color: C.bull }}>خرید</span>
+   373→                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toFa2(ta.bullScore)}</span>
+   374→              </div>
+   375→              <ProgressBar value={safeNum(ta.bullScore)} max={100} color={C.bull} />
+   376→            </div>
+   377→            <div>
+   378→              <div className="flex items-center justify-between mb-1">
+   379→                <span className="text-[10px] font-medium" style={{ color: C.bear }}>فروش</span>
+   380→                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toFa2(ta.bearScore)}</span>
+   381→              </div>
+   382→              <ProgressBar value={safeNum(ta.bearScore)} max={100} color={C.bear} />
+   383→            </div>
+   384→          </div>
+   385→        </GlassCard>
+   386→
+   387→        {/* ══════════════════════════════════════════════════════════════════
+   388→            ۳. Trend Analysis
+   389→        ══════════════════════════════════════════════════════════════════ */}
+   390→        <GlassCard className="p-3 space-y-2">
+   391→          <SectionTitle>تحلیل روند</SectionTitle>
+   392→          {[
+   393→            { label: 'کوتاه‌مدت', data: ta.trend.short },
+   394→            { label: 'میان‌مدت', data: ta.trend.medium },
+   395→            { label: 'بلندمدت', data: ta.trend.long },
+   396→          ].map(t => {
+   397→            const dir = trendDirectionLabel(t.data.direction, C.bull, C.bear, C.neutral);
+   398→            const DirIcon = t.data.direction?.toLowerCase()?.includes('up') ? ArrowUpRight : t.data.direction?.toLowerCase()?.includes('down') ? ArrowDownRight : Minus;
+   399→            return (
+   400→              <div key={t.label} className="flex items-center gap-2 rounded-xl px-2 py-1.5" style={{ background: C.cardBg }}>
+   401→                <DirIcon className="w-3 h-3 shrink-0" style={{ color: dir.color }} />
+   402→                <span className="text-[10px] font-medium shrink-0" style={{ color: C.textSec }}>{t.label}</span>
+   403→                <span className="text-[10px] font-bold" style={{ color: dir.color }}>{dir.label}</span>
+   404→                <span className="flex-1" />
+   405→                <div className="flex items-center gap-2 text-[9px] tabular-nums" dir="ltr">
+   406→                  <span style={{ color: C.textDim }}>زاویه</span>
+   407→                  <span className="font-bold" style={{ color: C.textSec }}>{toFa1(t.data.angle)}°</span>
+   408→                  <span style={{ color: C.textDim }}>R²</span>
+   409→                  <span className="font-bold" style={{ color: C.textSec }}>{toFa2(t.data.r2)}</span>
+   410→                </div>
+   411→              </div>
+   412→            );
+   413→          })}
+   414→        </GlassCard>
+   415→
+   416→        {/* ══════════════════════════════════════════════════════════════════
+   417→            ۴. Key Indicators (enhanced - 7 items in 2-col grid)
+   418→        ══════════════════════════════════════════════════════════════════ */}
+   419→        <div>
+   420→          <SectionTitle>اندیکاتورهای کلیدی</SectionTitle>
+   421→          <div className="grid grid-cols-2 gap-1.5">
+   422→            {[
+   423→              { label: 'RSI', value: toFa1(ta.rsi), signal: rsiSignal(ta.rsi) },
+   424→              { label: 'MFI', value: toFa1(ta.mfi), signal: rsiSignal(ta.mfi) },
+   425→              { label: 'CCI', value: toFa(ta.cci), signal: ta.cci > 100 ? 'bearish' as const : ta.cci < -100 ? 'bullish' as const : 'neutral' as const },
+   426→              { label: 'W%R', value: toFa1(ta.williamsR), signal: stochSignal(ta.williamsR) },
+   427→              { label: 'ADX', value: toFa1(ta.adx), signal: adxSignal(ta.adx) as 'bullish' | 'bearish' | 'neutral' },
+   428→              { label: 'Stoch %K', value: toFa1(ta.stochK), signal: stochSignal(ta.stochK) },
+   429→              { label: 'MACD H', value: toFa(ta.macd.histogram), signal: macdSignal(ta.macd.histogram) },
+   430→            ].map((ind) => (
+   431→              <GlassCard key={ind.label} className="relative px-2.5 py-2">
+   432→                <span className="absolute top-1.5 left-1.5 h-1.5 w-1.5 rounded-full" style={{ background: signalDotBg(ind.signal, C.bull, C.bear, C.neutral, C.textDim) }} />
+   433→                <div className="flex flex-col min-w-0">
+   434→                  <span className="text-[9px]" style={{ color: C.textDim }}>{ind.label}</span>
+   435→                  <span className="text-xs font-bold tabular-nums" style={{ color: C.text }} dir="ltr">{ind.value}</span>
+   436→                </div>
+   437→              </GlassCard>
+   438→            ))}
+   439→          </div>
+   440→        </div>
+   441→
+   442→        {/* ══════════════════════════════════════════════════════════════════
+   443→            ۵. MACD & Oscillators
+   444→        ══════════════════════════════════════════════════════════════════ */}
+   445→        <GlassCard className="p-3 space-y-2.5">
+   446→          <SectionTitle>MACD و نوسان‌نماها</SectionTitle>
+   447→
+   448→          {/* MACD line / signal / histogram */}
+   449→          <div>
+   450→            <div className="text-[9px] font-medium mb-1.5" style={{ color: C.textDim }}>MACD</div>
+   451→            <div className="grid grid-cols-3 gap-2">
+   452→              <div>
+   453→                <div className="text-[8px]" style={{ color: C.textDim }}>خط</div>
+   454→                <div className="text-[10px] font-bold tabular-nums" style={{ color: ta.macd.line > ta.macd.signal ? C.bull : C.bear }} dir="ltr">{toFa(ta.macd.line)}</div>
+   455→              </div>
+   456→              <div>
+   457→                <div className="text-[8px]" style={{ color: C.textDim }}>سیگنال</div>
+   458→                <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">{toFa(ta.macd.signal)}</div>
+   459→              </div>
+   460→              <div>
+   461→                <div className="text-[8px]" style={{ color: C.textDim }}>هیستوگرام</div>
+   462→                <div className="text-[10px] font-bold tabular-nums" style={{ color: ta.macd.histogram > 0 ? C.bull : ta.macd.histogram < 0 ? C.bear : C.neutral }} dir="ltr">{toFa(ta.macd.histogram)}</div>
+   463→              </div>
+   464→            </div>
+   465→          </div>
+   466→
+   467→          {/* Stochastic K / D */}
+   468→          <div style={{ borderTop: `1px solid ${C.cardBorder}` }} className="pt-2">
+   469→            <div className="text-[9px] font-medium mb-1.5" style={{ color: C.textDim }}>استوکاستیک</div>
+   470→            <div className="grid grid-cols-2 gap-2">
+   471→              <div>
+   472→                <div className="text-[8px]" style={{ color: C.textDim }}>%K</div>
+   473→                <div className="text-[10px] font-bold tabular-nums" style={{ color: C.text }} dir="ltr">{toFa1(ta.stochK)}</div>
+   474→              </div>
+   475→              <div>
+   476→                <div className="text-[8px]" style={{ color: C.textDim }}>%D</div>
+   477→                <div className="text-[10px] font-bold tabular-nums" style={{ color: C.text }} dir="ltr">{toFa1(ta.stochD)}</div>
+   478→              </div>
+   479→            </div>
+   480→          </div>
+   481→        </GlassCard>
+   482→
+   483→        {/* ══════════════════════════════════════════════════════════════════
+   484→            ۶. Price Channels
+   485→        ══════════════════════════════════════════════════════════════════ */}
+   486→        <GlassCard className="p-3 space-y-2.5">
+   487→          <SectionTitle>کانال‌های قیمتی</SectionTitle>
+   488→
+   489→          {/* Bollinger Bands */}
+   490→          <div>
+   491→            <div className="flex items-center justify-between mb-1.5">
+   492→              <span className="text-[9px] font-medium" style={{ color: C.textDim }}>باندهای بولینگر</span>
+   493→              <span className="text-[9px] font-bold" style={{ color: bbPos > 70 ? C.bear : bbPos < 30 ? C.bull : C.neutral }} dir="ltr">
+   494→                {toPersianDigits(String(bbPos))}٪
+   495→              </span>
+   496→            </div>
+   497→            <div className="space-y-0.5">
+   498→              {[
+   499→                { label: 'بالا', value: ta.bollingerBands.upper, color: C.bear },
+   500→                { label: 'میانی', value: ta.bollingerBands.middle, color: C.textSec },
+   501→                { label: 'پایین', value: ta.bollingerBands.lower, color: C.bull },
+   502→              ].map(b => (
+   503→                <div key={b.label} className="flex items-center justify-between px-1">
+   504→                  <span className="text-[9px]" style={{ color: C.textDim }}>{b.label}</span>
+   505→                  <span className="text-[10px] font-bold tabular-nums" style={{ color: b.color }} dir="ltr">{toFa(b.value)}</span>
+   506→                </div>
+   507→              ))}
+   508→            </div>
+   509→            {/* BB position bar */}
+   510→            <div className="mt-1.5 relative">
+   511→              <div className="w-full h-1.5 rounded-full" style={{ background: C.cardBorder }}>
+   512→                <div
+   513→                  className="h-full rounded-full transition-all"
+   514→                  style={{
+   515→                    width: `${bbPos}%`,
+   516→                    background: bbPos > 70 ? C.bear : bbPos < 30 ? C.bull : C.neutral,
+   517→                    opacity: 0.7,
+   518→                  }}
+   519→                />
+   520→              </div>
+   521→              <div
+   522→                className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full"
+   523→                style={{ left: `calc(${bbPos}% - 4px)`, background: C.text, border: `1px solid ${C.border}` }}
+   524→              />
+   525→            </div>
+   526→            <div className="flex items-center justify-between mt-0.5 px-1">
+   527→              <span className="text-[8px]" style={{ color: C.bull }}>اشباع فروش</span>
+   528→              <span className="text-[8px]" style={{ color: C.bear }}>اشباع خرید</span>
+   529→            </div>
+   530→          </div>
+   531→
+   532→          {/* SAR & ATR */}
+   533→          <div style={{ borderTop: `1px solid ${C.cardBorder}` }} className="pt-2 grid grid-cols-2 gap-2">
+   534→            <div>
+   535→              <div className="text-[8px]" style={{ color: C.textDim }}>SAR</div>
+   536→              <div className="text-[10px] font-bold tabular-nums" style={{ color: ta.sar > lastPrice ? C.bear : C.bull }} dir="ltr">{toFa(ta.sar)}</div>
+   537→            </div>
+   538→            <div>
+   539→              <div className="text-[8px]" style={{ color: C.textDim }}>ATR</div>
+   540→              <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">{toFa1(ta.atr)}</div>
+   541→            </div>
+   542→          </div>
+   543→        </GlassCard>
+   544→
+   545→        {/* ══════════════════════════════════════════════════════════════════
+   546→            ۷. Support & Resistance (enhanced)
+   547→        ══════════════════════════════════════════════════════════════════ */}
+   548→        <div>
+   549→          <SectionTitle>حمایت و مقاومت</SectionTitle>
+   550→          <div className="space-y-1.5">
+   551→            {/* Resistances */}
+   552→            {(ta.resistanceStrengths ?? []).length > 0 && (
+   553→              <div className="space-y-1">
+   554→                <div className="text-[9px] font-medium" style={{ color: C.bear }}>مقاومت‌ها</div>
+   555→                {(ta.resistanceStrengths ?? []).slice(0, 3).map((r, i) => {
+   556→                  const dist = pctDistance(lastPrice, r.price);
+   557→                  const isClosest = closestResistance?.price === r.price;
+   558→                  return (
+   559→                    <div
+   560→                      key={`r-${i}`}
+   561→                      className="flex items-center gap-2 rounded-xl px-2.5 py-1.5"
+   562→                      style={{
+   563→                        background: isClosest ? hexToRgba(C.bear, 0.12) : hexToRgba(C.bear, 0.06),
+   564→                        border: `1px solid ${isClosest ? hexToRgba(C.bear, 0.25) : hexToRgba(C.bear, 0.1)}`,
+   565→                      }}
+   566→                    >
+   567→                      <span className="text-[9px] font-medium shrink-0" style={{ color: C.bear }}>
+   568→                        R{toPersianDigits(String(i + 1))}
+   569→                      </span>
+   570→                      <span className="text-[10px] font-bold tabular-nums flex-1 text-left" style={{ color: C.text }} dir="ltr">
+   571→                        {toFa(r.price)}
+   572→                      </span>
+   573→                      <span className="text-[8px] font-bold tabular-nums shrink-0" style={{ color: C.bear }} dir="ltr">
+   574→                        +{toPersianDigits(Math.abs(safeNum(dist)).toFixed(1))}٪
+   575→                      </span>
+   576→                      <span className="text-[8px] px-1.5 py-0.5 rounded-xl shrink-0 font-bold" style={gradeStyle(r.grade, C.bear, C.neutral, C.primary, C.cardBg, C.textSec)}>
+   577→                        {gradeLabel(r.grade)}
+   578→                      </span>
+   579→                    </div>
+   580→                  );
+   581→                })}
+   582→              </div>
+   583→            )}
+   584→
+   585→            {/* Strength bars for resistances */}
+   586→            {(ta.resistanceStrengths ?? []).length > 0 && (
+   587→              <div className="flex gap-1 px-1">
+   588→                {(ta.resistanceStrengths ?? []).slice(0, 3).map((r, i) => (
+   589→                  <div key={`rb-${i}`} className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: hexToRgba(C.bear, 0.15) }}>
+   590→                    <div className="h-full rounded-full" style={{ width: `${(r.strength / 10) * 100}%`, background: hexToRgba(C.bear, 0.6) }} />
+   591→                  </div>
+   592→                ))}
+   593→              </div>
+   594→            )}
+   595→
+   596→            {/* Supports */}
+   597→            {(ta.supportStrengths ?? []).length > 0 && (
+   598→              <div className="space-y-1">
+   599→                <div className="text-[9px] font-medium" style={{ color: C.bull }}>حمایت‌ها</div>
+   600→                {(ta.supportStrengths ?? []).slice(0, 3).map((s, i) => {
+   601→                  const dist = pctDistance(lastPrice, s.price);
+   602→                  const isClosest = closestSupport?.price === s.price;
+   603→                  return (
+   604→                    <div
+   605→                      key={`s-${i}`}
+   606→                      className="flex items-center gap-2 rounded-xl px-2.5 py-1.5"
+   607→                      style={{
+   608→                        background: isClosest ? hexToRgba(C.bull, 0.12) : hexToRgba(C.bull, 0.06),
+   609→                        border: `1px solid ${isClosest ? hexToRgba(C.bull, 0.25) : hexToRgba(C.bull, 0.1)}`,
+   610→                      }}
+   611→                    >
+   612→                      <span className="text-[9px] font-medium shrink-0" style={{ color: C.bull }}>
+   613→                        S{toPersianDigits(String(i + 1))}
+   614→                      </span>
+   615→                      <span className="text-[10px] font-bold tabular-nums flex-1 text-left" style={{ color: C.text }} dir="ltr">
+   616→                        {toFa(s.price)}
+   617→                      </span>
+   618→                      <span className="text-[8px] font-bold tabular-nums shrink-0" style={{ color: C.bull }} dir="ltr">
+   619→                        {toPersianDigits(safeNum(dist).toFixed(1))}٪
+   620→                      </span>
+   621→                      <span className="text-[8px] px-1.5 py-0.5 rounded-xl shrink-0 font-bold" style={gradeStyle(s.grade, C.bear, C.neutral, C.primary, C.cardBg, C.textSec)}>
+   622→                        {gradeLabel(s.grade)}
+   623→                      </span>
+   624→                    </div>
+   625→                  );
+   626→                })}
+   627→              </div>
+   628→            )}
+   629→
+   630→            {/* Strength bars for supports */}
+   631→            {(ta.supportStrengths ?? []).length > 0 && (
+   632→              <div className="flex gap-1 px-1">
+   633→                {(ta.supportStrengths ?? []).slice(0, 3).map((s, i) => (
+   634→                  <div key={`sb-${i}`} className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: hexToRgba(C.bull, 0.15) }}>
+   635→                    <div className="h-full rounded-full" style={{ width: `${(s.strength / 10) * 100}%`, background: hexToRgba(C.bull, 0.6) }} />
+   636→                  </div>
+   637→                ))}
+   638→              </div>
+   639→            )}
+   640→          </div>
+   641→        </div>
+   642→
+   643→        {/* ══════════════════════════════════════════════════════════════════
+   644→            ۸. Top 3 Scenarios
+   645→        ══════════════════════════════════════════════════════════════════ */}
+   646→        <GlassCard className="p-3 space-y-2">
+   647→          <SectionTitle>سناریوهای احتمالی</SectionTitle>
+   648→          {top3Scenarios.map((sc, i) => {
+   649→            const isBullish = sc.targetMax > lastPrice && sc.targetMin > lastPrice;
+   650→            const isBearish = sc.targetMax < lastPrice && sc.targetMin < lastPrice;
+   651→            const scColor = isBullish ? C.bull : isBearish ? C.bear : C.neutral;
+   652→            return (
+   653→              <div key={sc.key} className="space-y-1">
+   654→                <div className="flex items-center gap-2">
+   655→                  <Target className="w-3 h-3 shrink-0" style={{ color: scColor }} />
+   656→                  <span className="text-[10px] font-bold flex-1 truncate" style={{ color: C.text }}>
+   657→                    {sc.key} — {sc.name}
+   658→                  </span>
+   659→                  <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: scColor }} dir="ltr">
+   660→                    {toPersianDigits(safeNum(sc.probability).toFixed(0))}٪
+   661→                  </span>
+   662→                </div>
+   663→                <ProgressBar value={safeNum(sc.probability)} max={100} color={scColor} height={3} />
+   664→                <div className="flex items-center justify-between px-1">
+   665→                  <span className="text-[8px] tabular-nums" style={{ color: C.textDim }} dir="ltr">
+   666→                    {toFa(sc.targetMin)}
+   667→                  </span>
+   668→                  <span className="text-[8px]" style={{ color: C.textDim }}>تا</span>
+   669→                  <span className="text-[8px] tabular-nums" style={{ color: C.textDim }} dir="ltr">
+   670→                    {toFa(sc.targetMax)}
+   671→                  </span>
+   672→                </div>
+   673→                {i < top3Scenarios.length - 1 && <div style={{ borderBottom: `1px solid ${C.cardBorder}` }} />}
+   674→              </div>
+   675→            );
+   676→          })}
+   677→        </GlassCard>
+   678→
+   679→        {/* ══════════════════════════════════════════════════════════════════
+   680→            ۹. Collapse toggle
+   681→        ══════════════════════════════════════════════════════════════════ */}
+   682→        <button
+   683→          onClick={() => setCollapsed(true)}
+   684→          className="w-full flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-[10px] transition-all cursor-pointer"
+   685→          style={{ color: C.textDim, background: C.cardBg, border: `1px solid ${C.cardBorder}` }}
+   686→          title="بستن سایدبار"
+   687→        >
+   688→          <ChevronLeft className="w-3.5 h-3.5" />
+   689→          <span>جمع‌شوندگی</span>
+   690→        </button>
+   691→      </div>
+   692→    </aside>
+   693→  );
+   694→}
+   695→
+   696→// Export for the collapsed state (show expand button)
+   697→export function CollapsedSidebarExpand({ onExpand }: { onExpand: () => void }) {
+   698→  const { colors: C } = useTheme();
+   699→  return (
+   700→    <button
+   701→      onClick={onExpand}
+   702→      className="shrink-0 hidden lg:flex items-center justify-center w-8 rounded-xl transition-all cursor-pointer"
+   703→      style={{ color: C.cardSubFg, background: C.cardBg, border: `1px solid ${C.cardBorder}` }}
+   704→      title="نمایش سایدبار"
+   705→    >
+   706→      <ChevronRight className="w-3.5 h-3.5" />
+   707→    </button>
+   708→  );
+   709→}
+   710→
