@@ -241,3 +241,25 @@ Stage Summary:
 - vdes-analysis.tsx: totalProb now computed from V11-enforced values (always 100)
 - IRON LAW GUARANTEED: Backend (decision-graph) + Frontend (ml-narrative-v11) both enforce sum=100
 - SC codes already in use from previous session (lines 186-194, 1051, 1448, 657)
+
+---
+Task ID: 10
+Agent: Main
+Task: Remove right panel from decision graph to give graph more space
+
+Work Log:
+- Identified right panel in vdss-graph.tsx: 340px wide panel showing scenario probability bars and node detail info (lines 807-869)
+- Changed grid layout from `grid-cols-1 lg:grid-cols-[1fr_340px]` to simple `<div>` wrapper
+- Removed the entire right panel HTML (scenario bars, node detail content, structure explanation text)
+- Removed unused `detailContent` useMemo (114 lines of JSX that was only rendered in the removed panel)
+- De-indented graph shell content (175 lines) to remove the now-unnecessary 2-space nesting
+- Removed the empty wrapper div, letting graph shell be a direct child
+- Node click/highlight still works (selectedNode state preserved for visual effects)
+- Filter buttons and reset still work (activeFilter state preserved)
+- Verified: graph now renders at full 1200px width (was 860px before)
+- No console errors
+
+Stage Summary:
+- vdss-graph.tsx: Removed 340px right panel, graph now uses full available width
+- Removed ~180 lines of unused code (panel HTML + detailContent useMemo)
+- Node click highlighting and filter buttons still functional

@@ -295,120 +295,6 @@ export default function VdssGraph(props: VdssGraphProps) {
   }, [drawEdges]);
 
 
-  // ── Detail panel content ─────────────────────────────────────────
-  const detailContent = useMemo(() => {
-    if (!selectedNode) return null;
-    const node = nodeMap[selectedNode];
-    if (!node) return null;
-
-    if (node.isTerminal && SCENARIO_KEYS.includes(selectedNode as typeof SCENARIO_KEYS[number])) {
-      const contrib = pathContributions[selectedNode] ?? { trend: 0, breakout: 0, reversal: 0 };
-      const meta = SCENARIO_META_LOCAL[selectedNode];
-      const s = scenarios[selectedNode as keyof typeof scenarios];
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: meta.color }}>{node.title}</h3>
-          <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
-          <span style={{
-            display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
-            color: '#ffffff', fontSize: '10px',
-            background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
-          }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-          <div style={{ fontSize: '12px', color: meta.color, fontWeight: 700 }}>{toFa(scenarioProb)}٪</div>
-
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${D.line}` }}>
-            <p style={{ fontSize: '12px', fontWeight: 700, marginBottom: 8, color: '#ffffff' }}>سهم هر استراتژی:</p>
-            {Object.entries(BRANCH_META).map(([bKey, bMeta]) => {
-              const val = contrib[bKey as 'trend' | 'breakout' | 'reversal'];
-              const pct = (val * 100).toFixed(1);
-              return (
-                <div key={bKey} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '9px 0', borderBottom: '1px dashed rgba(255,255,255,.12)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: bMeta.color }} />
-                    <span style={{ fontSize: '11px', color: '#ffffff' }}>{bMeta.label}</span>
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: bMeta.color }}>{toPersianDigits(pct)}٪</span>
-                </div>
-              );
-            })}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>مجموع</span>
-              <span style={{ fontSize: '11px', fontWeight: 900, color: meta.color }}>{toFa(s?.probability ?? 0)}٪</span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    const inputs = edges.filter(e => e.to === selectedNode);
-    const outputs = edges.filter(e => e.from === selectedNode);
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#ffffff' }}>{node.title}</h3>
-        <p style={{ fontSize: '12px', color: '#ffffff', lineHeight: 1.95, margin: 0 }}>{node.desc}</p>
-        <span style={{
-          display: 'inline-block', padding: '4px 8px', margin: '3px 2px', borderRadius: 8,
-          color: '#ffffff', fontSize: '10px',
-          background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.09)',
-        }}>{node.type === 'decision' ? 'گره تصمیم‌گیری' : node.type === 'event' ? 'گره رویداد شانسی' : 'گره نتیجه'}</span>
-        {inputs.length > 0 && (
-          <div>
-            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#ffffff' }}>مسیرهای ورودی ({toFa(inputs.length)}):</p>
-            <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
-              {inputs.map((e, i) => {
-                const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
-                const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
-                return (
-                  <li key={i} style={{
-                    padding: '9px 0', borderTop: '1px dashed rgba(255,255,255,.12)',
-                    fontSize: '11px', lineHeight: 1.8, color: '#e0eaf0',
-                  }}>
-                    <b style={{ color: '#ffffff' }}>{SCENARIO_DISPLAY[e.from] || e.from} ← {SCENARIO_DISPLAY[e.to] || e.to}</b>
-                    <span style={{
-                      marginRight: 8, padding: '2px 6px', borderRadius: 4,
-                      fontSize: '9px', fontWeight: 700,
-                      background: `${edgeColor}22`, color: edgeColor,
-                    }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
-                    <br />{e.label}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-        {outputs.length > 0 && (
-          <div>
-            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: 4, color: '#ffffff' }}>مسیرهای خروجی ({toFa(outputs.length)}):</p>
-            <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
-              {outputs.map((e, i) => {
-                const ep = edgeProbabilities[edges.indexOf(e)] ?? 0;
-                const edgeColor = EDGE_COLORS[e.type] ?? '#6b7280';
-                return (
-                  <li key={i} style={{
-                    padding: '9px 0', borderTop: '1px dashed rgba(255,255,255,.12)',
-                    fontSize: '11px', lineHeight: 1.8, color: '#e0eaf0',
-                  }}>
-                    <b style={{ color: '#ffffff' }}>{SCENARIO_DISPLAY[e.from] || e.from} → {SCENARIO_DISPLAY[e.to] || e.to}</b>
-                    <span style={{
-                      marginRight: 8, padding: '2px 6px', borderRadius: 4,
-                      fontSize: '9px', fontWeight: 700,
-                      background: `${edgeColor}22`, color: edgeColor,
-                    }}>{toPersianDigits((ep * 100).toFixed(1))}٪</span>
-                    <br />{e.label}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
-    );
-  }, [selectedNode, nodeMap, edges, edgeProbabilities, pathContributions, scenarios]);
-
   // ── All filter buttons ────────────────────────────────────────────
   const allFilters = [
     ...TYPE_FILTERS,
@@ -627,245 +513,179 @@ export default function VdssGraph(props: VdssGraphProps) {
       </div>
 
       {/* ═══ Graph Workspace ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-3.5">
-        {/* Graph Shell */}
-        <div
-          ref={shellRef}
-          className="relative overflow-auto min-h-[400px]"
-          style={{
-            border: `1px solid ${D.line}`, borderTop: 'none',
-            background: `radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72)`,
-            boxShadow: D.shadow,
-          }}>
-          <div ref={graphRef} className="relative mx-auto" style={{ width: DISPLAY_W, height: DISPLAY_H, minWidth: DISPLAY_W, minHeight: DISPLAY_H }}>
-            <svg ref={svgRef} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" aria-label="مسیرهای گراف تصمیم" />
-
-            {/* Nodes */}
-            {nodes.map(node => {
-              const pos = nodePositions[node.id];
-              if (!pos) return null;
-
-              const isRoot = node.id === 'ROOT';
-              const isResultNode = node.isTerminal === true || node.type === 'terminal' || SCENARIO_KEYS.includes(node.id as typeof SCENARIO_KEYS[number]);
-              const isEventNode = node.type === 'event';
-              // Layer 1 main branches: N_TREND, N_BREAK, N_REVERSAL
-              const isMainBranch = ['N_TREND', 'N_BREAK', 'N_REVERSAL'].includes(node.id);
-              // All other decision nodes (Layer 2 sub-branches)
-              const isSubBranch = node.type === 'decision' && !isRoot && !isMainBranch;
-              const isSelected = selectedNode === node.id;
-              const isVisible = visibleNodes.has(node.id);
-              const scenarioProb = isResultNode ? (scenarioProbabilities[node.id] ?? 0) : null;
-              const scenarioColor = isResultNode ? (SCENARIO_META_LOCAL[node.id]?.color ?? node.color) : node.color;
-
-              // Node dimensions — match the layout in decision-graph.ts
-              const nodeWidth = isResultNode ? 175 : isEventNode ? 158 : 155;
-              const nodeMinH = isResultNode ? 84 : isEventNode ? 56 : 72;
-
-              // Node styling based on type
-              let bgStyle: string;
-              let innerGlow: string;
-              let baseBoxShadow: string;
-              let borderW = '1px';
-              let borderDash: React.CSSProperties['borderStyle'] = 'solid';
-
-              if (isRoot) {
-                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 22px ${D.cyan}1f`;
-                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
-              } else if (isEventNode) {
-                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 18px ${scenarioColor}1f`;
-                baseBoxShadow = `${innerGlow}, 0 8px 20px rgba(0,0,0,.22)`;
-                borderDash = 'dotted';
-              } else if (isResultNode) {
-                bgStyle = `linear-gradient(160deg, ${scenarioColor}1f, rgba(8,22,35,.65))`;
-                innerGlow = `inset 0 0 24px ${scenarioColor}18`;
-                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
-                borderW = '2px';
-              } else {
-                // Main branch and sub-branch decision nodes
-                bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
-                innerGlow = `inset 0 0 22px ${scenarioColor}22`;
-                baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
-              }
-
-              const selectedGlow = isSelected
-                ? `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`
-                : baseBoxShadow;
-
-              // High-contrast text: bright white for visibility on dark backgrounds
-              const textColor = isVisible ? '#ffffff' : 'rgba(255,255,255,.3)';
-              const secondaryColor = '#e0eaf0';
-
-              return (
-                <div
-                  key={node.id}
-                  ref={el => { nodeRefs.current[node.id] = el; }}
-                  onClick={() => setSelectedNode(node.id)}
-                  className="absolute cursor-pointer z-[2] text-center"
-                  style={{
-                    right: pos.right * scaleX,
-                    top: pos.top * scaleY,
-                    width: nodeWidth,
-                    minWidth: nodeWidth,
-                    minHeight: nodeMinH,
-                    padding: isResultNode ? '8px 9px' : '8px 9px',
-                    border: `${borderW} ${borderDash} ${scenarioColor}`,
-                    borderRadius: 13,
-                    background: bgStyle,
-                    boxShadow: selectedGlow,
-                    opacity: isVisible ? 1 : 0.12,
-                    transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
-                    filter: isSelected ? 'brightness(1.18)' : 'none',
-                    transition: 'transform .2s, filter .2s, opacity .2s, box-shadow .2s',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isSelected && isVisible) {
-                      e.currentTarget.style.transform = 'translateY(-4px) scale(1.025)';
-                      e.currentTarget.style.filter = 'brightness(1.18)';
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`;
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (!isSelected) {
-                      e.currentTarget.style.transform = 'none';
-                      e.currentTarget.style.filter = 'none';
-                      e.currentTarget.style.boxShadow = baseBoxShadow;
-                    }
-                  }}
-                >
-                  {/* ROOT node */}
-                  {isRoot && (
-                    <>
-                      <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>ریشه تصمیم</div>
-                      <div style={{ fontSize: 10, color: D.cyan, fontWeight: 700, marginTop: 3 }}>Decision Root</div>
-                    </>
-                  )}
-
-                  {/* Main branch nodes (N_TREND, N_BREAK, N_REVERSAL) */}
-                  {isMainBranch && (
-                    <>
-                      <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
-                      <div style={{ fontSize: 10, color: scenarioColor, fontWeight: 700, marginTop: 2 }}>{node.titleEn}</div>
-                      <div style={{ fontSize: 11, color: scenarioColor, marginTop: 3, fontWeight: 800 }}>{nodeDisplayValues[node.id] ?? ''}</div>
-                    </>
-                  )}
-
-                  {/* Sub-branch decision nodes (Layer 2: N_T_BULL, N_B_UP, N_R_BULL, etc.) */}
-                  {isSubBranch && (
-                    <>
-                      <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
-                      <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
-                      <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 2 }}>{nodeDisplayValues[node.id] ?? ''}</div>
-                    </>
-                  )}
-
-                  {/* Event/assessment nodes (Layer 3: N_T_B_MOM_HIGH, etc.) */}
-                  {isEventNode && (
-                    <>
-                      <div style={{ fontSize: 11, fontWeight: 800, lineHeight: 1.35, color: '#ffffff' }}>{node.title}</div>
-                      <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
-                    </>
-                  )}
-
-                  {/* Terminal result nodes (SC1-SC9) */}
-                  {isResultNode && (
-                    <>
-                      <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.4, color: '#ffffff' }}>{SCENARIO_META_LOCAL[node.id]?.label ?? node.title}</div>
-                      {scenarioProb !== null && (
-                        <span style={{
-                          display: 'inline-block', marginTop: 4, padding: '2px 8px', borderRadius: 999,
-                          background: `${scenarioColor}30`, color: '#ffffff',
-                          fontSize: 16, fontWeight: 900,
-                          textShadow: `0 0 8px ${scenarioColor}88`,
-                        }}>{toFa(scenarioProb)}٪</span>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Legend */}
-            <div style={{
-              position: 'absolute', right: 17, bottom: 15, padding: 10,
-              border: `1px solid ${D.line}`, borderRadius: 10,
-              background: 'rgba(7,17,27,.8)', fontSize: 10, color: '#ffffff', lineHeight: 2,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.cyan }} />پیروی از روند</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.gold }} />شکست</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.purple }} />بازگشت</div>
-              <div style={{ borderTop: `1px solid ${D.line}`, margin: '4px 0' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.up }} />صعودی</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.pullback }} />خنثی / رنج</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.down }} />نزولی</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.risk }} />شوک / ریسک</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ═══ Right Panel: Scenario Probabilities & Detail ═══ */}
-        <div style={{
-          border: `1px solid ${D.line}`, borderRadius: 15,
-          background: 'linear-gradient(160deg, rgba(16,39,57,.93), rgba(7,19,31,.93))',
-          padding: 16, boxShadow: D.shadow,
-          display: 'flex', flexDirection: 'column',
+      {/* Graph Shell */}
+      <div
+        ref={shellRef}
+        className="relative overflow-auto min-h-[400px]"
+        style={{
+          border: `1px solid ${D.line}`, borderTop: 'none',
+          background: `radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72)`,
+          boxShadow: D.shadow,
         }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: '#ffffff' }}>📋 احتمال سناریوها</h2>
+        <div ref={graphRef} className="relative mx-auto" style={{ width: DISPLAY_W, height: DISPLAY_H, minWidth: DISPLAY_W, minHeight: DISPLAY_H }}>
+          <svg ref={svgRef} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" aria-label="مسیرهای گراف تصمیم" />
 
-          {selectedNode && detailContent ? (
-            <div style={{ borderTop: `1px solid ${D.line}`, paddingTop: 12, flex: 1, overflowY: 'auto', maxHeight: 860 }}>
-              {detailContent}
-            </div>
-          ) : (
-            <div style={{ flex: 1, overflowY: 'auto', maxHeight: 860, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {SCENARIO_KEYS.map(key => {
-                  const meta = SCENARIO_META_LOCAL[key];
-                  const prob = scenarioProbabilities[key] ?? 0;
-                  const isActive = activeFilter === key;
-                  const s = scenarios[key as keyof typeof scenarios];
-                  return (
-                    <div
-                      key={key}
-                      onClick={() => { setActiveFilter(key); setSelectedNode(null); }}
-                      style={{
-                        cursor: 'pointer', transition: 'all .2s',
-                        borderRadius: 12, padding: 12,
-                        border: `1px solid ${isActive ? meta.color + 'cc' : D.line}`,
-                        background: isActive
-                          ? `linear-gradient(160deg, ${meta.color}1f, rgba(8,22,35,.65))`
-                          : D.panel2,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{meta.label}</span>
-                        <span style={{ fontSize: 18, fontWeight: 900, color: meta.color }}>{toPersianDigits((prob * 100).toFixed(1))}٪</span>
-                      </div>
-                      <div style={{ width: '100%', height: 6, borderRadius: 999, marginBottom: 8, background: 'rgba(255,255,255,.08)' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 999, transition: 'all .3s',
-                          width: `${Math.min(100, prob * 100)}%`, background: meta.color,
-                        }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, color: '#e0eaf0' }}>
-                        <span>تجمیعی: <b style={{ color: '#ffffff' }}>{toFa(s?.probability ?? 0)}٪</b></span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Nodes */}
+          {nodes.map(node => {
+            const pos = nodePositions[node.id];
+            if (!pos) return null;
 
-              <div style={{ borderTop: `1px solid ${D.line}`, paddingTop: 12, marginTop: 4 }}>
-                <p style={{ fontSize: 10, color: '#e0eaf0', lineHeight: 2, margin: 0 }}>
-                  <b style={{ color: '#ffffff' }}>ساختار:</b> ۳ استراتژی × ۹ یال = ۲۷ مسیر مستقیم.<br />
-                  <b style={{ color: '#ffffff' }}>احتمال یال:</b> محاسبه‌شده از موتور تصمیم (backend).<br />
-                  <b style={{ color: '#ffffff' }}>احتمال مسیر:</b> P(استراتژی) × P(یال|استراتژی).<br />
-                  <b style={{ color: '#ffffff' }}>احتمال سناریو:</b> تجمیع ۳ مسیر هر سناریو.
-                </p>
+            const isRoot = node.id === 'ROOT';
+            const isResultNode = node.isTerminal === true || node.type === 'terminal' || SCENARIO_KEYS.includes(node.id as typeof SCENARIO_KEYS[number]);
+            const isEventNode = node.type === 'event';
+            // Layer 1 main branches: N_TREND, N_BREAK, N_REVERSAL
+            const isMainBranch = ['N_TREND', 'N_BREAK', 'N_REVERSAL'].includes(node.id);
+            // All other decision nodes (Layer 2 sub-branches)
+            const isSubBranch = node.type === 'decision' && !isRoot && !isMainBranch;
+            const isSelected = selectedNode === node.id;
+            const isVisible = visibleNodes.has(node.id);
+            const scenarioProb = isResultNode ? (scenarioProbabilities[node.id] ?? 0) : null;
+            const scenarioColor = isResultNode ? (SCENARIO_META_LOCAL[node.id]?.color ?? node.color) : node.color;
+
+            // Node dimensions — match the layout in decision-graph.ts
+            const nodeWidth = isResultNode ? 175 : isEventNode ? 158 : 155;
+            const nodeMinH = isResultNode ? 84 : isEventNode ? 56 : 72;
+
+            // Node styling based on type
+            let bgStyle: string;
+            let innerGlow: string;
+            let baseBoxShadow: string;
+            let borderW = '1px';
+            let borderDash: React.CSSProperties['borderStyle'] = 'solid';
+
+            if (isRoot) {
+              bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+              innerGlow = `inset 0 0 22px ${D.cyan}1f`;
+              baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
+            } else if (isEventNode) {
+              bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+              innerGlow = `inset 0 0 18px ${scenarioColor}1f`;
+              baseBoxShadow = `${innerGlow}, 0 8px 20px rgba(0,0,0,.22)`;
+              borderDash = 'dotted';
+            } else if (isResultNode) {
+              bgStyle = `linear-gradient(160deg, ${scenarioColor}1f, rgba(8,22,35,.65))`;
+              innerGlow = `inset 0 0 24px ${scenarioColor}18`;
+              baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
+              borderW = '2px';
+            } else {
+              // Main branch and sub-branch decision nodes
+              bgStyle = 'linear-gradient(145deg, rgba(18,42,61,.97), rgba(6,21,34,.96))';
+              innerGlow = `inset 0 0 22px ${scenarioColor}22`;
+              baseBoxShadow = `${innerGlow}, 0 10px 25px rgba(0,0,0,.25)`;
+            }
+
+            const selectedGlow = isSelected
+              ? `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`
+              : baseBoxShadow;
+
+            // High-contrast text: bright white for visibility on dark backgrounds
+            const textColor = isVisible ? '#ffffff' : 'rgba(255,255,255,.3)';
+            const secondaryColor = '#e0eaf0';
+
+            return (
+              <div
+                key={node.id}
+                ref={el => { nodeRefs.current[node.id] = el; }}
+                onClick={() => setSelectedNode(node.id)}
+                className="absolute cursor-pointer z-[2] text-center"
+                style={{
+                  right: pos.right * scaleX,
+                  top: pos.top * scaleY,
+                  width: nodeWidth,
+                  minWidth: nodeWidth,
+                  minHeight: nodeMinH,
+                  padding: isResultNode ? '8px 9px' : '8px 9px',
+                  border: `${borderW} ${borderDash} ${scenarioColor}`,
+                  borderRadius: 13,
+                  background: bgStyle,
+                  boxShadow: selectedGlow,
+                  opacity: isVisible ? 1 : 0.12,
+                  transform: isSelected ? 'translateY(-4px) scale(1.025)' : 'none',
+                  filter: isSelected ? 'brightness(1.18)' : 'none',
+                  transition: 'transform .2s, filter .2s, opacity .2s, box-shadow .2s',
+                }}
+                onMouseEnter={e => {
+                  if (!isSelected && isVisible) {
+                    e.currentTarget.style.transform = 'translateY(-4px) scale(1.025)';
+                    e.currentTarget.style.filter = 'brightness(1.18)';
+                    e.currentTarget.style.boxShadow = `0 0 0 2px ${scenarioColor}47, 0 0 28px ${scenarioColor}40`;
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isSelected) {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.filter = 'none';
+                    e.currentTarget.style.boxShadow = baseBoxShadow;
+                  }
+                }}
+              >
+                {/* ROOT node */}
+                {isRoot && (
+                  <>
+                    <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>ریشه تصمیم</div>
+                    <div style={{ fontSize: 10, color: D.cyan, fontWeight: 700, marginTop: 3 }}>Decision Root</div>
+                  </>
+                )}
+
+                {/* Main branch nodes (N_TREND, N_BREAK, N_REVERSAL) */}
+                {isMainBranch && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
+                    <div style={{ fontSize: 10, color: scenarioColor, fontWeight: 700, marginTop: 2 }}>{node.titleEn}</div>
+                    <div style={{ fontSize: 11, color: scenarioColor, marginTop: 3, fontWeight: 800 }}>{nodeDisplayValues[node.id] ?? ''}</div>
+                  </>
+                )}
+
+                {/* Sub-branch decision nodes (Layer 2: N_T_BULL, N_B_UP, N_R_BULL, etc.) */}
+                {isSubBranch && (
+                  <>
+                    <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.45, color: '#ffffff' }}>{node.title}</div>
+                    <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
+                    <div style={{ fontSize: 10, color: '#d4e8f0', marginTop: 2 }}>{nodeDisplayValues[node.id] ?? ''}</div>
+                  </>
+                )}
+
+                {/* Event/assessment nodes (Layer 3: N_T_B_MOM_HIGH, etc.) */}
+                {isEventNode && (
+                  <>
+                    <div style={{ fontSize: 11, fontWeight: 800, lineHeight: 1.35, color: '#ffffff' }}>{node.title}</div>
+                    <div style={{ fontSize: 9, color: scenarioColor, fontWeight: 700, marginTop: 1 }}>{node.titleEn}</div>
+                  </>
+                )}
+
+                {/* Terminal result nodes (SC1-SC9) */}
+                {isResultNode && (
+                  <>
+                    <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.4, color: '#ffffff' }}>{SCENARIO_META_LOCAL[node.id]?.label ?? node.title}</div>
+                    {scenarioProb !== null && (
+                      <span style={{
+                        display: 'inline-block', marginTop: 4, padding: '2px 8px', borderRadius: 999,
+                        background: `${scenarioColor}30`, color: '#ffffff',
+                        fontSize: 16, fontWeight: 900,
+                        textShadow: `0 0 8px ${scenarioColor}88`,
+                      }}>{toFa(scenarioProb)}٪</span>
+                    )}
+                  </>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
+
+          {/* Legend */}
+          <div style={{
+            position: 'absolute', right: 17, bottom: 15, padding: 10,
+            border: `1px solid ${D.line}`, borderRadius: 10,
+            background: 'rgba(7,17,27,.8)', fontSize: 10, color: '#ffffff', lineHeight: 2,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.cyan }} />پیروی از روند</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.gold }} />شکست</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.purple }} />بازگشت</div>
+            <div style={{ borderTop: `1px solid ${D.line}`, margin: '4px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.up }} />صعودی</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.pullback }} />خنثی / رنج</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.down }} />نزولی</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: COLORS.risk }} />شوک / ریسک</div>
+          </div>
         </div>
       </div>
 
