@@ -197,7 +197,7 @@ function buildDataSection(body: VdesRequest, v12Extra: V12ExtraData, dominantKey
       const marker = k === dominantKey ? ' ★ غالب (بیشترین احتمال اختصاصی سناریو)' : k === highestCumKey ? ' ◆ بیشترین تجمعی' : '';
       const cumProb = (s as any).cumulativeProbability ? ` | تجمعی: ${fmt((s as any).cumulativeProbability, 0)}ـ` : '';
       const dirLabel = (s as any).direction === 'bullish' ? ' [صعودی]' : (s as any).direction === 'bearish' ? ' [نزولی]' : (s as any).direction === 'range' ? ' [رنج]' : '';
-      return `- ${s.name}${dirLabel}: ${fmt(s.probability, 0)}ـ${cumProb} (هدف: ${fmtGrouped(s.targetMin)} — ${fmtGrouped(s.targetMax)} ${unit})${marker}`;
+      return `- ${k} — ${s.name}${dirLabel}: ${fmt(s.probability, 0)}ـ${cumProb} (هدف: ${fmtGrouped(s.targetMin)} — ${fmtGrouped(s.targetMax)} ${unit})${marker}`;
     }).join('\n');
 
   // Candlestick (condensed)
@@ -232,8 +232,8 @@ function buildDataSection(body: VdesRequest, v12Extra: V12ExtraData, dominantKey
 - حمایت S1: **${fmtGrouped(S1)}** (${s1Grade}) | حمایت S2: ${fmtGrouped(S2)} (${s2Grade})
 
 **سناریوهای کلیدی (الزامی در متن):**
-- سناریوی غالب (بیشترین احتمال اختصاصی سناریو): **${dom?.name || '—'}** با احتمال **${domProb}ـ** (هدف: ${domRange})
-- سناریوی با بیشترین احتمال تجمعی: **${cumDomName}** — احتمال اختصاصی سناریو: ${cumDomProb}ـ | احتمال تجمعی: **${cumDomCumProb}ـ** (هدف: ${cumDomRange})
+- سناریوی غالب (بیشترین احتمال اختصاصی سناریو): **${dominantKey} — ${dom?.name || '—'}** با احتمال **${domProb}ـ** (هدف: ${domRange})
+- سناریوی با بیشترین احتمال تجمعی: **${highestCumKey} — ${cumDomName}** — احتمال اختصاصی سناریو: ${cumDomProb}ـ | احتمال تجمعی: **${cumDomCumProb}ـ** (هدف: ${cumDomRange})
 
 **سناریوهای احتمالی (به ترتیب هدف قیمتی):**
 ${probTable}

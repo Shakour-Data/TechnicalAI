@@ -1,0 +1,1586 @@
+     1→'use client';
+     2→
+     3→import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
+     4→import { Skeleton } from '@/components/ui/skeleton';
+     5→import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
+     6→// Chart is rendered in page.tsx with id="chart-export-wrapper"
+     7→// Heavy export libs (jspdf, html-to-image, xlsx, file-saver) are loaded lazily via dynamic import
+     8→// to avoid ChunkLoadError on low-memory environments with Turbopack.
+     9→
+    10→function nativeSaveAs(blob: Blob, filename: string) {
+    11→  const url = URL.createObjectURL(blob);
+    12→  const a = document.createElement('a');
+    13→  a.href = url;
+    14→  a.download = filename;
+    15→  document.body.appendChild(a);
+    16→  a.click();
+    17→  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    18→}
+    19→import { smartJalaliDate, fullPersianDate, toPersianDigits, candleDateToJalali, isGregorianDate, formatJalaliString } from '@/lib/jalali';
+    20→import {
+    21→  DropdownMenu,
+    22→  DropdownMenuContent,
+    23→  DropdownMenuItem,
+    24→  DropdownMenuTrigger,
+    25→} from '@/components/ui/dropdown-menu';
+    26→import {
+    27→  FileCode,
+    28→  FileText,
+    29→  FileDown,
+    30→  Table,
+    31→  FileSpreadsheet,
+    32→  Download,
+    33→  ChevronDown,
+    34→  ImageIcon,
+    35→} from 'lucide-react';
+    36→import { computeDailyIndicators } from '@/lib/indicator-arrays';
+    37→import { formatPriceFa } from '@/lib/format-price';
+    38→import { useTheme } from '@/lib/theme-store';
+    39→
+    40→function renderAIText(text: string): string {
+    41→  // Remove CJK (Chinese/Japanese/Korean) characters — prohibited in output
+    42→  const noCjk = text.replace(/[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\uff00-\uffef]/g, '');
+    43→
+    44→  // Normalize zero-width and look-alike characters that may interfere with regex
+    45→  const normalized = noCjk.replace(/[\u200c\u200d\u200b\ufeff]/g, '');
+    46→
+    47→  // Color syntax: {color:hex}text{/color} or {color:named}text{/color} → <span>
+    48→  const colorMap: Record<string, string> = {
+    49→    'red': '#dc2626', 'red-600': '#dc2626', 'red-700': '#b91c1c',
+    50→    'green': '#16a34a', 'emerald': '#059669', 'emerald-600': '#059669', 'emerald-700': '#047857',
+    51→    'amber': '#d97706', 'amber-600': '#d97706', 'amber-700': '#b45309', 'amber-800': '#92400e',
+    52→    'blue': '#2563eb', 'blue-600': '#2563eb', 'blue-700': '#1d4ed8',
+    53→    'orange': '#ea580c',
+    54→    'purple': '#9333ea', 'purple-600': '#9333ea', 'purple-700': '#7e22ce',
+    55→  };
+    56→
+    57→  const withColors = normalized.replace(/\{color:([^}]+)\}([\s\S]*?)\{\/color\}/g, (_match, colorName: string, inner: string) => {
+    58→    const hex = colorMap[colorName.trim()] || (colorName.startsWith('#') ? colorName : null);
+    59→    if (!hex) return inner; // Unknown color: just return text without color
+    60→    return `<span style="color:${hex}">${inner}</span>`;
+    61→  });
+    62→
+    63→  return withColors
+    64→    .split('\n\n')
+    65→    .map(p => {
+    66→      // Convert **bold** to <strong>
+    67→      const html = p.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>');
+    68→      // Convert newlines within paragraph to <br>
+    69→      return `<p class="mb-4">${html.replace(/\n/g, '<br>')}</p>`;
+    70→    })
+    71→    .join('');
+    72→}
+    73→
+    74→// ═══════════════════════════════════════════════════════════════════
+    75→// Types
+    76→// ═══════════════════════════════════════════════════════════════════
+    77→
+    78→interface Scenario {
+    79→  name: string;
+    80→  nameEn: string;
+    81→  probability: number;
+    82→  targetMin: number;
+    83→  targetMax: number;
+    84→  description: string;
+    85→}
+    86→
+    87→export interface VdesAnalysisProps {
+    88→  symbolName: string;
+    89→  candles: { date: string; open: number; high: number; low: number; close: number; volume: number }[];
+    90→  currentPrice: number;
+    91→  resistances: number[];
+    92→  supports: number[];
+    93→  ma21: number;
+    94→  ma100: number;
+    95→  rsi: number;
+    96→  mfi: number;
+    97→  cci: number;
+    98→  adx: number;
+    99→  stochK: number;
+   100→  stochD: number;
+   101→  macdLine: number;
+   102→  macdSignal: number;
+   103→  macdHist: number;
+   104→  diPlus: number;
+   105→  diMinus: number;
+   106→  sar: number;
+   107→  atr: number;
+   108→  obv: number;
+   109→  bollingerUpper: number;
+   110→  bollingerMiddle: number;
+   111→  bollingerLower: number;
+   112→  trendDirection: string;
+   113→  trendAngle: number;
+   114→  trendR2: number;
+   115→  overallSignal: string;
+   116→  scenarios: {
+   117→    SC1: Scenario;
+   118→    SC2: Scenario;
+   119→    SC3: Scenario;
+   120→    SC4: Scenario;
+   121→    SC5: Scenario;
+   122→    SC6: Scenario;
+   123→    SC7: Scenario;
+   124→    SC8: Scenario;
+   125→    SC9: Scenario;
+   126→  };
+   127→  supportStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
+   128→  resistanceStrengths: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string; score: number; grade: string; overlapCount: number; methods: string[] }[];
+   129→  priceTargets: { price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string }[];
+   130→  hasVolume?: boolean;
+   131→  instrumentType?: string;
+   132→  instrumentCategory?: string;
+   133→  currencyUnit?: string;
+   134→  priceDecimals?: number;
+   135→  probabilityTrend?: {
+   136→    scenarios: { scenarioKey: string; label: string; group: string; currentProbability: number; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+   137→    groups: { group: string; label: string; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+   138→  };
+   139→}
+   140→
+   141→// ═══════════════════════════════════════════════════════════════════
+   142→// Constants
+   143→// ═══════════════════════════════════════════════════════════════════
+   144→
+   145→const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+   146→
+   147→const SCENARIO_KEYS = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
+   148→
+   149→type ScenarioKey = (typeof SCENARIO_KEYS)[number];
+   150→
+   151→const SCENARIO_NUMBER: Record<string, string> = {
+   152→  SC1: '\u06f1', SC2: '\u06f2', SC3: '\u06f3', SC4: '\u06f4', SC5: '\u06f5',
+   153→  SC6: '\u06f6', SC7: '\u06f7', SC8: '\u06f8', SC9: '\u06f9',
+   154→};
+   155→
+   156→// Convention: SC1-SC4=bearish, SC5=neutral, SC6-SC9=bullish (matches decision-graph.ts & ta-engine.ts)
+   157→const SCENARIO_META: Record<string, { label: string; type: string; border: string; badgeBg: string; badgeColor: string }> = {
+   158→  SC1: { label: '\u0634\u0648\u06a9 \u0646\u0632\u0648\u0644\u06cc', type: 'down', border: '#b91c1c', badgeBg: 'rgba(185,28,28,0.1)', badgeColor: '#b91c1c' },
+   159→  SC2: { label: '\u0646\u0632\u0648\u0644\u06cc \u0634\u062a\u0627\u0628\u200c\u062f\u0627\u0631', type: 'down', border: '#dc2626', badgeBg: 'rgba(220,38,38,0.1)', badgeColor: '#dc2626' },
+   160→  SC3: { label: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc', type: 'down', border: '#ea580c', badgeBg: 'rgba(234,88,12,0.1)', badgeColor: '#ea580c' },
+   161→  SC4: { label: '\u0646\u0632\u0648\u0644\u06cc \u062e\u0641\u06cc\u0641', type: 'down', border: '#c2410c', badgeBg: 'rgba(194,65,12,0.1)', badgeColor: '#c2410c' },
+   162→  SC5: { label: '\u0631\u0646\u062c', type: 'neutral', border: '#b45309', badgeBg: 'rgba(180,83,9,0.1)', badgeColor: '#b45309' },
+   163→  SC6: { label: '\u0635\u0639\u0648\u062f\u06cc \u062e\u0641\u06cc\u0641', type: 'up', border: '#047857', badgeBg: 'rgba(4,120,87,0.1)', badgeColor: '#047857' },
+   164→  SC7: { label: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', type: 'up', border: '#059669', badgeBg: 'rgba(5,150,105,0.1)', badgeColor: '#059669' },
+   165→  SC8: { label: '\u0635\u0639\u0648\u062f\u06cc \u0634\u062a\u0627\u0628\u062f\u0627\u0631', type: 'up', border: '#0e7490', badgeBg: 'rgba(14,116,144,0.1)', badgeColor: '#0e7490' },
+   166→  SC9: { label: '\u0634\u0648\u06a9 \u0635\u0639\u0648\u062f\u06cc', type: 'up', border: '#0891b2', badgeBg: 'rgba(8,145,178,0.1)', badgeColor: '#0891b2' },
+   167→};
+   168→
+   169→const GRADE_MAP: Record<string, { label: string; color: string }> = {
+   170→  'Very Strong': { label: 'بسیار قوی', color: 'text-red-700' },
+   171→  'Strong': { label: 'قوی', color: 'text-amber-700' },
+   172→  'Moderate': { label: 'متوسط', color: 'text-sky-700' },
+   173→  'Weak': { label: 'ضعیف', color: 'text-gray-500' },
+   174→};
+   175→
+   176→function GradeBadge({ grade }: { grade: string }) {
+   177→  const g = GRADE_MAP[grade] ?? GRADE_MAP['Weak'];
+   178→  return (
+   179→    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${g.color} ${grade === 'Very Strong' ? 'bg-red-100' : grade === 'Strong' ? 'bg-amber-100' : grade === 'Moderate' ? 'bg-sky-100' : 'bg-gray-100'}`}>
+   180→      {g.label}
+   181→    </span>
+   182→  );
+   183→}
+   184→
+   185→const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
+   186→  SC1: { text: 'سناریوی ۱: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+   187→  SC2: { text: 'سناریوی ۲: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
+   188→  SC3: { text: 'سناریوی ۳: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
+   189→  SC4: { text: 'سناریوی ۴: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+   190→  SC5: { text: 'سناریوی ۵: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
+   191→  SC6: { text: 'سناریوی ۶: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+   192→  SC7: { text: 'سناریوی ۷: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
+   193→  SC8: { text: 'سناریوی ۸: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
+   194→  SC9: { text: 'سناریوی ۹: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
+   195→};
+   196→
+   197→const RISK_PROFILE_LABELS: Record<V11Result['riskProfile'], { label: string; color: string; bg: string }> = {
+   198→  very_bullish: { label: 'صعودی بسیار قوی', color: '#047857', bg: 'rgba(4,120,87,0.08)' },
+   199→  bullish: { label: 'صعودی', color: '#059669', bg: 'rgba(5,150,105,0.08)' },
+   200→  neutral: { label: 'خنثی', color: '#b45309', bg: 'rgba(180,83,9,0.08)' },
+   201→  bearish: { label: 'نزولی', color: '#ea580c', bg: 'rgba(234,88,12,0.08)' },
+   202→  very_bearish: { label: 'نزولی بسیار قوی', color: '#b91c1c', bg: 'rgba(185,28,28,0.08)' },
+   203→};
+   204→
+   205→// ═══════════════════════════════════════════════════════════════════
+   206→// Instrument Category → Persian Terms Mapping
+   207→// ═══════════════════════════════════════════════════════════════════
+   208→
+   209→function getInstrumentTerms(category?: string): { noun: string; typeLabel: string; priceAction: string; tradeAction: string } {
+   210→  switch (category) {
+   211→    case 'currency': return { noun: 'ارز', typeLabel: 'ارز', priceAction: 'نرخ', tradeAction: 'معامله' };
+   212→    case 'gold': return { noun: 'طلا و سکه', typeLabel: 'طلا و سکه', priceAction: 'قیمت', tradeAction: 'معامله' };
+   213→    case 'silver': return { noun: 'نقره', typeLabel: 'نقره', priceAction: 'قیمت', tradeAction: 'معامله' };
+   214→    case 'gold_etf': return { noun: 'صندوق طلای بورس', typeLabel: 'صندوق طلا', priceAction: 'قیمت', tradeAction: 'معامله' };
+   215→    case 'crypto': return { noun: 'ارز دیجیتال', typeLabel: 'ارز دیجیتال', priceAction: 'قیمت', tradeAction: 'معامله' };
+   216→    case 'forex': return { noun: 'جفت ارز', typeLabel: 'جفت ارز', priceAction: 'نرخ', tradeAction: 'معامله' };
+   217→    case 'world_index': return { noun: 'شاخص بورس جهانی', typeLabel: 'شاخص جهانی', priceAction: 'مقدار', tradeAction: 'سرمایه‌گذاری' };
+   218→    case 'foreign_stock': return { noun: 'سهام خارجی', typeLabel: 'سهام خارجی', priceAction: 'قیمت', tradeAction: 'معامله' };
+   219→    case 'energy': return { noun: 'کامودیتی انرژی', typeLabel: 'انرژی', priceAction: 'قیمت', tradeAction: 'معامله' };
+   220→    case 'metal': return { noun: 'فلز جهانی', typeLabel: 'فلز', priceAction: 'قیمت', tradeAction: 'معامله' };
+   221→    case 'commodity': return { noun: 'کالای جهانی', typeLabel: 'کالا', priceAction: 'قیمت', tradeAction: 'معامله' };
+   222→    case 'index': return { noun: 'شاخص بورس', typeLabel: 'شاخص', priceAction: 'مقدار', tradeAction: 'سرمایه‌گذاری' };
+   223→    default: return { noun: 'سهم', typeLabel: 'سهم', priceAction: 'قیمت', tradeAction: 'معامله' };
+   224→  }
+   225→}
+   226→
+   227→// ═══════════════════════════════════════════════════════════════════
+   228→// Dynamic Analysis Text Generator
+   229→// ═══════════════════════════════════════════════════════════════════
+   230→
+   231→interface LevelStrength {
+   232→  price: number; strength: number; isTarget: boolean; fibRatio?: string; fibLabel?: string;
+   233→  score: number; grade: string; overlapCount: number; methods: string[];
+   234→}
+   235→
+   236→interface AnalysisContext {
+   237→  symbolName: string;
+   238→  currentPrice: number;
+   239→  ma21: number;
+   240→  ma100: number;
+   241→  rsi: number;
+   242→  mfi: number;
+   243→  cci: number;
+   244→  adx: number;
+   245→  stochK: number;
+   246→  stochD: number;
+   247→  macdLine: number;
+   248→  macdSignal: number;
+   249→  macdHist: number;
+   250→  diPlus: number;
+   251→  diMinus: number;
+   252→  sar: number;
+   253→  atr: number;
+   254→  obv: number;
+   255→  bollingerUpper: number;
+   256→  bollingerMiddle: number;
+   257→  bollingerLower: number;
+   258→  trendDirection: string;
+   259→  trendAngle: number;
+   260→  trendR2: number;
+   261→  overallSignal: string;
+   262→  highestKey: string;
+   263→  highestProb: number;
+   264→  scenarios: VdesAnalysisProps['scenarios'];
+   265→  S1: number;
+   266→  SC1: number;
+   267→  SC2: number;
+   268→  hasVolume: boolean;
+   269→  resistanceStrengths: LevelStrength[];
+   270→  supportStrengths: LevelStrength[];
+   271→  v11Result: V11Result;
+   272→  instrumentType?: string;
+   273→  instrumentCategory?: string;
+   274→  currencyUnit?: string;
+   275→}
+   276→
+   277→function generateAnalysisText(ctx: AnalysisContext) {
+   278→  const {
+   279→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   280→    stochK, stochD, macdLine, macdSignal, macdHist,
+   281→    diPlus, diMinus, sar, atr, obv,
+   282→    bollingerUpper, bollingerMiddle, bollingerLower,
+   283→    trendDirection, trendAngle, trendR2, overallSignal,
+   284→    highestKey, highestProb, scenarios, S1, R1, R2,
+   285→    hasVolume, resistanceStrengths, supportStrengths,
+   286→    v11Result, currencyUnit: ctxCurrencyUnit,
+   287→    instrumentCategory,
+   288→  } = ctx;
+   289→  const unit = ctxCurrencyUnit || 'ریال';
+   290→  const terms = getInstrumentTerms(instrumentCategory);
+   291→
+   292→  const R1_info = resistanceStrengths[0];
+   293→  const S1_info = supportStrengths[0];
+   294→  const R1_grade = R1_info?.grade ? (GRADE_MAP[R1_info.grade]?.label ?? R1_info.grade) : '';
+   295→  const S1_grade = S1_info?.grade ? (GRADE_MAP[S1_info.grade]?.label ?? S1_info.grade) : '';
+   296→  const R1_methods = R1_info?.methods?.length ? ` با ${toPersianDigits(String(R1_info.methods.length))} روش تأیید شده` : '';
+   297→  const S1_methods = S1_info?.methods?.length ? ` با ${toPersianDigits(String(S1_info.methods.length))} روش تأیید شده` : '';
+   298→
+   299→  const bullCum = v11Result.bullishCumulative;
+   300→  const bearCum = v11Result.bearishCumulative;
+   301→  const rangeCum = v11Result.neutralCumulative;
+   302→
+   303→  const dominant = SCENARIO_META[highestKey].label;
+   304→
+   305→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   306→  const stochSignal = stochK > 80 ? 'اشباع خرید' : stochK < 20 ? 'اشباع فروش' : stochK > stochD ? 'صعودی' : 'نزولی';
+   307→  const macdBullish = macdLine > macdSignal;
+   308→  const bbRange = bollingerUpper - bollingerLower;
+   309→  const bbPos = toPersianDigits(bbRange > 0 ? ((currentPrice - bollingerLower) / bbRange * 100).toFixed(0) : '50');
+   310→  const bbSignal = currentPrice > bollingerUpper ? 'بالای باند بالایی (اشباع خرید)'
+   311→    : currentPrice < bollingerLower ? 'زیر باند پایینی (اشباع فروش)'
+   312→    : `داخل باندها (${bbPos}٪ از بازه)`;
+   313→  const diSignal = diPlus > diMinus
+   314→    ? `DI+ (${toFa(diPlus)}) بالاتر از DI- (${toFa(diMinus)}) — فشار خرید غالب`
+   315→    : `DI- (${toFa(diMinus)}) بالاتر از DI+ (${toFa(diPlus)}) — فشار فروش غالب`;
+   316→  const trendText = trendDirection === 'up'
+   317→    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+   318→    : trendDirection === 'down'
+   319→    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+   320→    : 'خنثی و بدون جهت مشخص';
+   321→
+   322→  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+   323→  const trendColor = trendDirection === 'up' ? 'text-emerald-700' : trendDirection === 'down' ? 'text-red-700' : 'text-amber-800';
+   324→  const aboveBelow = (price: number, target: number) => price > target ? 'بالاتر' : 'پایین‌تر';
+   325→  const abColor = (price: number, target: number) => price > target ? 'text-emerald-700' : 'text-red-700';
+   326→
+   327→  const adxText = adx > 40 ? 'روند قدرتمند' : adx > 25 ? 'روند متوسط' : 'روند ضعیف یا رنج';
+   328→  const adxColor = adx > 40 ? 'text-emerald-700' : adx > 25 ? 'text-amber-800' : 'text-[#6b7280]';
+   329→
+   330→  // Helper: is bullish scenario?
+   331→  const isBull = (k: string) => ['SC6','SC7','SC8','SC9'].includes(k);
+   332→  const isBear = (k: string) => ['SC1','SC2','SC3','SC4'].includes(k);
+   333→
+   334→  // ── PARAGRAPH 1: General Trend & Price Position ──
+   335→  const p1 = (
+   336→    <>
+   337→      <strong className="text-amber-800">روند کلی و موقعیت قیمت:</strong>{' '}
+   338→      سناریوی غالب برای {terms.noun} {symbolName} <b className="text-[#111827]">{dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
+   339→      {terms.priceAction} در محدوده <b className="text-[#111827]">{toFa(currentPrice)} {unit}</b> معامله می‌شود و روند میان‌مدت{' '}
+   340→      <b className={trendColor}>{trendLabel}</b>
+   341→      {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={toPersianDigits((trendR2 * 100).toFixed(1))}٪).
+   342→      قیمت نسبت به MA21 ({toFa(ma21)} {unit}){' '}
+   343→      <span className={abColor(currentPrice, ma21)}>{aboveBelow(currentPrice, ma21)}</span>
+   344→      {' '}و نسبت به MA100 ({toFa(ma100)} {unit}){' '}
+   345→      <span className={abColor(currentPrice, ma100)}>{aboveBelow(currentPrice, ma100)}</span>
+   346→      {' '}قرار دارد.
+   347→      اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
+   348→      {sar < currentPrice
+   349→        ? <><span>زیر قیمت قرار دارد که <b className="text-emerald-700">تأیید روند صعودی</b> است.</span></>
+   350→        : <><span>بالای قیمت قرار دارد که <b className="text-red-700">تأیید روند نزولی</b> است.</span></>
+   351→      }
+   352→      {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده <b className={adxText}>{adxText}</b> می‌باشد.
+   353→      {' '}{diSignal}.
+   354→    </>
+   355→  );
+   356→
+   357→  // ── PARAGRAPH 2: Oscillator & Momentum (scenario-aware) ──
+   358→  let p2: React.ReactNode;
+   359→  if (isBull(highestKey)) {
+   360→    const isStrongBull = highestKey === 'SC8' || highestKey === 'SC9';
+   361→    p2 = (
+   362→      <>
+   363→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — مومنتوم صعودی{isStrongBull ? ' قوی' : ''}:</strong>{' '}
+   364→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
+   365→        <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b>
+   366→        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز {highestKey === 'SC9' ? 'شوک' : 'شتابدار'} صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
+   367→        {' '}قرار دارد.
+   368→        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.</span>}
+   369→        CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   370→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
+   371→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با{' '}
+   372→        {macdBullish
+   373→          ? <span className="text-emerald-700">عبور خط اصلی بالای خط سیگنال — تأیید‌کننده مومنتوم صعودی قدرتمند</span>
+   374→          : <span className="text-red-700">خط اصلی زیر خط سیگنال — هشدار کاهش مومنتوم</span>}
+   375→        . هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت و در حال گسترش</span> : <span className="text-red-700">منفی</span>}.
+   376→        {isStrongBull && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده <b className="text-emerald-700">شتاب صعودی شدید</b> و ورود نقدینگی گسترده است.</span>}
+   377→        {!isStrongBull && bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده بایاس صعودی قوی در بازار است.</span>}
+   378→      </>
+   379→    );
+   380→  } else if (highestKey === 'SC5') {
+   381→    p2 = (
+   382→      <>
+   383→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — بازار بدون جهت:</strong>{' '}
+   384→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد.
+   385→        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش</span> : <span>در محدوده خنثی</span>}.</span>}
+   386→        CCI ({toFa(cci)}) {cci > 100 ? <span>بالاتر از +100</span> : cci < -100 ? <span>پایین‌تر از -100</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   387→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
+   388→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+   389→        {macdBullish
+   390→          ? <span className="text-emerald-700">صعودی اما ضعیف</span>
+   391→          : <span className="text-red-700">نزولی اما ضعیف</span>}.
+   392→        هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت</span> : <span className="text-red-700">منفی</span>} — مومنتوم پایین.
+   393→        اندیکاتورها تأییدکننده فاز رنج و عدم قطعیت بازار هستند. خروج از محدوده رنج نیاز به تأیید مومنتوم دارد.
+   394→      </>
+   395→    );
+   396→  } else if (isBear(highestKey)) {
+   397→    const isStrongBear = highestKey === 'SC1' || highestKey === 'SC2';
+   398→    p2 = (
+   399→      <>
+   400→        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — {isStrongBear ? 'تضعیف شدید ساختار' : 'هشدار اصلاح'}:</strong>{' '}
+   401→        اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد
+   402→        {rsi < 40 && <span> — {isStrongBear ? 'سقوط RSI نشان‌دهنده فشار فروش سنگین است' : 'روند نزولی RSI هشدار ادامه اصلاح است'}.</span>}.
+   403→        {ctx.hasVolume && <span>MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی {isStrongBear ? 'خطرناک' : 'محتمل'}</span> : mfi < 20 ? <span className="text-red-700">اشباع فروش شدید — {isStrongBear ? 'خروج پول گسترده' : 'احتمال بازگشت کوتاه‌مدت'}</span> : <span>{isStrongBear ? 'در حال کاهش — هشدار خروج پول' : 'در محدوده نزولی'}</span>}.</span>}
+   404→        CCI ({toFa(cci)}) {cci > 100 ? <span className="text-red-700">بالاتر از +100 — {isStrongBear ? 'واگرایی قطعی' : 'ممکن است واگرایی منفی باشد'}</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 — {isStrongBear ? 'سقوط آزاد' : 'فشار فروش قوی'}</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+   405→        استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
+   406→        MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+   407→        {macdBullish
+   408→          ? <span className="text-amber-800">صعودی موقت — {isStrongBear ? 'در ساختار نزولی قابل اعتماد نیست' : 'در روند نزولی سیگنال ضعیف'}</span>
+   409→          : <span className="text-red-700">تقاطع نزولی — {isStrongBear ? 'سیگنال خروج فوری' : 'تأیید‌کننده فشار فروش'}</span>}.
+   410→        هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-amber-800">مثبت اما ضعیف</span> : <span className="text-red-700">منفی و {isStrongBear ? 'تشدید شونده' : 'در حال گسترش'}</span>}.
+   411→        {isStrongBear && <span> تمام اندیکاتورها تضعیف ساختاری و هشدار خروج سرمایه را تأیید می‌کنند.</span>}
+   412→        {!isStrongBear && <span> در مجموع، اندیکاتورها هشدار اصلاح عمیق‌تر را صادر می‌کنند.</span>}
+   413→      </>
+   414→    );
+   415→  } else {
+   416→    p2 = <></>;
+   417→  }
+   418→
+   419→  // ── PARAGRAPH 3: Bollinger Bands & Volatility ──
+   420→  const p3 = (
+   421→    <>
+   422→      <strong className="text-amber-800">تحلیل نوسانات و باند بولینگر:</strong>{' '}
+   423→      قیمت در باند بولینگر <b className="text-[#111827]">{bbSignal}</b> قرار دارد.
+   424→      باند بالایی: {toFa(bollingerUpper)}، باند میانی (MA20): {toFa(bollingerMiddle)}، باند پایینی: {toFa(bollingerLower)} {unit}.
+   425→      {currentPrice > bollingerUpper
+   426→        ? ' عبور از باند بالایی معمولاً نشان‌دهنده ادامه حرکت صعودی کوتاه‌مدت یا واکنش به باند است.'
+   427→        : currentPrice < bollingerLower
+   428→        ? ' نزدیکی یا عبور از باند پایینی می‌تواند نشانه بازگشت قیمت به سمت باند میانی باشد.'
+   429→        : ' موقعیت قیمت در داخل باندها نشان‌دهنده عدم وجود سیگنال شدید از باند بولینگر است.'}
+   430→      {isBull(highestKey) && ' فاصله قیمت از باند بالایی نشان‌دهنده شتاب صعودی است.'}
+   431→      {isBear(highestKey) && ' نزدیکی به باند پایینی هشدار ادامه فشار نزولی است.'}
+   432→      {highestKey === 'SC5' && ' نوسان در محدوده باندها تأییدکننده فاز رنج بازار است.'}
+   433→    </>
+   434→  );
+   435→
+   436→  // ── PARAGRAPH 4: Volume & OBV Analysis (scenario-aware) — HIDDEN when no volume ──
+   437→  const p4 = ctx.hasVolume ? (
+   438→    <>
+   439→      <strong className="text-amber-800">تحلیل حجم معاملات و شاخص OBV:</strong>{' '}
+   440→      شاخص جریان ورودی پول (OBV) در سطح <b className="text-[#111827]">{obv > 0 ? '+' : ''}{toPersianDigits((obv / 1e6).toFixed(1))}M</b> قرار دارد
+   441→      {obv > 0
+   442→        ? <span> که <b className="text-emerald-700">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است.
+   443→          {isBull(highestKey) ? ' این حجم مثبت تأیید‌کننده سناریوی صعودی است.' : ''}
+   444→          {highestKey === 'SC5' ? ' اما در فاز رنج، حجم مثبت الزاماً سیگنال صعودی نیست.' : ''}
+   445→          {isBear(highestKey) ? ' اما با وجود حجم مثبت، ساختار قیمت ضعیف است — این تناقض قابل توجه است.' : ''}
+   446→        </span>
+   447→        : <span> که <b className="text-red-700">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد.
+   448→          {isBull(highestKey) ? ' خروج پول با سناریوی صعودی در تضاد است — احتیاط توصیه می‌شود.' : ''}
+   449→          {highestKey === 'SC5' ? ' خروج پول در فاز رنج معمولاً پیش‌نشاننده شکست به سمت پایین است.' : ''}
+   450→          {isBear(highestKey) ? ' این خروج پول تأیید‌کننده سناریوی نزولی و ضرورت حفظ سرمایه است.' : ''}
+   451→        </span>
+   452→      }
+   453→    </>
+   454→  ) : (
+   455→    <>
+   456→      <strong className="text-amber-800">تحلیل نوسان پذیری:</strong>{' '}
+   457→      اندیکاتور ATR ({toFa(atr)}) نشان‌دهنده میانگین نوسان روزانه {terms.noun} است؛
+   458→      {atr > currentPrice * 0.03
+   459→        ? <span> نوسان بالاتر از ۳٪ قیمت که <b className="text-amber-800">نوسان بالایی</b> محسوب شده و مدیریت ریسک دقیق‌تری را ایجاب می‌کند.</span>
+   460→        : <span> نوسان معقول که نشان‌دهنده <b className="text-[#374151]">ثبات نسبی قیمت</b> در بازه‌های معاملاتی اخیر است.</span>
+   461→      }
+   462→    </>
+   463→  );
+   464→
+   465→  // ── PARAGRAPH 5: Risk/Reward & Confluence (scenario-aware) ──
+   466→  let p5: React.ReactNode;
+   467→  if (isBull(highestKey)) {
+   468→    const isStrong = highestKey === 'SC3' || highestKey === 'SC4';
+   469→    p5 = (
+   470→      <>
+   471→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   472→        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
+   473→        با احتمال {toFa(highestProb)}٪ برای سناریوی {dominant}، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی{isStrong ? ' قدرتمند و شتابدار' : ''}</b> را تأیید می‌کنند.
+   474→        {bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
+   475→        نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} {unit}، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
+   476→        تلاقی MA21 و MA100{' '}
+   477→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   478→          ? <span className="text-amber-800">بسیار نزدیک به هم — تقاطع طلایی احتمالی</span>
+   479→          : ma21 > ma100
+   480→          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+   481→          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
+   482→        {' '}است. {isStrong ? 'مومنتوم بالا مدیریت ریسک دقیق‌تری را ایجاب می‌کند.' : `توصیه: در صورت شکست مقاومت ${toFa(R1)}، هدف بعدی ${toFa(R2)} ${unit} تعیین می‌شود.`}
+   483→      </>
+   484→    );
+   485→  } else if (highestKey === 'SC5') {
+   486→    p5 = (
+   487→      <>
+   488→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   489→        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
+   490→        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
+   491→        سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بهترین استراتژی <b className="text-amber-800">انتظار و مشاهده</b> است.
+   492→        منتظر خروج قیمت از محدوده {toFa(S1)} تا {toFa(R1)} {unit} بمانید.
+   493→        تلاقی MA21 و MA100{' '}
+   494→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   495→          ? <span className="text-amber-800">نزدیک به هم — هر گونه تقاطع می‌تواند سیگنال جهت باشد</span>
+   496→          : ma21 > ma100
+   497→          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+   498→          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
+   499→        {' '}. شکست سطوح کلیدی و مومنتوم MACD را پایش کنید.
+   500→      </>
+   501→    );
+   502→  } else {
+   503→    // Bearish SC6-SC9
+   504→    const isStrong = highestKey === 'SC8' || highestKey === 'SC9';
+   505→    p5 = (
+   506→      <>
+   507→        <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
+   508→        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
+   509→        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده {isStrong ? <b className="text-red-700">تضعیف شدید ساختار</b> : <b className="text-red-700">ریسک اصلاح عمیق</b>} است.
+   510→        {bearCum > 60 && <span> مجموع احتمال نزولی {toFa(bearCum)}٪ — <b className="text-red-700">بایاس نزولی {isStrong ? 'بسیار' : ''}قوی</b> در بازار حاکم است.</span>}
+   511→        {isStrong ? <span> تمام شاخص‌ها هشدار <b className="text-red-700">خروج فوری</b> را صادر می‌کنند.</span> : <span> ورود به معامله خرید در این شرایط <b className="text-red-700">ریسک بالایی</b> دارد.</span>}
+   512→        تلاقی MA21 و MA100{' '}
+   513→        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+   514→          ? <span className="text-red-700">نزدیک به هم — {isStrong ? 'تقاطع مرگ در حال تکوین' : 'احتمال تقاطع مرگ'}</span>
+   515→          : ma21 > ma100
+   516→          ? <span className="text-amber-800">MA21 هنوز بالاتر اما {isStrong ? 'به سرعت در حال نزدیک شدن' : 'در حال ضعیف شدن'}</span>
+   517→          : <span className="text-red-700">MA21 زیر MA100 — {isStrong ? 'تأیید نهایی ساختار نزولی' : 'تأیید‌کننده فشار فروش'}</span>}
+   518→        {' '}. {isStrong ? 'حفظ سرمایه اولویت اول است. از هرگونه موقعیت خرید جدید خودداری کنید.' : `توصیه: احتیاط و انتظار برای بازگشت به محدوده حمایت ${toFa(S1)} ${unit}.`}
+   519→      </>
+   520→    );
+   521→  }
+   522→
+   523→  return [p1, p2, p3, p4, p5];
+   524→}
+   525→
+   526→// ═══════════════════════════════════════════════════════════════════
+   527→// Sub-components
+   528→// ═══════════════════════════════════════════════════════════════════
+   529→
+   530→function StrengthBar({ strength }: { strength: number }) {
+   531→  const pct = (strength / 10) * 100;
+   532→  const color = strength >= 7 ? '#047857' : strength >= 4 ? '#b45309' : '#6b7280';
+   533→  return (
+   534→    <div className="flex items-center gap-2">
+   535→      <div className="w-16 h-2 rounded-full bg-[#e5e7eb] overflow-hidden">
+   536→        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+   537→      </div>
+   538→      <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{toPersianDigits(String(strength))}</span>
+   539→    </div>
+   540→  );
+   541→}
+   542→
+   543→// ═══════════════════════════════════════════════════════════════════
+   544→// Component
+   545→// ═══════════════════════════════════════════════════════════════════
+   546→
+   547→export default function VdesAnalysis(props: VdesAnalysisProps) {
+   548→  const { colors: C, isDark } = useTheme();
+   549→  const {
+   550→    symbolName, candles, currentPrice, resistances, supports, ma21, ma100,
+   551→    rsi, mfi, cci, adx, stochK, stochD, macdLine, macdSignal, macdHist,
+   552→    diPlus, diMinus, sar, atr, obv, bollingerUpper, bollingerMiddle, bollingerLower,
+   553→    trendDirection, trendAngle, trendR2, overallSignal, scenarios,
+   554→    supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
+   555→    instrumentCategory,
+   556→    currencyUnit: propCurrencyUnit, priceDecimals: propPriceDecimals,
+   557→    probabilityTrend,
+   558→  } = props;
+   559→  const unit = propCurrencyUnit || 'ریال';
+   560→  const decimals = propPriceDecimals ?? 0;
+   561→
+   562→  const vdesRef = useRef<HTMLDivElement>(null);
+   563→
+   564→  // Resistance/Support levels for analysis text
+   565→  const R1_level = resistances[0] ?? currentPrice * 1.05;
+   566→  const R2_level = resistances[1] ?? currentPrice * 1.10;
+   567→  const S1_level = supports[0] ?? currentPrice * 0.95;
+   568→  const S2_level = supports[1] ?? currentPrice * 0.90;
+   569→  const S3_level = supports[2] ?? currentPrice * 0.85;
+   570→
+   571→  // Use the dominant bullish scenario's target range (consistent with scenario cards below)
+   572→  const bullishScenarios = ['SC1', 'SC2', 'SC3', 'SC4'] as const;
+   573→  let dominantBullKey: string = 'SC1';
+   574→  let dominantBullProb = 0;
+   575→  for (const k of bullishScenarios) {
+   576→    if ((scenarios[k]?.probability ?? 0) > dominantBullProb) {
+   577→      dominantBullProb = scenarios[k]?.probability ?? 0;
+   578→      dominantBullKey = k;
+   579→    }
+   580→  }
+   581→  const targetMin = scenarios[dominantBullKey as keyof typeof scenarios]?.targetMin ?? Math.round(currentPrice * 1.02);
+   582→  const targetMax = scenarios[dominantBullKey as keyof typeof scenarios]?.targetMax ?? Math.round(currentPrice * 1.08);
+   583→
+   584→  // ── V11 Computation ──────────────────────────────────────────
+   585→  const v11Result: V11Result = useMemo(() => {
+   586→    const input = {
+   587→      SC1: scenarios.SC1.probability,
+   588→      SC2: scenarios.SC2.probability,
+   589→      SC3: scenarios.SC3.probability,
+   590→      SC4: scenarios.SC4.probability,
+   591→      SC5: scenarios.SC5.probability,
+   592→      SC6: scenarios.SC6.probability,
+   593→      SC7: scenarios.SC7.probability,
+   594→      SC8: scenarios.SC8.probability,
+   595→      SC9: scenarios.SC9.probability,
+   596→    };
+   597→    return computeV11Probabilities(input);
+   598→  }, [scenarios]);
+   599→
+   600→  // ── Dominant scenario ──────────────────────────────────────────
+   601→  let highestKey = 'SC5';
+   602→  let highestProb = 0;
+   603→  for (const key of SCENARIO_KEYS) {
+   604→    const prob = scenarios[key]?.probability ?? 0;
+   605→    if (prob > highestProb) {
+   606→      highestProb = prob;
+   607→      highestKey = key;
+   608→    }
+   609→  }
+   610→  const strategy = STRATEGY_MAP[highestKey];
+   611→  const strategyType = SCENARIO_META[highestKey]?.type;
+   612→  const totalProb = SCENARIO_KEYS.reduce((sum, k) => sum + (scenarios[k]?.probability ?? 0), 0);
+   613→
+   614→  // ── RSI signal ─────────────────────────────────────────────────
+   615→  const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+   616→
+   617→  // ── Trend text ─────────────────────────────────────────────────
+   618→  const trendText = trendDirection === 'up'
+   619→    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+   620→    : trendDirection === 'down'
+   621→    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+   622→    : 'خنثی و بدون جهت مشخص';
+   623→
+   624→  // ── Shamsi dates ───────────────────────────────────────────────
+   625→  const lastCandleDate = candles.length > 0 ? candles[candles.length - 1].date : '';
+   626→  const lastCandleJalali = lastCandleDate ? fullPersianDate(lastCandleDate) : '';
+   627→
+   628→  // ── Dynamic analysis text ──────────────────────────────────────
+   629→  const analysisParagraphs = useMemo(() => {
+   630→    return generateAnalysisText({
+   631→      symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   632→      stochK, stochD, macdLine, macdSignal, macdHist,
+   633→      diPlus, diMinus, sar, atr, obv,
+   634→      bollingerUpper, bollingerMiddle, bollingerLower,
+   635→      trendDirection, trendAngle, trendR2, overallSignal,
+   636→      highestKey, highestProb, scenarios,
+   637→      S1: S1_level, SC1: R1_level, SC2: R2_level,
+   638→      hasVolume: hasVolume ?? false,
+   639→      resistanceStrengths, supportStrengths,
+   640→      v11Result,
+   641→      currencyUnit: propCurrencyUnit,
+   642→      instrumentCategory,
+   643→    });
+   644→  }, [
+   645→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   646→    stochK, stochD, macdLine, macdSignal, macdHist,
+   647→    diPlus, diMinus, sar, atr, obv,
+   648→    bollingerUpper, bollingerMiddle, bollingerLower,
+   649→    trendDirection, trendAngle, trendR2, overallSignal,
+   650→    highestKey, highestProb, scenarios,
+   651→    S1_level, R1_level, R2_level, hasVolume,
+   652→    resistanceStrengths, supportStrengths, v11Result, propCurrencyUnit,
+   653→    instrumentCategory,
+   654→  ]);
+   655→
+   656→  // ── Strategy recommendation text ────────────────────────────────
+   657→  const mfiOverbought = hasVolume && mfi > 80;
+   658→  const mfiOversold = hasVolume && mfi < 20;
+   659→  const mfiNote = hasVolume ? `, MFI: ${toFa(mfi)}` : '';
+   660→  const strategyText = rsi > 70 || mfiOverbought
+   661→    ? `با توجه به هشدار اشباع خرید (RSI: ${toFa(rsi)}${mfiNote}) و فاصله قیمت تا مقاومت ${toFa(R1_level)}، استراتژی محتاطانه، انتظار برای اصلاح قیمت و ورود در محدوده حمایت ${toFa(S1_level)} تا ${toFa(S2_level)} ${unit} می‌باشد. در این محدوده می‌توان با حد ضرر ${toFa(S2_level)} ${unit} وارد موقعیت خرید شد.`
+   662→    : rsi < 30 || mfiOversold
+   663→    ? `با توجه به اشباع فروش (RSI: ${toFa(rsi)}${mfiNote}) و نزدیکی به حمایت ${toFa(S1_level)}، فرصت خرید در محدوده فعلی با حد ضرر ${toFa(S2_level)} ${unit} قابل بررسی است. هدف اولیه ${toFa(R1_level)} و هدف ثانویه ${toFa(R2_level)} ${unit} تعیین می‌شود.`
+   664→    : `با توجه به وضعیت خنثی اندیکاتورها (RSI: ${toFa(rsi)}${mfiNote}, ADX: ${toFa(adx)}، قدرت روند: ${adx > 25 ? 'قوی' : 'ضعیف'})، انتظار برای خروج قیمت از محدوده ${toFa(S1_level)} تا ${toFa(R1_level)} ${unit} و سپس تصمیم‌گیری توصیه می‌شود. مومنتوم MACD و شکست سطوح کلیدی را برای تأیید سیگنال پایش کنید.`;
+   665→
+   666→  const v11Map = useMemo(() => {
+   667→    const m = new Map<string, V11Result['scenarios'][number]>();
+   668→    for (const s of v11Result.scenarios) m.set(s.key, s);
+   669→    return m;
+   670→  }, [v11Result]);
+   671→
+   672→  // ── AI Analysis Text ───────────────────────────────────────
+   673→  const [aiText, setAiText] = useState<string | null>(null);
+   674→  const [aiLoading, setAiLoading] = useState(true);
+   675→  const [aiError, setAiError] = useState<string | null>(null);
+   676→  const [aiRetryKey, setAiRetryKey] = useState(0);
+   677→  const [aiIsFallback, setAiIsFallback] = useState(false);
+   678→  const aiAutoRetryRef = useRef(0);
+   679→
+   680→  // Listen for retry events from the retry button
+   681→  useEffect(() => {
+   682→    const handler = () => { setAiRetryKey((k) => k + 1); aiAutoRetryRef.current = 0; };
+   683→    window.addEventListener('ai-retry', handler);
+   684→    return () => window.removeEventListener('ai-retry', handler);
+   685→  }, []);
+   686→
+   687→  // ── localStorage helpers for AI text caching ──
+   688→
+   689→  // On mount: show cached text as placeholder while fresh data loads
+   690→  useEffect(() => {
+   691→    if (!currentPrice) return;
+   692→    try {
+   693→      const todayKey = `ai-${symbolName}-${new Date().toISOString().slice(0, 10)}`;
+   694→      const cached = localStorage.getItem(todayKey);
+   695→      if (cached) {
+   696→        const parsed = JSON.parse(cached);
+   697→        if (parsed.text && parsed.text.length > 50) {
+   698→          setAiText(parsed.text);
+   699→          setAiIsFallback(!!parsed.isFallback);
+   700→          // Do NOT set aiLoading=false — always fetch fresh data in background
+   701→        }
+   702→      }
+   703→    } catch { /* ignore */ }
+   704→  }, [symbolName]);
+   705→
+   706→  // Stable key: only re-fetch when symbol changes (not on every indicator update)
+   707→  const aiFetchKey = symbolName;
+   708→
+   709→  // Fetch from API when symbol changes or retry is triggered
+   710→  useEffect(() => {
+   711→    if (!currentPrice) return;
+   712→    // Always fetch fresh analysis; cache is used as placeholder only
+   713→    let cancelled = false;
+   714→    const controller = new AbortController();
+   715→
+   716→    (async () => {
+   717→      try {
+   718→        setAiLoading(true);
+   719→        setAiError(null);
+   720→        setAiIsFallback(false);
+   721→
+   722→        const res = await fetch('/api/ai-analysis', {
+   723→          method: 'POST',
+   724→          headers: { 'Content-Type': 'application/json' },
+   725→          body: JSON.stringify({
+   726→            symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   727→            stochK, stochD, macdLine, macdSignal, macdHist,
+   728→            diPlus, diMinus, sar, atr, obv,
+   729→            bollingerUpper, bollingerMiddle, bollingerLower,
+   730→            trendDirection, trendAngle, trendR2,
+   731→            scenarios, hasVolume: hasVolume ?? false,
+   732→            resistanceStrengths, supportStrengths,
+   733→            v11Probabilities: v11Result,
+   734→            instrumentType,
+   735→            probabilityTrend: probabilityTrend ? {
+   736→              scenarios: probabilityTrend.scenarios.map(s => ({
+   737→                scenarioKey: s.scenarioKey, label: s.label, group: s.group,
+   738→                currentProbability: s.currentProbability, trendDirection: s.trendDirection,
+   739→                trend: s.trend.slice(0, 7).map(d => ({ individualProb: d.individualProb, cumulativeProb: d.cumulativeProb })),
+   740→              })),
+   741→              groups: probabilityTrend.groups.map(g => ({
+   742→                group: g.group, label: g.label, trendDirection: g.trendDirection,
+   743→                trend: g.trend.slice(0, 7).map(d => ({ cumulativeProb: d.cumulativeProb })),
+   744→              })),
+   745→            } : undefined,
+   746→          }),
+   747→          signal: controller.signal,
+   748→        });
+   749→        if (cancelled) return;
+   750→        if (!res.ok) {
+   751→          let errMsg = `خطای سرور (${res.status})`;
+   752→          try {
+   753→            const errBody = await res.json();
+   754→            if (errBody.error) errMsg = errBody.error;
+   755→          } catch {
+   756→            if (res.status === 502) errMsg = 'سرور هوشمند در حال بارگذاری مجدد است.';
+   757→            else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست.';
+   758→          }
+   759→          // On error, try to show any previous localStorage text as fallback
+   760→          const prevText = getAnyLocalCache(symbolName);
+   761→          if (prevText) {
+   762→            setAiText(prevText);
+   763→            setAiIsFallback(true);
+   764→            setAiLoading(false);
+   765→            return;
+   766→          }
+   767→          setAiError(errMsg);
+   768→          return;
+   769→        }
+   770→        const data = await res.json();
+   771→        if (cancelled) return;
+   772→        if (data.text) {
+   773→          setAiText(data.text);
+   774→          setAiIsFallback(!!data.isFallback);
+   775→          setAiError(null);
+   776→          // Save to localStorage
+   777→          saveLocalCache(symbolName, data.text, !!data.isFallback);
+   778→        } else if (data.error) {
+   779→          const prevText = getAnyLocalCache(symbolName);
+   780→          if (prevText) {
+   781→            setAiText(prevText);
+   782→            setAiIsFallback(true);
+   783→          } else {
+   784→            setAiError(data.error);
+   785→          }
+   786→        }
+   787→      } catch (err: unknown) {
+   788→        if (cancelled) return;
+   789→        if (err instanceof DOMException && err.name === 'AbortError') return;
+   790→        const msg = err instanceof Error ? err.message : String(err);
+   791→        if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
+   792→        // On network error, show localStorage fallback if available
+   793→        const prevText = getAnyLocalCache(symbolName);
+   794→        if (prevText) {
+   795→          setAiText(prevText);
+   796→          setAiIsFallback(true);
+   797→        } else {
+   798→          setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
+   799→        }
+   800→      } finally {
+   801→        if (!cancelled) setAiLoading(false);
+   802→      }
+   803→    })();
+   804→
+   805→    return () => { cancelled = true; controller.abort(); };
+   806→  }, [aiFetchKey, aiRetryKey]);
+   807→
+   808→  // Helper: save AI text to localStorage (per-day key)
+   809→  function saveLocalCache(sym: string, text: string, isFallback: boolean) {
+   810→    try {
+   811→      const key = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
+   812→      localStorage.setItem(key, JSON.stringify({ text, isFallback, ts: Date.now() }));
+   813→      // Also keep a "latest" key for any-day fallback
+   814→      localStorage.setItem(`ai-${sym}-latest`, JSON.stringify({ text, date: new Date().toISOString().slice(0, 10), ts: Date.now() }));
+   815→    } catch { /* quota exceeded — ignore */ }
+   816→  }
+   817→
+   818→  // Helper: get any previous cached text from localStorage (any day)
+   819→  function getAnyLocalCache(sym: string): string | null {
+   820→    try {
+   821→      // First try today
+   822→      const todayKey = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
+   823→      const todayCached = localStorage.getItem(todayKey);
+   824→      if (todayCached) {
+   825→        const parsed = JSON.parse(todayCached);
+   826→        if (parsed.text && parsed.text.length > 50) return parsed.text;
+   827→      }
+   828→      // Then try "latest" from any day
+   829→      const latestCached = localStorage.getItem(`ai-${sym}-latest`);
+   830→      if (latestCached) {
+   831→        const parsed = JSON.parse(latestCached);
+   832→        if (parsed.text && parsed.text.length > 50) return parsed.text;
+   833→      }
+   834→    } catch { /* ignore */ }
+   835→    return null;
+   836→  }
+   837→
+   838→  // ── File name helper ───────────────────────────────────────────
+   839→  const today = new Date().toISOString().slice(0, 10);
+   840→  const fileBase = `${symbolName}_تحلیل_${today}`;
+   841→
+   842→  // ── Per-day indicators for CSV/Excel ──────────────────────────
+   843→  const dailyIndicators = useMemo(() => computeDailyIndicators(candles), [candles]);
+   844→
+   845→  // ── Risk profile info ──────────────────────────────────────────
+   846→  const riskInfo = RISK_PROFILE_LABELS[v11Result.riskProfile];
+   847→
+   848→  // ═══ EXPORT FUNCTIONS ═══════════════════════════════════════════
+   849→
+   850→  const exportHTML = useCallback(async () => {
+   851→    if (!vdesRef.current) return;
+   852→    const analysisHTML = vdesRef.current.querySelector('.vdes-analysis-text')?.innerHTML || '<p>تحلیل در دسترس نیست</p>';
+   853→
+   854→    // Pre-compute Jalali date labels for chart time axis
+   855→    const dateLabels = candles.map(d =>
+   856→      isGregorianDate(d.date) ? candleDateToJalali(d.date, 'compact') : formatJalaliString(d.date, 'compact')
+   857→    );
+   858→
+   859→    // Build candle data JSON (only last 500 candles to keep file size reasonable)
+   860→    const maxCandles = 500;
+   861→    const chartCandles = candles.length > maxCandles ? candles.slice(-maxCandles) : candles;
+   862→    const chartDateLabels = candles.length > maxCandles ? dateLabels.slice(-maxCandles) : dateLabels;
+   863→    const candleDataJSON = JSON.stringify(chartCandles.map((d, i) => ({
+   864→      time: i, o: d.open, h: d.high, l: d.low, c: d.close, v: d.volume
+   865→    })));
+   866→    const dateLabelsJSON = JSON.stringify(chartDateLabels);
+   867→
+   868→    // Build price lines JSON
+   869→    const priceLines: Array<{ price: number; color: string; title: string; lineStyle: number; lineWidth: number }> = [];
+   870→    if (ma21 > 0) priceLines.push({ price: ma21, color: '#06b6d4', title: 'MA21', lineStyle: 0, lineWidth: 1 });
+   871→    if (ma100 > 0) priceLines.push({ price: ma100, color: '#a855f7', title: 'MA100', lineStyle: 0, lineWidth: 1 });
+   872→    if (sar > 0) priceLines.push({ price: sar, color: '#d97706', title: 'SAR', lineStyle: 1, lineWidth: 1 });
+   873→    if (bollingerUpper > 0) priceLines.push({ price: bollingerUpper, color: '#7c3aed', title: 'BB Upper', lineStyle: 2, lineWidth: 1 });
+   874→    if (bollingerMiddle > 0) priceLines.push({ price: bollingerMiddle, color: '#7c3aed', title: 'BB Mid', lineStyle: 2, lineWidth: 1 });
+   875→    if (bollingerLower > 0) priceLines.push({ price: bollingerLower, color: '#7c3aed', title: 'BB Lower', lineStyle: 2, lineWidth: 1 });
+   876→    for (let i = 0; i < Math.min(resistances.length, 4); i++) {
+   877→      if (resistances[i] > 0) priceLines.push({ price: resistances[i], color: '#ea580c', title: `R${i + 1}`, lineStyle: 0, lineWidth: 2 });
+   878→    }
+   879→    for (let i = 0; i < Math.min(supports.length, 4); i++) {
+   880→      if (supports[i] > 0) priceLines.push({ price: supports[i], color: '#2563eb', title: `S${i + 1}`, lineStyle: 0, lineWidth: 2 });
+   881→    }
+   882→    const priceLinesJSON = JSON.stringify(priceLines);
+   883→
+   884→    const chartBg = isDark ? '#0a0a1a' : '#ffffff';
+   885→    const chartText = isDark ? '#9ca3af' : '#6b7280';
+   886→    const chartGrid = isDark ? '#1e293b' : '#f1f5f9';
+   887→    const chartBorder = isDark ? '#334155' : '#e2e8f0';
+   888→    const crosshairColor = isDark ? '#475569' : '#94a3b8';
+   889→
+   890→    const html = `<!DOCTYPE html>
+   891→<html lang="fa" dir="rtl">
+   892→<head>
+   893→<meta charset="UTF-8">
+   894→<meta name="viewport" content="width=device-width, initial-scale=1.0">
+   895→<title>تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری</title>
+   896→<script src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script>
+   897→<style>
+   898→* { box-sizing: border-box; margin: 0; padding: 0; }
+   899→body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageBg}; color: ${C.cardFg}; padding: 20px 16px 40px; line-height: 1.8; }
+   900→.app { max-width: 1400px; margin: 0 auto; }
+   901→.header { background: ${C.cardBg}; backdrop-filter: blur(14px); border: 1px solid ${C.primary}; border-radius: 32px; padding: 26px 32px; margin-bottom: 28px; ${isDark ? 'box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);' : 'box-shadow: 0 4px 16px rgba(0,0,0,.08);'} }
+   902→.header h1 { font-size: 1.8rem; font-weight: 700; color: #f8e365; margin-bottom: 6px; }
+   903→.header .sub { color: ${C.cardSubFg}; font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 12px 28px; margin-top: 8px; }
+   904→.header .sub span { background: ${C.cardBg}; padding: 4px 14px; border-radius: 40px; border: 1px solid ${C.cardBorder}; }
+   905→.panel { background: ${C.cardBg}; backdrop-filter: blur(8px); border: 1px solid ${C.cardBorder}; border-radius: 28px; padding: 22px 24px; margin-bottom: 24px; ${isDark ? 'box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);' : 'box-shadow: 0 4px 16px rgba(0,0,0,.08);'} }
+   906→.panel h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 16px; color: ${C.cardFg}; display: flex; align-items: center; gap: 12px; }
+   907→.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+   908→@media (max-width: 950px) { .grid-2 { grid-template-columns: 1fr; } }
+   909→.level-box { background: ${C.cardBg}; border-radius: 16px; padding: 16px 18px; border: 1px solid ${C.cardBorder}; }
+   910→.level-box h3 { font-size: 1.1rem; margin-bottom: 14px; border-bottom: 1px solid ${C.cardBorder}; padding-bottom: 10px; }
+   911→.level-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid ${C.cardBorder}; font-size: 0.95rem; align-items: center; }
+   912→.level-row .badge { font-size: 0.7rem; background: ${C.cardBorder}; padding: 0 10px; border-radius: 30px; margin-left: 8px; color: ${C.cardSubFg}; }
+   913→.level-row .price { font-weight: 700; direction: ltr; }
+   914→.support .price { color: ${C.bullColor}; }
+   915→.resistance .price { color: ${C.bearColor}; }
+   916→.scenario-table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid ${C.cardBorder}; }
+   917→.scenario-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; min-width: 500px; }
+   918→.scenario-table thead { background: ${C.cardBorder}; border-bottom: 2px solid ${C.cardBorder}; }
+   919→.scenario-table th { padding: 12px 14px; text-align: right; font-weight: 600; color: ${C.cardSubFg}; font-size: 0.85rem; }
+   920→.scenario-table td { padding: 10px 14px; border-bottom: 1px solid ${C.cardBorder}; vertical-align: middle; }
+   921→.scenario-table tr:last-child td { border-bottom: none; }
+   922→.scenario-table .s-prob { font-weight: 700; color: #f8e365; background: rgba(248, 227, 101, 0.08); padding: 2px 10px; border-radius: 30px; display: inline-block; text-align: center; min-width: 50px; }
+   923→.scenario-table .s-cum { font-weight: 600; color: ${C.cardFg}; }
+   924→.scenario-table .s-range { direction: ltr; font-weight: 500; color: ${C.cardSubFg}; }
+   925→.scenario-table tr.up { border-right: 4px solid ${C.bullColor}; }
+   926→.scenario-table tr.down { border-right: 4px solid ${C.bearColor}; }
+   927→.scenario-table tr.pullback { border-right: 4px solid ${C.neutralColor}; }
+   928→.scenario-table tr { transition: 0.15s; }
+   929→.scenario-table tr:hover { background: ${C.cardBorder}; }
+   930→.analysis-text { background: ${C.cardBg}; border-radius: 16px; padding: 18px 20px; border: 1px solid ${C.cardBorder}; line-height: 1.8; font-size: 0.95rem; color: ${C.cardFg}; }
+   931→.analysis-text strong { color: #f8e365; }
+   932→.highlight-box { background: rgba(248, 227, 101, 0.06); border-right: 4px solid #f8e365; padding: 12px 16px; border-radius: 12px; margin: 12px 0; }
+   933→.summary-bar { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 0.8rem; flex-wrap: wrap; }
+   934→.strategy-tag { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; border: 1px solid; }
+   935→.footer { margin-top: 18px; color: ${C.cardSubFg}; font-size: 0.75rem; text-align: center; border-top: 1px solid ${C.cardBorder}; padding-top: 16px; }
+   936→#chart-container { width: 100%; border-radius: 16px; overflow: hidden; }
+   937→#chart-legend { display: flex; gap: 16px; padding: 8px 16px; font-size: 0.8rem; color: ${chartText}; direction: ltr; text-align: left; flex-wrap: wrap; background: ${chartBg}; border-bottom: 1px solid ${chartBorder}; min-height: 32px; align-items: center; }
+   938→#chart-legend span { white-space: nowrap; }
+   939→#chart-legend .up { color: #22c55e; }
+   940→#chart-legend .dn { color: #ef4444; }
+   941→</style>
+   942→</head>
+   943→<body>
+   944→<div class="app">
+   945→<header class="header">
+   946→  <h1>📈 تحلیل تکنیکال · ${symbolName}</h1>
+   947→  <div class="sub">
+   948→    <span>📍 قیمت مرجع: <b style="color:${C.cardFg}">${toFa(currentPrice)} ${unit}</b></span>
+   949→    <span>🎯 هدف کوتاه‌مدت: <b style="color:${C.cardFg}">${toFa(targetMin)} – ${toFa(targetMax)} ${unit}</b></span>
+   950→    ${lastCandleJalali ? `<span>📅 تاریخ: ${lastCandleJalali}</span>` : ''}
+   951→  </div>
+   952→</header>
+   953→
+   954→<div class="panel" style="padding:8px 0 0 0;overflow:hidden;">
+   955→  <div id="chart-legend"></div>
+   956→  <div id="chart-container"></div>
+   957→</div>
+   958→
+   959→<script>
+   960→(function(){
+   961→  var cd = ${candleDataJSON};
+   962→  var dl = ${dateLabelsJSON};
+   963→  var pl = ${priceLinesJSON};
+   964→
+   965→  var PD='\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669';
+   966→  function toPD(s){return String(s).replace(/\d/g,function(m){return PD[+m]})}
+   967→  function toFa(n){return toPD(Math.round(n))}
+   968→  function formatVol(v){if(v>=1e9)return toPD((v/1e9).toFixed(1))+'B';if(v>=1e6)return toPD((v/1e6).toFixed(1))+'M';if(v>=1e3)return toPD((v/1e3).toFixed(1))+'K';return toFa(v)}
+   969→
+   970→  var chartEl = document.getElementById('chart-container');
+   971→  var legendEl = document.getElementById('chart-legend');
+   972→  var BULL='#22c55e',BEAR='#ef4444';
+   973→
+   974→  var chart = LightweightCharts.createChart(chartEl,{
+   975→    layout:{background:{type:LightweightCharts.ColorType.Solid,color:'${chartBg}'},textColor:'${chartText}',fontSize:11},
+   976→    grid:{vertLines:{color:'${chartGrid}'},horzLines:{color:'${chartGrid}'}},
+   977→    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'${crosshairColor}',labelBackgroundColor:'${chartBg}'},horzLine:{color:'${crosshairColor}',labelBackgroundColor:'${chartBg}'}},
+   978→    rightPriceScale:{borderColor:'${chartBorder}',scaleMargins:{top:0.05,bottom:0.3}},
+   979→    timeScale:{borderColor:'${chartBorder}',rightOffset:5,barSpacing:6,tickMarkFormatter:function(t){return dl[t]||String(t)}},
+   980→    localization:{priceFormatter:function(p){return toPD(p.toLocaleString('en',{maximumFractionDigits:${decimals}}))}},
+   981→    width:chartEl.clientWidth,height:520
+   982→  });
+   983→
+   984→  var cs=chart.addSeries(LightweightCharts.CandlestickSeries,{
+   985→    upColor:BULL,downColor:BEAR,borderUpColor:BULL,borderDownColor:BEAR,wickUpColor:BULL,wickDownColor:BEAR
+   986→  });
+   987→  cs.setData(cd.map(function(d){return{time:d.time,open:d.o,high:d.h,low:d.l,close:d.c}}));
+   988→
+   989→  var vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'custom',formatter:formatVol},priceScaleId:'vol'});
+   990→  vol.setData(cd.map(function(d){return{time:d.time,value:d.v,color:d.c>=d.o?BULL:BEAR}}));
+   991→  chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
+   992→
+   993→  pl.forEach(function(l){
+   994→    cs.createPriceLine({price:l.price,color:l.color,lineWidth:l.lineWidth,lineStyle:l.lineStyle,axisLabelVisible:true,title:l.title});
+   995→  });
+   996→
+   997→  chart.subscribeCrosshairMove(function(p){
+   998→    if(!p.time&&p.time!==0){legendEl.innerHTML='';return}
+   999→    var d=cd[p.time];if(!d){legendEl.innerHTML='';return}
+  1000→    var prev=p.time>0?cd[p.time-1]:d;
+  1001→    var chg=prev.c>0?((d.c-prev.c)/prev.c*100):0;
+  1002→    var cls=chg>=0?'up':'dn';
+  1003→    legendEl.innerHTML='<span>'+dl[p.time]+'</span> <span>O: '+toFa(d.o)+'</span> <span>H: '+toFa(d.h)+'</span> <span>L: '+toFa(d.l)+'</span> <span>C: <b class="'+cls+'">'+toFa(d.c)+'</b></span> <span>Vol: '+formatVol(d.v)+'</span> <span class="'+cls+'">'+toPD(chg.toFixed(2))+'%</span>';
+  1004→  });
+  1005→
+  1006→  chart.timeScale().fitContent();
+  1007→
+  1008→  window.addEventListener('resize',function(){
+  1009→    chart.applyOptions({width:chartEl.clientWidth});
+  1010→  });
+  1011→})();
+  1012→</script>
+  1013→
+  1014→<div class="grid-2">
+  1015→  <div class="level-box resistance">
+  1016→    <h3 style="color:${C.bearColor}">⚠️ مقاومت‌ها</h3>
+  1017→    ${resistanceStrengths.slice(0, 6).map((r, i) => {
+  1018→      const grade = r.grade ? (GRADE_MAP[r.grade]?.label ?? r.grade) : '';
+  1019→      return `<div class="level-row"><span>${grade ? `<span class="badge">${grade}</span>` : ''} R${toFa(i + 1)}</span><span class="price">${toFa(r.price)}</span></div>`;
+  1020→    }).join('')}
+  1021→  </div>
+  1022→  <div class="level-box support">
+  1023→    <h3 style="color:${C.bullColor}">🛡️ حمایت‌ها</h3>
+  1024→    ${supportStrengths.slice(0, 6).map((s, i) => {
+  1025→      const grade = s.grade ? (GRADE_MAP[s.grade]?.label ?? s.grade) : '';
+  1026→      return `<div class="level-row"><span>${grade ? `<span class="badge">${grade}</span>` : ''} S${toFa(i + 1)}</span><span class="price">${toFa(s.price)}</span></div>`;
+  1027→    }).join('')}
+  1028→  </div>
+  1029→</div>
+  1030→
+  1031→<div class="panel">
+  1032→  <h2>🎯 <span>سناریوها · احتمال اختصاصی و تجمعی</span></h2>
+  1033→  <div class="scenario-table-wrap">
+  1034→    <table class="scenario-table">
+  1035→      <thead>
+  1036→        <tr>
+  1037→          <th>سناریو</th>
+  1038→          <th style="text-align:center">احتمال اختصاصی</th>
+  1039→          <th style="text-align:center">احتمال تجمعی</th>
+  1040→          <th style="text-align:left">هدف قیمتی</th>
+  1041→        </tr>
+  1042→      </thead>
+  1043→      <tbody>
+  1044→        ${[...SCENARIO_KEYS].reverse().map(key => {
+  1045→          const s = scenarios[key];
+  1046→          if (!s) return '';
+  1047→          const m = SCENARIO_META[key];
+  1048→          const v = v11Map.get(key);
+  1049→          const rowType = m.type === 'up' ? 'up' : m.type === 'down' ? 'down' : 'pullback';
+  1050→          return `<tr class="${rowType}">
+  1051→            <td>${m.label}</td>
+  1052→            <td style="text-align:center"><span class="s-prob">${toFa(v?.rawProbability ?? s.probability)}٪</span></td>
+  1053→            <td style="text-align:center"><span class="s-cum">${toFa(v?.cumulativeProbability ?? 0)}٪</span></td>
+  1054→            <td class="s-range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}</td>
+  1055→          </tr>`;
+  1056→        }).join('')}
+  1057→      </tbody>
+  1058→    </table>
+  1059→  </div>
+  1060→  <div class="summary-bar">
+  1061→    <span style="color:${C.bullColor}">▲ صعودی: <b>${toFa(v11Result.bullishCumulative)}٪</b></span>
+  1062→    <span style="color:${C.neutralColor}">● رنج: <b>${toFa(v11Result.neutralCumulative)}٪</b></span>
+  1063→    <span style="color:${C.bearColor}">▼ نزولی: <b>${toFa(v11Result.bearishCumulative)}٪</b></span>
+  1064→    <span style="color:${C.cardSubFg}">مجموع: <b style="color:${C.cardFg}">${toFa(totalProb)}٪</b></span>
+  1065→  </div>
+  1066→</div>
+  1067→
+  1068→<div class="panel">
+  1069→  <h2>🧠 <span>تحلیل جامع</span></h2>
+  1070→  <div class="analysis-text">${analysisHTML}</div>
+  1071→</div>
+  1072→
+  1073→<div style="text-align:center;padding:12px">
+  1074→  <span class="strategy-tag" style="color:${strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor};border-color:${strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor};background:${strategyType === 'up' ? C.bullBg : strategyType === 'down' ? C.bearBg : C.neutralBg}">${strategy.text}</span>
+  1075→</div>
+  1076→
+  1077→<footer class="footer">
+  1078→  تمامی تحلیل‌ها بر اساس داده‌های تکنیکال، سطوح کلیدی و روندهای گذشته تدوین شده است. این محتوا صرفاً جنبه آموزشی و تحلیلی دارد و توصیه سرمایه‌گذاری محسوب نمی‌شود.
+  1079→</footer>
+  1080→</div>
+  1081→</body>
+  1082→</html>`;
+  1083→    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  1084→    nativeSaveAs(blob, `${fileBase}.html`);
+  1085→  }, [symbolName, candles, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark, resistances, supports, ma21, ma100, sar, bollingerUpper, bollingerMiddle, bollingerLower]);
+  1086→
+  1087→
+  1088→  const exportText = useCallback(() => {
+  1089→    const lines: string[] = [];
+  1090→    lines.push(`تحلیل تکنیکال ${symbolName} — توضیح‌دهنده تصویری`);
+  1091→    if (lastCandleJalali) lines.push(`تاریخ: ${lastCandleJalali}`);
+  1092→    lines.push('');
+  1093→    lines.push(`قیمت مرجع: ${toFa(currentPrice)} ${unit}`);
+  1094→    lines.push(`هدف کوتاه‌مدت: ${toFa(targetMin)} — ${toFa(targetMax)} ${unit}`);
+  1095→    lines.push(`روند: ${trendText}`);
+  1096→    lines.push(`پروفایل ریسک: ${riskInfo.label}`);
+  1097→    lines.push(`RSI: ${toFa(rsi)} (${rsiSignal})`);
+  1098→    lines.push('');
+  1099→    lines.push('═══ تحلیل جامع ═══');
+  1100→    lines.push('');
+  1101→    // Extract text content from the analysis section
+  1102→    if (vdesRef.current) {
+  1103→      const textEl = vdesRef.current.querySelector('.vdes-analysis-text');
+  1104→      if (textEl) lines.push(textEl.textContent || '');
+  1105→    }
+  1106→    lines.push('');
+  1107→    lines.push('═══ احتمالات سناریوها ═══');
+  1108→    lines.push('');
+  1109→    for (const k of SCENARIO_KEYS) {
+  1110→      const s = scenarios[k];
+  1111→      if (!s) continue;
+  1112→      const m = SCENARIO_META[k];
+  1113→      const v = v11Map.get(k);
+  1114→      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cumulativeProbability ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}`);
+  1115→    }
+  1116→    lines.push('');
+  1117→    lines.push(`مجموع صعودی: ${toFa(v11Result.bullishCumulative)}٪ | رنج: ${toFa(v11Result.neutralCumulative)}٪ | مجموع نزولی: ${toFa(v11Result.bearishCumulative)}٪`);
+  1118→    lines.push(`سیگنال غالب: ${strategy.text}`);
+  1119→    const text = lines.join('\n');
+  1120→    const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
+  1121→    nativeSaveAs(blob, `${fileBase}.txt`);
+  1122→  }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, strategy, lastCandleJalali, fileBase, v11Result, v11Map, riskInfo]);
+  1123→
+  1124→  const exportPDF = useCallback(async () => {
+  1125→    const el = vdesRef.current;
+  1126→    if (!el || !el.isConnected || el.offsetWidth === 0) return;
+  1127→    try {
+  1128→      const [{ toPng }, { jsPDF }] = await Promise.all([
+  1129→        import('html-to-image'),
+  1130→        import('jspdf'),
+  1131→      ]);
+  1132→      const originalDisplay = el.style.display;
+  1133→      const originalVisibility = el.style.visibility;
+  1134→      if (el.offsetHeight === 0) {
+  1135→        el.style.display = 'block';
+  1136→        el.style.visibility = 'visible';
+  1137→        await new Promise(r => setTimeout(r, 100));
+  1138→      }
+  1139→      const dataUrl = await toPng(el, { backgroundColor: C.pageBg, pixelRatio: 2, cacheBust: true, skipAutoScale: true });
+  1140→      el.style.display = originalDisplay;
+  1141→      el.style.visibility = originalVisibility;
+  1142→      const pdf = new jsPDF('p', 'mm', 'a4');
+  1143→      const pdfWidth = pdf.internal.pageSize.getWidth();
+  1144→      const pdfHeight = pdf.internal.pageSize.getHeight();
+  1145→      const imgWidth = pdfWidth;
+  1146→      const imgHeight = (el.offsetHeight * imgWidth) / el.offsetWidth;
+  1147→      let heightLeft = imgHeight;
+  1148→      let position = 0;
+  1149→      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+  1150→      heightLeft -= pdfHeight;
+  1151→      while (heightLeft > 0) {
+  1152→        position = heightLeft - imgHeight;
+  1153→        pdf.addPage();
+  1154→        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+  1155→        heightLeft -= pdfHeight;
+  1156→      }
+  1157→      pdf.save(`${fileBase}.pdf`);
+  1158→    } catch (err) {
+  1159→      console.warn('PDF export failed:', err instanceof Error ? err.message : String(err));
+  1160→    }
+  1161→  }, [fileBase]);
+  1162→
+  1163→  const exportExcel = useCallback(async () => {
+  1164→    try {
+  1165→      const XLSX = await import('xlsx');
+  1166→      const rows = dailyIndicators.map((d, i) => ({
+  1167→        '#': i + 1,
+  1168→        'تاریخ': d.date,
+  1169→        'باز': d.open,
+  1170→        'بالا': d.high,
+  1171→        'پایین': d.low,
+  1172→        'بسته': d.close,
+  1173→        'حجم': d.volume,
+  1174→        'MA21': d.ma21,
+  1175→        'MA100': d.ma100,
+  1176→        'RSI': d.rsi,
+  1177→        'MFI': d.mfi,
+  1178→        'CCI': d.cci,
+  1179→        'ADX': d.adx,
+  1180→        'MACD': d.macd,
+  1181→        'MACD_Signal': d.macdSignal,
+  1182→        'MACD_Hist': d.macdHist,
+  1183→        'Stoch_K': d.stochK,
+  1184→        'Stoch_D': d.stochD,
+  1185→        'SAR': d.sar,
+  1186→        'ATR': d.atr,
+  1187→        'BB_Upper': d.bbUpper,
+  1188→        'BB_Middle': d.bbMiddle,
+  1189→        'BB_Lower': d.bbLower,
+  1190→      }));
+  1191→      const ws = XLSX.utils.json_to_sheet(rows);
+  1192→      const wb = XLSX.utils.book_new();
+  1193→      XLSX.utils.book_append_sheet(wb, ws, 'داده‌ها');
+  1194→      // Add scenarios sheet
+  1195→      const scenarioRows = SCENARIO_KEYS.map(k => ({
+  1196→        'سناریو': SCENARIO_META[k].label,
+  1197→        'کد': `سناریوی ${SCENARIO_NUMBER[k]}`,
+  1198→        'احتمال اختصاصی٪': scenarios[k]?.probability ?? 0,
+  1199→        'احتمال تجمعی٪': v11Map.get(k)?.cumulativeProbability ?? 0,
+  1200→        'هدف_حداقل': Math.round(scenarios[k]?.targetMin ?? 0),
+  1201→        'هدف_حداکثر': Math.round(scenarios[k]?.targetMax ?? 0),
+  1202→      }));
+  1203→      const ws2 = XLSX.utils.json_to_sheet(scenarioRows);
+  1204→      XLSX.utils.book_append_sheet(wb, ws2, 'سناریوها');
+  1205→      XLSX.writeFile(wb, `${fileBase}.xlsx`);
+  1206→    } catch (err) {
+  1207→      console.warn('Excel export failed:', err instanceof Error ? err.message : String(err));
+  1208→    }
+  1209→  }, [dailyIndicators, scenarios, fileBase, v11Map]);
+  1210→
+  1211→  const exportCSV = useCallback(() => {
+  1212→    const headers = ['تاریخ', 'باز', 'بالا', 'پایین', 'بسته', 'حجم', 'MA21', 'MA100', 'RSI', 'MFI', 'CCI', 'ADX', 'MACD', 'MACD_Signal', 'MACD_Hist', 'SAR', 'ATR', 'BB_Upper', 'BB_Middle', 'BB_Lower'];
+  1213→    const csvRows: string[] = [headers.join(',')];
+  1214→    for (const d of dailyIndicators) {
+  1215→      csvRows.push([
+  1216→        d.date, d.open, d.high, d.low, d.close, d.volume,
+  1217→        d.ma21, d.ma100, d.rsi, d.mfi,
+  1218→        d.cci, d.adx, d.macd,
+  1219→        d.macdSignal, d.macdHist, d.sar, d.atr,
+  1220→        d.bbUpper, d.bbMiddle, d.bbLower,
+  1221→      ].join(','));
+  1222→    }
+  1223→    const csv = csvRows.join('\n');
+  1224→    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  1225→    nativeSaveAs(blob, `${fileBase}.csv`);
+  1226→  }, [dailyIndicators, fileBase]);
+  1227→
+  1228→  // ── Chart Image Export ─────────────────────────────────────────
+  1229→  const exportChartImage = useCallback(async () => {
+  1230→    const chartEl = document.getElementById('chart-export-wrapper');
+  1231→    if (!chartEl || !chartEl.isConnected || chartEl.offsetWidth === 0) return;
+  1232→    try {
+  1233→      const { toPng } = await import('html-to-image');
+  1234→      const dataUrl = await toPng(chartEl, { backgroundColor: '#ffffff', pixelRatio: 2, cacheBust: true });
+  1235→      nativeSaveAs(dataUrl, `${fileBase}_نمودار.png`);
+  1236→    } catch (err) {
+  1237→      console.warn('Chart image export failed:', err instanceof Error ? err.message : String(err));
+  1238→    }
+  1239→  }, [fileBase]);
+  1240→
+  1241→  return (
+  1242→    <div ref={vdesRef} className="space-y-7" dir="rtl" style={{ background: C.pageBg, padding: '20px 16px 40px', borderRadius: '16px' }}>
+  1243→
+  1244→      {/* ═══ HEADER ═══ */}
+  1245→      <header
+  1246→        className="mb-7"
+  1247→        style={{
+  1248→          background: C.cardBg,
+  1249→          backdropFilter: 'blur(14px)',
+  1250→          WebkitBackdropFilter: 'blur(14px)',
+  1251→          border: `1px solid ${C.primary}`,
+  1252→          borderRadius: '32px',
+  1253→          padding: '26px 32px',
+  1254→          boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.6)' : '0 4px 16px rgba(0,0,0,.08)',
+  1255→        }}
+  1256→      >
+  1257→        <h1 style={{ fontSize: '1.8rem', fontWeight: 700, color: C.primary, marginBottom: '6px' }}>
+  1258→          📈 تحلیل تکنیکال · {symbolName}
+  1259→        </h1>
+  1260→        <div className="flex flex-wrap gap-3" style={{ marginTop: '8px' }}>
+  1261→          <span style={{
+  1262→            background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
+  1263→            border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
+  1264→          }}>
+  1265→            📍 قیمت مرجع: <b style={{ color: C.cardFg }}>{toFa(currentPrice)} {unit}</b>
+  1266→          </span>
+  1267→          <span style={{
+  1268→            background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
+  1269→            border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
+  1270→          }}>
+  1271→            🎯 هدف کوتاه‌مدت: <b style={{ color: C.cardFg }}>{toFa(targetMin)} – {toFa(targetMax)} {unit}</b>
+  1272→          </span>
+  1273→          {lastCandleJalali && (
+  1274→            <span style={{
+  1275→              background: C.cardBg, padding: '4px 14px', borderRadius: '40px',
+  1276→              border: `1px solid ${C.cardBorder}`, color: C.cardSubFg, fontSize: '0.95rem',
+  1277→            }}>
+  1278→              📅 تاریخ: {lastCandleJalali}
+  1279→            </span>
+  1280→          )}
+  1281→        </div>
+  1282→      </header>
+  1283→
+  1284→      {/* ═══ EXPORT TOOLBAR ═══ */}
+  1285→      <div className="flex items-center justify-between">
+  1286→        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: C.cardFg }}>خروجی تحلیل</span>
+  1287→        <DropdownMenu>
+  1288→          <DropdownMenuTrigger asChild>
+  1289→            <button
+  1290→              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-colors"
+  1291→              style={{
+  1292→                background: C.cardBg,
+  1293→                border: `1px solid ${C.cardBorder}`,
+  1294→                color: C.cardFg,
+  1295→                fontSize: '0.75rem',
+  1296→                fontWeight: 500,
+  1297→              }}
+  1298→            >
+  1299→              <Download className="w-4 h-4" />
+  1300→              <span>دانلود / خروجی</span>
+  1301→              <ChevronDown className="w-3.5 h-3.5" style={{ color: C.cardSubFg }} />
+  1302→            </button>
+  1303→          </DropdownMenuTrigger>
+  1304→          <DropdownMenuContent
+  1305→            align="end"
+  1306→            className=""
+  1307→            style={{ background: C.cardBg, borderColor: C.cardBorder }}
+  1308→          >
+  1309→            <DropdownMenuItem onClick={exportHTML} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+  1310→              <FileCode className="w-4 h-4" style={{ color: C.primary }} />
+  1311→              <span className="text-xs">HTML+CSS+JS</span>
+  1312→            </DropdownMenuItem>
+  1313→            <DropdownMenuItem onClick={exportText} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+  1314→              <FileText className="w-4 h-4" style={{ color: C.primary }} />
+  1315→              <span className="text-xs">متن (Text)</span>
+  1316→            </DropdownMenuItem>
+  1317→            <DropdownMenuItem onClick={exportPDF} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+  1318→              <FileDown className="w-4 h-4" style={{ color: C.primary }} />
+  1319→              <span className="text-xs">PDF</span>
+  1320→            </DropdownMenuItem>
+  1321→            <DropdownMenuItem onClick={exportExcel} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+  1322→              <Table className="w-4 h-4" style={{ color: C.primary }} />
+  1323→              <span className="text-xs">اکسل (Excel)</span>
+  1324→            </DropdownMenuItem>
+  1325→            <DropdownMenuItem onClick={exportCSV} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+  1326→              <FileSpreadsheet className="w-4 h-4" style={{ color: C.primary }} />
+  1327→              <span className="text-xs">CSV</span>
+  1328→            </DropdownMenuItem>
+  1329→            <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+  1330→              <ImageIcon className="w-4 h-4" style={{ color: C.primary }} />
+  1331→              <span className="text-xs">عکس نمودار (PNG)</span>
+  1332→            </DropdownMenuItem>
+  1333→          </DropdownMenuContent>
+  1334→        </DropdownMenu>
+  1335→      </div>
+  1336→
+  1337→      {/* ═══ CHART ═══ */}
+  1338→      {/* Chart is rendered above this component in page.tsx (v3.0) */}
+  1339→
+  1340→      {/* ═══ KEY LEVELS (Support/Resistance) ═══ */}
+  1341→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ marginBottom: '24px' }}>
+  1342→        {/* ── Resistances ── */}
+  1343→        <div style={{
+  1344→          background: C.cardBg, borderRadius: '16px', padding: '16px 18px',
+  1345→          border: `1px solid ${C.cardBorder}`, height: '100%',
+  1346→        }}>
+  1347→          <h3 style={{
+  1348→            fontSize: '1.1rem', color: C.bearColor, marginBottom: '14px',
+  1349→            borderBottom: `1px solid ${C.cardBorder}`, paddingBottom: '10px',
+  1350→          }}>
+  1351→            ⚠️ مقاومت‌ها
+  1352→          </h3>
+  1353→          {resistanceStrengths.slice(0, 6).map((r, i) => (
+  1354→            <div key={i} style={{
+  1355→              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  1356→              padding: '8px 0', borderBottom: `1px solid ${C.cardBorder}`, fontSize: '0.95rem',
+  1357→            }}>
+  1358→              <div className="flex items-center gap-2">
+  1359→                {r.grade && (
+  1360→                  <span style={{
+  1361→                    fontSize: '0.7rem', background: C.cardBorder,
+  1362→                    padding: '0 10px', borderRadius: '30px', color: C.cardSubFg,
+  1363→                  }}>
+  1364→                    {GRADE_MAP[r.grade]?.label ?? r.grade}
+  1365→                  </span>
+  1366→                )}
+  1367→                <span style={{ fontSize: '0.8rem', color: C.cardSubFg }}>R{toFa(i + 1)}</span>
+  1368→              </div>
+  1369→              <span style={{ fontWeight: 700, color: C.bearColor, direction: 'ltr' as const }}>
+  1370→                {toFa(r.price)}
+  1371→              </span>
+  1372→            </div>
+  1373→          ))}
+  1374→        </div>
+  1375→
+  1376→        {/* ── Supports ── */}
+  1377→        <div style={{
+  1378→          background: C.cardBg, borderRadius: '16px', padding: '16px 18px',
+  1379→          border: `1px solid ${C.cardBorder}`, height: '100%',
+  1380→        }}>
+  1381→          <h3 style={{
+  1382→            fontSize: '1.1rem', color: C.bullColor, marginBottom: '14px',
+  1383→            borderBottom: `1px solid ${C.cardBorder}`, paddingBottom: '10px',
+  1384→          }}>
+  1385→            🛡️ حمایت‌ها
+  1386→          </h3>
+  1387→          {supportStrengths.slice(0, 6).map((s, i) => (
+  1388→            <div key={i} style={{
+  1389→              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  1390→              padding: '8px 0', borderBottom: `1px solid ${C.cardBorder}`, fontSize: '0.95rem',
+  1391→            }}>
+  1392→              <div className="flex items-center gap-2">
+  1393→                {s.grade && (
+  1394→                  <span style={{
+  1395→                    fontSize: '0.7rem', background: C.cardBorder,
+  1396→                    padding: '0 10px', borderRadius: '30px', color: C.cardSubFg,
+  1397→                  }}>
+  1398→                    {GRADE_MAP[s.grade]?.label ?? s.grade}
+  1399→                  </span>
+  1400→                )}
+  1401→                <span style={{ fontSize: '0.8rem', color: C.cardSubFg }}>S{toFa(i + 1)}</span>
+  1402→              </div>
+  1403→              <span style={{ fontWeight: 700, color: C.bullColor, direction: 'ltr' as const }}>
+  1404→                {toFa(s.price)}
+  1405→              </span>
+  1406→            </div>
+  1407→          ))}
+  1408→        </div>
+  1409→      </div>
+  1410→
+  1411→      {/* ═══ SCENARIO PROBABILITIES (V11) — TABLE FORMAT ═══ */}
+  1412→      <div style={{
+  1413→        background: C.cardBg, backdropFilter: 'blur(8px)',
+  1414→        border: `1px solid ${C.cardBorder}`, borderRadius: '28px',
+  1415→        padding: '22px 24px', boxShadow: isDark ? '0 20px 40px -12px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0,0,0,.08)',
+  1416→      }}>
+  1417→        <h2 style={{
+  1418→          fontSize: '1.2rem', fontWeight: 600, marginBottom: '16px',
+  1419→          color: C.cardFg, display: 'flex', alignItems: 'center', gap: '12px',
+  1420→        }}>
+  1421→          <span>🎯</span> <span>سناریوها · احتمال اختصاصی و تجمعی</span>
+  1422→        </h2>
+  1423→        <div style={{ overflowX: 'auto', borderRadius: '16px', border: `1px solid ${C.cardBorder}` }}>
+  1424→          <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.95rem', minWidth: '500px' }}>
+  1425→            <thead>
+  1426→              <tr style={{ background: C.cardBorder, borderBottom: `2px solid ${C.cardBorder}` }}>
+  1427→                <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>سناریو</th>
+  1428→                <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>احتمال اختصاصی</th>
+  1429→                <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>احتمال تجمعی</th>
+  1430→                <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: C.cardSubFg, fontSize: '0.85rem' }}>هدف قیمتی</th>
+  1431→              </tr>
+  1432→            </thead>
+  1433→            <tbody>
+  1434→              {[...SCENARIO_KEYS].reverse().map((key, idx, arr) => {
+  1435→                const s = scenarios[key];
+  1436→                if (!s) return null;
+  1437→                const meta = SCENARIO_META[key];
+  1438→                const v11 = v11Map.get(key);
+  1439→                const rowType = meta.type === 'up' ? 'up' : meta.type === 'down' ? 'down' : 'pullback';
+  1440→                const borderColor = rowType === 'up' ? C.bullColor : rowType === 'down' ? C.bearColor : C.neutralColor;
+  1441→                const isLast = idx === arr.length - 1;
+  1442→                return (
+  1443→                  <tr key={key} style={{
+  1444→                    borderRight: `4px solid ${borderColor}`,
+  1445→                    borderBottom: isLast ? 'none' : `1px solid ${C.cardBorder}`,
+  1446→                    transition: '0.15s',
+  1447→                  }}>
+  1448→                    <td style={{ padding: '10px 14px', fontWeight: 500, color: C.cardFg }}>{meta.label}</td>
+  1449→                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+  1450→                      <span style={{
+  1451→                        fontWeight: 700, color: C.primary, background: C.primaryBg,
+  1452→                        padding: '2px 10px', borderRadius: '30px', display: 'inline-block',
+  1453→                        textAlign: 'center', minWidth: '50px',
+  1454→                      }}>
+  1455→                        {toFa(v11?.rawProbability ?? s.probability)}٪
+  1456→                      </span>
+  1457→                    </td>
+  1458→                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+  1459→                      <span style={{ fontWeight: 600, color: C.cardFg }}>
+  1460→                        {toFa(v11?.cumulativeProbability ?? 0)}٪
+  1461→                      </span>
+  1462→                    </td>
+  1463→                    <td style={{ padding: '10px 14px', direction: 'ltr', textAlign: 'left', fontWeight: 500, color: C.cardSubFg }}>
+  1464→                      {toFa(s.targetMin)} — {toFa(s.targetMax)} {unit}
+  1465→                    </td>
+  1466→                  </tr>
+  1467→                );
+  1468→              })}
+  1469→            </tbody>
+  1470→          </table>
+  1471→        </div>
+  1472→        <div style={{ marginTop: '12px', display: 'flex', gap: '16px', justifyContent: 'center', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+  1473→          <span style={{ color: C.bullColor }}>▲ صعودی: <b>{toFa(v11Result.bullishCumulative)}٪</b></span>
+  1474→          <span style={{ color: C.neutralColor }}>● رنج: <b>{toFa(v11Result.neutralCumulative)}٪</b></span>
+  1475→          <span style={{ color: C.bearColor }}>▼ نزولی: <b>{toFa(v11Result.bearishCumulative)}٪</b></span>
+  1476→          <span style={{ color: C.cardSubFg }}>مجموع: <b style={{ color: C.cardFg }}>{toFa(totalProb)}٪</b></span>
+  1477→        </div>
+  1478→      </div>
+  1479→
+  1480→      {/* ═══ ANALYSIS TEXT ═══ */}
+  1481→      <div style={{
+  1482→        background: C.cardBg, backdropFilter: 'blur(8px)',
+  1483→        border: `1px solid ${C.cardBorder}`, borderRadius: '28px',
+  1484→        padding: '22px 24px', boxShadow: isDark ? '0 20px 40px -12px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0,0,0,.08)',
+  1485→      }}>
+  1486→        <h2 style={{
+  1487→          fontSize: '1.2rem', fontWeight: 600, marginBottom: '16px',
+  1488→          color: C.cardFg, display: 'flex', alignItems: 'center', gap: '12px',
+  1489→        }}>
+  1490→          <span>🧠</span> <span>تحلیل جامع</span>
+  1491→        </h2>
+  1492→        <div
+  1493→          className="vdes-analysis-text max-h-[400px] overflow-y-auto pr-1 [&_strong]:font-bold"
+  1494→          style={{
+  1495→            background: C.cardBg, borderRadius: '16px',
+  1496→            padding: '18px 20px', border: `1px solid ${C.cardBorder}`,
+  1497→            lineHeight: 1.8, fontSize: '0.95rem', color: C.cardFg,
+  1498→          }}
+  1499→          dir="rtl"
+  1500→        >
+  1501→          {aiLoading && (
+  1502→            <div className="flex flex-col items-center gap-3 py-8 justify-center">
+  1503→              <div className="w-5 h-5 border-2 border-[rgba(37,99,235,0.3)] border-t-[#2563eb] rounded-full animate-spin" />
+  1504→              <span style={{ fontSize: '0.875rem', color: C.primary }}>
+  1505→                در حال تولید تحلیل هوشمند ...
+  1506→              </span>
+  1507→            </div>
+  1508→          )}
+  1509→          {aiError && !aiText && (
+  1510→            <div style={{ borderRadius: '12px', padding: '16px', background: 'rgba(255,117,138,0.08)', border: '1px solid rgba(255,117,138,0.2)' }}>
+  1511→              <p style={{ fontSize: '0.75rem', color: C.bearColor, marginBottom: '4px' }}>خطا در تولید تحلیل هوشمند:</p>
+  1512→              <p style={{ fontSize: '0.75rem', color: C.bearColor, marginBottom: '8px', opacity: 0.8 }}>{aiError.length > 150 ? aiError.slice(0, 150) + '...' : aiError}</p>
+  1513→              <button
+  1514→                onClick={() => {
+  1515→                  setAiError(null);
+  1516→                  setAiText(null);
+  1517→                  aiAutoRetryRef.current = 0;
+  1518→                  setAiRetryKey(k => k + 1);
+  1519→                }}
+  1520→                style={{ fontSize: '0.75rem', fontWeight: 500, color: C.bearColor, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
+  1521→              >تلاش مجدد</button>
+  1522→            </div>
+  1523→          )}
+  1524→          {!aiLoading && aiText && (
+  1525→            <div>
+  1526→              {aiIsFallback && (
+  1527→                <div style={{ fontSize: '0.7rem', color: C.cardSubFg, marginBottom: '8px', opacity: 0.7 }}>
+  1528→                  ⚠️ این تحلیل از روزهای قبل بازیابی شده است. برای تولید تحلیل جدید دکمه «تلاش مجدد» را بزنید.
+  1529→                </div>
+  1530→              )}
+  1531→              <div dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }} />
+  1532→            </div>
+  1533→          )}
+  1534→          {!aiLoading && !aiText && !aiError && analysisParagraphs.length > 0 && (
+  1535→            <div className="space-y-4">
+  1536→              {analysisParagraphs.map((p, i) => (
+  1537→                <p key={i} style={{ color: C.cardFg }}>{p}</p>
+  1538→              ))}
+  1539→              <div style={{
+  1540→                background: C.primaryBg, borderRight: '4px solid ' + C.primary,
+  1541→                padding: '12px 16px', borderRadius: '12px', marginTop: '12px',
+  1542→              }}>
+  1543→                <strong style={{ color: C.primary, fontSize: '0.875rem' }}>استراتژی پیشنهادی:</strong>
+  1544→                <p style={{ color: C.cardFg, fontSize: '0.75rem', lineHeight: 1.85, marginTop: '6px' }}>{strategyText}</p>
+  1545→              </div>
+  1546→            </div>
+  1547→          )}
+  1548→        </div>
+  1549→      </div>
+  1550→
+  1551→      {/* ═══ STRATEGY TAG ═══ */}
+  1552→      <div style={{ textAlign: 'center', padding: '12px' }}>
+  1553→        <span style={{
+  1554→          display: 'inline-block', padding: '6px 16px', borderRadius: '20px',
+  1555→          fontSize: '0.75rem', fontWeight: 700,
+  1556→          border: `1px solid ${strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor}`,
+  1557→          background: strategyType === 'up' ? C.bullBg : strategyType === 'down' ? C.bearBg : C.neutralBg,
+  1558→          color: strategyType === 'up' ? C.bullColor : strategyType === 'down' ? C.bearColor : C.neutralColor,
+  1559→        }}>
+  1560→          {strategy.text}
+  1561→        </span>
+  1562→      </div>
+  1563→
+  1564→      {/* ═══ FOOTER ═══ */}
+  1565→      <footer style={{
+  1566→        marginTop: '18px', color: C.cardSubFg, fontSize: '0.75rem', textAlign: 'center',
+  1567→        borderTop: `1px solid ${C.cardBorder}`, paddingTop: '16px',
+  1568→      }}>
+  1569→        تمامی تحلیل‌ها بر اساس داده‌های تکنیکال، سطوح کلیدی و روندهای گذشته تدوین شده است. این محتوا صرفاً جنبه آموزشی و تحلیلی دارد و توصیه سرمایه‌گذاری محسوب نمی‌شود.
+  1570→      </footer>
+  1571→    </div>
+  1572→  );
+  1573→
+  1574→}
+  1575→
+  1576→// ── Loading ────────────────────────────────────────────────────────────────────
+  1577→
+  1578→export function VdesAnalysisSkeleton() {
+  1579→  const { colors: C } = useTheme();
+  1580→  return (
+  1581→    <div className="space-y-7" style={{ background: C.pageBg, padding: '20px 16px 40px', borderRadius: '16px' }}>
+  1582→      <Skeleton className="h-28 w-full rounded-[32px]" style={{ background: C.cardBg }} />
+  1583→      <Skeleton className="h-[500px] w-full rounded-[28px]" style={{ background: C.cardBg }} />
+  1584→    </div>
+  1585→  );
+  1586→}

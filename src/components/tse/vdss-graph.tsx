@@ -109,9 +109,9 @@ const SCENARIO_DISPLAY: Record<string, string> = {
   ROOT: 'ریشه',
   BR1: 'پیروی از روند', BR2: 'شکست', BR3: 'بازگشت',
   EA: 'وضعیت روند', EB: 'وضعیت شکست', EC: 'وضعیت واگرایی',
-  SC1: 'سناریوی ۱', SC2: 'سناریوی ۲', SC3: 'سناریوی ۳',
-  SC4: 'سناریوی ۴', SC5: 'سناریوی ۵', SC6: 'سناریوی ۶',
-  SC7: 'سناریوی ۷', SC8: 'سناریوی ۸', SC9: 'سناریوی ۹',
+  SC1: 'SC1', SC2: 'SC2', SC3: 'SC3',
+  SC4: 'SC4', SC5: 'SC5', SC6: 'SC6',
+  SC7: 'SC7', SC8: 'SC8', SC9: 'SC9',
 };
 
 const BRANCH_META: Record<string, { label: string; color: string }> = {
@@ -1529,7 +1529,7 @@ function ProbabilityTrendTable({ data }: { data?: ProbabilityTrendResult | null 
                   <TableRow key={key} className="border-b border-[#e5e7eb]/60 hover:bg-[#f9fafb]">
                     <TableCell className="px-2 py-1 font-bold" style={{ color: gc.text, minWidth: 100, fontSize: 10 }}>
                       <span className="inline-block w-2 h-2 rounded-full ml-1" style={{ background: gc.text }} />
-                      {sc.label}
+                      {key} — {sc.label}
                     </TableCell>
                     {allDays.map(day => {
                       const dp = getDay(sc.trend, day);

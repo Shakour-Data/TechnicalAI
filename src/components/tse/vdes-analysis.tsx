@@ -183,15 +183,15 @@ function GradeBadge({ grade }: { grade: string }) {
 }
 
 const STRATEGY_MAP: Record<string, { text: string; tagCls: string }> = {
-  SC1: { text: 'سناریوی ۱: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
-  SC2: { text: 'سناریوی ۲: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
-  SC3: { text: 'سناریوی ۳: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
-  SC4: { text: 'سناریوی ۴: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
-  SC5: { text: 'سناریوی ۵: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
-  SC6: { text: 'سناریوی ۶: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
-  SC7: { text: 'سناریوی ۷: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
-  SC8: { text: 'سناریوی ۸: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
-  SC9: { text: 'سناریوی ۹: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
+  SC1: { text: 'SC1: شوک نزولی — خروج فوری توصیه می‌شود', tagCls: 'bg-red-700/10 text-red-700 border border-red-700/20' },
+  SC2: { text: 'SC2: نزولی شتاب‌دار — خروج از موقعیت‌های خرید', tagCls: 'bg-red-600/10 text-red-600 border border-red-600/20' },
+  SC3: { text: 'SC3: نزولی قوی — کاهش موقعیت توصیه می‌شود', tagCls: 'bg-orange-600/10 text-orange-600 border border-orange-600/20' },
+  SC4: { text: 'SC4: نزولی خفیف — احتیاط توصیه می‌شود', tagCls: 'bg-orange-700/10 text-orange-700 border border-orange-700/20' },
+  SC5: { text: 'SC5: رنج — منتظر خروج از محدوده بمانید', tagCls: 'bg-amber-800/10 text-amber-800 border border-amber-800/20' },
+  SC6: { text: 'SC6: صعودی خفیف — ورود تدریجی توصیه می‌شود', tagCls: 'bg-emerald-700/10 text-emerald-700 border border-emerald-700/20' },
+  SC7: { text: 'SC7: صعودی قوی — مومنتوم بالا، مدیریت ریسک ضروری', tagCls: 'bg-teal-700/10 text-teal-700 border border-teal-700/20' },
+  SC8: { text: 'SC8: صعودی شتاب‌دار — احتمال بالای عبور از مقاومت‌ها', tagCls: 'bg-emerald-600/10 text-emerald-600 border border-emerald-600/20' },
+  SC9: { text: 'SC9: شوک صعودی — حرکت انفجاری احتمالی', tagCls: 'bg-cyan-700/10 text-cyan-700 border border-cyan-700/20' },
 };
 
 const RISK_PROFILE_LABELS: Record<V11Result['riskProfile'], { label: string; color: string; bg: string }> = {
@@ -335,7 +335,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const p1 = (
     <>
       <strong className="text-amber-800">روند کلی و موقعیت قیمت:</strong>{' '}
-      سناریوی غالب برای {terms.noun} {symbolName} <b className="text-[#111827]">{dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
+      سناریوی غالب برای {terms.noun} {symbolName} <b className="text-[#111827]">{highestKey} — {dominant}</b> با احتمال <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
       {terms.priceAction} در محدوده <b className="text-[#111827]">{toFa(currentPrice)} {unit}</b> معامله می‌شود و روند میان‌مدت{' '}
       <b className={trendColor}>{trendLabel}</b>
       {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={toPersianDigits((trendR2 * 100).toFixed(1))}٪).
@@ -440,14 +440,14 @@ function generateAnalysisText(ctx: AnalysisContext) {
       شاخص جریان ورودی پول (OBV) در سطح <b className="text-[#111827]">{obv > 0 ? '+' : ''}{toPersianDigits((obv / 1e6).toFixed(1))}M</b> قرار دارد
       {obv > 0
         ? <span> که <b className="text-emerald-700">تجمع مثبت حجم</b> را نشان می‌دهد و حاکی از ورود پول هوشمند و تقویت روند صعودی است.
-          {isBull(highestKey) ? ' این حجم مثبت تأیید‌کننده سناریوی صعودی است.' : ''}
+          {isBull(highestKey) ? ` این حجم مثبت تأیید‌کننده ${highestKey} (${dominant}) است.` : ''}
           {highestKey === 'SC5' ? ' اما در فاز رنج، حجم مثبت الزاماً سیگنال صعودی نیست.' : ''}
           {isBear(highestKey) ? ' اما با وجود حجم مثبت، ساختار قیمت ضعیف است — این تناقض قابل توجه است.' : ''}
         </span>
         : <span> که <b className="text-red-700">خروج پول</b> را نشان می‌دهد و می‌تواند نشانه ضعف خریداران و احتمال ادامه اصلاح باشد.
-          {isBull(highestKey) ? ' خروج پول با سناریوی صعودی در تضاد است — احتیاط توصیه می‌شود.' : ''}
+          {isBull(highestKey) ? ` خروج پول با ${highestKey} (${dominant}) در تضاد است — احتیاط توصیه می‌شود.` : ''}
           {highestKey === 'SC5' ? ' خروج پول در فاز رنج معمولاً پیش‌نشاننده شکست به سمت پایین است.' : ''}
-          {isBear(highestKey) ? ' این خروج پول تأیید‌کننده سناریوی نزولی و ضرورت حفظ سرمایه است.' : ''}
+          {isBear(highestKey) ? ` این خروج پول تأیید‌کننده ${highestKey} (${dominant}) و ضرورت حفظ سرمایه است.` : ''}
         </span>
       }
     </>
@@ -470,7 +470,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
         {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
-        با احتمال {toFa(highestProb)}٪ برای سناریوی {dominant}، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی{isStrong ? ' قدرتمند و شتابدار' : ''}</b> را تأیید می‌کنند.
+        با احتمال {toFa(highestProb)}٪ برای {highestKey} ({dominant})، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی{isStrong ? ' قدرتمند و شتابدار' : ''}</b> را تأیید می‌کنند.
         {bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
         نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} {unit}، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
         تلاقی MA21 و MA100{' '}
@@ -487,7 +487,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
         {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
-        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
+        {highestKey} ({dominant}) با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
         سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بهترین استراتژی <b className="text-amber-800">انتظار و مشاهده</b> است.
         منتظر خروج قیمت از محدوده {toFa(S1)} تا {toFa(R1)} {unit} بمانید.
         تلاقی MA21 و MA100{' '}
@@ -506,7 +506,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
       <>
         <strong className="text-amber-800">تحلیل تلاقی سیگنال‌ها و نسبت ریسک به بازده:</strong>{' '}
         {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
-        سناریوی {dominant} با احتمال {toFa(highestProb)}٪ نشان‌دهنده {isStrong ? <b className="text-red-700">تضعیف شدید ساختار</b> : <b className="text-red-700">ریسک اصلاح عمیق</b>} است.
+        {highestKey} ({dominant}) با احتمال {toFa(highestProb)}٪ نشان‌دهنده {isStrong ? <b className="text-red-700">تضعیف شدید ساختار</b> : <b className="text-red-700">ریسک اصلاح عمیق</b>} است.
         {bearCum > 60 && <span> مجموع احتمال نزولی {toFa(bearCum)}٪ — <b className="text-red-700">بایاس نزولی {isStrong ? 'بسیار' : ''}قوی</b> در بازار حاکم است.</span>}
         {isStrong ? <span> تمام شاخص‌ها هشدار <b className="text-red-700">خروج فوری</b> را صادر می‌کنند.</span> : <span> ورود به معامله خرید در این شرایط <b className="text-red-700">ریسک بالایی</b> دارد.</span>}
         تلاقی MA21 و MA100{' '}
@@ -1048,7 +1048,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
           const v = v11Map.get(key);
           const rowType = m.type === 'up' ? 'up' : m.type === 'down' ? 'down' : 'pullback';
           return `<tr class="${rowType}">
-            <td>${m.label}</td>
+            <td>${key} — ${m.label}</td>
             <td style="text-align:center"><span class="s-prob">${toFa(v?.rawProbability ?? s.probability)}٪</span></td>
             <td style="text-align:center"><span class="s-cum">${toFa(v?.cumulativeProbability ?? 0)}٪</span></td>
             <td class="s-range">${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}</td>
@@ -1111,7 +1111,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
       if (!s) continue;
       const m = SCENARIO_META[k];
       const v = v11Map.get(k);
-      lines.push(`سناریوی ${SCENARIO_NUMBER[k]} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cumulativeProbability ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}`);
+      lines.push(`${k} — ${m.label}: اختصاصی ${toFa(s.probability)}٪ | تجمعی ${toFa(v?.cumulativeProbability ?? 0)}٪ | هدف: ${toFa(s.targetMin)} — ${toFa(s.targetMax)} ${unit}`);
     }
     lines.push('');
     lines.push(`مجموع صعودی: ${toFa(v11Result.bullishCumulative)}٪ | رنج: ${toFa(v11Result.neutralCumulative)}٪ | مجموع نزولی: ${toFa(v11Result.bearishCumulative)}٪`);
@@ -1194,7 +1194,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
       // Add scenarios sheet
       const scenarioRows = SCENARIO_KEYS.map(k => ({
         'سناریو': SCENARIO_META[k].label,
-        'کد': `سناریوی ${SCENARIO_NUMBER[k]}`,
+        'کد': k,
         'احتمال اختصاصی٪': scenarios[k]?.probability ?? 0,
         'احتمال تجمعی٪': v11Map.get(k)?.cumulativeProbability ?? 0,
         'هدف_حداقل': Math.round(scenarios[k]?.targetMin ?? 0),
@@ -1445,7 +1445,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
                     borderBottom: isLast ? 'none' : `1px solid ${C.cardBorder}`,
                     transition: '0.15s',
                   }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 500, color: C.cardFg }}>{meta.label}</td>
+                    <td style={{ padding: '10px 14px', fontWeight: 500, color: C.cardFg }}>{key} — {meta.label}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                       <span style={{
                         fontWeight: 700, color: C.primary, background: C.primaryBg,

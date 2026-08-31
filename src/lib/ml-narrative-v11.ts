@@ -148,7 +148,7 @@ export function buildV11PromptSection(v11: V11Result): string {
     const s = v11.scenarios[i];
     const num = toFa(i + 1);
     lines.push(
-      `- سناریوی ${num} (${s.name}): احتمال اختصاصی ${toFa(s.rawProbability)}٪ | احتمال تجمعی ${toFa(s.cumulativeProbability)}٪`,
+      `- ${s.key} (${s.name}): احتمال اختصاصی ${toFa(s.rawProbability)}٪ | احتمال تجمعی ${toFa(s.cumulativeProbability)}٪`,
     );
   }
 

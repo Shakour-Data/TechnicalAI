@@ -208,11 +208,11 @@ ${S2 ? `- حمایت **S2** در ${fmtGrouped(S2)} ${unit}${supportStrengths?.[1
 - میانگین نوسان روزانه (ATR): ${fmtGrouped(atr)} ${unit}
 
 **سناریوهای محتمل (با احتمالات):**
-- **سناریوی ۱ – ${scenarios.SC1?.name || '—'}:** ${fmt(scenarios.SC1?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC1?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC1?.targetMax ?? 0)} ${unit})
-- **سناریوی ۲ – ${scenarios.SC2?.name || '—'}:** ${fmt(scenarios.SC2?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC2?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC2?.targetMax ?? 0)} ${unit})
-- **سناریوی ۳ – ${scenarios.SC3?.name || '—'}:** ${fmt(scenarios.SC3?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC3?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC3?.targetMax ?? 0)} ${unit})
-- **سناریوی ۴ – ${scenarios.SC4?.name || '—'}:** ${fmt(scenarios.SC4?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC4?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC4?.targetMax ?? 0)} ${unit})
-- **سناریوی ۵ – ${scenarios.SC5?.name || '—'}:** ${fmt(scenarios.SC5?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC5?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC5?.targetMax ?? 0)} ${unit})
+- **SC1 – ${scenarios.SC1?.name || '—'}:** ${fmt(scenarios.SC1?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC1?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC1?.targetMax ?? 0)} ${unit})
+- **SC2 – ${scenarios.SC2?.name || '—'}:** ${fmt(scenarios.SC2?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC2?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC2?.targetMax ?? 0)} ${unit})
+- **SC3 – ${scenarios.SC3?.name || '—'}:** ${fmt(scenarios.SC3?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC3?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC3?.targetMax ?? 0)} ${unit})
+- **SC4 – ${scenarios.SC4?.name || '—'}:** ${fmt(scenarios.SC4?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC4?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC4?.targetMax ?? 0)} ${unit})
+- **SC5 – ${scenarios.SC5?.name || '—'}:** ${fmt(scenarios.SC5?.probability ?? 0, 0)}٪ (محدوده ${fmtGrouped(scenarios.SC5?.targetMin ?? 0)} — ${fmtGrouped(scenarios.SC5?.targetMax ?? 0)} ${unit})
 `;
 }
 

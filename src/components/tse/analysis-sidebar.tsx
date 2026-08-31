@@ -654,7 +654,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
                 <div className="flex items-center gap-2">
                   <Target className="w-3 h-3 shrink-0" style={{ color: scColor }} />
                   <span className="text-[10px] font-bold flex-1 truncate" style={{ color: C.text }}>
-                    {sc.name}
+                    {sc.key} — {sc.name}
                   </span>
                   <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: scColor }} dir="ltr">
                     {toPersianDigits(safeNum(sc.probability).toFixed(0))}٪
