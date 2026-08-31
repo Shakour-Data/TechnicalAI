@@ -263,3 +263,24 @@ Stage Summary:
 - vdss-graph.tsx: Removed 340px right panel, graph now uses full available width
 - Removed ~180 lines of unused code (panel HTML + detailContent useMemo)
 - Node click highlighting and filter buttons still functional
+---
+Task ID: 10
+Agent: main
+Task: Fix TGJU data fetching permanently - api.tgju.org returns 403, page_reader returns 429
+
+Work Log:
+- Investigated dev logs: api.tgju.org returns HTTP 403 (Cloudflare), z-ai page_reader returns 429 (rate-limited)
+- Identified that TGJU_TO_YAHOO_MAP covers ~80% of instruments (crypto, indices, forex, energy, metals, commodities, foreign stocks)
+- Implemented Yahoo Finance as PRIMARY data source for all instruments with Yahoo mapping in fetchTgjuHistory()
+- Added request queue with serialization (one page_reader call at a time) + rate limiting (10s min interval) + exponential backoff retry (3 retries: 3s, 9s, 27s)
+- Added file-based persistent cache (survives server restarts) at OS tmpdir
+- Increased in-memory cache TTL from 30 min to 4 hours
+- Added stale cache fallback (returns expired data when fresh fetch fails)
+- Added yahooFetchedKeys Set for cross-module source detection
+- Updated tgju-analysis route to detect Yahoo-sourced data for proper volume/currency handling
+- Rebuilt production bundle and verified via API and browser
+
+Stage Summary:
+- Global instruments (crypto, indices, forex, energy, metals, commodities, foreign stocks): Now use Yahoo Finance as PRIMARY source. Verified: BTC (399 candles), EUR/USD (284), Gold (276), Brent (276), DOW (275) - all return HTTP 200 with full data
+- Iranian instruments (currency, gold, silver, gold_etf): Still depend on page_reader which is rate-limited at z-ai infrastructure level. Queue + retry logic implemented but 429 persists when rate limit is exceeded.
+- Files modified: src/lib/tgju-api.ts (major rewrite of fetchTgjuHistory), src/app/api/tgju-analysis/route.ts (source detection)

@@ -1,0 +1,2002 @@
+     1→▲ Next.js 16.1.3 (Turbopack)
+     2→- Local:         http://localhost:3000
+     3→- Network:       http://21.0.7.251:3000
+     4→- Environments: .env
+     5→
+     6→✓ Starting...
+     7→✓ Ready in 691ms
+     8→○ Compiling / ...
+     9→ GET / 200 in 6.3s (compile: 6.0s, render: 236ms)
+    10→ GET / 200 in 48ms (compile: 4ms, render: 44ms)
+    11→ GET / 200 in 39ms (compile: 3ms, render: 36ms)
+    12→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+    13→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+    14→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+    15→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.1s (compile: 200ms, render: 5.9s)
+    16→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+    17→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+    18→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+    19→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.4s (compile: 3ms, render: 6.4s)
+    20→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+    21→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+    22→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+    23→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.1s (compile: 3ms, render: 6.1s)
+    24→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+    25→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+    26→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+    27→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 5.8s (compile: 2ms, render: 5.8s)
+    28→ GET / 200 in 57ms (compile: 3ms, render: 53ms)
+    29→ GET / 200 in 81ms (compile: 4ms, render: 77ms)
+    30→[Yahoo Finance] Error fetching batch 1: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    31→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+    32→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+    33→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+    34→  465 |     try {
+    35→> 466 |       const results = await yahooFinance.quote(batch, {
+    36→      |                       ^
+    37→  467 |         fields: [
+    38→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    39→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+    40→[Yahoo Finance] Error fetching batch 2: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    41→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+    42→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+    43→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+    44→  465 |     try {
+    45→> 466 |       const results = await yahooFinance.quote(batch, {
+    46→      |                       ^
+    47→  467 |         fields: [
+    48→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    49→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+    50→[Yahoo Finance] Error fetching batch 3: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    51→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+    52→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+    53→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+    54→  465 |     try {
+    55→> 466 |       const results = await yahooFinance.quote(batch, {
+    56→      |                       ^
+    57→  467 |         fields: [
+    58→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    59→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+    60→[Yahoo Finance] Error fetching batch 4: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    61→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+    62→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+    63→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+    64→  465 |     try {
+    65→> 466 |       const results = await yahooFinance.quote(batch, {
+    66→      |                       ^
+    67→  467 |         fields: [
+    68→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    69→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+    70→[Yahoo Finance] Error fetching batch 5: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    71→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+    72→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+    73→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+    74→  465 |     try {
+    75→> 466 |       const results = await yahooFinance.quote(batch, {
+    76→      |                       ^
+    77→  467 |         fields: [
+    78→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    79→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+    80→[Yahoo Finance] Error fetching batch 6: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    81→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+    82→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+    83→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+    84→  465 |     try {
+    85→> 466 |       const results = await yahooFinance.quote(batch, {
+    86→      |                       ^
+    87→  467 |         fields: [
+    88→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    89→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+    90→[TGJU] 109 static instruments have price=0, fetching from Yahoo Finance as fallback...
+    91→ GET /api/tgju-instruments 200 in 2.4s (compile: 284ms, render: 2.1s)
+    92→[Yahoo Finance] Error fetching batch 7: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    93→    at ignore-listed frames
+    94→[TGJU] Yahoo fallback batch 1 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+    95→[Yahoo Finance] Error fetching batch 8: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    96→    at ignore-listed frames
+    97→[TGJU] Yahoo fallback batch 2 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+    98→[Yahoo Finance] Error fetching batch 9: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+    99→    at ignore-listed frames
+   100→[TGJU] Yahoo fallback batch 3 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   101→[Yahoo Finance] Error fetching batch 10: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   102→    at ignore-listed frames
+   103→[TGJU] Yahoo fallback batch 4 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   104→[Yahoo Finance] Error fetching batch 11: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   105→    at ignore-listed frames
+   106→[TGJU] Yahoo fallback batch 5 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   107→[Yahoo Finance] Error fetching batch 12: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   108→    at ignore-listed frames
+   109→[TGJU] Yahoo fallback batch 6 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   110→[Yahoo Finance] Error fetching batch 13: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   111→    at ignore-listed frames
+   112→[TGJU] Yahoo fallback batch 7 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   113→[TGJU] Yahoo fallback filled 0/109 instrument prices
+   114→ GET /api/yahoo-instruments 200 in 3.6s (compile: 478ms, render: 3.1s)
+   115→ GET /api/instruments 200 in 11.0s (compile: 518ms, render: 10.5s)
+   116→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+   117→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+   118→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   119→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 7.0s (compile: 4ms, render: 7.0s)
+   120→ GET /?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 195ms (compile: 4ms, render: 191ms)
+   121→ GET /api/tgju-instruments 200 in 17ms (compile: 12ms, render: 5ms)
+   122→[Yahoo Finance] Error fetching batch 1: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   123→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   124→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   125→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   126→  465 |     try {
+   127→> 466 |       const results = await yahooFinance.quote(batch, {
+   128→      |                       ^
+   129→  467 |         fields: [
+   130→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   131→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   132→[Yahoo Finance] Error fetching batch 2: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   133→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   134→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   135→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   136→  465 |     try {
+   137→> 466 |       const results = await yahooFinance.quote(batch, {
+   138→      |                       ^
+   139→  467 |         fields: [
+   140→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   141→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   142→[Yahoo Finance] Error fetching batch 3: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   143→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   144→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   145→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   146→  465 |     try {
+   147→> 466 |       const results = await yahooFinance.quote(batch, {
+   148→      |                       ^
+   149→  467 |         fields: [
+   150→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   151→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   152→[Yahoo Finance] Error fetching batch 4: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   153→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   154→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   155→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   156→  465 |     try {
+   157→> 466 |       const results = await yahooFinance.quote(batch, {
+   158→      |                       ^
+   159→  467 |         fields: [
+   160→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   161→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   162→[Yahoo Finance] Error fetching batch 5: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   163→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   164→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   165→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   166→  465 |     try {
+   167→> 466 |       const results = await yahooFinance.quote(batch, {
+   168→      |                       ^
+   169→  467 |         fields: [
+   170→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   171→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   172→[Yahoo Finance] Error fetching batch 6: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   173→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   174→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   175→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   176→  465 |     try {
+   177→> 466 |       const results = await yahooFinance.quote(batch, {
+   178→      |                       ^
+   179→  467 |         fields: [
+   180→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   181→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   182→[Yahoo Finance] Error fetching batch 7: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   183→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   184→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   185→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   186→  465 |     try {
+   187→> 466 |       const results = await yahooFinance.quote(batch, {
+   188→      |                       ^
+   189→  467 |         fields: [
+   190→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   191→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   192→[Yahoo Finance] Error fetching batch 8: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   193→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   194→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   195→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   196→  465 |     try {
+   197→> 466 |       const results = await yahooFinance.quote(batch, {
+   198→      |                       ^
+   199→  467 |         fields: [
+   200→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   201→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   202→[Yahoo Finance] Error fetching batch 9: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   203→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   204→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   205→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   206→  465 |     try {
+   207→> 466 |       const results = await yahooFinance.quote(batch, {
+   208→      |                       ^
+   209→  467 |         fields: [
+   210→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   211→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   212→[Yahoo Finance] Error fetching batch 10: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   213→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   214→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   215→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   216→  465 |     try {
+   217→> 466 |       const results = await yahooFinance.quote(batch, {
+   218→      |                       ^
+   219→  467 |         fields: [
+   220→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   221→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   222→[Yahoo Finance] Error fetching batch 11: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   223→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   224→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   225→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   226→  465 |     try {
+   227→> 466 |       const results = await yahooFinance.quote(batch, {
+   228→      |                       ^
+   229→  467 |         fields: [
+   230→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   231→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   232→[Yahoo Finance] Error fetching batch 12: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   233→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   234→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   235→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   236→  465 |     try {
+   237→> 466 |       const results = await yahooFinance.quote(batch, {
+   238→      |                       ^
+   239→  467 |         fields: [
+   240→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   241→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   242→[Yahoo Finance] Error fetching batch 13: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   243→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   244→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   245→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   246→  465 |     try {
+   247→> 466 |       const results = await yahooFinance.quote(batch, {
+   248→      |                       ^
+   249→  467 |         fields: [
+   250→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   251→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   252→ GET /api/yahoo-instruments 200 in 3.3s (compile: 1854µs, render: 3.3s)
+   253→ GET /api/instruments 200 in 10.6s (compile: 4ms, render: 10.6s)
+   254→ GET / 200 in 39ms (compile: 4ms, render: 35ms)
+   255→ GET / 200 in 35ms (compile: 2ms, render: 32ms)
+   256→ GET / 200 in 33ms (compile: 2ms, render: 31ms)
+   257→ GET / 200 in 42ms (compile: 5ms, render: 38ms)
+   258→[Yahoo Finance] Error fetching batch 1: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   259→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   260→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   261→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   262→  465 |     try {
+   263→> 466 |       const results = await yahooFinance.quote(batch, {
+   264→      |                       ^
+   265→  467 |         fields: [
+   266→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   267→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   268→[Yahoo Finance] Error fetching batch 2: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   269→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   270→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   271→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   272→  465 |     try {
+   273→> 466 |       const results = await yahooFinance.quote(batch, {
+   274→      |                       ^
+   275→  467 |         fields: [
+   276→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   277→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   278→[Yahoo Finance] Error fetching batch 3: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   279→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   280→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   281→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   282→  465 |     try {
+   283→> 466 |       const results = await yahooFinance.quote(batch, {
+   284→      |                       ^
+   285→  467 |         fields: [
+   286→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   287→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   288→[Yahoo Finance] Error fetching batch 4: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   289→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   290→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   291→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   292→  465 |     try {
+   293→> 466 |       const results = await yahooFinance.quote(batch, {
+   294→      |                       ^
+   295→  467 |         fields: [
+   296→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   297→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   298→[Yahoo Finance] Error fetching batch 5: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   299→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   300→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   301→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   302→  465 |     try {
+   303→> 466 |       const results = await yahooFinance.quote(batch, {
+   304→      |                       ^
+   305→  467 |         fields: [
+   306→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   307→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   308→[TGJU] 109 static instruments have price=0, fetching from Yahoo Finance as fallback...
+   309→ GET /api/tgju-instruments 200 in 1831ms (compile: 4ms, render: 1827ms)
+   310→[Yahoo Finance] Error fetching batch 6: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   311→    at ignore-listed frames
+   312→[TGJU] Yahoo fallback batch 1 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   313→[Yahoo Finance] Error fetching batch 7: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   314→    at ignore-listed frames
+   315→[TGJU] Yahoo fallback batch 2 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   316→[Yahoo Finance] Error fetching batch 8: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   317→    at ignore-listed frames
+   318→[TGJU] Yahoo fallback batch 3 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   319→[Yahoo Finance] Error fetching batch 9: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   320→    at ignore-listed frames
+   321→[TGJU] Yahoo fallback batch 4 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   322→[Yahoo Finance] Error fetching batch 10: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   323→    at ignore-listed frames
+   324→[TGJU] Yahoo fallback batch 5 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   325→[Yahoo Finance] Error fetching batch 11: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   326→    at ignore-listed frames
+   327→[TGJU] Yahoo fallback batch 6 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   328→[Yahoo Finance] Error fetching batch 12: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   329→    at ignore-listed frames
+   330→[TGJU] Yahoo fallback batch 7 failed: Failed to get crumb, status 429, statusText: Too Many Requests
+   331→[TGJU] Yahoo fallback filled 0/109 instrument prices
+   332→[Yahoo Finance] Error fetching batch 13: Error: Failed to get crumb, status 429, statusText: Too Many Requests
+   333→    at async fetchYahooQuotes (src/lib/yahoo-finance-api.ts:466:23)
+   334→    at async GET (src/app/api/yahoo-instruments/route.ts:25:16)
+   335→  464 |     const batch = symbols.slice(i, i + BATCH_SIZE);
+   336→  465 |     try {
+   337→> 466 |       const results = await yahooFinance.quote(batch, {
+   338→      |                       ^
+   339→  467 |         fields: [
+   340→  468 |           'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   341→  469 |           'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   342→ GET /api/yahoo-instruments 200 in 2.7s (compile: 1700µs, render: 2.7s)
+   343→ GET /api/instruments 200 in 10.5s (compile: 1296µs, render: 10.5s)
+   344→[TGJU] Direct fetch HTTP 403 for price_dollar_rl
+   345→[TGJU] Direct fetch returned 0 candles for price_dollar_rl, trying page_reader...
+   346→[TGJU] Using z-ai SDK page_reader for price_dollar_rl...
+   347→[TGJU] Column map for price_dollar_rl: O=3 H=2 L=1 C=0 Date=7
+   348→[TGJU] price_dollar_rl: 8/3938 invalid candles skipped
+   349→[TGJU] price_dollar_rl: Parsed 3930 candles (1390-09-05 to 1405-06-07)
+   350→ GET /api/tgju-analysis?key=price_dollar_rl 200 in 9.7s (compile: 48ms, render: 9.6s)
+   351→[AI] Previous cache fallback HIT for price_dollar_rl (2026-08-28) [17ms]
+   352→ POST /api/ai-analysis 200 in 111ms (compile: 88ms, render: 23ms)
+   353→ GET /api/tgju-analysis?key=price_dollar_rl 200 in 6.5s (compile: 3ms, render: 6.5s)
+   354→[AI] Previous cache fallback HIT for price_dollar_rl (2026-08-28) [3ms]
+   355→ POST /api/ai-analysis 200 in 10ms (compile: 3ms, render: 7ms)
+   356→ GET /api/tgju-analysis?key=price_dollar_rl 200 in 6.5s (compile: 3ms, render: 6.5s)
+   357→[AI] Previous cache fallback HIT for price_dollar_rl (2026-08-28) [4ms]
+   358→ POST /api/ai-analysis 200 in 10ms (compile: 2ms, render: 7ms)
+   359→ GET /api/tgju-analysis?key=price_dollar_rl 200 in 6.7s (compile: 3ms, render: 6.7s)
+   360→ GET / 200 in 70ms (compile: 5ms, render: 65ms)
+   361→ GET / 200 in 39ms (compile: 4ms, render: 35ms)
+   362→ GET / 200 in 38ms (compile: 2ms, render: 36ms)
+   363→ GET / 200 in 38ms (compile: 2ms, render: 35ms)
+   364→ GET / 200 in 38ms (compile: 4ms, render: 34ms)
+   365→ GET / 200 in 43ms (compile: 3ms, render: 39ms)
+   366→ GET / 200 in 45ms (compile: 4ms, render: 41ms)
+   367→ GET / 200 in 41ms (compile: 4ms, render: 37ms)
+   368→ GET / 200 in 44ms (compile: 2ms, render: 42ms)
+   369→ GET / 200 in 38ms (compile: 2ms, render: 36ms)
+   370→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+   371→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+   372→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   373→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.8s (compile: 2ms, render: 6.8s)
+   374→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+   375→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+   376→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   377→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.5s (compile: 5ms, render: 6.5s)
+   378→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+   379→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+   380→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   381→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 4.6s (compile: 1859µs, render: 4.6s)
+   382→[tse-api] BrsApi candlestick failed for خبار: HTTP 400
+   383→[tse-api] BRS failed for خبار, trying finpy-tse library fallback...
+   384→[analysis] Error for symbol=خبار: داده‌ای برای نماد «خبار» یافت نشد. لطفاً نام نماد را بررسی کنید.
+   385→ GET /api/analysis?symbol=%D8%AE%D8%A8%D8%A7%D8%B1 404 in 292ms (compile: 1459µs, render: 291ms)
+   386→[tse-api] BrsApi symbol data failed for خبار: HTTP 400
+   387→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+   388→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+   389→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   390→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 6.7s (compile: 3ms, render: 6.7s)
+   391→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+   392→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+   393→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   394→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 5.2s (compile: 3ms, render: 5.2s)
+   395→ GET / 200 in 48ms (compile: 3ms, render: 45ms)
+   396→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+   397→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+   398→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   399→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 5.3s (compile: 3ms, render: 5.3s)
+   400→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+   401→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+   402→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   403→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 5.2s (compile: 2ms, render: 5.2s)
+   404→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+   405→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+   406→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   407→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 5.1s (compile: 110ms, render: 5.0s)
+   408→[tse-api] Using candlestick file cache for خودرو (5266 candles)
+   409→[analysis] Historical snapshots for خودرو: 30 days (data.length=5266)
+   410→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+   411→ GET /api/analysis?symbol=%D8%AE%D9%88%D8%AF%D8%B1%D9%88 200 in 6.5s (compile: 3ms, render: 6.5s)
+   412→ GET / 200 in 56ms (compile: 8ms, render: 49ms)
+   413→ GET / 200 in 302ms (compile: 3ms, render: 299ms)
+   414→The following result did not validate with schema: #/definitions/QuoteResponseArray
+   415→[
+   416→  {
+   417→    "instancePath": "/12",
+   418→    "schemaPath": "#/definitions/Quote",
+   419→    "message": "should match some schema in oneOf",
+   420→    "params": {
+   421→      "discriminator": "quoteType"
+   422→    },
+   423→    "data": {
+   424→      "language": "en-US",
+   425→      "region": "US",
+   426→      "quoteType": "ALTSYMBOL",
+   427→      "typeDisp": "ALTSYMBOL",
+   428→      "triggerable": false,
+   429→      "customPriceAlertConfidence": "NONE",
+   430→      "currency": "USX",
+   431→      "marketState": "REGULAR",
+   432→      "regularMarketChangePercent": -0.9414595,
+   433→      "regularMarketPrice": 91.54,
+   434→      "tradeable": false,
+   435→      "cryptoTradeable": false,
+   436→      "hasPrePostMarketData": false,
+   437→      "firstTradeDateMilliseconds": 946875600000,
+   438→      "regularMarketChange": -0.87000275,
+   439→      "fulldayChange": -0.87000275,
+   440→      "fulldayChangePercent": -0.9414595,
+   441→      "fulldayPrice": 91.54,
+   442→      "regularMarketDayHigh": 89.73,
+   443→      "regularMarketDayRange": "88.88 - 89.73",
+   444→      "regularMarketDayLow": 88.88,
+   445→      "regularMarketVolume": 24734,
+   446→      "regularMarketPreviousClose": 92.41,
+   447→      "fullExchangeName": "NY Mercantile",
+   448→      "fiftyTwoWeekLowChange": 2.6600037,
+   449→      "fiftyTwoWeekLowChangePercent": 0.029928034,
+   450→      "fiftyTwoWeekRange": "88.88 - 89.73",
+   451→      "fiftyTwoWeekHighChange": 1.8099976,
+   452→      "fiftyTwoWeekHighChangePercent": 0.020171598,
+   453→      "fiftyTwoWeekLow": 88.88,
+   454→      "fiftyTwoWeekHigh": 89.73,
+   455→      "regularMarketTime": 1787931045,
+   456→      "exchange": "NYM",
+   457→      "exchangeTimezoneName": "America/New_York",
+   458→      "exchangeTimezoneShortName": "EDT",
+   459→      "gmtOffSetMilliseconds": -14400000,
+   460→      "market": "us24_market",
+   461→      "esgPopulated": false,
+   462→      "sourceInterval": 30,
+   463→      "exchangeDataDelayedBy": 10,
+   464→      "symbol": "CT=F"
+   465→    },
+   466→    "subErrors": [
+   467→      {
+   468→        "instancePath": "/12/quoteType",
+   469→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+   470→        "message": "Invalid const value",
+   471→        "data": "ALTSYMBOL",
+   472→        "params": {
+   473→          "const": "CRYPTOCURRENCY"
+   474→        }
+   475→      },
+   476→      {
+   477→        "instancePath": "/12/quoteType",
+   478→        "schemaPath": "#/definitions/QuoteCurrency",
+   479→        "message": "Invalid const value",
+   480→        "data": "ALTSYMBOL",
+   481→        "params": {
+   482→          "const": "CURRENCY"
+   483→        }
+   484→      },
+   485→      {
+   486→        "instancePath": "/12/quoteType",
+   487→        "schemaPath": "#/definitions/QuoteECNQuote",
+   488→        "message": "Invalid const value",
+   489→        "data": "ALTSYMBOL",
+   490→        "params": {
+   491→          "const": "ECNQUOTE"
+   492→        }
+   493→      },
+   494→      {
+   495→        "instancePath": "/12/quoteType",
+   496→        "schemaPath": "#/definitions/QuoteEtf",
+   497→        "message": "Invalid const value",
+   498→        "data": "ALTSYMBOL",
+   499→        "params": {
+   500→          "const": "ETF"
+   501→        }
+   502→      },
+   503→      {
+   504→        "instancePath": "/12/quoteType",
+   505→        "schemaPath": "#/definitions/QuoteEquity",
+   506→        "message": "Invalid const value",
+   507→        "data": "ALTSYMBOL",
+   508→        "params": {
+   509→          "const": "EQUITY"
+   510→        }
+   511→      },
+   512→      {
+   513→        "instancePath": "/12/quoteType",
+   514→        "schemaPath": "#/definitions/QuoteFuture",
+   515→        "message": "Invalid const value",
+   516→        "data": "ALTSYMBOL",
+   517→        "params": {
+   518→          "const": "FUTURE"
+   519→        }
+   520→      },
+   521→      {
+   522→        "instancePath": "/12/quoteType",
+   523→        "schemaPath": "#/definitions/QuoteIndex",
+   524→        "message": "Invalid const value",
+   525→        "data": "ALTSYMBOL",
+   526→        "params": {
+   527→          "const": "INDEX"
+   528→        }
+   529→      },
+   530→      {
+   531→        "instancePath": "/12/quoteType",
+   532→        "schemaPath": "#/definitions/QuoteMutualfund",
+   533→        "message": "Invalid const value",
+   534→        "data": "ALTSYMBOL",
+   535→        "params": {
+   536→          "const": "MUTUALFUND"
+   537→        }
+   538→      },
+   539→      {
+   540→        "instancePath": "/12/quoteType",
+   541→        "schemaPath": "#/definitions/QuoteOption",
+   542→        "message": "Invalid const value",
+   543→        "data": "ALTSYMBOL",
+   544→        "params": {
+   545→          "const": "OPTION"
+   546→        }
+   547→      },
+   548→      {
+   549→        "instancePath": "/12/quoteType",
+   550→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+   551→        "message": "Invalid const value",
+   552→        "data": "ALTSYMBOL",
+   553→        "params": {
+   554→          "const": "MONEYMARKET"
+   555→        }
+   556→      },
+   557→      {
+   558→        "instancePath": "/12/typeDisp",
+   559→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+   560→        "message": "Invalid const value",
+   561→        "data": "ALTSYMBOL",
+   562→        "params": {
+   563→          "const": "MoneyMarket"
+   564→        }
+   565→      },
+   566→      {
+   567→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+   568→        "instancePath": "/12",
+   569→        "message": "Missing required properties",
+   570→        "params": {
+   571→          "missing": [
+   572→            "expireDate",
+   573→            "expireIsoDate",
+   574→            "underlyingExchangeSymbol"
+   575→          ]
+   576→        }
+   577→      },
+   578→      {
+   579→        "schemaPath": "#/definitions/QuoteFuture/required",
+   580→        "instancePath": "/12",
+   581→        "message": "Missing required properties",
+   582→        "params": {
+   583→          "missing": [
+   584→            "contractSymbol"
+   585→          ]
+   586→        }
+   587→      },
+   588→      {
+   589→        "schemaPath": "#/definitions/QuoteOption/required",
+   590→        "instancePath": "/12",
+   591→        "message": "Missing required properties",
+   592→        "params": {
+   593→          "missing": [
+   594→            "expireDate",
+   595→            "expireIsoDate",
+   596→            "openInterest",
+   597→            "strike",
+   598→            "underlyingSymbol"
+   599→          ]
+   600→        }
+   601→      }
+   602→    ]
+   603→  },
+   604→  {
+   605→    "instancePath": "/13",
+   606→    "schemaPath": "#/definitions/Quote",
+   607→    "message": "should match some schema in oneOf",
+   608→    "params": {
+   609→      "discriminator": "quoteType"
+   610→    },
+   611→    "data": {
+   612→      "language": "en-US",
+   613→      "region": "US",
+   614→      "quoteType": "ALTSYMBOL",
+   615→      "typeDisp": "ALTSYMBOL",
+   616→      "triggerable": false,
+   617→      "customPriceAlertConfidence": "NONE",
+   618→      "currency": "USX",
+   619→      "marketState": "REGULAR",
+   620→      "regularMarketChangePercent": -0.66044,
+   621→      "regularMarketPrice": 109.05,
+   622→      "shortName": "Live Cattle Oct 20",
+   623→      "tradeable": false,
+   624→      "cryptoTradeable": false,
+   625→      "hasPrePostMarketData": false,
+   626→      "firstTradeDateMilliseconds": 951886800000,
+   627→      "regularMarketChange": -0.724998,
+   628→      "fulldayChange": -0.724998,
+   629→      "fulldayChangePercent": -0.66044,
+   630→      "fulldayPrice": 109.05,
+   631→      "regularMarketDayHigh": 109.85,
+   632→      "regularMarketDayRange": "108.375 - 109.85",
+   633→      "regularMarketDayLow": 108.375,
+   634→      "regularMarketVolume": 16686,
+   635→      "regularMarketPreviousClose": 109.775,
+   636→      "fullExchangeName": "CME",
+   637→      "regularMarketOpen": 109.325,
+   638→      "fiftyTwoWeekLowChange": 0.67500305,
+   639→      "fiftyTwoWeekLowChangePercent": 0.006228402,
+   640→      "fiftyTwoWeekRange": "108.375 - 109.85",
+   641→      "fiftyTwoWeekHighChange": -0.7999954,
+   642→      "fiftyTwoWeekHighChangePercent": -0.0072826166,
+   643→      "fiftyTwoWeekLow": 108.375,
+   644→      "fiftyTwoWeekHigh": 109.85,
+   645→      "regularMarketTime": 1598033099,
+   646→      "exchange": "CME",
+   647→      "exchangeTimezoneName": "America/New_York",
+   648→      "exchangeTimezoneShortName": "EDT",
+   649→      "gmtOffSetMilliseconds": -14400000,
+   650→      "market": "us24_market",
+   651→      "esgPopulated": false,
+   652→      "sourceInterval": 10,
+   653→      "exchangeDataDelayedBy": 10,
+   654→      "symbol": "LC=F"
+   655→    },
+   656→    "subErrors": [
+   657→      {
+   658→        "instancePath": "/13/quoteType",
+   659→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+   660→        "message": "Invalid const value",
+   661→        "data": "ALTSYMBOL",
+   662→        "params": {
+   663→          "const": "CRYPTOCURRENCY"
+   664→        }
+   665→      },
+   666→      {
+   667→        "instancePath": "/13/quoteType",
+   668→        "schemaPath": "#/definitions/QuoteCurrency",
+   669→        "message": "Invalid const value",
+   670→        "data": "ALTSYMBOL",
+   671→        "params": {
+   672→          "const": "CURRENCY"
+   673→        }
+   674→      },
+   675→      {
+   676→        "instancePath": "/13/quoteType",
+   677→        "schemaPath": "#/definitions/QuoteECNQuote",
+   678→        "message": "Invalid const value",
+   679→        "data": "ALTSYMBOL",
+   680→        "params": {
+   681→          "const": "ECNQUOTE"
+   682→        }
+   683→      },
+   684→      {
+   685→        "instancePath": "/13/quoteType",
+   686→        "schemaPath": "#/definitions/QuoteEtf",
+   687→        "message": "Invalid const value",
+   688→        "data": "ALTSYMBOL",
+   689→        "params": {
+   690→          "const": "ETF"
+   691→        }
+   692→      },
+   693→      {
+   694→        "instancePath": "/13/quoteType",
+   695→        "schemaPath": "#/definitions/QuoteEquity",
+   696→        "message": "Invalid const value",
+   697→        "data": "ALTSYMBOL",
+   698→        "params": {
+   699→          "const": "EQUITY"
+   700→        }
+   701→      },
+   702→      {
+   703→        "instancePath": "/13/quoteType",
+   704→        "schemaPath": "#/definitions/QuoteFuture",
+   705→        "message": "Invalid const value",
+   706→        "data": "ALTSYMBOL",
+   707→        "params": {
+   708→          "const": "FUTURE"
+   709→        }
+   710→      },
+   711→      {
+   712→        "instancePath": "/13/quoteType",
+   713→        "schemaPath": "#/definitions/QuoteIndex",
+   714→        "message": "Invalid const value",
+   715→        "data": "ALTSYMBOL",
+   716→        "params": {
+   717→          "const": "INDEX"
+   718→        }
+   719→      },
+   720→      {
+   721→        "instancePath": "/13/quoteType",
+   722→        "schemaPath": "#/definitions/QuoteMutualfund",
+   723→        "message": "Invalid const value",
+   724→        "data": "ALTSYMBOL",
+   725→        "params": {
+   726→          "const": "MUTUALFUND"
+   727→        }
+   728→      },
+   729→      {
+   730→        "instancePath": "/13/quoteType",
+   731→        "schemaPath": "#/definitions/QuoteOption",
+   732→        "message": "Invalid const value",
+   733→        "data": "ALTSYMBOL",
+   734→        "params": {
+   735→          "const": "OPTION"
+   736→        }
+   737→      },
+   738→      {
+   739→        "instancePath": "/13/quoteType",
+   740→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+   741→        "message": "Invalid const value",
+   742→        "data": "ALTSYMBOL",
+   743→        "params": {
+   744→          "const": "MONEYMARKET"
+   745→        }
+   746→      },
+   747→      {
+   748→        "instancePath": "/13/typeDisp",
+   749→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+   750→        "message": "Invalid const value",
+   751→        "data": "ALTSYMBOL",
+   752→        "params": {
+   753→          "const": "MoneyMarket"
+   754→        }
+   755→      },
+   756→      {
+   757→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+   758→        "instancePath": "/13",
+   759→        "message": "Missing required properties",
+   760→        "params": {
+   761→          "missing": [
+   762→            "expireDate",
+   763→            "expireIsoDate",
+   764→            "underlyingExchangeSymbol"
+   765→          ]
+   766→        }
+   767→      },
+   768→      {
+   769→        "schemaPath": "#/definitions/QuoteFuture/required",
+   770→        "instancePath": "/13",
+   771→        "message": "Missing required properties",
+   772→        "params": {
+   773→          "missing": [
+   774→            "contractSymbol"
+   775→          ]
+   776→        }
+   777→      },
+   778→      {
+   779→        "schemaPath": "#/definitions/QuoteOption/required",
+   780→        "instancePath": "/13",
+   781→        "message": "Missing required properties",
+   782→        "params": {
+   783→          "missing": [
+   784→            "expireDate",
+   785→            "expireIsoDate",
+   786→            "openInterest",
+   787→            "strike",
+   788→            "underlyingSymbol"
+   789→          ]
+   790→        }
+   791→      }
+   792→    ]
+   793→  }
+   794→]
+   795→
+   796→This may happen intermittently, so catch errors appropriately. If it starts happening on every request that previously worked, Yahoo may have changed its API. If it affects one symbol but not others, Yahoo may be returning a symbol-specific response shape.
+   797→
+   798→Search existing reports:
+   799→
+   800→  https://github.com/gadicc/yahoo-finance2/issues?q=is%3Aissue+Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray
+   801→
+   802→Open a new issue and include the affected symbol: @gadicc/yahoo-finance2 v4.0.2
+   803→
+   804→  https://github.com/gadicc/yahoo-finance2/issues/new?template=validation-error.yml&title=Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray&library-version=4.0.2
+   805→
+   806→For information on how to turn off the above logging or skip these errors, see https://github.com/gadicc/yahoo-finance2/blob/dev/docs/validation.md.
+   807→
+   808→The "Help Fix Validation Errors" section also explains how to contribute a schema fix.
+   809→
+   810→[Yahoo Finance] Batch 8 validation error, retrying individually...
+   811→[TGJU] 109 static instruments have price=0, fetching from Yahoo Finance as fallback...
+   812→ GET /api/tgju-instruments 200 in 2.2s (compile: 116ms, render: 2.1s)
+   813→[TGJU] Yahoo fallback batch 7 validation error, retrying individually...
+   814→The following result did not validate with schema: #/definitions/QuoteResponseArray
+   815→[
+   816→  {
+   817→    "instancePath": "/0",
+   818→    "schemaPath": "#/definitions/Quote",
+   819→    "message": "should match some schema in oneOf",
+   820→    "params": {
+   821→      "discriminator": "quoteType"
+   822→    },
+   823→    "data": {
+   824→      "language": "en-US",
+   825→      "region": "US",
+   826→      "quoteType": "ALTSYMBOL",
+   827→      "typeDisp": "ALTSYMBOL",
+   828→      "triggerable": false,
+   829→      "customPriceAlertConfidence": "NONE",
+   830→      "currency": "USX",
+   831→      "regularMarketChange": -0.87000275,
+   832→      "fulldayChange": -0.87000275,
+   833→      "fulldayChangePercent": -0.9414595,
+   834→      "fulldayPrice": 91.54,
+   835→      "regularMarketDayHigh": 89.73,
+   836→      "regularMarketDayRange": "88.88 - 89.73",
+   837→      "regularMarketDayLow": 88.88,
+   838→      "regularMarketVolume": 24734,
+   839→      "regularMarketPreviousClose": 92.41,
+   840→      "fullExchangeName": "NY Mercantile",
+   841→      "fiftyTwoWeekLowChange": 2.6600037,
+   842→      "fiftyTwoWeekLowChangePercent": 0.029928034,
+   843→      "fiftyTwoWeekRange": "88.88 - 89.73",
+   844→      "fiftyTwoWeekHighChange": 1.8099976,
+   845→      "fiftyTwoWeekHighChangePercent": 0.020171598,
+   846→      "fiftyTwoWeekLow": 88.88,
+   847→      "fiftyTwoWeekHigh": 89.73,
+   848→      "marketState": "REGULAR",
+   849→      "regularMarketTime": 1787931045,
+   850→      "regularMarketChangePercent": -0.9414595,
+   851→      "regularMarketPrice": 91.54,
+   852→      "exchange": "NYM",
+   853→      "exchangeTimezoneName": "America/New_York",
+   854→      "exchangeTimezoneShortName": "EDT",
+   855→      "gmtOffSetMilliseconds": -14400000,
+   856→      "market": "us24_market",
+   857→      "esgPopulated": false,
+   858→      "sourceInterval": 30,
+   859→      "exchangeDataDelayedBy": 10,
+   860→      "tradeable": false,
+   861→      "cryptoTradeable": false,
+   862→      "hasPrePostMarketData": false,
+   863→      "firstTradeDateMilliseconds": 946875600000,
+   864→      "symbol": "CT=F"
+   865→    },
+   866→    "subErrors": [
+   867→      {
+   868→        "instancePath": "/0/quoteType",
+   869→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+   870→        "message": "Invalid const value",
+   871→        "data": "ALTSYMBOL",
+   872→        "params": {
+   873→          "const": "CRYPTOCURRENCY"
+   874→        }
+   875→      },
+   876→      {
+   877→        "instancePath": "/0/quoteType",
+   878→        "schemaPath": "#/definitions/QuoteCurrency",
+   879→        "message": "Invalid const value",
+   880→        "data": "ALTSYMBOL",
+   881→        "params": {
+   882→          "const": "CURRENCY"
+   883→        }
+   884→      },
+   885→      {
+   886→        "instancePath": "/0/quoteType",
+   887→        "schemaPath": "#/definitions/QuoteECNQuote",
+   888→        "message": "Invalid const value",
+   889→        "data": "ALTSYMBOL",
+   890→        "params": {
+   891→          "const": "ECNQUOTE"
+   892→        }
+   893→      },
+   894→      {
+   895→        "instancePath": "/0/quoteType",
+   896→        "schemaPath": "#/definitions/QuoteEtf",
+   897→        "message": "Invalid const value",
+   898→        "data": "ALTSYMBOL",
+   899→        "params": {
+   900→          "const": "ETF"
+   901→        }
+   902→      },
+   903→      {
+   904→        "instancePath": "/0/quoteType",
+   905→        "schemaPath": "#/definitions/QuoteEquity",
+   906→        "message": "Invalid const value",
+   907→        "data": "ALTSYMBOL",
+   908→        "params": {
+   909→          "const": "EQUITY"
+   910→        }
+   911→      },
+   912→      {
+   913→        "instancePath": "/0/quoteType",
+   914→        "schemaPath": "#/definitions/QuoteFuture",
+   915→        "message": "Invalid const value",
+   916→        "data": "ALTSYMBOL",
+   917→        "params": {
+   918→          "const": "FUTURE"
+   919→        }
+   920→      },
+   921→      {
+   922→        "instancePath": "/0/quoteType",
+   923→        "schemaPath": "#/definitions/QuoteIndex",
+   924→        "message": "Invalid const value",
+   925→        "data": "ALTSYMBOL",
+   926→        "params": {
+   927→          "const": "INDEX"
+   928→        }
+   929→      },
+   930→      {
+   931→        "instancePath": "/0/quoteType",
+   932→        "schemaPath": "#/definitions/QuoteMutualfund",
+   933→        "message": "Invalid const value",
+   934→        "data": "ALTSYMBOL",
+   935→        "params": {
+   936→          "const": "MUTUALFUND"
+   937→        }
+   938→      },
+   939→      {
+   940→        "instancePath": "/0/quoteType",
+   941→        "schemaPath": "#/definitions/QuoteOption",
+   942→        "message": "Invalid const value",
+   943→        "data": "ALTSYMBOL",
+   944→        "params": {
+   945→          "const": "OPTION"
+   946→        }
+   947→      },
+   948→      {
+   949→        "instancePath": "/0/quoteType",
+   950→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+   951→        "message": "Invalid const value",
+   952→        "data": "ALTSYMBOL",
+   953→        "params": {
+   954→          "const": "MONEYMARKET"
+   955→        }
+   956→      },
+   957→      {
+   958→        "instancePath": "/0/typeDisp",
+   959→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+   960→        "message": "Invalid const value",
+   961→        "data": "ALTSYMBOL",
+   962→        "params": {
+   963→          "const": "MoneyMarket"
+   964→        }
+   965→      },
+   966→      {
+   967→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+   968→        "instancePath": "/0",
+   969→        "message": "Missing required properties",
+   970→        "params": {
+   971→          "missing": [
+   972→            "expireDate",
+   973→            "expireIsoDate",
+   974→            "underlyingExchangeSymbol"
+   975→          ]
+   976→        }
+   977→      },
+   978→      {
+   979→        "schemaPath": "#/definitions/QuoteFuture/required",
+   980→        "instancePath": "/0",
+   981→        "message": "Missing required properties",
+   982→        "params": {
+   983→          "missing": [
+   984→            "contractSymbol"
+   985→          ]
+   986→        }
+   987→      },
+   988→      {
+   989→        "schemaPath": "#/definitions/QuoteOption/required",
+   990→        "instancePath": "/0",
+   991→        "message": "Missing required properties",
+   992→        "params": {
+   993→          "missing": [
+   994→            "expireDate",
+   995→            "expireIsoDate",
+   996→            "openInterest",
+   997→            "strike",
+   998→            "underlyingSymbol"
+   999→          ]
+  1000→        }
+  1001→      }
+  1002→    ]
+  1003→  }
+  1004→]
+  1005→
+  1006→This may happen intermittently, so catch errors appropriately. If it starts happening on every request that previously worked, Yahoo may have changed its API. If it affects one symbol but not others, Yahoo may be returning a symbol-specific response shape.
+  1007→
+  1008→Search existing reports:
+  1009→
+  1010→  https://github.com/gadicc/yahoo-finance2/issues?q=is%3Aissue+Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray
+  1011→
+  1012→Open a new issue and include the affected symbol: @gadicc/yahoo-finance2 v4.0.2
+  1013→
+  1014→  https://github.com/gadicc/yahoo-finance2/issues/new?template=validation-error.yml&title=Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray&library-version=4.0.2
+  1015→
+  1016→For information on how to turn off the above logging or skip these errors, see https://github.com/gadicc/yahoo-finance2/blob/dev/docs/validation.md.
+  1017→
+  1018→The "Help Fix Validation Errors" section also explains how to contribute a schema fix.
+  1019→
+  1020→The following result did not validate with schema: #/definitions/QuoteResponseArray
+  1021→[
+  1022→  {
+  1023→    "instancePath": "/0",
+  1024→    "schemaPath": "#/definitions/Quote",
+  1025→    "message": "should match some schema in oneOf",
+  1026→    "params": {
+  1027→      "discriminator": "quoteType"
+  1028→    },
+  1029→    "data": {
+  1030→      "language": "en-US",
+  1031→      "region": "US",
+  1032→      "quoteType": "ALTSYMBOL",
+  1033→      "typeDisp": "ALTSYMBOL",
+  1034→      "triggerable": false,
+  1035→      "customPriceAlertConfidence": "NONE",
+  1036→      "currency": "USX",
+  1037→      "sourceInterval": 10,
+  1038→      "exchangeDataDelayedBy": 10,
+  1039→      "tradeable": false,
+  1040→      "cryptoTradeable": false,
+  1041→      "hasPrePostMarketData": false,
+  1042→      "firstTradeDateMilliseconds": 951886800000,
+  1043→      "regularMarketTime": 1598033099,
+  1044→      "exchange": "CME",
+  1045→      "exchangeTimezoneName": "America/New_York",
+  1046→      "exchangeTimezoneShortName": "EDT",
+  1047→      "gmtOffSetMilliseconds": -14400000,
+  1048→      "market": "us24_market",
+  1049→      "esgPopulated": false,
+  1050→      "marketState": "REGULAR",
+  1051→      "regularMarketChange": -0.724998,
+  1052→      "fulldayChange": -0.724998,
+  1053→      "fulldayChangePercent": -0.66044,
+  1054→      "fulldayPrice": 109.05,
+  1055→      "regularMarketDayHigh": 109.85,
+  1056→      "regularMarketDayRange": "108.375 - 109.85",
+  1057→      "regularMarketDayLow": 108.375,
+  1058→      "regularMarketVolume": 16686,
+  1059→      "regularMarketPreviousClose": 109.775,
+  1060→      "fullExchangeName": "CME",
+  1061→      "regularMarketOpen": 109.325,
+  1062→      "fiftyTwoWeekLowChange": 0.67500305,
+  1063→      "fiftyTwoWeekLowChangePercent": 0.006228402,
+  1064→      "fiftyTwoWeekRange": "108.375 - 109.85",
+  1065→      "fiftyTwoWeekHighChange": -0.7999954,
+  1066→      "fiftyTwoWeekHighChangePercent": -0.0072826166,
+  1067→      "fiftyTwoWeekLow": 108.375,
+  1068→      "fiftyTwoWeekHigh": 109.85,
+  1069→      "regularMarketChangePercent": -0.66044,
+  1070→      "regularMarketPrice": 109.05,
+  1071→      "symbol": "LC=F"
+  1072→    },
+  1073→    "subErrors": [
+  1074→      {
+  1075→        "instancePath": "/0/quoteType",
+  1076→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+  1077→        "message": "Invalid const value",
+  1078→        "data": "ALTSYMBOL",
+  1079→        "params": {
+  1080→          "const": "CRYPTOCURRENCY"
+  1081→        }
+  1082→      },
+  1083→      {
+  1084→        "instancePath": "/0/quoteType",
+  1085→        "schemaPath": "#/definitions/QuoteCurrency",
+  1086→        "message": "Invalid const value",
+  1087→        "data": "ALTSYMBOL",
+  1088→        "params": {
+  1089→          "const": "CURRENCY"
+  1090→        }
+  1091→      },
+  1092→      {
+  1093→        "instancePath": "/0/quoteType",
+  1094→        "schemaPath": "#/definitions/QuoteECNQuote",
+  1095→        "message": "Invalid const value",
+  1096→        "data": "ALTSYMBOL",
+  1097→        "params": {
+  1098→          "const": "ECNQUOTE"
+  1099→        }
+  1100→      },
+  1101→      {
+  1102→        "instancePath": "/0/quoteType",
+  1103→        "schemaPath": "#/definitions/QuoteEtf",
+  1104→        "message": "Invalid const value",
+  1105→        "data": "ALTSYMBOL",
+  1106→        "params": {
+  1107→          "const": "ETF"
+  1108→        }
+  1109→      },
+  1110→      {
+  1111→        "instancePath": "/0/quoteType",
+  1112→        "schemaPath": "#/definitions/QuoteEquity",
+  1113→        "message": "Invalid const value",
+  1114→        "data": "ALTSYMBOL",
+  1115→        "params": {
+  1116→          "const": "EQUITY"
+  1117→        }
+  1118→      },
+  1119→      {
+  1120→        "instancePath": "/0/quoteType",
+  1121→        "schemaPath": "#/definitions/QuoteFuture",
+  1122→        "message": "Invalid const value",
+  1123→        "data": "ALTSYMBOL",
+  1124→        "params": {
+  1125→          "const": "FUTURE"
+  1126→        }
+  1127→      },
+  1128→      {
+  1129→        "instancePath": "/0/quoteType",
+  1130→        "schemaPath": "#/definitions/QuoteIndex",
+  1131→        "message": "Invalid const value",
+  1132→        "data": "ALTSYMBOL",
+  1133→        "params": {
+  1134→          "const": "INDEX"
+  1135→        }
+  1136→      },
+  1137→      {
+  1138→        "instancePath": "/0/quoteType",
+  1139→        "schemaPath": "#/definitions/QuoteMutualfund",
+  1140→        "message": "Invalid const value",
+  1141→        "data": "ALTSYMBOL",
+  1142→        "params": {
+  1143→          "const": "MUTUALFUND"
+  1144→        }
+  1145→      },
+  1146→      {
+  1147→        "instancePath": "/0/quoteType",
+  1148→        "schemaPath": "#/definitions/QuoteOption",
+  1149→        "message": "Invalid const value",
+  1150→        "data": "ALTSYMBOL",
+  1151→        "params": {
+  1152→          "const": "OPTION"
+  1153→        }
+  1154→      },
+  1155→      {
+  1156→        "instancePath": "/0/quoteType",
+  1157→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1158→        "message": "Invalid const value",
+  1159→        "data": "ALTSYMBOL",
+  1160→        "params": {
+  1161→          "const": "MONEYMARKET"
+  1162→        }
+  1163→      },
+  1164→      {
+  1165→        "instancePath": "/0/typeDisp",
+  1166→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1167→        "message": "Invalid const value",
+  1168→        "data": "ALTSYMBOL",
+  1169→        "params": {
+  1170→          "const": "MoneyMarket"
+  1171→        }
+  1172→      },
+  1173→      {
+  1174→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+  1175→        "instancePath": "/0",
+  1176→        "message": "Missing required properties",
+  1177→        "params": {
+  1178→          "missing": [
+  1179→            "expireDate",
+  1180→            "expireIsoDate",
+  1181→            "underlyingExchangeSymbol"
+  1182→          ]
+  1183→        }
+  1184→      },
+  1185→      {
+  1186→        "schemaPath": "#/definitions/QuoteFuture/required",
+  1187→        "instancePath": "/0",
+  1188→        "message": "Missing required properties",
+  1189→        "params": {
+  1190→          "missing": [
+  1191→            "contractSymbol"
+  1192→          ]
+  1193→        }
+  1194→      },
+  1195→      {
+  1196→        "schemaPath": "#/definitions/QuoteOption/required",
+  1197→        "instancePath": "/0",
+  1198→        "message": "Missing required properties",
+  1199→        "params": {
+  1200→          "missing": [
+  1201→            "expireDate",
+  1202→            "expireIsoDate",
+  1203→            "openInterest",
+  1204→            "strike",
+  1205→            "underlyingSymbol"
+  1206→          ]
+  1207→        }
+  1208→      }
+  1209→    ]
+  1210→  }
+  1211→]
+  1212→
+  1213→This may happen intermittently, so catch errors appropriately. If it starts happening on every request that previously worked, Yahoo may have changed its API. If it affects one symbol but not others, Yahoo may be returning a symbol-specific response shape.
+  1214→
+  1215→Search existing reports:
+  1216→
+  1217→  https://github.com/gadicc/yahoo-finance2/issues?q=is%3Aissue+Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray
+  1218→
+  1219→Open a new issue and include the affected symbol: @gadicc/yahoo-finance2 v4.0.2
+  1220→
+  1221→  https://github.com/gadicc/yahoo-finance2/issues/new?template=validation-error.yml&title=Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray&library-version=4.0.2
+  1222→
+  1223→For information on how to turn off the above logging or skip these errors, see https://github.com/gadicc/yahoo-finance2/blob/dev/docs/validation.md.
+  1224→
+  1225→The "Help Fix Validation Errors" section also explains how to contribute a schema fix.
+  1226→
+  1227→The following result did not validate with schema: #/definitions/QuoteResponseArray
+  1228→[
+  1229→  {
+  1230→    "instancePath": "/2",
+  1231→    "schemaPath": "#/definitions/Quote",
+  1232→    "message": "should match some schema in oneOf",
+  1233→    "params": {
+  1234→      "discriminator": "quoteType"
+  1235→    },
+  1236→    "data": {
+  1237→      "language": "en-US",
+  1238→      "region": "US",
+  1239→      "quoteType": "ALTSYMBOL",
+  1240→      "typeDisp": "ALTSYMBOL",
+  1241→      "triggerable": false,
+  1242→      "customPriceAlertConfidence": "NONE",
+  1243→      "currency": "USD",
+  1244→      "regularMarketTime": 1681154654,
+  1245→      "exchange": "CME",
+  1246→      "exchangeTimezoneName": "America/New_York",
+  1247→      "exchangeTimezoneShortName": "EDT",
+  1248→      "gmtOffSetMilliseconds": -14400000,
+  1249→      "market": "us24_market",
+  1250→      "esgPopulated": false,
+  1251→      "regularMarketChangePercent": -1.1171701,
+  1252→      "regularMarketPrice": 380.6,
+  1253→      "sourceInterval": 10,
+  1254→      "exchangeDataDelayedBy": 10,
+  1255→      "tradeable": false,
+  1256→      "cryptoTradeable": false,
+  1257→      "hasPrePostMarketData": false,
+  1258→      "firstTradeDateMilliseconds": 963806400000,
+  1259→      "regularMarketChange": -4.299988,
+  1260→      "fulldayChange": -4.299988,
+  1261→      "fulldayChangePercent": -1.1171701,
+  1262→      "fulldayPrice": 380.6,
+  1263→      "regularMarketDayHigh": 395.7,
+  1264→      "regularMarketDayRange": "379.5 - 395.7",
+  1265→      "regularMarketDayLow": 379.5,
+  1266→      "regularMarketVolume": 193,
+  1267→      "regularMarketPreviousClose": 384.9,
+  1268→      "fullExchangeName": "CME",
+  1269→      "regularMarketOpen": 382.7,
+  1270→      "fiftyTwoWeekLowChange": 1.1000061,
+  1271→      "fiftyTwoWeekLowChangePercent": 0.002898567,
+  1272→      "fiftyTwoWeekRange": "379.5 - 395.7",
+  1273→      "fiftyTwoWeekHighChange": -15.100006,
+  1274→      "fiftyTwoWeekHighChangePercent": -0.03816024,
+  1275→      "fiftyTwoWeekLow": 379.5,
+  1276→      "fiftyTwoWeekHigh": 395.7,
+  1277→      "longName": "Random Length Lumber Futures",
+  1278→      "marketState": "REGULAR",
+  1279→      "shortName": "Lumber May 23",
+  1280→      "symbol": "LBS=F"
+  1281→    },
+  1282→    "subErrors": [
+  1283→      {
+  1284→        "instancePath": "/2/quoteType",
+  1285→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+  1286→        "message": "Invalid const value",
+  1287→        "data": "ALTSYMBOL",
+  1288→        "params": {
+  1289→          "const": "CRYPTOCURRENCY"
+  1290→        }
+  1291→      },
+  1292→      {
+  1293→        "instancePath": "/2/quoteType",
+  1294→        "schemaPath": "#/definitions/QuoteCurrency",
+  1295→        "message": "Invalid const value",
+  1296→        "data": "ALTSYMBOL",
+  1297→        "params": {
+  1298→          "const": "CURRENCY"
+  1299→        }
+  1300→      },
+  1301→      {
+  1302→        "instancePath": "/2/quoteType",
+  1303→        "schemaPath": "#/definitions/QuoteECNQuote",
+  1304→        "message": "Invalid const value",
+  1305→        "data": "ALTSYMBOL",
+  1306→        "params": {
+  1307→          "const": "ECNQUOTE"
+  1308→        }
+  1309→      },
+  1310→      {
+  1311→        "instancePath": "/2/quoteType",
+  1312→        "schemaPath": "#/definitions/QuoteEtf",
+  1313→        "message": "Invalid const value",
+  1314→        "data": "ALTSYMBOL",
+  1315→        "params": {
+  1316→          "const": "ETF"
+  1317→        }
+  1318→      },
+  1319→      {
+  1320→        "instancePath": "/2/quoteType",
+  1321→        "schemaPath": "#/definitions/QuoteEquity",
+  1322→        "message": "Invalid const value",
+  1323→        "data": "ALTSYMBOL",
+  1324→        "params": {
+  1325→          "const": "EQUITY"
+  1326→        }
+  1327→      },
+  1328→      {
+  1329→        "instancePath": "/2/quoteType",
+  1330→        "schemaPath": "#/definitions/QuoteFuture",
+  1331→        "message": "Invalid const value",
+  1332→        "data": "ALTSYMBOL",
+  1333→        "params": {
+  1334→          "const": "FUTURE"
+  1335→        }
+  1336→      },
+  1337→      {
+  1338→        "instancePath": "/2/quoteType",
+  1339→        "schemaPath": "#/definitions/QuoteIndex",
+  1340→        "message": "Invalid const value",
+  1341→        "data": "ALTSYMBOL",
+  1342→        "params": {
+  1343→          "const": "INDEX"
+  1344→        }
+  1345→      },
+  1346→      {
+  1347→        "instancePath": "/2/quoteType",
+  1348→        "schemaPath": "#/definitions/QuoteMutualfund",
+  1349→        "message": "Invalid const value",
+  1350→        "data": "ALTSYMBOL",
+  1351→        "params": {
+  1352→          "const": "MUTUALFUND"
+  1353→        }
+  1354→      },
+  1355→      {
+  1356→        "instancePath": "/2/quoteType",
+  1357→        "schemaPath": "#/definitions/QuoteOption",
+  1358→        "message": "Invalid const value",
+  1359→        "data": "ALTSYMBOL",
+  1360→        "params": {
+  1361→          "const": "OPTION"
+  1362→        }
+  1363→      },
+  1364→      {
+  1365→        "instancePath": "/2/quoteType",
+  1366→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1367→        "message": "Invalid const value",
+  1368→        "data": "ALTSYMBOL",
+  1369→        "params": {
+  1370→          "const": "MONEYMARKET"
+  1371→        }
+  1372→      },
+  1373→      {
+  1374→        "instancePath": "/2/typeDisp",
+  1375→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1376→        "message": "Invalid const value",
+  1377→        "data": "ALTSYMBOL",
+  1378→        "params": {
+  1379→          "const": "MoneyMarket"
+  1380→        }
+  1381→      },
+  1382→      {
+  1383→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+  1384→        "instancePath": "/2",
+  1385→        "message": "Missing required properties",
+  1386→        "params": {
+  1387→          "missing": [
+  1388→            "expireDate",
+  1389→            "expireIsoDate",
+  1390→            "underlyingExchangeSymbol"
+  1391→          ]
+  1392→        }
+  1393→      },
+  1394→      {
+  1395→        "schemaPath": "#/definitions/QuoteFuture/required",
+  1396→        "instancePath": "/2",
+  1397→        "message": "Missing required properties",
+  1398→        "params": {
+  1399→          "missing": [
+  1400→            "contractSymbol"
+  1401→          ]
+  1402→        }
+  1403→      },
+  1404→      {
+  1405→        "schemaPath": "#/definitions/QuoteOption/required",
+  1406→        "instancePath": "/2",
+  1407→        "message": "Missing required properties",
+  1408→        "params": {
+  1409→          "missing": [
+  1410→            "expireDate",
+  1411→            "expireIsoDate",
+  1412→            "openInterest",
+  1413→            "strike",
+  1414→            "underlyingSymbol"
+  1415→          ]
+  1416→        }
+  1417→      }
+  1418→    ]
+  1419→  }
+  1420→]
+  1421→
+  1422→This may happen intermittently, so catch errors appropriately. If it starts happening on every request that previously worked, Yahoo may have changed its API. If it affects one symbol but not others, Yahoo may be returning a symbol-specific response shape.
+  1423→
+  1424→Search existing reports:
+  1425→
+  1426→  https://github.com/gadicc/yahoo-finance2/issues?q=is%3Aissue+Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray
+  1427→
+  1428→Open a new issue and include the affected symbol: @gadicc/yahoo-finance2 v4.0.2
+  1429→
+  1430→  https://github.com/gadicc/yahoo-finance2/issues/new?template=validation-error.yml&title=Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray&library-version=4.0.2
+  1431→
+  1432→For information on how to turn off the above logging or skip these errors, see https://github.com/gadicc/yahoo-finance2/blob/dev/docs/validation.md.
+  1433→
+  1434→The "Help Fix Validation Errors" section also explains how to contribute a schema fix.
+  1435→
+  1436→[Yahoo Finance] Batch 9 validation error, retrying individually...
+  1437→The following result did not validate with schema: #/definitions/QuoteResponseArray
+  1438→[
+  1439→  {
+  1440→    "instancePath": "/0",
+  1441→    "schemaPath": "#/definitions/Quote",
+  1442→    "message": "should match some schema in oneOf",
+  1443→    "params": {
+  1444→      "discriminator": "quoteType"
+  1445→    },
+  1446→    "data": {
+  1447→      "language": "en-US",
+  1448→      "region": "US",
+  1449→      "quoteType": "ALTSYMBOL",
+  1450→      "typeDisp": "ALTSYMBOL",
+  1451→      "triggerable": false,
+  1452→      "customPriceAlertConfidence": "NONE",
+  1453→      "currency": "USD",
+  1454→      "regularMarketChange": -4.299988,
+  1455→      "fulldayChange": -4.299988,
+  1456→      "fulldayChangePercent": -1.1171701,
+  1457→      "fulldayPrice": 380.6,
+  1458→      "regularMarketDayHigh": 395.7,
+  1459→      "regularMarketDayRange": "379.5 - 395.7",
+  1460→      "regularMarketDayLow": 379.5,
+  1461→      "regularMarketVolume": 193,
+  1462→      "regularMarketPreviousClose": 384.9,
+  1463→      "fullExchangeName": "CME",
+  1464→      "regularMarketOpen": 382.7,
+  1465→      "fiftyTwoWeekLowChange": 1.1000061,
+  1466→      "fiftyTwoWeekLowChangePercent": 0.002898567,
+  1467→      "fiftyTwoWeekRange": "379.5 - 395.7",
+  1468→      "fiftyTwoWeekHighChange": -15.100006,
+  1469→      "fiftyTwoWeekHighChangePercent": -0.03816024,
+  1470→      "fiftyTwoWeekLow": 379.5,
+  1471→      "fiftyTwoWeekHigh": 395.7,
+  1472→      "marketState": "REGULAR",
+  1473→      "regularMarketTime": 1681154654,
+  1474→      "regularMarketChangePercent": -1.1171701,
+  1475→      "regularMarketPrice": 380.6,
+  1476→      "exchange": "CME",
+  1477→      "exchangeTimezoneName": "America/New_York",
+  1478→      "exchangeTimezoneShortName": "EDT",
+  1479→      "gmtOffSetMilliseconds": -14400000,
+  1480→      "market": "us24_market",
+  1481→      "esgPopulated": false,
+  1482→      "sourceInterval": 10,
+  1483→      "exchangeDataDelayedBy": 10,
+  1484→      "tradeable": false,
+  1485→      "cryptoTradeable": false,
+  1486→      "hasPrePostMarketData": false,
+  1487→      "firstTradeDateMilliseconds": 963806400000,
+  1488→      "symbol": "LBS=F"
+  1489→    },
+  1490→    "subErrors": [
+  1491→      {
+  1492→        "instancePath": "/0/quoteType",
+  1493→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+  1494→        "message": "Invalid const value",
+  1495→        "data": "ALTSYMBOL",
+  1496→        "params": {
+  1497→          "const": "CRYPTOCURRENCY"
+  1498→        }
+  1499→      },
+  1500→      {
+  1501→        "instancePath": "/0/quoteType",
+  1502→        "schemaPath": "#/definitions/QuoteCurrency",
+  1503→        "message": "Invalid const value",
+  1504→        "data": "ALTSYMBOL",
+  1505→        "params": {
+  1506→          "const": "CURRENCY"
+  1507→        }
+  1508→      },
+  1509→      {
+  1510→        "instancePath": "/0/quoteType",
+  1511→        "schemaPath": "#/definitions/QuoteECNQuote",
+  1512→        "message": "Invalid const value",
+  1513→        "data": "ALTSYMBOL",
+  1514→        "params": {
+  1515→          "const": "ECNQUOTE"
+  1516→        }
+  1517→      },
+  1518→      {
+  1519→        "instancePath": "/0/quoteType",
+  1520→        "schemaPath": "#/definitions/QuoteEtf",
+  1521→        "message": "Invalid const value",
+  1522→        "data": "ALTSYMBOL",
+  1523→        "params": {
+  1524→          "const": "ETF"
+  1525→        }
+  1526→      },
+  1527→      {
+  1528→        "instancePath": "/0/quoteType",
+  1529→        "schemaPath": "#/definitions/QuoteEquity",
+  1530→        "message": "Invalid const value",
+  1531→        "data": "ALTSYMBOL",
+  1532→        "params": {
+  1533→          "const": "EQUITY"
+  1534→        }
+  1535→      },
+  1536→      {
+  1537→        "instancePath": "/0/quoteType",
+  1538→        "schemaPath": "#/definitions/QuoteFuture",
+  1539→        "message": "Invalid const value",
+  1540→        "data": "ALTSYMBOL",
+  1541→        "params": {
+  1542→          "const": "FUTURE"
+  1543→        }
+  1544→      },
+  1545→      {
+  1546→        "instancePath": "/0/quoteType",
+  1547→        "schemaPath": "#/definitions/QuoteIndex",
+  1548→        "message": "Invalid const value",
+  1549→        "data": "ALTSYMBOL",
+  1550→        "params": {
+  1551→          "const": "INDEX"
+  1552→        }
+  1553→      },
+  1554→      {
+  1555→        "instancePath": "/0/quoteType",
+  1556→        "schemaPath": "#/definitions/QuoteMutualfund",
+  1557→        "message": "Invalid const value",
+  1558→        "data": "ALTSYMBOL",
+  1559→        "params": {
+  1560→          "const": "MUTUALFUND"
+  1561→        }
+  1562→      },
+  1563→      {
+  1564→        "instancePath": "/0/quoteType",
+  1565→        "schemaPath": "#/definitions/QuoteOption",
+  1566→        "message": "Invalid const value",
+  1567→        "data": "ALTSYMBOL",
+  1568→        "params": {
+  1569→          "const": "OPTION"
+  1570→        }
+  1571→      },
+  1572→      {
+  1573→        "instancePath": "/0/quoteType",
+  1574→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1575→        "message": "Invalid const value",
+  1576→        "data": "ALTSYMBOL",
+  1577→        "params": {
+  1578→          "const": "MONEYMARKET"
+  1579→        }
+  1580→      },
+  1581→      {
+  1582→        "instancePath": "/0/typeDisp",
+  1583→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1584→        "message": "Invalid const value",
+  1585→        "data": "ALTSYMBOL",
+  1586→        "params": {
+  1587→          "const": "MoneyMarket"
+  1588→        }
+  1589→      },
+  1590→      {
+  1591→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+  1592→        "instancePath": "/0",
+  1593→        "message": "Missing required properties",
+  1594→        "params": {
+  1595→          "missing": [
+  1596→            "expireDate",
+  1597→            "expireIsoDate",
+  1598→            "underlyingExchangeSymbol"
+  1599→          ]
+  1600→        }
+  1601→      },
+  1602→      {
+  1603→        "schemaPath": "#/definitions/QuoteFuture/required",
+  1604→        "instancePath": "/0",
+  1605→        "message": "Missing required properties",
+  1606→        "params": {
+  1607→          "missing": [
+  1608→            "contractSymbol"
+  1609→          ]
+  1610→        }
+  1611→      },
+  1612→      {
+  1613→        "schemaPath": "#/definitions/QuoteOption/required",
+  1614→        "instancePath": "/0",
+  1615→        "message": "Missing required properties",
+  1616→        "params": {
+  1617→          "missing": [
+  1618→            "expireDate",
+  1619→            "expireIsoDate",
+  1620→            "openInterest",
+  1621→            "strike",
+  1622→            "underlyingSymbol"
+  1623→          ]
+  1624→        }
+  1625→      }
+  1626→    ]
+  1627→  }
+  1628→]
+  1629→
+  1630→This may happen intermittently, so catch errors appropriately. If it starts happening on every request that previously worked, Yahoo may have changed its API. If it affects one symbol but not others, Yahoo may be returning a symbol-specific response shape.
+  1631→
+  1632→Search existing reports:
+  1633→
+  1634→  https://github.com/gadicc/yahoo-finance2/issues?q=is%3Aissue+Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray
+  1635→
+  1636→Open a new issue and include the affected symbol: @gadicc/yahoo-finance2 v4.0.2
+  1637→
+  1638→  https://github.com/gadicc/yahoo-finance2/issues/new?template=validation-error.yml&title=Failed%20validation%3A%20%23%2Fdefinitions%2FQuoteResponseArray&library-version=4.0.2
+  1639→
+  1640→For information on how to turn off the above logging or skip these errors, see https://github.com/gadicc/yahoo-finance2/blob/dev/docs/validation.md.
+  1641→
+  1642→The "Help Fix Validation Errors" section also explains how to contribute a schema fix.
+  1643→
+  1644→[TGJU] Yahoo fallback filled 97/109 instrument prices
+  1645→ GET /api/yahoo-instruments 200 in 4.3s (compile: 31ms, render: 4.3s)
+  1646→ GET /api/instruments 200 in 10.5s (compile: 8ms, render: 10.5s)
+  1647→[tse-api] Using candlestick file cache for فولاد (4210 candles)
+  1648→[analysis] Historical snapshots for فولاد: 30 days (data.length=4210)
+  1649→[analysis] probabilityTrend built: 9 scenarios, horizon=30
+  1650→ GET /api/analysis?symbol=%D9%81%D9%88%D9%84%D8%A7%D8%AF 200 in 5.3s (compile: 3ms, render: 5.3s)
+  1651→[AI] Generating for فولاد مبارکه اصفهان (cache miss) [10ms]
+  1652→[AI-dedicated] Attempt 1/3...
+  1653→[AI-dedicated] Success in 23.6s (attempt 1)
+  1654→[AI] Saved to daily cache: فولاد مبارکه اصفهان (2026-08-31) [23572ms]
+  1655→[AI] Complete for فولاد مبارکه اصفهان [23572ms]
+  1656→ POST /api/ai-analysis 200 in 23.6s (compile: 2ms, render: 23.6s)
+  1657→ GET / 200 in 39ms (compile: 3ms, render: 36ms)
+  1658→ GET / 200 in 47ms (compile: 3ms, render: 44ms)
+  1659→ GET / 200 in 36ms (compile: 2ms, render: 33ms)
+  1660→The following result did not validate with schema: #/definitions/QuoteResponseArray
+  1661→[
+  1662→  {
+  1663→    "instancePath": "/12",
+  1664→    "schemaPath": "#/definitions/Quote",
+  1665→    "message": "should match some schema in oneOf",
+  1666→    "params": {
+  1667→      "discriminator": "quoteType"
+  1668→    },
+  1669→    "data": {
+  1670→      "language": "en-US",
+  1671→      "region": "US",
+  1672→      "quoteType": "ALTSYMBOL",
+  1673→      "typeDisp": "ALTSYMBOL",
+  1674→      "triggerable": false,
+  1675→      "customPriceAlertConfidence": "NONE",
+  1676→      "currency": "USX",
+  1677→      "regularMarketChangePercent": 0.6784885,
+  1678→      "regularMarketPrice": 92,
+  1679→      "regularMarketTime": 1788161435,
+  1680→      "marketState": "REGULAR",
+  1681→      "exchange": "NYM",
+  1682→      "exchangeTimezoneName": "America/New_York",
+  1683→      "exchangeTimezoneShortName": "EDT",
+  1684→      "gmtOffSetMilliseconds": -14400000,
+  1685→      "market": "us24_market",
+  1686→      "esgPopulated": false,
+  1687→      "hasPrePostMarketData": false,
+  1688→      "firstTradeDateMilliseconds": 946875600000,
+  1689→      "regularMarketChange": 0.62000275,
+  1690→      "fulldayChange": 0.62000275,
+  1691→      "fulldayChangePercent": 0.6784885,
+  1692→      "fulldayPrice": 92,
+  1693→      "regularMarketDayHigh": 89.73,
+  1694→      "regularMarketDayRange": "88.88 - 89.73",
+  1695→      "regularMarketDayLow": 88.88,
+  1696→      "regularMarketVolume": 3758,
+  1697→      "regularMarketPreviousClose": 92.41,
+  1698→      "fullExchangeName": "NY Mercantile",
+  1699→      "fiftyTwoWeekLowChange": 3.1200027,
+  1700→      "fiftyTwoWeekLowChangePercent": 0.03510354,
+  1701→      "fiftyTwoWeekRange": "88.88 - 89.73",
+  1702→      "fiftyTwoWeekHighChange": 2.2699966,
+  1703→      "fiftyTwoWeekHighChangePercent": 0.025298078,
+  1704→      "fiftyTwoWeekLow": 88.88,
+  1705→      "fiftyTwoWeekHigh": 89.73,
+  1706→      "sourceInterval": 30,
+  1707→      "exchangeDataDelayedBy": 10,
+  1708→      "tradeable": false,
+  1709→      "cryptoTradeable": false,
+  1710→      "symbol": "CT=F"
+  1711→    },
+  1712→    "subErrors": [
+  1713→      {
+  1714→        "instancePath": "/12/quoteType",
+  1715→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+  1716→        "message": "Invalid const value",
+  1717→        "data": "ALTSYMBOL",
+  1718→        "params": {
+  1719→          "const": "CRYPTOCURRENCY"
+  1720→        }
+  1721→      },
+  1722→      {
+  1723→        "instancePath": "/12/quoteType",
+  1724→        "schemaPath": "#/definitions/QuoteCurrency",
+  1725→        "message": "Invalid const value",
+  1726→        "data": "ALTSYMBOL",
+  1727→        "params": {
+  1728→          "const": "CURRENCY"
+  1729→        }
+  1730→      },
+  1731→      {
+  1732→        "instancePath": "/12/quoteType",
+  1733→        "schemaPath": "#/definitions/QuoteECNQuote",
+  1734→        "message": "Invalid const value",
+  1735→        "data": "ALTSYMBOL",
+  1736→        "params": {
+  1737→          "const": "ECNQUOTE"
+  1738→        }
+  1739→      },
+  1740→      {
+  1741→        "instancePath": "/12/quoteType",
+  1742→        "schemaPath": "#/definitions/QuoteEtf",
+  1743→        "message": "Invalid const value",
+  1744→        "data": "ALTSYMBOL",
+  1745→        "params": {
+  1746→          "const": "ETF"
+  1747→        }
+  1748→      },
+  1749→      {
+  1750→        "instancePath": "/12/quoteType",
+  1751→        "schemaPath": "#/definitions/QuoteEquity",
+  1752→        "message": "Invalid const value",
+  1753→        "data": "ALTSYMBOL",
+  1754→        "params": {
+  1755→          "const": "EQUITY"
+  1756→        }
+  1757→      },
+  1758→      {
+  1759→        "instancePath": "/12/quoteType",
+  1760→        "schemaPath": "#/definitions/QuoteFuture",
+  1761→        "message": "Invalid const value",
+  1762→        "data": "ALTSYMBOL",
+  1763→        "params": {
+  1764→          "const": "FUTURE"
+  1765→        }
+  1766→      },
+  1767→      {
+  1768→        "instancePath": "/12/quoteType",
+  1769→        "schemaPath": "#/definitions/QuoteIndex",
+  1770→        "message": "Invalid const value",
+  1771→        "data": "ALTSYMBOL",
+  1772→        "params": {
+  1773→          "const": "INDEX"
+  1774→        }
+  1775→      },
+  1776→      {
+  1777→        "instancePath": "/12/quoteType",
+  1778→        "schemaPath": "#/definitions/QuoteMutualfund",
+  1779→        "message": "Invalid const value",
+  1780→        "data": "ALTSYMBOL",
+  1781→        "params": {
+  1782→          "const": "MUTUALFUND"
+  1783→        }
+  1784→      },
+  1785→      {
+  1786→        "instancePath": "/12/quoteType",
+  1787→        "schemaPath": "#/definitions/QuoteOption",
+  1788→        "message": "Invalid const value",
+  1789→        "data": "ALTSYMBOL",
+  1790→        "params": {
+  1791→          "const": "OPTION"
+  1792→        }
+  1793→      },
+  1794→      {
+  1795→        "instancePath": "/12/quoteType",
+  1796→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1797→        "message": "Invalid const value",
+  1798→        "data": "ALTSYMBOL",
+  1799→        "params": {
+  1800→          "const": "MONEYMARKET"
+  1801→        }
+  1802→      },
+  1803→      {
+  1804→        "instancePath": "/12/typeDisp",
+  1805→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1806→        "message": "Invalid const value",
+  1807→        "data": "ALTSYMBOL",
+  1808→        "params": {
+  1809→          "const": "MoneyMarket"
+  1810→        }
+  1811→      },
+  1812→      {
+  1813→        "schemaPath": "#/definitions/QuoteAltSymbol/required",
+  1814→        "instancePath": "/12",
+  1815→        "message": "Missing required properties",
+  1816→        "params": {
+  1817→          "missing": [
+  1818→            "expireDate",
+  1819→            "expireIsoDate",
+  1820→            "underlyingExchangeSymbol"
+  1821→          ]
+  1822→        }
+  1823→      },
+  1824→      {
+  1825→        "schemaPath": "#/definitions/QuoteFuture/required",
+  1826→        "instancePath": "/12",
+  1827→        "message": "Missing required properties",
+  1828→        "params": {
+  1829→          "missing": [
+  1830→            "contractSymbol"
+  1831→          ]
+  1832→        }
+  1833→      },
+  1834→      {
+  1835→        "schemaPath": "#/definitions/QuoteOption/required",
+  1836→        "instancePath": "/12",
+  1837→        "message": "Missing required properties",
+  1838→        "params": {
+  1839→          "missing": [
+  1840→            "expireDate",
+  1841→            "expireIsoDate",
+  1842→            "openInterest",
+  1843→            "strike",
+  1844→            "underlyingSymbol"
+  1845→          ]
+  1846→        }
+  1847→      }
+  1848→    ]
+  1849→  },
+  1850→  {
+  1851→    "instancePath": "/13",
+  1852→    "schemaPath": "#/definitions/Quote",
+  1853→    "message": "should match some schema in oneOf",
+  1854→    "params": {
+  1855→      "discriminator": "quoteType"
+  1856→    },
+  1857→    "data": {
+  1858→      "language": "en-US",
+  1859→      "region": "US",
+  1860→      "quoteType": "ALTSYMBOL",
+  1861→      "typeDisp": "ALTSYMBOL",
+  1862→      "triggerable": false,
+  1863→      "customPriceAlertConfidence": "NONE",
+  1864→      "currency": "USX",
+  1865→      "regularMarketChangePercent": -0.66044,
+  1866→      "regularMarketPrice": 109.05,
+  1867→      "regularMarketTime": 1598033099,
+  1868→      "marketState": "REGULAR",
+  1869→      "shortName": "Live Cattle Oct 20",
+  1870→      "exchange": "CME",
+  1871→      "exchangeTimezoneName": "America/New_York",
+  1872→      "exchangeTimezoneShortName": "EDT",
+  1873→      "gmtOffSetMilliseconds": -14400000,
+  1874→      "market": "us24_market",
+  1875→      "esgPopulated": false,
+  1876→      "hasPrePostMarketData": false,
+  1877→      "firstTradeDateMilliseconds": 951886800000,
+  1878→      "regularMarketChange": -0.724998,
+  1879→      "fulldayChange": -0.724998,
+  1880→      "fulldayChangePercent": -0.66044,
+  1881→      "fulldayPrice": 109.05,
+  1882→      "regularMarketDayHigh": 109.85,
+  1883→      "regularMarketDayRange": "108.375 - 109.85",
+  1884→      "regularMarketDayLow": 108.375,
+  1885→      "regularMarketVolume": 16686,
+  1886→      "regularMarketPreviousClose": 109.775,
+  1887→      "fullExchangeName": "CME",
+  1888→      "regularMarketOpen": 109.325,
+  1889→      "fiftyTwoWeekLowChange": 0.67500305,
+  1890→      "fiftyTwoWeekLowChangePercent": 0.006228402,
+  1891→      "fiftyTwoWeekRange": "108.375 - 109.85",
+  1892→      "fiftyTwoWeekHighChange": -0.7999954,
+  1893→      "fiftyTwoWeekHighChangePercent": -0.0072826166,
+  1894→      "fiftyTwoWeekLow": 108.375,
+  1895→      "fiftyTwoWeekHigh": 109.85,
+  1896→      "sourceInterval": 10,
+  1897→      "exchangeDataDelayedBy": 10,
+  1898→      "tradeable": false,
+  1899→      "cryptoTradeable": false,
+  1900→      "symbol": "LC=F"
+  1901→    },
+  1902→    "subErrors": [
+  1903→      {
+  1904→        "instancePath": "/13/quoteType",
+  1905→        "schemaPath": "#/definitions/QuoteCryptoCurrency",
+  1906→        "message": "Invalid const value",
+  1907→        "data": "ALTSYMBOL",
+  1908→        "params": {
+  1909→          "const": "CRYPTOCURRENCY"
+  1910→        }
+  1911→      },
+  1912→      {
+  1913→        "instancePath": "/13/quoteType",
+  1914→        "schemaPath": "#/definitions/QuoteCurrency",
+  1915→        "message": "Invalid const value",
+  1916→        "data": "ALTSYMBOL",
+  1917→        "params": {
+  1918→          "const": "CURRENCY"
+  1919→        }
+  1920→      },
+  1921→      {
+  1922→        "instancePath": "/13/quoteType",
+  1923→        "schemaPath": "#/definitions/QuoteECNQuote",
+  1924→        "message": "Invalid const value",
+  1925→        "data": "ALTSYMBOL",
+  1926→        "params": {
+  1927→          "const": "ECNQUOTE"
+  1928→        }
+  1929→      },
+  1930→      {
+  1931→        "instancePath": "/13/quoteType",
+  1932→        "schemaPath": "#/definitions/QuoteEtf",
+  1933→        "message": "Invalid const value",
+  1934→        "data": "ALTSYMBOL",
+  1935→        "params": {
+  1936→          "const": "ETF"
+  1937→        }
+  1938→      },
+  1939→      {
+  1940→        "instancePath": "/13/quoteType",
+  1941→        "schemaPath": "#/definitions/QuoteEquity",
+  1942→        "message": "Invalid const value",
+  1943→        "data": "ALTSYMBOL",
+  1944→        "params": {
+  1945→          "const": "EQUITY"
+  1946→        }
+  1947→      },
+  1948→      {
+  1949→        "instancePath": "/13/quoteType",
+  1950→        "schemaPath": "#/definitions/QuoteFuture",
+  1951→        "message": "Invalid const value",
+  1952→        "data": "ALTSYMBOL",
+  1953→        "params": {
+  1954→          "const": "FUTURE"
+  1955→        }
+  1956→      },
+  1957→      {
+  1958→        "instancePath": "/13/quoteType",
+  1959→        "schemaPath": "#/definitions/QuoteIndex",
+  1960→        "message": "Invalid const value",
+  1961→        "data": "ALTSYMBOL",
+  1962→        "params": {
+  1963→          "const": "INDEX"
+  1964→        }
+  1965→      },
+  1966→      {
+  1967→        "instancePath": "/13/quoteType",
+  1968→        "schemaPath": "#/definitions/QuoteMutualfund",
+  1969→        "message": "Invalid const value",
+  1970→        "data": "ALTSYMBOL",
+  1971→        "params": {
+  1972→          "const": "MUTUALFUND"
+  1973→        }
+  1974→      },
+  1975→      {
+  1976→        "instancePath": "/13/quoteType",
+  1977→        "schemaPath": "#/definitions/QuoteOption",
+  1978→        "message": "Invalid const value",
+  1979→        "data": "ALTSYMBOL",
+  1980→        "params": {
+  1981→          "const": "OPTION"
+  1982→        }
+  1983→      },
+  1984→      {
+  1985→        "instancePath": "/13/quoteType",
+  1986→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1987→        "message": "Invalid const value",
+  1988→        "data": "ALTSYMBOL",
+  1989→        "params": {
+  1990→          "const": "MONEYMARKET"
+  1991→        }
+  1992→      },
+  1993→      {
+  1994→        "instancePath": "/13/typeDisp",
+  1995→        "schemaPath": "#/definitions/QuoteMoneyMarket",
+  1996→        "message": "Invalid const value",
+  1997→        "data": "ALTSYMBOL",
+  1998→        "params": {
+  1999→          "const": "MoneyMarket"
+  2000→        }
+
+[showing lines 1-2000 of 15645; use offset=2001 with limit to continue reading]

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchTgjuHistory, getTgjuYahooFallback, STATIC_INSTRUMENTS } from '@/lib/tgju-api';
+import { fetchTgjuHistory, getTgjuYahooFallback, STATIC_INSTRUMENTS, yahooFetchedKeys } from '@/lib/tgju-api';
 import { fetchYahooHistory, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
 import type { OHLCV } from '@/lib/ta-engine';
 import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
@@ -15,14 +15,16 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Try TGJU historical data first
+    // 1. Fetch historical data (fetchTgjuHistory now uses Yahoo as primary for global instruments)
     let history = await fetchTgjuHistory(key);
 
-    // 2. If TGJU fails (< 30 candles, likely 403), try Yahoo fallback
+    // Detect if data came from Yahoo (either from fetchTgjuHistory internal Yahoo path, or route fallback)
     const yahooFallbackSymbol = getTgjuYahooFallback(key);
-    let isYahooFallback = false;
+    let isYahooFallback = yahooFetchedKeys.has(key);
+    yahooFetchedKeys.delete(key); // consume the flag
 
-    if (history.length < 30 && yahooFallbackSymbol) {
+    // 2. If still not enough data and Yahoo is available, try Yahoo directly as last resort
+    if (history.length < 30 && yahooFallbackSymbol && !isYahooFallback) {
       console.log(`[TGJU Analysis] TGJU returned ${history.length} candles for ${key}, falling back to Yahoo: ${yahooFallbackSymbol}`);
       try {
         const yahooHistory = await fetchYahooHistory(yahooFallbackSymbol, 365);
@@ -33,6 +35,7 @@ export async function GET(req: NextRequest) {
             high: h.high,
             low: h.low,
             close: h.close,
+            volume: h.volume,
           }));
           isYahooFallback = true;
         }

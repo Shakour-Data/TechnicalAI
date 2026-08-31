@@ -1,13 +1,19 @@
 /**
  * TGJU (Tala-Jaraghi) API Integration
  *
- * Data sources:
- * 1. tgju-api (tgju.amirhossein.info) — fast, real-time prices for currency & gold
- * 2. tgju.org internal API (via z-ai page_reader) — historical daily OHLC data for ALL instruments
+ * Data sources (in priority order for historical data):
+ * 1. Yahoo Finance — PRIMARY for global instruments (crypto, indices, forex, energy, metals, commodities)
+ * 2. tgju-api (tgju.amirhossein.info) — fast, real-time prices for currency & gold
+ * 3. api.tgju.org — historical daily OHLC (often blocked by Cloudflare, 403)
+ * 4. z-ai page_reader — bypasses Cloudflare (rate-limited, queued with backoff)
  *
  * Chart data API: https://api.tgju.org/v1/market/indicator/summary-table-data/{key}
  * Response format: { recordsTotal, data: [[open, low, high, close, change, changePct, gregorianDate, jalaliDate], ...] }
  */
+
+import { writeFile, mkdir, readFile } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 const TGJU_API_BASE = 'https://tgju.amirhossein.info';
 const TGJU_CHART_API = 'https://api.tgju.org/v1/market/indicator/summary-table-data';
@@ -499,7 +505,36 @@ const liveInstrumentsCache: { data: TgjuInstrument[] | null; ts: number } = { da
 const INSTRUMENTS_TTL = 5 * 60 * 1000; // 5 minutes
 
 const historyCache = new Map<string, { data: TgjuOHLC[]; ts: number }>();
-const HISTORY_TTL = 30 * 60 * 1000; // 30 minutes
+const HISTORY_TTL = 4 * 60 * 60 * 1000; // 4 hours (reduced page_reader load)
+const HISTORY_STALE_TTL = 24 * 60 * 60 * 1000; // 24 hours (return stale data if fresh fails)
+
+// File-based persistent cache directory
+const FILE_CACHE_DIR = join(tmpdir(), 'tgju-history-cache');
+
+// ─── File-based cache helpers ───
+async function ensureCacheDir() {
+  try { await mkdir(FILE_CACHE_DIR, { recursive: true }); } catch {}
+}
+
+async function readFromFileCache(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+  try {
+    const filePath = join(FILE_CACHE_DIR, `${tgjuKey}.json`);
+    const data = await readFile(filePath, 'utf-8');
+    const parsed = JSON.parse(data);
+    if (parsed && Array.isArray(parsed.data) && parsed.data.length >= 30 && parsed.ts) {
+      return parsed.data as TgjuOHLC[];
+    }
+  } catch {}
+  return null;
+}
+
+async function writeToFileCache(tgjuKey: string, candles: TgjuOHLC[]): Promise<void> {
+  try {
+    await ensureCacheDir();
+    const filePath = join(FILE_CACHE_DIR, `${tgjuKey}.json`);
+    await writeFile(filePath, JSON.stringify({ data: candles, ts: Date.now() }), 'utf-8');
+  } catch {}
+}
 
 // Cache for static instrument prices (from chart API last 3 candles)
 const staticPriceCache = new Map<string, { close: number; high: number; low: number; prevClose: number; ts: number }>();
@@ -773,40 +808,100 @@ async function backgroundFetchYahooFallbackPrices(instruments: TgjuInstrument[])
 
 /* ─── Fetch historical OHLC data ── */
 
+/* ─── Page Reader Request Queue ─────────────────────── */
+// Track which keys were last fetched from Yahoo (for route to detect source)
+export const yahooFetchedKeys = new Set<string>();
+
+let pageReaderQueue: Promise<void> = Promise.resolve();
+let lastPageReaderCall = 0;
+const PAGE_READER_MIN_INTERVAL = 10_000; // 10 seconds between calls
+const PAGE_READER_MAX_RETRIES = 3;
+const PAGE_READER_RETRY_BASE_DELAY = 3_000; // 3 seconds base retry delay
+
 /**
- * Fetch historical OHLC data from TGJU chart API.
- * Strategy:
- * 1. Try direct fetch (fast, ~100ms) — works when Cloudflare is not blocking
- * 2. If 403/blocked, fall back to z-ai page_reader (bypasses Cloudflare, ~3s)
- * 3. If both fail, return cached data if available
+ * Fetch historical OHLC data for a TGJU instrument.
  *
- * All results are cached for HISTORY_TTL (30 min) to minimize page_reader calls.
+ * Strategy (permanent fix):
+ * 1. Check in-memory cache (4h TTL)
+ * 2. For global instruments with Yahoo mapping → use Yahoo Finance as PRIMARY
+ * 3. For Iranian instruments → try direct fetch, then queued page_reader with retry
+ * 4. If all fail → return stale cache (up to 24h) or file-based cache
  */
 export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
-  const cached = historyCache.get(tgjuKey);
   const now = Date.now();
+
+  // ── Step 0: Check in-memory cache ──
+  const cached = historyCache.get(tgjuKey);
   if (cached && now - cached.ts < HISTORY_TTL) {
     return cached.data;
   }
 
-  // ── Step 1: Try direct fetch (fast path) ──
+  // ── Step 1: For global instruments, use Yahoo Finance as PRIMARY source ──
+  const yahooSymbol = TGJU_TO_YAHOO_MAP[tgjuKey];
+  if (yahooSymbol) {
+    try {
+      const YahooFinance = (await import('yahoo-finance2')).default;
+      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'], validation: { logErrors: false } });
+      const result = await yf.chart(yahooSymbol, {
+        period1: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+        period2: new Date(),
+        interval: '1d',
+      });
+      if (result.quotes && result.quotes.length >= 30) {
+        const candles: TgjuOHLC[] = result.quotes
+          .filter((q: any) => q.close != null && q.open != null)
+          .map((q: any) => ({
+            date: q.date?.toISOString().split('T')[0] || '',
+            open: q.open!,
+            high: q.high || q.close!,
+            low: q.low || q.close!,
+            close: q.close!,
+          }));
+        if (candles.length >= 30) {
+          console.log(`[TGJU] ${tgjuKey}: Got ${candles.length} candles from Yahoo (${yahooSymbol})`);
+          yahooFetchedKeys.add(tgjuKey);
+          cacheHistory(tgjuKey, candles, now);
+          return candles;
+        }
+      }
+    } catch (err) {
+      console.warn(`[TGJU] Yahoo historical fetch failed for ${tgjuKey} (${yahooSymbol}):`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  // ── Step 2: For Iranian instruments (or Yahoo fallback failed), try TGJU sources ──
+  // 2a: Try direct fetch (fast path, works when Cloudflare not blocking)
   const directResult = await tryDirectFetch(tgjuKey);
   if (directResult && directResult.length >= 30) {
     cacheHistory(tgjuKey, directResult, now);
     return directResult;
   }
 
-  // ── Step 2: Fall back to page_reader (bypasses Cloudflare) ──
-  console.log(`[TGJU] Direct fetch returned ${directResult?.length ?? 0} candles for ${tgjuKey}, trying page_reader...`);
-  const pageReaderResult = await fetchTgjuHistoryViaPageReader(tgjuKey);
+  // 2b: Queued page_reader with retry + rate limiting
+  console.log(`[TGJU] Direct fetch returned ${directResult?.length ?? 0} candles for ${tgjuKey}, using queued page_reader...`);
+  const pageReaderResult = await fetchViaQueuedPageReader(tgjuKey);
   if (pageReaderResult && pageReaderResult.length >= 30) {
     cacheHistory(tgjuKey, pageReaderResult, now);
     return pageReaderResult;
   }
 
-  // ── Step 3: Both failed — return stale cache or empty ──
-  console.warn(`[TGJU] All methods failed for ${tgjuKey}, returning ${cached?.data?.length ?? 0} cached candles`);
-  return cached?.data || [];
+  // ── Step 3: All methods failed — return stale cache ──
+  if (cached && cached.data.length >= 30) {
+    const age = ((now - cached.ts) / 60_000).toFixed(0);
+    console.warn(`[TGJU] All methods failed for ${tgjuKey}, returning stale cache (${age}min old, ${cached.data.length} candles)`);
+    return cached.data;
+  }
+
+  // ── Step 4: Try file-based cache ──
+  const fileCached = await readFromFileCache(tgjuKey);
+  if (fileCached && fileCached.length >= 30) {
+    console.warn(`[TGJU] Returning file-cached data for ${tgjuKey} (${fileCached.length} candles)`);
+    historyCache.set(tgjuKey, { data: fileCached, ts: Date.now() - HISTORY_TTL + 60_000 }); // Mark as almost-expired
+    return fileCached;
+  }
+
+  console.error(`[TGJU] All methods and caches failed for ${tgjuKey}`);
+  return [];
 }
 
 /**
@@ -841,54 +936,96 @@ async function tryDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
 }
 
 /**
- * Fetch TGJU historical data via z-ai CLI page_reader (bypasses Cloudflare).
- * Uses child_process to call `z-ai function -n page_reader` which runs
- * a headless browser internally and can solve Cloudflare challenges.
- * Slower (~5-15s) but reliable when direct fetch is blocked.
+ * Fetch TGJU historical data via queued page_reader with retry and rate limiting.
+ * This prevents 429 errors by serializing requests and adding delays between calls.
+ */
+async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+  // Enqueue this request — ensures only one page_reader call at a time
+  let result: TgjuOHLC[] | null = null;
+  const taskPromise = (async () => {
+    // Rate limit: wait if last call was too recent
+    const timeSinceLastCall = Date.now() - lastPageReaderCall;
+    if (timeSinceLastCall < PAGE_READER_MIN_INTERVAL) {
+      const waitTime = PAGE_READER_MIN_INTERVAL - timeSinceLastCall;
+      console.log(`[TGJU] Rate limiting page_reader: waiting ${waitTime}ms...`);
+      await new Promise(r => setTimeout(r, waitTime));
+    }
+
+    // Retry with exponential backoff
+    for (let attempt = 1; attempt <= PAGE_READER_MAX_RETRIES; attempt++) {
+      try {
+        lastPageReaderCall = Date.now();
+        const fetchResult = await fetchTgjuHistoryViaPageReader(tgjuKey);
+        if (fetchResult && fetchResult.length >= 30) {
+          result = fetchResult;
+          return; // success
+        }
+        // Got data but not enough candles — don't retry
+        if (fetchResult && fetchResult.length > 0) {
+          console.warn(`[TGJU] page_reader returned only ${fetchResult.length} candles for ${tgjuKey}`);
+          return;
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isRateLimit = errMsg.includes('429') || errMsg.includes('Too many requests');
+        if (isRateLimit && attempt < PAGE_READER_MAX_RETRIES) {
+          const delay = PAGE_READER_RETRY_BASE_DELAY * Math.pow(3, attempt - 1); // 3s, 9s, 27s
+          console.warn(`[TGJU] page_reader 429 for ${tgjuKey}, retry ${attempt}/${PAGE_READER_MAX_RETRIES} in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        console.error(`[TGJU] page_reader error for ${tgjuKey} (attempt ${attempt}):`, errMsg);
+        return;
+      }
+    }
+  })();
+
+  // Chain onto the queue
+  pageReaderQueue = pageReaderQueue.then(() => taskPromise, () => taskPromise);
+  await pageReaderQueue;
+  return result;
+}
+
+/**
+ * Single page_reader call to fetch TGJU historical data.
+ * Uses z-ai SDK to bypass Cloudflare challenges.
+ * Throws on failure so the caller (fetchViaQueuedPageReader) can retry.
  */
 async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
   const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
 
-  try {
-    // Use z-ai-web-dev-sdk directly (works within Next.js process)
-    const ZAI = (await import('z-ai-web-dev-sdk')).default;
-    const zai = await ZAI.create();
-    console.log(`[TGJU] Using z-ai SDK page_reader for ${tgjuKey}...`);
-    const result = await zai.functions.invoke('page_reader', { url: apiUrl });
+  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+  const zai = await ZAI.create();
+  console.log(`[TGJU] Using z-ai SDK page_reader for ${tgjuKey}...`);
+  const invokeResult = await zai.functions.invoke('page_reader', { url: apiUrl });
 
-    if (result.code !== 200 || !result.data?.html) {
-      console.warn(`[TGJU] page_reader SDK failed for ${tgjuKey}: code=${result.code}`);
-      return null;
-    }
-
-    // Extract JSON from <pre> tag in the HTML
-    const html = result.data.html;
-    const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
-    if (!preMatch) {
-      console.warn(`[TGJU] page_reader: no <pre> block found for ${tgjuKey}`);
-      return null;
-    }
-
-    // Unescape HTML entities and strip HTML tags from values (e.g. <span class="high" dir="ltr">1000</span> → 1000)
-    const jsonStr = preMatch[1]
-      .replace(/<[^>]*>/g, '')        // Strip ALL HTML tags first
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\s+/g, ' ')           // Normalize whitespace
-      .trim();
-
-    if (!jsonStr.startsWith('{')) {
-      console.warn(`[TGJU] page_reader: extracted content is not JSON for ${tgjuKey}`);
-      return null;
-    }
-
-    return parseTgjuChartData(tgjuKey, jsonStr);
-  } catch (err) {
-    console.error(`[TGJU] page_reader SDK error for ${tgjuKey}:`, err instanceof Error ? err.message : err);
-    return null;
+  if (invokeResult.code !== 200 || !invokeResult.data?.html) {
+    const errMsg = invokeResult.error || `code=${invokeResult.code}`;
+    throw new Error(errMsg);
   }
+
+  // Extract JSON from <pre> tag in the HTML
+  const html = invokeResult.data.html;
+  const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
+  if (!preMatch) {
+    throw new Error('no <pre> block found in page_reader response');
+  }
+
+  // Unescape HTML entities and strip HTML tags from values
+  const jsonStr = preMatch[1]
+    .replace(/<[^>]*>/g, '')        // Strip ALL HTML tags first
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')           // Normalize whitespace
+    .trim();
+
+  if (!jsonStr.startsWith('{')) {
+    throw new Error('extracted content is not JSON');
+  }
+
+  return parseTgjuChartData(tgjuKey, jsonStr);
 }
 
 /**
@@ -996,6 +1133,8 @@ function parseTgjuChartData(tgjuKey: string, jsonStr: string): TgjuOHLC[] | null
  */
 function cacheHistory(tgjuKey: string, candles: TgjuOHLC[], now: number): void {
   historyCache.set(tgjuKey, { data: candles, ts: now });
+  // Also persist to file for server restart resilience
+  writeToFileCache(tgjuKey, candles).catch(() => {});
 
   // Also update static price cache for this instrument
   if (candles.length >= 2) {
