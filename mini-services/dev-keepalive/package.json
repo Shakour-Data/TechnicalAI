@@ -1,0 +1,8 @@
+{
+  "name": "nextjs-dev",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd /home/z/my-project && NODE_OPTIONS=--max-old-space-size=3072 node /home/z/my-project/node_modules/.bin/next dev -p 3000"
+  }
+}
