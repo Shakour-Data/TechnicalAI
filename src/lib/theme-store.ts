@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from './safe-storage';
 
 // ─── Theme Presets ──────────────────────────────────────────────
 export interface ThemeColors {
@@ -263,7 +264,12 @@ export const useThemeStore = create<ThemeState>()(
         return THEME_PRESETS.find(t => t.id === themeId)?.colors ?? whiteBlue;
       },
     }),
-    { name: 'app-theme' }
+    {
+      name: 'app-theme',
+      storage: createJSONStorage(() => safeLocalStorage as unknown as Storage),
+      // Skip hydration to prevent SSR/client mismatch in iframes
+      skipHydration: true,
+    }
   )
 );
 

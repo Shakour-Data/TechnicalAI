@@ -513,14 +513,6 @@ export default function Home() {
     }
   }, []);
 
-  // Full page reload every 15 minutes
-  useEffect(() => {
-    const timer = setInterval(() => {
-      window.location.reload();
-    }, 900_000);
-    return () => clearInterval(timer);
-  }, []);
-
   // Auto-refresh: data re-fetch + on tab focus
   const doRefresh = useCallback(async () => {
     const params = lastFetchRef.current;
@@ -536,6 +528,14 @@ export default function Home() {
     }
   }, [handleSelect, loading, refreshing]);
 
+  // Soft refresh every 15 minutes (re-fetch data instead of hard reload — reload crashes iframes)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      doRefresh().catch(() => {});
+    }, 900_000);
+    return () => clearInterval(timer);
+  }, [doRefresh]);
+
   useEffect(() => {
     if (!data) return;
     refreshTimerRef.current = setInterval(doRefresh, REFRESH_INTERVAL);
@@ -544,13 +544,17 @@ export default function Home() {
     };
   }, [data, doRefresh]);
 
-  // Refresh on tab/window focus
+  // Refresh on tab/window focus (wrapped for iframe safety)
   useEffect(() => {
     const onFocus = () => {
       if (data) doRefresh().catch(() => {});
     };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    try {
+      window.addEventListener('focus', onFocus);
+      return () => { try { window.removeEventListener('focus', onFocus); } catch {} };
+    } catch {
+      return undefined;
+    }
   }, [data, doRefresh]);
 
   // Use info.lastPrice (live) when available, otherwise fall back to last candle close.

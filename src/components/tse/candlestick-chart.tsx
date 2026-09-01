@@ -855,19 +855,22 @@ export default function CandlestickChart({ data, ta, height = 520, priceDecimals
   useEffect(() => {
     const el = chartContainerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const { width: w, height: h } = e.contentRect;
-        if (w > 0 && h > 0) {
-          chartRef.current?.applyOptions({ width: w, height: h });
-          setChartSize({ w, h });
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver((entries) => {
+        for (const e of entries) {
+          const { width: w, height: h } = e.contentRect;
+          if (w > 0 && h > 0) {
+            try { chartRef.current?.applyOptions({ width: w, height: h }); } catch {}
+            try { setChartSize({ w, h }); } catch {}
+          }
         }
-      }
-    });
-    ro.observe(el);
+      });
+      ro.observe(el);
+    } catch {}
     build();
     return () => {
-      ro.disconnect();
+      try { ro?.disconnect(); } catch {}
       subscriberRef.current?.dispose();
       subscriberRef.current = null;
       crosshairSubRef.current?.dispose();

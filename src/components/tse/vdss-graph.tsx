@@ -289,9 +289,12 @@ export default function VdssGraph(props: VdssGraphProps) {
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => drawEdges());
-    observer.observe(el);
-    return () => observer.disconnect();
+    let observer: ResizeObserver | null = null;
+    try {
+      observer = new ResizeObserver(() => { try { drawEdges(); } catch {} });
+      observer.observe(el);
+    } catch {}
+    return () => { try { observer?.disconnect(); } catch {} };
   }, [drawEdges]);
 
 

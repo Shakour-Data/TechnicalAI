@@ -276,14 +276,17 @@ const TradingViewChartInner = memo(function TradingViewChartInner({
     build();
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      for (const e of entries) {
-        const { width: w, height: h } = e.contentRect;
-        if (w > 0 && h > 0) chartRef.current?.applyOptions({ width: w, height: h });
-      }
-    });
-    ro.observe(el);
-    return () => { ro.disconnect(); chartRef.current?.remove(); chartRef.current = null; };
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver(entries => {
+        for (const e of entries) {
+          const { width: w, height: h } = e.contentRect;
+          if (w > 0 && h > 0) { try { chartRef.current?.applyOptions({ width: w, height: h }); } catch {} }
+        }
+      });
+      ro.observe(el);
+    } catch {}
+    return () => { try { ro?.disconnect(); } catch {} try { chartRef.current?.remove(); } catch {} chartRef.current = null; };
   }, [build]);
 
   // ── Collect legend info ─────────────────────────────────────────
