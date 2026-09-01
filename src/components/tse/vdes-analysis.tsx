@@ -687,7 +687,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
 
   // ── localStorage helpers for AI text caching ──
 
-  // On mount: show cached text as placeholder while fresh data loads
+  // On mount: show cached text as placeholder ONLY if price matches (within 2%)
   useEffect(() => {
     if (!currentPrice) return;
     try {
@@ -696,13 +696,22 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed.text && parsed.text.length > 50) {
+          // Price validation: skip cached text if price differs >2%
+          if (parsed.price && currentPrice > 0) {
+            const diff = Math.abs(parsed.price - currentPrice) / currentPrice;
+            if (diff > 0.02) {
+              // Price changed too much, don't show stale cached text
+              localStorage.removeItem(todayKey);
+              return;
+            }
+          }
           setAiText(parsed.text);
           setAiIsFallback(!!parsed.isFallback);
           // Do NOT set aiLoading=false — always fetch fresh data in background
         }
       }
     } catch { /* ignore */ }
-  }, [symbolName]);
+  }, [symbolName, currentPrice]);
 
   // Stable key: only re-fetch when symbol changes (not on every indicator update)
   const aiFetchKey = symbolName;
@@ -808,17 +817,17 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     return () => { cancelled = true; controller.abort(); };
   }, [aiFetchKey, aiRetryKey]);
 
-  // Helper: save AI text to localStorage (per-day key)
+  // Helper: save AI text to localStorage (per-day key) with price for validation
   function saveLocalCache(sym: string, text: string, isFallback: boolean) {
     try {
       const key = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
-      localStorage.setItem(key, JSON.stringify({ text, isFallback, ts: Date.now() }));
+      localStorage.setItem(key, JSON.stringify({ text, isFallback, price: currentPrice, ts: Date.now() }));
       // Also keep a "latest" key for any-day fallback
-      localStorage.setItem(`ai-${sym}-latest`, JSON.stringify({ text, date: new Date().toISOString().slice(0, 10), ts: Date.now() }));
+      localStorage.setItem(`ai-${sym}-latest`, JSON.stringify({ text, date: new Date().toISOString().slice(0, 10), price: currentPrice, ts: Date.now() }));
     } catch { /* quota exceeded — ignore */ }
   }
 
-  // Helper: get any previous cached text from localStorage (any day)
+  // Helper: get any previous cached text from localStorage (any day) with price validation
   function getAnyLocalCache(sym: string): string | null {
     try {
       // First try today
@@ -826,13 +835,26 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       const todayCached = localStorage.getItem(todayKey);
       if (todayCached) {
         const parsed = JSON.parse(todayCached);
-        if (parsed.text && parsed.text.length > 50) return parsed.text;
+        if (parsed.text && parsed.text.length > 50) {
+          // Validate price match (within 5%)
+          if (parsed.price && currentPrice > 0) {
+            const diff = Math.abs(parsed.price - currentPrice) / currentPrice;
+            if (diff <= 0.05) return parsed.text;
+          } else {
+            return parsed.text;
+          }
+        }
       }
-      // Then try "latest" from any day
+      // Then try "latest" from any day (only if price within 2%)
       const latestCached = localStorage.getItem(`ai-${sym}-latest`);
       if (latestCached) {
         const parsed = JSON.parse(latestCached);
-        if (parsed.text && parsed.text.length > 50) return parsed.text;
+        if (parsed.text && parsed.text.length > 50) {
+          if (parsed.price && currentPrice > 0) {
+            const diff = Math.abs(parsed.price - currentPrice) / currentPrice;
+            if (diff <= 0.02) return parsed.text;
+          }
+        }
       }
     } catch { /* ignore */ }
     return null;
