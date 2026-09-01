@@ -284,3 +284,29 @@ Stage Summary:
 - Global instruments (crypto, indices, forex, energy, metals, commodities, foreign stocks): Now use Yahoo Finance as PRIMARY source. Verified: BTC (399 candles), EUR/USD (284), Gold (276), Brent (276), DOW (275) - all return HTTP 200 with full data
 - Iranian instruments (currency, gold, silver, gold_etf): Still depend on page_reader which is rate-limited at z-ai infrastructure level. Queue + retry logic implemented but 429 persists when rate limit is exceeded.
 - Files modified: src/lib/tgju-api.ts (major rewrite of fetchTgjuHistory), src/app/api/tgju-analysis/route.ts (source detection)
+---
+Task ID: 1
+Agent: main
+Task: Fix TGJU analysis text quality issues (prices, units, codes, backward-looking)
+
+Work Log:
+- Tested TGJU live API: returns Toman-based prices (e.g., dollar: 2,139,900)
+- Identified 7 root causes in ai-analysis/route.ts and tgju-analysis/route.ts
+- Fixed post-processing regex (was broken - missing replacement string, now handles all codes)
+- Fixed cache to save cleaned text instead of raw content
+- Fixed unit label logic for TGJU instruments (currency/gold → ریال, not واحد)
+- Fixed SYSTEM_PROMPT rule 20 (was hardcoding 'واحد', now uses provided unit)
+- Added rule 21 (prohibition of all technical codes) and rule 22 (forward-looking analysis)
+- Replaced technical codes in prompt with Persian descriptions
+- Added price validation for previous-day cache fallback (2% threshold)
+- Added currencyUnit and instrumentCategory to frontend AI request
+- Added live price fetch for Iranian instruments in tgju-analysis route
+- Added live title fetch for Iranian instruments
+- Cleared old AI analysis cache from database
+
+Stage Summary:
+- ai-analysis/route.ts: Fixed 6 issues (post-processing, cache, unit, prompt, forward-looking, stale cache)
+- tgju-analysis/route.ts: Added live price and title fetch for Iranian instruments
+- vdes-analysis.tsx: Added currencyUnit and instrumentCategory to AI request body
+- format-price.ts: Already correct (returns 'ریال' for TGJU currency/gold)
+- Verified: API returns lastPrice=2139900, currencyUnit=ریال for dollar

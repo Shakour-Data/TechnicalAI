@@ -733,6 +733,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             resistanceStrengths, supportStrengths,
             v11Probabilities: v11Result,
             instrumentType,
+            instrumentCategory,
+            currencyUnit: propCurrencyUnit,
             probabilityTrend: probabilityTrend ? {
               scenarios: probabilityTrend.scenarios.map(s => ({
                 scenarioKey: s.scenarioKey, label: s.label, group: s.group,

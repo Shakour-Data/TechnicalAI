@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchTgjuHistory, getTgjuYahooFallback, STATIC_INSTRUMENTS, yahooFetchedKeys } from '@/lib/tgju-api';
+import { fetchTgjuHistory, getTgjuYahooFallback, STATIC_INSTRUMENTS, yahooFetchedKeys, fetchTgjuInstruments } from '@/lib/tgju-api';
 import { fetchYahooHistory, fetchYahooQuotes } from '@/lib/yahoo-finance-api';
 import type { OHLCV } from '@/lib/ta-engine';
 import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
@@ -110,19 +110,44 @@ export async function GET(req: NextRequest) {
       volume: isYahooFallback ? (h as any).volume || 0 : 0,
     }));
 
+    // 8. Fetch live price and title for Iranian instruments
+    // This ensures the displayed price and AI analysis use real-time data, not stale historical close
+    let livePrice = lastCandle.close;
+    let liveTitle = instrument?.title || '';
+    const iranianCategories = new Set(['currency', 'gold', 'silver', 'gold_etf']);
+    if (iranianCategories.has(category)) {
+      try {
+        const instruments = await fetchTgjuInstruments();
+        const liveInst = instruments.find((i) => i.key === key);
+        if (liveInst && liveInst.price > 0) {
+          livePrice = liveInst.price;
+          console.log(`[TGJU Analysis] Live price for ${key}: ${liveInst.price} (hist close: ${lastCandle.close})`);
+        }
+        if (liveInst?.title && !liveTitle) {
+          liveTitle = liveInst.title;
+        }
+      } catch (liveErr) {
+        console.warn(`[TGJU Analysis] Live price fetch failed for ${key}:`, liveErr);
+      }
+    }
+
+    // Recalculate change based on live price
+    const liveChange = livePrice - prevCandle.close;
+    const liveChangePercent = prevCandle.close > 0 ? (liveChange / prevCandle.close) * 100 : 0;
+
     const response: Record<string, unknown> = {
       symbol: key,
       candles,
       info: {
-        name: instrument?.title || key,
+        name: liveTitle || instrument?.title || key,
         symbol: key,
-        lastPrice: lastCandle.close,
-        change: changePercent,
-        closePrice: lastCandle.close,
-        closeChange: change,
+        lastPrice: livePrice,
+        change: liveChangePercent,
+        closePrice: livePrice,
+        closeChange: liveChange,
         openPrice: lastCandle.open,
-        minPrice: lastCandle.low,
-        maxPrice: lastCandle.high,
+        minPrice: Math.min(lastCandle.low, livePrice),
+        maxPrice: Math.max(lastCandle.high, livePrice),
         yesterdayClose: prevCandle.close,
         volume: 0,
         value: 0,

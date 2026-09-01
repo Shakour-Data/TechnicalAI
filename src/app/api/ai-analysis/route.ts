@@ -251,8 +251,34 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   // Instrument type and currency unit — use client-provided unit when available
   const instType = (body.instrumentType as string) || 'tse';
   const clientCurrencyUnit = (body.currencyUnit as string) || '';
-  const unitLabel = clientCurrencyUnit || (instType === 'tse' ? '\u0631\u06cc\u0627\u0644' : '\u0648\u0627\u062d\u062f');
-  const instrumentLabel = instType === 'tgju' ? '\u06a9\u0627\u0644\u0627\u06cc \u0637\u0644\u0627/\u0627\u0631\u0632' : instType === 'yahoo' ? '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc' : '\u0633\u0647\u0627\u0645 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
+  const clientCategory = (body.instrumentCategory as string) || '';
+
+  // Determine unit label: client-provided > category-based > fallback
+  let unitLabel: string;
+  if (clientCurrencyUnit) {
+    unitLabel = clientCurrencyUnit;
+  } else if (instType === 'tse') {
+    unitLabel = '\u0631\u06cc\u0627\u0644';
+  } else if (instType === 'tgju') {
+    // TGJU: currency/gold/silver/gold_etf are ریال, crypto is تتر, others are دلار
+    if (['currency', 'gold', 'silver', 'gold_etf'].includes(clientCategory)) {
+      unitLabel = '\u0631\u06cc\u0627\u0644';
+    } else if (clientCategory === 'crypto') {
+      unitLabel = '\u062a\u062a\u0631';
+    } else if (['world_index', 'index'].includes(clientCategory)) {
+      unitLabel = '\u0648\u0627\u062d\u062f';
+    } else {
+      unitLabel = '\u062f\u0644\u0627\u0631';
+    }
+  } else if (instType === 'yahoo') {
+    unitLabel = clientCategory === 'world_index' ? '\u0648\u0627\u062d\u062f' : '\u062f\u0644\u0627\u0631';
+  } else {
+    unitLabel = '\u0648\u0627\u062d\u062f';
+  }
+
+  const instrumentLabel = instType === 'tgju'
+    ? (['currency', 'gold', 'silver', 'gold_etf'].includes(clientCategory) ? '\u0627\u0628\u0632\u0627\u0631 \u0645\u0627\u0644\u06cc \u0627\u06cc\u0631\u0627\u0646\u06cc' : '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc')
+    : instType === 'yahoo' ? '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc' : '\u0633\u0647\u0627\u0645 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
 
   // Probability trend block (cumulative trends for scenarios and groups)
   let trendBlock = '';
@@ -292,14 +318,29 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
 \u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631:\n${scenarioTrendLines}`;
   }
 
+  // Persian descriptions for technical indicators (no codes in prompt)
+  const maDesc = `\u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a (\u06f2\u06f1 \u0631\u0648\u0632\u0647): ${toPersianNum(ma21)} | \u0628\u0644\u0646\u062f\u0645\u062f\u062a (\u06f1\u06f0\u06f0 \u0631\u0648\u0632\u0647): ${toPersianNum(ma100)}`;
+  const maRelation = currentPrice > ma21 && currentPrice > ma100
+    ? '\u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0647\u0631 \u062f\u0648 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u0627\u0633\u062a'
+    : currentPrice > ma21 ? '\u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a \u0627\u0645\u0627 \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0628\u0644\u0646\u062f\u0645\u062f\u062a \u0627\u0633\u062a'
+    : currentPrice > ma100 ? '\u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a \u0627\u0645\u0627 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0628\u0644\u0646\u062f\u0645\u062f\u062a \u0627\u0633\u062a'
+    : '\u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0647\u0631 \u062f\u0648 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u0627\u0633\u062a';
+  const rsiDesc = `\u0634\u0627\u062e\u0635 \u0642\u062f\u0631\u062a \u0646\u0633\u0628\u06cc: ${toPersianNum(rsi)} (${rsiSignal})`;
+  const adxDesc = `\u0634\u0627\u062e\u0635 \u0634\u062f\u062a \u0631\u0648\u0646\u062f: ${toPersianNum(adx)} (${adxStrength}) | \u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f/\u0641\u0631\u0648\u0634: ${toPersianNum(diPlus)}/${toPersianNum(diMinus)} (${diPressure})`;
+  const stochDesc = `\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9: ${toPersianNum(stochK)}/${toPersianNum(stochD)}`;
+  const cciMfiDesc = `\u0634\u0627\u062e\u0635 \u06a9\u0627\u0646\u0627\u0644 \u06a9\u0627\u0644\u0627: ${toPersianNum(cci)}${mfi > 0 ? ` | \u0634\u0627\u062e\u0635 \u062c\u0631\u06cc\u0627\u0646 \u0646\u0642\u062f\u06cc: ${toPersianNum(mfi)}` : ''}`;
+  const macdFullDesc = `\u0648\u0627\u06af\u0631\u0627\u0641 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645: ${macdDesc} | \u062c\u0631\u06cc\u0627\u0646 \u062a\u062c\u0645\u0639\u06cc \u062d\u062c\u0645: ${obvDesc}`;
+  const bbSarDesc = `\u0628\u0627\u0646\u062f \u0628\u0648\u0644\u06cc\u0646\u06af\u0631: ${toPersianNum(bollingerLower)} \u2014 ${toPersianNum(bollingerUpper)} | \u062d\u0645\u0627\u06cc\u062a \u067e\u0648\u06cc\u0627: ${toPersianNum(sar)} | \u062f\u0627\u0645\u0646\u0647 \u062a\u0644\u0648\u0627\u062a\u06cc: ${toPersianNum(atr)}`;
+
   return `
 **\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647:**
-- \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a: **${toPersianNum(currentPrice)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0, R\u00b2=${(trendR2 * 100).toFixed(1)}%)
-- MA21=${toPersianNum(ma21)} | MA100=${toPersianNum(ma100)} | ${currentPrice > ma21 ? '\u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632'} MA21, ${currentPrice > ma100 ? '\u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632' : '\u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632'} MA100
-- RSI=${toPersianNum(rsi)} (${rsiSignal}) | ADX=${toPersianNum(adx)} (${adxStrength}) | DI+/DI-: ${toPersianNum(diPlus)}/${toPersianNum(diMinus)} (${diPressure})
-- \u0627\u0633\u062a\u0648\u06a9=${toPersianNum(stochK)}/${toPersianNum(stochD)} | CCI=${toPersianNum(cci)}${mfi > 0 ? ` | MFI=${toPersianNum(mfi)}` : ''}
-- MACD: ${macdDesc} (${toPersianNum(macdLine)}/${toPersianNum(macdSignal)}/${toPersianNum(macdHist)}) | OBV: ${obvDesc}
-- \u0628\u0627\u0646\u062f: ${toPersianNum(bollingerLower)} \u2014 ${toPersianNum(bollingerUpper)} | SAR: ${toPersianNum(sar)} | ATR: ${toPersianNum(atr)}
+- \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a \u0641\u0639\u0644\u06cc: **${toPersianNum(currentPrice)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0)
+- ${maDesc}. ${maRelation}.
+- ${rsiDesc}
+- ${adxDesc}
+- ${stochDesc} | ${cciMfiDesc}
+- ${macdFullDesc}
+- ${bbSarDesc}
 - \u0645\u0642\u0627\u0648\u0645\u062a: ${toPersianNum(R1Price)} (${R1Grade}) | \u062d\u0645\u0627\u06cc\u062a: ${toPersianNum(S1Price)} (${S1Grade})
 
 **\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631 (\u0645\u0631\u062a\u0628 \u0628\u0631 \u0627\u062d\u062a\u0645\u0627\u0644):**
@@ -334,10 +375,10 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.
 18. **فاصله‌گذاری صحیح:** بین هر دو کلمه حتماً یک فاصله (Space) باشد. هیچ دو کلمه‌ای نباید به هم بچسبند. نیم‌فاصله (ZWNJ) فقط در جای صحیح استفاده شود (مثل فعل‌های مزید، پیشوندها و پسوندها). مثال صحیح: «حد ضرر»، «نقطه ورود». مثال غلط: «حدضرر»، «نقطه‌ورود» (نیم‌فاصله اشتباه)، «حد ضر ر» (فاصله اشتباه).
 19. **نگارش بی‌نقص:** متن باید از نظر املایی، انشایی و نگارشی کاملاً بی‌نقص باشد. هیچ غلط املایی، خطای دستوری یا عبارت نادرست فارسی در متن نباشد. از کلمات مترادف و متنوع استفاده کنید و از تکرار بیش از حد یک کلمه یا عبارت پرهیز کنید.
-20. **واحد پولی و اندازه‌گیری:**
-    - اگر نوع ابزار «سهام بورس ایران» است، تمام اعداد قیمت را با واحد «ریال» بنویسید (مثلاً «۵,۲۳۰ ریال» یا «۲,۱۵۰,۰۰۰ ریال»).
-    - اگر نوع ابزار «کالای طلا/ارز» یا «نشانگر بین‌المللی» است، به جای واحد پولی از کلمه «واحد» استفاده کنید (مثلاً «۵ میلیون واحد» یا «۲,۱۴۵,۰۰۰ واحد»). به هیچ وجه از «ریال» یا «تومان» استفاده نکنید.
-    - در مورد شاخص‌ها و نشانگرها، هیچ واحد پولی به کار نبرید و فقط بگویید «واحد» (مثلاً «شاخص در محدوده ۲ میلیون واحد قرار دارد»).`;
+20. **واحد پولی:** در داده‌های پایه، واحد پولی دقیقاً ذکر شده است (مثلاً «ریال»، «تومان»، «دلار» یا «واحد»). شما باید دقیقاً همان واحدی را که در داده‌ها ارائه شده است استفاده کنید. هیچ واحد دیگری جایگزین نکنید.
+21. **ممنوعیت مطلق کدها و شناسه‌ها:** به هیچ وجه در متن خروجی از کدهای تخصصی سیستم استفاده نکنید. ممنوع: SC1 تا SC9، R1 تا R9، MA21، MA100، RSI، ADX، MACD، CCI، MFI، ATR، SAR، OBV، DI+، DI-، R² و هر واژه فنی انگلیسی دیگر. فقط نام فارسی سناریوها و نام ابزار مالی مجاز است. اندیکاتورها را فقط به صورت توصیفی بیاورید (مثلاً «شاخص قدرت نسبی» به جای RSI).
+22. **تحلیل آینده‌نگر:** تحلیل شما باید کاملاً آینده‌نگر باشد. از توصیف دوباره موضوعاتی که در گذشته رخ داده است خودداری کنید. تمرکز شما باید بر پیش‌بینی روند آینده، سطوح کلیدی و استراتژی معاملاتی باشد. قیمت فعلی نقطه شروع تحلیل است، نه نتیجه تحلیل. از عباراتی مثل «در 7 روز اخیر» یا «در گذشته» استفاده نکنید. بگویید: «در روزهای آینده»، «پیش‌بینی می‌شود»، «احتمال دارد».
+`;
 
 // ─── POST Handler ────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -369,21 +410,27 @@ export async function POST(req: NextRequest) {
       console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
     }
 
-    // 1b. Check for previous day's cache (fallback for rate-limit scenarios)
+    // 1b. Check for previous day's cache (fallback only if price is within 2%)
     try {
+      const currentPrice = Number(body.currentPrice) || 0;
       const prevCached = await db.aiAnalysisCache.findFirst({
         where: { symbol: symbolName, date: { not: today } },
         orderBy: { createdAt: 'desc' },
       });
-      if (prevCached && prevCached.text) {
-        console.log(`[AI] Previous cache fallback HIT for ${symbolName} (${prevCached.date}) [${Date.now() - startTime}ms]`);
-        return NextResponse.json({
-          text: prevCached.text,
-          ml: prevCached.ml ? JSON.parse(prevCached.ml) : undefined,
-          cached: true,
-          cachedDate: prevCached.date,
-          isFallback: true,
-        });
+      if (prevCached && prevCached.text && prevCached.price > 0 && currentPrice > 0) {
+        const priceDiff = Math.abs(prevCached.price - currentPrice) / currentPrice;
+        if (priceDiff < 0.02) { // Less than 2% price difference
+          console.log(`[AI] Previous cache fallback HIT for ${symbolName} (${prevCached.date}, price diff ${((priceDiff)*100).toFixed(1)}%) [${Date.now() - startTime}ms]`);
+          return NextResponse.json({
+            text: prevCached.text,
+            ml: prevCached.ml ? JSON.parse(prevCached.ml) : undefined,
+            cached: true,
+            cachedDate: prevCached.date,
+            isFallback: true,
+          });
+        } else {
+          console.log(`[AI] Previous cache SKIP for ${symbolName} (price diff ${((priceDiff)*100).toFixed(1)}% > 2%)`);
+        }
       }
     } catch (dbErr) {
       console.warn('[AI] Previous cache fallback read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
@@ -423,23 +470,38 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // Post-process: strip leaked codes
-    const cleaned = content.replace(/\bSC[1-9]\b/g, "").replace(/\bMA\d+\b/g, "").replace(/\s{2,}/g, ).trim();
+    // Post-process: strip ALL leaked technical codes
+    const cleaned = content
+      .replace(/\bSC\d+\b/g, '')
+      .replace(/\bR\d+\b(?=[\s,.;:!?\)\-\u0627-\u06cc]|$)/g, '')
+      .replace(/\bMA\d+\b/g, '')
+      .replace(/\bRSI\b/g, 'شاخص قدرت نسبی')
+      .replace(/\bMACD\b/g, 'واگراف هیستوگرام')
+      .replace(/\bMFI\b/g, 'شاخص جریان نقدي')
+      .replace(/\bCCI\b/g, 'شاخص کانال کالا')
+      .replace(/\bADX\b/g, 'شاخص شدت روند')
+      .replace(/\bATR\b/g, 'دامنه تلواتي')
+      .replace(/\bSAR\b/g, 'حمایت پویا')
+      .replace(/\bOBV\b/g, 'جریان تجمعی حجم')
+      .replace(/\bDI[+\-]/g, '')
+      .replace(/\bR\s*\u00b2\s*=\s*[\d.]+/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
 
-    // 7. Save to daily persistent cache
+    // 7. Save to daily persistent cache (save CLEANED text, not raw)
     try {
       await db.aiAnalysisCache.upsert({
         where: { symbol_date: { symbol: symbolName, date: today } },
         create: {
           symbol: symbolName,
           date: today,
-          text: content,
+          text: cleaned,
           ml: JSON.stringify(mlData),
           price: Number(body.currentPrice) || 0,
         },
         update: {
-          text: content,
+          text: cleaned,
           ml: JSON.stringify(mlData),
           price: Number(body.currentPrice) || 0,
         },
