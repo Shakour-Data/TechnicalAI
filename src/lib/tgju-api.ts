@@ -11,7 +11,7 @@
  * Response format: { recordsTotal, data: [[open, low, high, close, change, changePct, gregorianDate, jalaliDate], ...] }
  */
 
-import { writeFile, mkdir, readFile } from 'fs/promises';
+import { writeFile, mkdir, readFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -499,6 +499,37 @@ function isValidCandle(o: number, h: number, l: number, c: number): boolean {
   return true;
 }
 
+/**
+ * Check if parsed candle data is reasonably fresh.
+ * Rejects data where the most recent candle is older than 2 years.
+ * This prevents serving data from e.g. 1392 when current year is 1404.
+ */
+function isDataFresh(candles: TgjuOHLC[]): boolean {
+  if (candles.length === 0) return false;
+  const lastDateStr = candles[candles.length - 1].date;
+  const yearMatch = lastDateStr.match(/(\d{4})/);
+  if (!yearMatch) return true; // Can't determine year, assume fresh
+
+  const year = parseInt(yearMatch[1], 10);
+  const now = new Date();
+  const gregorianYear = now.getFullYear();
+  // Approximate current Jalali year (Gregorian - 621 or 622)
+  const approxJalaliYear = gregorianYear - 621;
+
+  // Jalali years: 1390-1500 range
+  if (year >= 1390 && year <= 1500) {
+    return year >= approxJalaliYear - 2; // Allow up to 2 years old
+  }
+
+  // Gregorian years
+  if (year >= 2020 && year <= 2035) {
+    return year >= gregorianYear - 2;
+  }
+
+  // Unknown format, don't reject
+  return true;
+}
+
 /* ─── Cache ────────────────────────────────────────────── */
 
 const liveInstrumentsCache: { data: TgjuInstrument[] | null; ts: number } = { data: null, ts: 0 };
@@ -522,6 +553,12 @@ async function readFromFileCache(tgjuKey: string): Promise<TgjuOHLC[] | null> {
     const data = await readFile(filePath, 'utf-8');
     const parsed = JSON.parse(data);
     if (parsed && Array.isArray(parsed.data) && parsed.data.length >= 30 && parsed.ts) {
+      // Validate freshness — reject stale data (e.g. from year 1392)
+      if (!isDataFresh(parsed.data as TgjuOHLC[])) {
+        console.warn(`[TGJU] File cache for ${tgjuKey} is STALE, deleting`);
+        try { await unlink(filePath); } catch {}
+        return null;
+      }
       return parsed.data as TgjuOHLC[];
     }
   } catch {}
@@ -830,10 +867,16 @@ const PAGE_READER_RETRY_BASE_DELAY = 3_000; // 3 seconds base retry delay
 export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
   const now = Date.now();
 
-  // ── Step 0: Check in-memory cache ──
+  // ── Step 0: Check in-memory cache (with freshness validation) ──
   const cached = historyCache.get(tgjuKey);
   if (cached && now - cached.ts < HISTORY_TTL) {
-    return cached.data;
+    // Validate cached data is not stale (e.g. 1392-era data from a previous bug)
+    if (isDataFresh(cached.data)) {
+      return cached.data;
+    } else {
+      console.warn(`[TGJU] In-memory cache for ${tgjuKey} is STALE (latest: ${cached.data[cached.data.length - 1]?.date}), invalidating`);
+      historyCache.delete(tgjuKey);
+    }
   }
 
   // ── Step 1: For global instruments, use Yahoo Finance as PRIMARY source ──
@@ -885,8 +928,8 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
     return pageReaderResult;
   }
 
-  // ── Step 3: All methods failed — return stale cache ──
-  if (cached && cached.data.length >= 30) {
+  // ── Step 3: All methods failed — return stale cache (only if fresh) ──
+  if (cached && cached.data.length >= 30 && isDataFresh(cached.data)) {
     const age = ((now - cached.ts) / 60_000).toFixed(0);
     console.warn(`[TGJU] All methods failed for ${tgjuKey}, returning stale cache (${age}min old, ${cached.data.length} candles)`);
     return cached.data;
@@ -910,7 +953,9 @@ export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
  */
 async function tryDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
   try {
-    const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
+    // CRITICAL: order_dir=desc to get the MOST RECENT candles, not the oldest.
+    // With asc+start=0, we'd get data from 1392 for long-history instruments!
+    const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=desc&start=0&length=365`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12_000);
 
@@ -992,7 +1037,8 @@ async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | n
  * Throws on failure so the caller (fetchViaQueuedPageReader) can retry.
  */
 async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
-  const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
+  // CRITICAL: order_dir=desc to get the MOST RECENT candles, not the oldest.
+  const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=desc&start=0&length=365`;
 
   const ZAI = (await import('z-ai-web-dev-sdk')).default;
   const zai = await ZAI.create();
@@ -1117,6 +1163,12 @@ function parseTgjuChartData(tgjuKey: string, jsonStr: string): TgjuOHLC[] | null
     const lastDate = candles[candles.length - 1].date;
     if (firstDate > lastDate) {
       candles.reverse();
+    }
+
+    // ── Freshness validation: reject data that is too old (e.g. from 1392) ──
+    if (!isDataFresh(candles)) {
+      console.warn(`[TGJU] ${tgjuKey}: Data is STALE (latest candle: ${candles[candles.length - 1]?.date}), REJECTING`);
+      return null;
     }
 
     console.log(`[TGJU] ${tgjuKey}: Parsed ${candles.length} candles (${candles[0]?.date} to ${candles[candles.length - 1]?.date})`);

@@ -393,18 +393,38 @@ export async function POST(req: NextRequest) {
     const today = getTodayDateStr();
 
     // 1. Check daily persistent cache (Prisma/SQLite)
+    // Also validate price match — if cached price is wildly different, re-generate
     try {
+      const currentPrice = Number(body.currentPrice) || 0;
       const cached = await db.aiAnalysisCache.findUnique({
         where: { symbol_date: { symbol: symbolName, date: today } },
       });
       if (cached && cached.text) {
-        console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
-        return NextResponse.json({
-          text: cached.text,
-          ml: cached.ml ? JSON.parse(cached.ml) : undefined,
-          cached: true,
-          cachedDate: cached.date,
-        });
+        // Price sanity check: if cached price differs by >5%, the cached analysis
+        // was likely generated with wrong/stale data (e.g. 1392-era chart data)
+        const cachedPrice = Number(cached.price) || 0;
+        if (cachedPrice > 0 && currentPrice > 0) {
+          const priceDiff = Math.abs(cachedPrice - currentPrice) / currentPrice;
+          if (priceDiff > 0.05) {
+            console.log(`[AI] Daily cache INVALIDATED for ${symbolName} (cached price diff ${(priceDiff * 100).toFixed(1)}% > 5%), re-generating`);
+          } else {
+            console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+            return NextResponse.json({
+              text: cached.text,
+              ml: cached.ml ? JSON.parse(cached.ml) : undefined,
+              cached: true,
+              cachedDate: cached.date,
+            });
+          }
+        } else {
+          console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+          return NextResponse.json({
+            text: cached.text,
+            ml: cached.ml ? JSON.parse(cached.ml) : undefined,
+            cached: true,
+            cachedDate: cached.date,
+          });
+        }
       }
     } catch (dbErr) {
       console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);

@@ -1,0 +1,1180 @@
+     1→/**
+     2→ * TGJU (Tala-Jaraghi) API Integration
+     3→ *
+     4→ * Data sources (in priority order for historical data):
+     5→ * 1. Yahoo Finance — PRIMARY for global instruments (crypto, indices, forex, energy, metals, commodities)
+     6→ * 2. tgju-api (tgju.amirhossein.info) — fast, real-time prices for currency & gold
+     7→ * 3. api.tgju.org — historical daily OHLC (often blocked by Cloudflare, 403)
+     8→ * 4. z-ai page_reader — bypasses Cloudflare (rate-limited, queued with backoff)
+     9→ *
+    10→ * Chart data API: https://api.tgju.org/v1/market/indicator/summary-table-data/{key}
+    11→ * Response format: { recordsTotal, data: [[open, low, high, close, change, changePct, gregorianDate, jalaliDate], ...] }
+    12→ */
+    13→
+    14→import { writeFile, mkdir, readFile } from 'fs/promises';
+    15→import { join } from 'path';
+    16→import { tmpdir } from 'os';
+    17→
+    18→const TGJU_API_BASE = 'https://tgju.amirhossein.info';
+    19→const TGJU_CHART_API = 'https://api.tgju.org/v1/market/indicator/summary-table-data';
+    20→
+    21→/* ─── Types ────────────────────────────────────────────── */
+    22→
+    23→export type TgjuCategoryType =
+    24→  | 'currency' | 'gold' | 'silver' | 'gold_etf'
+    25→  | 'crypto' | 'world_index' | 'foreign_stock' | 'forex' | 'energy' | 'metal' | 'commodity';
+    26→
+    27→export interface TgjuPriceItem {
+    28→  title: string;
+    29→  price: string;
+    30→  key: string;
+    31→  status: string | null;
+    32→  low_price: string | null;
+    33→  high_price: string | null;
+    34→}
+    35→
+    36→export interface TgjuGoldCategory {
+    37→  title: string;
+    38→  prices: TgjuPriceItem[];
+    39→}
+    40→
+    41→export interface TgjuInstrument {
+    42→  title: string;
+    43→  key: string;
+    44→  price: number;
+    45→  highPrice: number;
+    46→  lowPrice: number;
+    47→  change: number;
+    48→  changePercent: number;
+    49→  category: TgjuCategoryType;
+    50→  groupTitle?: string;
+    51→}
+    52→
+    53→export interface TgjuOHLC {
+    54→  date: string;
+    55→  open: number;
+    56→  high: number;
+    57→  low: number;
+    58→  close: number;
+    59→}
+    60→
+    61→/* ─── Static Instrument Definitions ────────────────────── */
+    62→
+    63→interface StaticInstrument {
+    64→  title: string;
+    65→  key: string;
+    66→  category: TgjuCategoryType;
+    67→  groupTitle?: string;
+    68→}
+    69→
+    70→export const STATIC_INSTRUMENTS: StaticInstrument[] = [
+    71→  /* ── Crypto ──────────────────────────────────────────── */
+    72→  { title: 'بیت کوین', key: 'crypto-bitcoin', category: 'crypto' },
+    73→  { title: 'اتریوم', key: 'crypto-ethereum', category: 'crypto' },
+    74→  { title: 'لایت کوین', key: 'crypto-litecoin', category: 'crypto' },
+    75→  { title: 'ریپل', key: 'crypto-ripple', category: 'crypto' },
+    76→  { title: 'بیت کش', key: 'crypto-bitcoin-cash', category: 'crypto' },
+    77→  { title: 'کاردانو', key: 'crypto-cardano', category: 'crypto' },
+    78→  { title: 'استلار', key: 'crypto-stellar', category: 'crypto' },
+    79→  { title: 'تتر', key: 'crypto-tether', category: 'crypto' },
+    80→  { title: 'مونرو', key: 'crypto-monero', category: 'crypto' },
+    81→  { title: 'دش', key: 'crypto-dash', category: 'crypto' },
+    82→  { title: 'ای او اس', key: 'crypto-eos', category: 'crypto' },
+    83→  { title: 'نئو', key: 'crypto-neo', category: 'crypto' },
+    84→  { title: 'آیوتا', key: 'crypto-iota', category: 'crypto' },
+    85→
+    86→  /* ── World Stock Indices ──────────────────────────────── */
+    87→  // Americas
+    88→  { title: 'داو جونز (آمریکا)', key: 'indices-us30-oanda', category: 'world_index', groupTitle: 'آمریکا' },
+    89→  { title: 'نزدک ۱۰۰', key: 'indices-ndx-indx', category: 'world_index', groupTitle: 'آمریکا' },
+    90→  { title: 'S&P 500', key: 'indices-xsp-indx', category: 'world_index', groupTitle: 'آمریکا' },
+    91→  { title: 'راسل ۲۰۰۰', key: 'indices-midde50-icmarkets', category: 'world_index', groupTitle: 'آمریکا' },
+    92→  { title: 'S&P/TSX (کانادا)', key: 'indices-gsptse-indx', category: 'world_index', groupTitle: 'آمریکا' },
+    93→  { title: 'IBOVESPA (برزیل)', key: 'indices-bvsp-indx', category: 'world_index', groupTitle: 'آمریکا' },
+    94→  { title: 'IPC (مکزیک)', key: 'indices-mxx-indx', category: 'world_index', groupTitle: 'آمریکا' },
+    95→  // Europe
+    96→  { title: 'داکس (آلمان)', key: 'indices-gdaxi-indx', category: 'world_index', groupTitle: 'اروپا' },
+    97→  { title: 'یورواستاکس ۵۰', key: 'indices-sx5e-indx', category: 'world_index', groupTitle: 'اروپا' },
+    98→  { title: 'STOXX 600 (اروپا)', key: 'indices-sxxp-indx', category: 'world_index', groupTitle: 'اروپا' },
+    99→  { title: 'Euronext 100', key: 'indices-n100-indx', category: 'world_index', groupTitle: 'اروپا' },
+   100→  { title: 'CAC 40 (فرانسه)', key: 'indices-fr40-oanda', category: 'world_index', groupTitle: 'اروپا' },
+   101→  { title: 'FTSE 100 (انگلستان)', key: 'indices-uk100-oanda', category: 'world_index', groupTitle: 'اروپا' },
+   102→  { title: 'ایبکس ۳۵ (اسپانیا)', key: 'indices-ibex-indx', category: 'world_index', groupTitle: 'اروپا' },
+   103→  { title: 'FTSE MIB (ایتالیا)', key: 'indices-it40-icmarkets', category: 'world_index', groupTitle: 'اروپا' },
+   104→  { title: 'SMI (سوئیس)', key: 'indices-ssmi-indx', category: 'world_index', groupTitle: 'اروپا' },
+   105→  { title: 'AEX (هلند)', key: 'indices-aex-indx', category: 'world_index', groupTitle: 'اروپا' },
+   106→  { title: 'OMX (سوئد)', key: 'indices-omxs30-indx', category: 'world_index', groupTitle: 'اروپا' },
+   107→  { title: 'BEL 20 (بلژیک)', key: 'indices-bfx-indx', category: 'world_index', groupTitle: 'اروپا' },
+   108→  { title: 'ATX (اتریش)', key: 'indices-atx-indx', category: 'world_index', groupTitle: 'اروپا' },
+   109→  { title: 'WIG (لهستان)', key: 'indices-wig-war', category: 'world_index', groupTitle: 'اروپا' },
+   110→  { title: 'ISEQ (ایرلند)', key: 'indices-isec-indx', category: 'world_index', groupTitle: 'اروپا' },
+   111→  // Asia-Pacific
+   112→  { title: 'نیکی ۲۲۵ (ژاپن)', key: 'indices-jp225-oanda', category: 'world_index', groupTitle: 'آسیا' },
+   113→  { title: 'هانگ سنگ (هنگ‌کنگ)', key: 'indices-hk50-pepperstone', category: 'world_index', groupTitle: 'آسیا' },
+   114→  { title: 'شاخص چین A۵۰', key: 'indices-chn50-fxcm', category: 'world_index', groupTitle: 'آسیا' },
+   115→  { title: 'کوسپی (کره جنوبی)', key: 'indices-ks200-icmarkets', category: 'world_index', groupTitle: 'آسیا' },
+   116→  { title: 'شانگهای کامپوزیت', key: 'indices-ssec-indx', category: 'world_index', groupTitle: 'آسیا' },
+   117→  { title: 'Sensex (هند)', key: 'indices-bsesn-indx', category: 'world_index', groupTitle: 'آسیا' },
+   118→  { title: 'NIFTY ۵۰ (هند)', key: 'indices-nsei-indx', category: 'world_index', groupTitle: 'آسیا' },
+   119→  { title: 'SET (تایلند)', key: 'indices-set50-indx', category: 'world_index', groupTitle: 'آسیا' },
+   120→  { title: 'ASX 200 (استرالیا)', key: 'indices-xjo-indx', category: 'world_index', groupTitle: 'آسیا' },
+   121→  { title: 'تایوان وزنی', key: 'indices-twii-indx', category: 'world_index', groupTitle: 'آسیا' },
+   122→  // Middle East & Africa
+   123→  { title: 'TASI (عربستان)', key: 'indices-tasi-indx', category: 'world_index', groupTitle: 'خاورمیانه' },
+   124→  { title: 'DFMGI (امارات)', key: 'indices-dfmgi-indx', category: 'world_index', groupTitle: 'خاورمیانه' },
+   125→  { title: 'بوورسا (ترکیه)', key: 'indices-xu100-is', category: 'world_index', groupTitle: 'خاورمیانه' },
+   126→  { title: 'TA-125 (اسرائیل)', key: 'indices-ta125-indx', category: 'world_index', groupTitle: 'خاورمیانه' },
+   127→  { title: 'MOEX (روسیه)', key: 'indices-imoex-indx', category: 'world_index', groupTitle: 'سایر' },
+   128→
+   129→  /* ── Foreign Stocks (Tokenized) ───────────────────────── */
+   130→  // US Tech
+   131→  { title: 'اپل (AAPL)', key: 'crypto-apple-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   132→  { title: 'مایکروسافت (MSFT)', key: 'crypto-microsoft-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   133→  { title: 'انویدیا (NVDA)', key: 'crypto-nvidia-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   134→  { title: 'آلفابت/گوگل (GOOGL)', key: 'crypto-alphabet-class-a-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   135→  { title: 'متا/فیس‌بوک (META)', key: 'crypto-meta-platforms-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   136→  { title: 'آمازون (AMZN)', key: 'crypto-amazon-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   137→  { title: 'تسلا (TSLA)', key: 'crypto-tesla-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   138→  { title: 'نتفلیکس (NFLX)', key: 'crypto-netflix-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   139→  { title: 'اینتل (INTC)', key: 'crypto-intel-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   140→  { title: 'ادوبی (ADBE)', key: 'crypto-adobe-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   141→  { title: 'برودکام (AVGO)', key: 'crypto-broadcom-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   142→  { title: 'کوالکام (QCOM)', key: 'crypto-qualcomm-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   143→  // US Finance
+   144→  { title: 'جی‌پی مورگان (JPM)', key: 'crypto-jpmorgan-chase-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مالی' },
+   145→  { title: 'گلدمن ساکس (GS)', key: 'crypto-goldman-sachs-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مالی' },
+   146→  { title: 'ویزا (V)', key: 'crypto-visa-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مالی' },
+   147→  { title: 'مسترکارت (MA)', key: 'crypto-mastercard-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مالی' },
+   148→  { title: 'بلاک‌هیلز (BLK)', key: 'crypto-blackrock-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مالی' },
+   149→  // US Healthcare & Consumer
+   150→  { title: 'جانسون اند جانسون (JNJ)', key: 'crypto-johnson-johnson-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مصرفی/بهداشت' },
+   151→  { title: 'کوکاکولا (KO)', key: 'crypto-coca-cola-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مصرفی/بهداشت' },
+   152→  { title: 'پفایزر (PFE)', key: 'crypto-pfizer-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مصرفی/بهداشت' },
+   153→  // US Other
+   154→  { title: 'تیسلا (TSLA) xStock', key: 'crypto-wrapped-tesla-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   155→  { title: 'میتا (META) xStock', key: 'crypto-wrapped-meta-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   156→  { title: 'کوین‌بیس (COIN)', key: 'crypto-coinbase-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
+   157→  // China / Asia
+   158→  { title: 'علی‌بابا (BABA)', key: 'crypto-baba', category: 'foreign_stock', groupTitle: 'چین' },
+   159→  { title: 'تنسنت', key: 'crypto-tencent', category: 'foreign_stock', groupTitle: 'چین' },
+   160→  { title: 'بایدو', key: 'crypto-baidu', category: 'foreign_stock', groupTitle: 'چین' },
+   161→  { title: 'جی‌دی کام', key: 'crypto-jd-com', category: 'foreign_stock', groupTitle: 'چین' },
+   162→
+   163→  /* ── Forex Pairs (Major) ──────────────────────────────── */
+   164→  { title: 'یورو / دلار', key: 'eur-usd-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   165→  { title: 'پوند / دلار', key: 'gbp-usd-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   166→  { title: 'دلار / ین', key: 'usd-jpy-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   167→  { title: 'دلار / فرانک سویس', key: 'usd-chf-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   168→  { title: 'دلار استرالیا / دلار', key: 'aud-usd-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   169→  { title: 'دلار نیوزیلند / دلار', key: 'nzd-usd-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   170→  { title: 'دلار / دلار کانادا', key: 'usd-cad-ask', category: 'forex', groupTitle: 'جفت‌ارزهای اصلی' },
+   171→  { title: 'دلار / لیر ترکیه', key: 'usd-try-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   172→  { title: 'دلار / روبل روسیه', key: 'usd-rub-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   173→  { title: 'دلار / کرون سوئد', key: 'usd-sek-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   174→  { title: 'دلار / کرون نروژ', key: 'usd-nok-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   175→  { title: 'دلار / یوان چین', key: 'usd-cny-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   176→  { title: 'دلار / پزو مکزیک', key: 'usd-mxn-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   177→  { title: 'دلار / رند آفریقای جنوبی', key: 'brl-usd-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   178→  { title: 'دلار / درهم امارات', key: 'usd-aed-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   179→  { title: 'دلار / دلار سنگاپور', key: 'usd-sgd-ask', category: 'forex', groupTitle: 'اگزوتیک' },
+   180→
+   181→  /* ── Oil & Energy ─────────────────────────────────────── */
+   182→  { title: 'نفت برنت', key: 'energy-brent-oil', category: 'energy', groupTitle: 'نفت' },
+   183→  { title: 'نفت وست تگزاس (WTI)', key: 'energy-crude-oil', category: 'energy', groupTitle: 'نفت' },
+   184→  { title: 'نفت اوپک', key: 'oil_opec', category: 'energy', groupTitle: 'نفت' },
+   185→  { title: 'گاز طبیعی', key: 'energy-natural-gas', category: 'energy', groupTitle: 'انرژی' },
+   186→  { title: 'بنزین', key: 'energy-gasoline-rbob', category: 'energy', groupTitle: 'انرژی' },
+   187→  { title: ' LSM Marker', key: 'lng-japan-korea-marker', category: 'energy', groupTitle: 'انرژی' },
+   188→
+   189→  /* ── World Metals ─────────────────────────────────────── */
+   190→  { title: 'انس جهانی طلا', key: 'ons', category: 'metal', groupTitle: 'فلزات گران‌بها' },
+   191→  { title: 'نقره جهانی', key: 'silver', category: 'metal', groupTitle: 'فلزات گران‌بها' },
+   192→  { title: 'پلاتین', key: 'platinum', category: 'metal', groupTitle: 'فلزات گران‌بها' },
+   193→  { title: 'پالادیوم', key: 'palladium', category: 'metal', groupTitle: 'فلزات گران‌بها' },
+   194→  { title: 'مس', key: 'basemetal-copper', category: 'metal', groupTitle: 'فلزات پایه' },
+   195→  { title: 'آلومینیوم', key: 'basemetal-aluminum', category: 'metal', groupTitle: 'فلزات پایه' },
+   196→  { title: 'روی', key: 'basemetal-zinc', category: 'metal', groupTitle: 'فلزات پایه' },
+   197→  { title: 'نیکل', key: 'basemetal-nickel', category: 'metal', groupTitle: 'فلزات پایه' },
+   198→  { title: 'سرب', key: 'basemetal-lead', category: 'metal', groupTitle: 'فلزات پایه' },
+   199→  { title: 'قلع', key: 'basemetal-tin', category: 'metal', groupTitle: 'فلزات پایه' },
+   200→
+   201→  /* ── Global Commodities ───────────────────────────────── */
+   202→  { title: 'گندم (آمریکا)', key: 'commodities-us-wheat', category: 'commodity', groupTitle: 'غلات' },
+   203→  { title: 'ذرت', key: 'commodities-us-corn', category: 'commodity', groupTitle: 'غلات' },
+   204→  { title: 'سویا', key: 'commodities-us-soybeans', category: 'commodity', groupTitle: 'غلات' },
+   205→  { title: 'برنج', key: 'commodities-rough-rice', category: 'commodity', groupTitle: 'غلات' },
+   206→  { title: 'پنبه', key: 'commodities-us-cotton', category: 'commodity', groupTitle: 'کالاها' },
+   207→  { title: 'قهوه', key: 'commodities-us-cocoa', category: 'commodity', groupTitle: 'کالاها' },
+   208→  { title: 'شکر', key: 'commodities-us-sugar', category: 'commodity', groupTitle: 'کالاها' },
+   209→  { title: 'شکلات', key: 'commodities-london-cocoa', category: 'commodity', groupTitle: 'کالاها' },
+   210→  { title: 'روغن سویا', key: 'commodities-us-soybean-oil', category: 'commodity', groupTitle: 'کالاها' },
+   211→  { title: 'پالم', key: 'commodities-palm-oil', category: 'commodity', groupTitle: 'کالاها' },
+   212→  { title: 'ذرت (لندن)', key: 'commodities-london-wheat', category: 'commodity', groupTitle: 'غلات' },
+   213→];
+   214→
+   215→/* ─── TGJU → Yahoo Finance Fallback Map ─────────────── */
+   216→/**
+   217→ * Maps TGJU static instrument keys to Yahoo Finance symbols.
+   218→ * Used when api.tgju.org returns 403 (blocked) so we fall back to Yahoo.
+   219→ * Only instruments with Yahoo equivalents are mapped.
+   220→ */
+   221→export const TGJU_TO_YAHOO_MAP: Record<string, string> = {
+   222→  // Crypto
+   223→  'crypto-bitcoin': 'BTC-USD',
+   224→  'crypto-ethereum': 'ETH-USD',
+   225→  'crypto-litecoin': 'LTC-USD',
+   226→  'crypto-ripple': 'XRP-USD',
+   227→  'crypto-bitcoin-cash': 'BCH-USD',
+   228→  'crypto-cardano': 'ADA-USD',
+   229→  'crypto-stellar': 'XLM-USD',
+   230→  'crypto-tether': 'USDT-USD',
+   231→  'crypto-monero': 'XMR-USD',
+   232→  'crypto-dash': 'DASH-USD',
+   233→  'crypto-eos': 'EOS-USD',
+   234→  'crypto-neo': 'NEO-USD',
+   235→  'crypto-iota': 'MIOTA-USD',
+   236→
+   237→  // World Indices — Americas
+   238→  'indices-us30-oanda': '^DJI',
+   239→  'indices-ndx-indx': '^NDX',
+   240→  'indices-xsp-indx': '^GSPC',
+   241→  'indices-midde50-icmarkets': '^RUT',
+   242→  'indices-bvsp-indx': '^BVSP',
+   243→  'indices-mxx-indx': '^MXX',
+   244→  // World Indices — Europe
+   245→  'indices-gdaxi-indx': '^GDAXI',
+   246→  'indices-fr40-oanda': '^FCHI',
+   247→  'indices-uk100-oanda': '^FTSE',
+   248→  'indices-ibex-indx': '^IBEX',
+   249→  'indices-it40-icmarkets': '^MIB',
+   250→  'indices-ssmi-indx': '^SSMI',
+   251→  'indices-aex-indx': '^AEX',
+   252→  'indices-imoex-indx': '^IMOEX',
+   253→  // World Indices — Asia-Pacific
+   254→  'indices-jp225-oanda': '^N225',
+   255→  'indices-hk50-pepperstone': '^HSI',
+   256→  'indices-ks200-icmarkets': '^KS11',
+   257→  'indices-ssec-indx': '^000001.SS',
+   258→  'indices-bsesn-indx': '^BSESN',
+   259→  'indices-nsei-indx': '^NSEI',
+   260→  'indices-set50-indx': '^SET',
+   261→  'indices-xjo-indx': '^AXJO',
+   262→  'indices-twii-indx': '^TWII',
+   263→  // World Indices — Middle East
+   264→  'indices-tasi-indx': '^TASI',
+   265→  'indices-dfmgi-indx': '^DFMGI',
+   266→  'indices-xu100-is': '^XU100',
+   267→
+   268→  // Foreign Stocks (Tokenized) → Real Yahoo tickers
+   269→  'crypto-apple-tokenized-stock-ondo': 'AAPL',
+   270→  'crypto-microsoft-tokenized-stock-ondo': 'MSFT',
+   271→  'crypto-nvidia-tokenized-stock-ondo': 'NVDA',
+   272→  'crypto-alphabet-class-a-tokenized-stock-ondo': 'GOOGL',
+   273→  'crypto-meta-platforms-tokenized-stock-ondo': 'META',
+   274→  'crypto-amazon-tokenized-stock-ondo': 'AMZN',
+   275→  'crypto-tesla-tokenized-stock-ondo': 'TSLA',
+   276→  'crypto-netflix-tokenized-stock-ondo': 'NFLX',
+   277→  'crypto-intel-tokenized-stock-ondo': 'INTC',
+   278→  'crypto-adobe-tokenized-stock-ondo': 'ADBE',
+   279→  'crypto-broadcom-tokenized-stock-xstock': 'AVGO',
+   280→  'crypto-qualcomm-tokenized-stock-ondo': 'QCOM',
+   281→  'crypto-jpmorgan-chase-tokenized-stock-ondo': 'JPM',
+   282→  'crypto-goldman-sachs-tokenized-stock-ondo': 'GS',
+   283→  'crypto-visa-tokenized-stock-ondo': 'V',
+   284→  'crypto-mastercard-tokenized-stock-ondo': 'MA',
+   285→  'crypto-blackrock-tokenized-stock-ondo': 'BLK',
+   286→  'crypto-johnson-johnson-tokenized-stock-ondo': 'JNJ',
+   287→  'crypto-coca-cola-tokenized-stock-ondo': 'KO',
+   288→  'crypto-pfizer-tokenized-stock-ondo': 'PFE',
+   289→  'crypto-wrapped-tesla-tokenized-stock-xstock': 'TSLA',
+   290→  'crypto-wrapped-meta-tokenized-stock-xstock': 'META',
+   291→  'crypto-coinbase-tokenized-stock-xstock': 'COIN',
+   292→  'crypto-baba': 'BABA',
+   293→  'crypto-tencent': '0700.HK',
+   294→  'crypto-baidu': 'BIDU',
+   295→  'crypto-jd-com': 'JD',
+   296→
+   297→  // Forex — Major
+   298→  'eur-usd-ask': 'EURUSD=X',
+   299→  'gbp-usd-ask': 'GBPUSD=X',
+   300→  'usd-jpy-ask': 'USDJPY=X',
+   301→  'usd-chf-ask': 'USDCHF=X',
+   302→  'aud-usd-ask': 'AUDUSD=X',
+   303→  'nzd-usd-ask': 'NZDUSD=X',
+   304→  'usd-cad-ask': 'USDCAD=X',
+   305→  // Forex — Exotic
+   306→  'usd-try-ask': 'USDTRY=X',
+   307→  'usd-sek-ask': 'USDSEK=X',
+   308→  'usd-nok-ask': 'USDNOK=X',
+   309→  'usd-cny-ask': 'USDCNH=X',
+   310→  'usd-mxn-ask': 'USDMXN=X',
+   311→  'brl-usd-ask': 'USDZAR=X',
+   312→  'usd-aed-ask': 'USDAED=X',
+   313→  'usd-sgd-ask': 'USDSGD=X',
+   314→  'usd-rub-ask': 'USDRUB=X',
+   315→
+   316→  // Energy
+   317→  'energy-brent-oil': 'BZ=F',
+   318→  'energy-crude-oil': 'CL=F',
+   319→  'energy-natural-gas': 'NG=F',
+   320→  'energy-gasoline-rbob': 'RB=F',
+   321→  'lng-japan-korea-marker': 'NG=F', // closest Yahoo equivalent
+   322→
+   323→  // Metals — Precious
+   324→  'ons': 'GC=F',
+   325→  'silver': 'SI=F',
+   326→  'platinum': 'PL=F',
+   327→  'palladium': 'PA=F',
+   328→  // Metals — Base
+   329→  'basemetal-copper': 'HG=F',
+   330→  'basemetal-aluminum': 'ALI.L',
+   331→  'basemetal-zinc': 'ZI=F',
+   332→  'basemetal-nickel': 'NICKEL.L',
+   333→  'basemetal-lead': 'ZI=F',    // closest Yahoo equivalent
+   334→  'basemetal-tin': 'ALI.L',    // closest Yahoo equivalent
+   335→
+   336→  // Commodities
+   337→  'commodities-us-wheat': 'ZW=F',
+   338→  'commodities-us-corn': 'ZC=F',
+   339→  'commodities-us-soybeans': 'ZS=F',
+   340→  'commodities-rough-rice': 'ZR=F', // rough rice futures
+   341→  'commodities-us-cotton': 'CT=F',
+   342→  'commodities-us-cocoa': 'CC=F',
+   343→  'commodities-us-sugar': 'SB=F',
+   344→  'commodities-london-cocoa': 'CC=F',
+   345→  'commodities-us-soybean-oil': 'ZL=F',
+   346→  'commodities-palm-oil': 'ZL=F',  // closest Yahoo equivalent
+   347→  'commodities-london-wheat': 'ZW=F',
+   348→  'oil_opec': 'CL=F', // OPEC basket → use WTI as proxy
+   349→};
+   350→
+   351→/* ─── Helpers ──────────────────────────────────────────── */
+   352→
+   353→/**
+   354→ * Parse a number that might contain Persian digits, commas, or other formatting.
+   355→ * Handles null/undefined/empty strings gracefully.
+   356→ */
+   357→function parsePersianNum(str: string | null | undefined | number): number {
+   358→  if (str === null || str === undefined) return 0;
+   359→  let s = String(str).trim();
+   360→  if (!s || s === '-' || s === '') return 0;
+   361→  // Strip trailing % sign (e.g. "0.05%" → "0.05")
+   362→  if (s.endsWith('%')) s = s.slice(0, -1).trim();
+   363→  // Replace commas and Persian digits
+   364→  const cleaned = s.replace(/[,۰-۹]/g, (c: string) => {
+   365→    const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+   366→    const idx = persianDigits.indexOf(c);
+   367→    return idx >= 0 ? String(idx) : c === ',' ? '' : c;
+   368→  });
+   369→  const n = Number(cleaned);
+   370→  return isFinite(n) ? n : 0;
+   371→}
+   372→
+   373→/**
+   374→ * Check if a value looks like a date string (contains / or - and is not a number).
+   375→ */
+   376→function looksLikeDate(val: string | null | undefined | number): boolean {
+   377→  if (!val) return false;
+   378→  const s = String(val).trim();
+   379→  return /[\/\-]/.test(s) && isNaN(Number(s.replace(/[,۰-۹\/\-]/g, '')));
+   380→}
+   381→
+   382→/**
+   383→ * Check if a value looks like a percentage (ends with % or is small like 0.5 to 50).
+   384→ */
+   385→function looksLikePercentage(val: string | null | undefined | number): boolean {
+   386→  if (!val) return false;
+   387→  const s = String(val).trim();
+   388→  if (s.endsWith('%')) return true;
+   389→  const n = parsePersianNum(val);
+   390→  return !isNaN(n) && Math.abs(n) < 100 && n !== 0;
+   391→}
+   392→
+   393→/**
+   394→ * Auto-detect column mapping for TGJU API response.
+   395→ * Expected format: [open, low, high, close, change, changePct, gregorianDate, jalaliDate]
+   396→ * But the API may change column order.
+   397→ */
+   398→function detectColumnMap(row: (string | number)[]): {
+   399→  openIdx: number; highIdx: number; lowIdx: number; closeIdx: number;
+   400→  jalaliDateIdx: number; gregorianDateIdx: number;
+   401→} | null {
+   402→  if (!row || row.length < 6) return null;
+   403→
+   404→  let jalaliDateIdx = -1;
+   405→  let gregorianDateIdx = -1;
+   406→  const numericIndices: number[] = [];
+   407→  const percentageIndices: number[] = [];
+   408→
+   409→  for (let i = 0; i < row.length; i++) {
+   410→    const val = row[i];
+   411→    if (looksLikeDate(val)) {
+   412→      // Jalali dates have Persian digits or format like 1404/05/25
+   413→      const s = String(val);
+   414→      if (/[۰-۹]/.test(s) || /^14\d{2}/.test(s.replace(/[۰-۹]/g, (d: string) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))) {
+   415→        if (jalaliDateIdx === -1) jalaliDateIdx = i;
+   416→      } else {
+   417→        if (gregorianDateIdx === -1) gregorianDateIdx = i;
+   418→      }
+   419→    } else if (looksLikePercentage(val)) {
+   420→      percentageIndices.push(i);
+   421→    } else {
+   422→      const n = parsePersianNum(val);
+   423→      if (isFinite(n) && n !== 0) {
+   424→        numericIndices.push(i);
+   425→      }
+   426→    }
+   427→  }
+   428→
+   429→  // If we couldn't auto-detect dates, fall back to assumed positions
+   430→  if (jalaliDateIdx === -1 && row.length >= 8) {
+   431→    // Default assumption: row[6] = gregorian, row[7] = jalali
+   432→    if (looksLikeDate(row[7])) jalaliDateIdx = 7;
+   433→    else if (looksLikeDate(row[6])) jalaliDateIdx = 6;
+   434→    if (gregorianDateIdx === -1 && looksLikeDate(row[6]) && jalaliDateIdx !== 6) gregorianDateIdx = 6;
+   435→    else if (gregorianDateIdx === -1 && looksLikeDate(row[7]) && jalaliDateIdx !== 7) gregorianDateIdx = 7;
+   436→  }
+   437→
+   438→  // Numeric columns (excluding percentages) should be OHLC + change
+   439→  // OHLC: typically 4 largest absolute values among non-percentage numerics
+   440→  // change: the remaining one
+   441→  const ohlcCandidates = numericIndices.filter(i => !percentageIndices.includes(i));
+   442→
+   443→  if (ohlcCandidates.length < 4) {
+   444→    // Fallback: assume first 4 numeric columns are OHLC
+   445→    if (numericIndices.length >= 4) {
+   446→      return {
+   447→        openIdx: numericIndices[0],
+   448→        highIdx: numericIndices[2],
+   449→        lowIdx: numericIndices[1],
+   450→        closeIdx: numericIndices[3],
+   451→        jalaliDateIdx: jalaliDateIdx >= 0 ? jalaliDateIdx : 7,
+   452→        gregorianDateIdx: gregorianDateIdx >= 0 ? gregorianDateIdx : 6,
+   453→      };
+   454→    }
+   455→    return null;
+   456→  }
+   457→
+   458→  // Sort by absolute value descending to identify OHLC (largest) vs change (smallest)
+   459→  const sorted = ohlcCandidates
+   460→    .map(i => ({ idx: i, val: Math.abs(parsePersianNum(row[i])) }))
+   461→    .sort((a, b) => b.val - a.val);
+   462→
+   463→  // The 4 largest should be OHLC. Among them, identify high (max) and low (min).
+   464→  // open and close are the other two.
+   465→  const top4 = sorted.slice(0, 4);
+   466→  const maxIdx = top4.reduce((a, b) => a.val > b.val ? a : b).idx;
+   467→  const minIdx = top4.reduce((a, b) => a.val < b.val ? a : b).idx;
+   468→  const others = top4.filter(x => x.idx !== maxIdx && x.idx !== minIdx);
+   469→
+   470→  // Among the two remaining, the one closer to high is open, the other is close
+   471→  // (heuristic: in an uptrend open < close, but we can't assume direction)
+   472→  // Default: first = open, second = close
+   473→  const openIdx = others[0]?.idx ?? ohlcCandidates[0];
+   474→  const closeIdx = others[1]?.idx ?? ohlcCandidates[3];
+   475→
+   476→  return {
+   477→    openIdx,
+   478→    highIdx: maxIdx,
+   479→    lowIdx: minIdx,
+   480→    closeIdx,
+   481→    jalaliDateIdx: jalaliDateIdx >= 0 ? jalaliDateIdx : row.length - 1,
+   482→    gregorianDateIdx: gregorianDateIdx >= 0 ? gregorianDateIdx : row.length - 2,
+   483→  };
+   484→}
+   485→
+   486→/**
+   487→ * Validate a candle's OHLC values for sanity.
+   488→ * Returns true if the candle is valid.
+   489→ */
+   490→function isValidCandle(o: number, h: number, l: number, c: number): boolean {
+   491→  if (!isFinite(o) || !isFinite(h) || !isFinite(l) || !isFinite(c)) return false;
+   492→  if (o <= 0 || h <= 0 || l <= 0 || c <= 0) return false;
+   493→  // High must be >= Low, Open, Close
+   494→  if (h < l || h < o || h < c) return false;
+   495→  // Low must be <= High, Open, Close
+   496→  if (l > o || l > c) return false;
+   497→  // No infinite or extreme values
+   498→  if (o > 1e15 || h > 1e15 || l > 1e15 || c > 1e15) return false;
+   499→  return true;
+   500→}
+   501→
+   502→/* ─── Cache ────────────────────────────────────────────── */
+   503→
+   504→const liveInstrumentsCache: { data: TgjuInstrument[] | null; ts: number } = { data: null, ts: 0 };
+   505→const INSTRUMENTS_TTL = 5 * 60 * 1000; // 5 minutes
+   506→
+   507→const historyCache = new Map<string, { data: TgjuOHLC[]; ts: number }>();
+   508→const HISTORY_TTL = 4 * 60 * 60 * 1000; // 4 hours (reduced page_reader load)
+   509→const HISTORY_STALE_TTL = 24 * 60 * 60 * 1000; // 24 hours (return stale data if fresh fails)
+   510→
+   511→// File-based persistent cache directory
+   512→const FILE_CACHE_DIR = join(tmpdir(), 'tgju-history-cache');
+   513→
+   514→// ─── File-based cache helpers ───
+   515→async function ensureCacheDir() {
+   516→  try { await mkdir(FILE_CACHE_DIR, { recursive: true }); } catch {}
+   517→}
+   518→
+   519→async function readFromFileCache(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+   520→  try {
+   521→    const filePath = join(FILE_CACHE_DIR, `${tgjuKey}.json`);
+   522→    const data = await readFile(filePath, 'utf-8');
+   523→    const parsed = JSON.parse(data);
+   524→    if (parsed && Array.isArray(parsed.data) && parsed.data.length >= 30 && parsed.ts) {
+   525→      return parsed.data as TgjuOHLC[];
+   526→    }
+   527→  } catch {}
+   528→  return null;
+   529→}
+   530→
+   531→async function writeToFileCache(tgjuKey: string, candles: TgjuOHLC[]): Promise<void> {
+   532→  try {
+   533→    await ensureCacheDir();
+   534→    const filePath = join(FILE_CACHE_DIR, `${tgjuKey}.json`);
+   535→    await writeFile(filePath, JSON.stringify({ data: candles, ts: Date.now() }), 'utf-8');
+   536→  } catch {}
+   537→}
+   538→
+   539→// Cache for static instrument prices (from chart API last 3 candles)
+   540→const staticPriceCache = new Map<string, { close: number; high: number; low: number; prevClose: number; ts: number }>();
+   541→const STATIC_PRICE_TTL = 10 * 60 * 1000; // 10 minutes
+   542→
+   543→/* ─── Fetch live instruments (currency + gold from tgju-api) + static list ── */
+   544→
+   545→export async function fetchTgjuInstruments(): Promise<TgjuInstrument[]> {
+   546→  const now = Date.now();
+   547→  if (liveInstrumentsCache.data && now - liveInstrumentsCache.ts < INSTRUMENTS_TTL) {
+   548→    return liveInstrumentsCache.data;
+   549→  }
+   550→
+   551→  const controller = new AbortController();
+   552→  const timeout = setTimeout(() => controller.abort(), 10000);
+   553→
+   554→  try {
+   555→    const [currencyRes, goldRes] = await Promise.all([
+   556→      fetch(`${TGJU_API_BASE}/api/price/currency`, { signal: controller.signal }),
+   557→      fetch(`${TGJU_API_BASE}/api/price/gold`, { signal: controller.signal }),
+   558→    ]);
+   559→
+   560→    clearTimeout(timeout);
+   561→
+   562→    const instruments: TgjuInstrument[] = [];
+   563→
+   564→    if (currencyRes.ok) {
+   565→      const currencies: TgjuPriceItem[] = await currencyRes.json();
+   566→      for (const c of currencies) {
+   567→        const price = parsePersianNum(c.price);
+   568→        const low = parsePersianNum(c.low_price);
+   569→        const high = parsePersianNum(c.high_price);
+   570→        instruments.push({
+   571→          title: c.title,
+   572→          key: c.key,
+   573→          price,
+   574→          highPrice: high,
+   575→          lowPrice: low,
+   576→          change: 0,
+   577→          changePercent: 0,
+   578→          category: 'currency',
+   579→        });
+   580→      }
+   581→    }
+   582→
+   583→    if (goldRes.ok) {
+   584→      const goldCategories: TgjuGoldCategory[] = await goldRes.json();
+   585→      for (const cat of goldCategories) {
+   586→        for (const item of cat.prices) {
+   587→          const price = parsePersianNum(item.price);
+   588→          const low = parsePersianNum(item.low_price);
+   589→          const high = parsePersianNum(item.high_price);
+   590→
+   591→          let category: TgjuCategoryType = 'gold';
+   592→          if (item.key.startsWith('ime_fund_')) category = 'gold_etf';
+   593→          else if (item.key.startsWith('silver_')) category = 'silver';
+   594→
+   595→          instruments.push({
+   596→            title: item.title,
+   597→            key: item.key,
+   598→            price,
+   599→            highPrice: high,
+   600→            lowPrice: low,
+   601→            change: 0,
+   602→            changePercent: 0,
+   603→            category,
+   604→            groupTitle: cat.title,
+   605→          });
+   606→        }
+   607→      }
+   608→    }
+   609→
+   610→    // Add static instruments (crypto, world indices, forex, energy, metals, commodities)
+   611→    for (const s of STATIC_INSTRUMENTS) {
+   612→      const cached = staticPriceCache.get(s.key);
+   613→      const price = cached?.close ?? 0;
+   614→      instruments.push({
+   615→        title: s.title,
+   616→        key: s.key,
+   617→        price,
+   618→        highPrice: cached?.high ?? 0,
+   619→        lowPrice: cached?.low ?? 0,
+   620→        change: cached ? (cached.close - cached.prevClose) : 0,
+   621→        changePercent: cached && cached.prevClose > 0 ? ((cached.close - cached.prevClose) / cached.prevClose) * 100 : 0,
+   622→        category: s.category,
+   623→        groupTitle: s.groupTitle,
+   624→      });
+   625→    }
+   626→
+   627→    liveInstrumentsCache.data = instruments;
+   628→    liveInstrumentsCache.ts = now;
+   629→
+   630→    // ── Background: fetch chart data for currency/gold to get accurate daily change ──
+   631→    backgroundFetchCurrencyGoldChange(instruments).catch(() => {});
+   632→
+   633→    // ── Background: fetch Yahoo prices for static instruments with price=0 (TGJU API 403) ──
+   634→    backgroundFetchYahooFallbackPrices(instruments).catch(() => {});
+   635→
+   636→    return instruments;
+   637→  } catch {
+   638→    clearTimeout(timeout);
+   639→    return liveInstrumentsCache.data || [];
+   640→  }
+   641→}
+   642→
+   643→/**
+   644→ * Background task: fetch last 2 candles for currency/gold items to compute accurate daily change.
+   645→ * Uses direct fetch to avoid queue contention.
+   646→ * Only updates change/changePercent — keeps the live price from tgju-api.
+   647→ */
+   648→async function backgroundFetchCurrencyGoldChange(instruments: TgjuInstrument[]) {
+   649→  const currencyGoldItems = instruments.filter(
+   650→    (i) => i.category === 'currency' || i.category === 'gold' || i.category === 'silver' || i.category === 'gold_etf'
+   651→  );
+   652→
+   653→  // Limit to first 10 to avoid rate-limiting (most important: USD, EUR, gold coin, etc.)
+   654→  const priorityKeys = currencyGoldItems.slice(0, 10).map((i) => i.key);
+   655→
+   656→  for (const key of priorityKeys) {
+   657→    try {
+   658→      const url = `${TGJU_CHART_API}/${key}?lang=fa&order_dir=desc&start=0&length=2`;
+   659→      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+   660→      if (!res.ok) continue;
+   661→      const jsonStr = await res.text();
+   662→      if (!jsonStr.startsWith('{')) continue;
+   663→
+   664→      const data = JSON.parse(jsonStr);
+   665→      const rows: string[][] = data.data;
+   666→      if (!rows || rows.length < 2) continue;
+   667→
+   668→      const newest = rows[0];
+   669→      const prev = rows[1];
+   670→      const latestClose = parsePersianNum(newest[3]);
+   671→      const prevClose = parsePersianNum(prev[3]);
+   672→
+   673→      if (latestClose > 0 && prevClose > 0) {
+   674→        const inst = liveInstrumentsCache.data?.find((i) => i.key === key);
+   675→        if (inst) {
+   676→          inst.change = latestClose - prevClose;
+   677→          inst.changePercent = ((latestClose - prevClose) / prevClose) * 100;
+   678→        }
+   679→      }
+   680→    } catch {
+   681→      // skip individual errors
+   682→    }
+   683→  }
+   684→}
+   685→
+   686→/**
+   687→ * Get the Yahoo Finance fallback symbol for a TGJU instrument key.
+   688→ * Returns undefined if no mapping exists.
+   689→ */
+   690→export function getTgjuYahooFallback(tgjuKey: string): string | undefined {
+   691→  return TGJU_TO_YAHOO_MAP[tgjuKey];
+   692→}
+   693→
+   694→/**
+   695→ * Background task: fetch Yahoo Finance prices for static instruments that have price=0
+   696→ * (happens when api.tgju.org returns 403). Updates the live cache in-place.
+   697→ */
+   698→async function backgroundFetchYahooFallbackPrices(instruments: TgjuInstrument[]) {
+   699→  // Collect static instruments with price=0 that have a Yahoo mapping
+   700→  const zeroPriceItems = instruments.filter(
+   701→    (i) => i.price === 0 && i.key in TGJU_TO_YAHOO_MAP
+   702→  );
+   703→
+   704→  if (zeroPriceItems.length === 0) return;
+   705→
+   706→  console.log(`[TGJU] ${zeroPriceItems.length} static instruments have price=0, fetching from Yahoo Finance as fallback...`);
+   707→
+   708→  // Collect unique Yahoo symbols
+   709→  const keyToSymbol = new Map<string, string>();
+   710→  const symbolToKeys = new Map<string, string[]>();
+   711→  for (const item of zeroPriceItems) {
+   712→    const yahooSym = TGJU_TO_YAHOO_MAP[item.key];
+   713→    if (!yahooSym) continue;
+   714→    keyToSymbol.set(item.key, yahooSym);
+   715→    if (!symbolToKeys.has(yahooSym)) symbolToKeys.set(yahooSym, []);
+   716→    symbolToKeys.get(yahooSym)!.push(item.key);
+   717→  }
+   718→
+   719→  const uniqueSymbols = [...symbolToKeys.keys()];
+   720→
+   721→  try {
+   722→    // Dynamic import to avoid loading yahoo-finance2 for TSE-only users
+   723→    const YahooFinance = (await import('yahoo-finance2')).default;
+   724→    const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'], validation: { logErrors: false } });
+   725→
+   726→    // Fetch in batches of 15 (smaller batches reduce Yahoo validation errors)
+   727→    const BATCH_SIZE = 15;
+   728→    for (let i = 0; i < uniqueSymbols.length; i += BATCH_SIZE) {
+   729→      const batch = uniqueSymbols.slice(i, i + BATCH_SIZE);
+   730→      try {
+   731→        const results = await yahooFinance.quote(batch, {
+   732→          fields: ['symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent', 'regularMarketPreviousClose', 'regularMarketDayHigh', 'regularMarketDayLow'],
+   733→        });
+   734→
+   735→        for (const r of results) {
+   736→          if (r.regularMarketPrice == null) continue;
+   737→          const tgjuKeys = symbolToKeys.get(r.symbol);
+   738→          if (!tgjuKeys) continue;
+   739→
+   740→          for (const tgjuKey of tgjuKeys) {
+   741→            const inst = liveInstrumentsCache.data?.find((x) => x.key === tgjuKey);
+   742→            if (inst && inst.price === 0) {
+   743→              inst.price = r.regularMarketPrice;
+   744→              inst.highPrice = r.regularMarketDayHigh ?? r.regularMarketPrice;
+   745→              inst.lowPrice = r.regularMarketDayLow ?? r.regularMarketPrice;
+   746→              inst.change = r.regularMarketChange ?? 0;
+   747→              inst.changePercent = r.regularMarketChangePercent ?? 0;
+   748→
+   749→              // Also update static price cache
+   750→              staticPriceCache.set(tgjuKey, {
+   751→                close: r.regularMarketPrice,
+   752→                high: r.regularMarketDayHigh ?? r.regularMarketPrice,
+   753→                low: r.regularMarketDayLow ?? r.regularMarketPrice,
+   754→                prevClose: r.regularMarketPreviousClose ?? r.regularMarketPrice,
+   755→                ts: Date.now(),
+   756→              });
+   757→            }
+   758→          }
+   759→        }
+   760→      } catch (err) {
+   761→        const errMsg = err instanceof Error ? err.message : String(err);
+   762→        if (errMsg.includes('validation') || errMsg.includes('FailedYahooValidationError')) {
+   763→          // Batch failed due to schema validation — retry individually
+   764→          console.warn(`[TGJU] Yahoo fallback batch ${Math.floor(i / BATCH_SIZE) + 1} validation error, retrying individually...`);
+   765→          for (const symbol of batch) {
+   766→            try {
+   767→              const singleResults = await yahooFinance.quote([symbol], {
+   768→                fields: ['symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent', 'regularMarketPreviousClose', 'regularMarketDayHigh', 'regularMarketDayLow'],
+   769→              });
+   770→              for (const r of singleResults) {
+   771→                if (r.regularMarketPrice == null) continue;
+   772→                const tgjuKeys = symbolToKeys.get(r.symbol);
+   773→                if (!tgjuKeys) continue;
+   774→                for (const tgjuKey of tgjuKeys) {
+   775→                  const inst = liveInstrumentsCache.data?.find((x) => x.key === tgjuKey);
+   776→                  if (inst && inst.price === 0) {
+   777→                    inst.price = r.regularMarketPrice;
+   778→                    inst.highPrice = r.regularMarketDayHigh ?? r.regularMarketPrice;
+   779→                    inst.lowPrice = r.regularMarketDayLow ?? r.regularMarketPrice;
+   780→                    inst.change = r.regularMarketChange ?? 0;
+   781→                    inst.changePercent = r.regularMarketChangePercent ?? 0;
+   782→                    staticPriceCache.set(tgjuKey, {
+   783→                      close: r.regularMarketPrice,
+   784→                      high: r.regularMarketDayHigh ?? r.regularMarketPrice,
+   785→                      low: r.regularMarketDayLow ?? r.regularMarketPrice,
+   786→                      prevClose: r.regularMarketPreviousClose ?? r.regularMarketPrice,
+   787→                      ts: Date.now(),
+   788→                    });
+   789→                  }
+   790→                }
+   791→              }
+   792→            } catch {
+   793→              // skip individual symbol errors
+   794→            }
+   795→          }
+   796→        } else {
+   797→          console.warn(`[TGJU] Yahoo fallback batch ${Math.floor(i / BATCH_SIZE) + 1} failed:`, errMsg);
+   798→        }
+   799→      }
+   800→    }
+   801→
+   802→    const filledCount = zeroPriceItems.filter((i) => i.price > 0).length;
+   803→    console.log(`[TGJU] Yahoo fallback filled ${filledCount}/${zeroPriceItems.length} instrument prices`);
+   804→  } catch (err) {
+   805→    console.error(`[TGJU] Yahoo fallback fetch failed:`, err);
+   806→  }
+   807→}
+   808→
+   809→/* ─── Fetch historical OHLC data ── */
+   810→
+   811→/* ─── Page Reader Request Queue ─────────────────────── */
+   812→// Track which keys were last fetched from Yahoo (for route to detect source)
+   813→export const yahooFetchedKeys = new Set<string>();
+   814→
+   815→let pageReaderQueue: Promise<void> = Promise.resolve();
+   816→let lastPageReaderCall = 0;
+   817→const PAGE_READER_MIN_INTERVAL = 10_000; // 10 seconds between calls
+   818→const PAGE_READER_MAX_RETRIES = 3;
+   819→const PAGE_READER_RETRY_BASE_DELAY = 3_000; // 3 seconds base retry delay
+   820→
+   821→/**
+   822→ * Fetch historical OHLC data for a TGJU instrument.
+   823→ *
+   824→ * Strategy (permanent fix):
+   825→ * 1. Check in-memory cache (4h TTL)
+   826→ * 2. For global instruments with Yahoo mapping → use Yahoo Finance as PRIMARY
+   827→ * 3. For Iranian instruments → try direct fetch, then queued page_reader with retry
+   828→ * 4. If all fail → return stale cache (up to 24h) or file-based cache
+   829→ */
+   830→export async function fetchTgjuHistory(tgjuKey: string): Promise<TgjuOHLC[]> {
+   831→  const now = Date.now();
+   832→
+   833→  // ── Step 0: Check in-memory cache ──
+   834→  const cached = historyCache.get(tgjuKey);
+   835→  if (cached && now - cached.ts < HISTORY_TTL) {
+   836→    return cached.data;
+   837→  }
+   838→
+   839→  // ── Step 1: For global instruments, use Yahoo Finance as PRIMARY source ──
+   840→  const yahooSymbol = TGJU_TO_YAHOO_MAP[tgjuKey];
+   841→  if (yahooSymbol) {
+   842→    try {
+   843→      const YahooFinance = (await import('yahoo-finance2')).default;
+   844→      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'], validation: { logErrors: false } });
+   845→      const result = await yf.chart(yahooSymbol, {
+   846→        period1: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+   847→        period2: new Date(),
+   848→        interval: '1d',
+   849→      });
+   850→      if (result.quotes && result.quotes.length >= 30) {
+   851→        const candles: TgjuOHLC[] = result.quotes
+   852→          .filter((q: any) => q.close != null && q.open != null)
+   853→          .map((q: any) => ({
+   854→            date: q.date?.toISOString().split('T')[0] || '',
+   855→            open: q.open!,
+   856→            high: q.high || q.close!,
+   857→            low: q.low || q.close!,
+   858→            close: q.close!,
+   859→          }));
+   860→        if (candles.length >= 30) {
+   861→          console.log(`[TGJU] ${tgjuKey}: Got ${candles.length} candles from Yahoo (${yahooSymbol})`);
+   862→          yahooFetchedKeys.add(tgjuKey);
+   863→          cacheHistory(tgjuKey, candles, now);
+   864→          return candles;
+   865→        }
+   866→      }
+   867→    } catch (err) {
+   868→      console.warn(`[TGJU] Yahoo historical fetch failed for ${tgjuKey} (${yahooSymbol}):`, err instanceof Error ? err.message : err);
+   869→    }
+   870→  }
+   871→
+   872→  // ── Step 2: For Iranian instruments (or Yahoo fallback failed), try TGJU sources ──
+   873→  // 2a: Try direct fetch (fast path, works when Cloudflare not blocking)
+   874→  const directResult = await tryDirectFetch(tgjuKey);
+   875→  if (directResult && directResult.length >= 30) {
+   876→    cacheHistory(tgjuKey, directResult, now);
+   877→    return directResult;
+   878→  }
+   879→
+   880→  // 2b: Queued page_reader with retry + rate limiting
+   881→  console.log(`[TGJU] Direct fetch returned ${directResult?.length ?? 0} candles for ${tgjuKey}, using queued page_reader...`);
+   882→  const pageReaderResult = await fetchViaQueuedPageReader(tgjuKey);
+   883→  if (pageReaderResult && pageReaderResult.length >= 30) {
+   884→    cacheHistory(tgjuKey, pageReaderResult, now);
+   885→    return pageReaderResult;
+   886→  }
+   887→
+   888→  // ── Step 3: All methods failed — return stale cache ──
+   889→  if (cached && cached.data.length >= 30) {
+   890→    const age = ((now - cached.ts) / 60_000).toFixed(0);
+   891→    console.warn(`[TGJU] All methods failed for ${tgjuKey}, returning stale cache (${age}min old, ${cached.data.length} candles)`);
+   892→    return cached.data;
+   893→  }
+   894→
+   895→  // ── Step 4: Try file-based cache ──
+   896→  const fileCached = await readFromFileCache(tgjuKey);
+   897→  if (fileCached && fileCached.length >= 30) {
+   898→    console.warn(`[TGJU] Returning file-cached data for ${tgjuKey} (${fileCached.length} candles)`);
+   899→    historyCache.set(tgjuKey, { data: fileCached, ts: Date.now() - HISTORY_TTL + 60_000 }); // Mark as almost-expired
+   900→    return fileCached;
+   901→  }
+   902→
+   903→  console.error(`[TGJU] All methods and caches failed for ${tgjuKey}`);
+   904→  return [];
+   905→}
+   906→
+   907→/**
+   908→ * Try direct HTTP fetch to TGJU chart API.
+   909→ * Returns parsed candles or null on failure.
+   910→ */
+   911→async function tryDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+   912→  try {
+   913→    const url = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
+   914→    const controller = new AbortController();
+   915→    const timer = setTimeout(() => controller.abort(), 12_000);
+   916→
+   917→    const res = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
+   918→    clearTimeout(timer);
+   919→
+   920→    if (!res.ok) {
+   921→      console.warn(`[TGJU] Direct fetch HTTP ${res.status} for ${tgjuKey}`);
+   922→      return null;
+   923→    }
+   924→
+   925→    const jsonStr = await res.text();
+   926→    if (!jsonStr.startsWith('{')) {
+   927→      console.warn(`[TGJU] Direct fetch non-JSON for ${tgjuKey}`);
+   928→      return null;
+   929→    }
+   930→
+   931→    return parseTgjuChartData(tgjuKey, jsonStr);
+   932→  } catch (err) {
+   933→    console.warn(`[TGJU] Direct fetch error for ${tgjuKey}:`, err instanceof Error ? err.message : err);
+   934→    return null;
+   935→  }
+   936→}
+   937→
+   938→/**
+   939→ * Fetch TGJU historical data via queued page_reader with retry and rate limiting.
+   940→ * This prevents 429 errors by serializing requests and adding delays between calls.
+   941→ */
+   942→async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+   943→  // Enqueue this request — ensures only one page_reader call at a time
+   944→  let result: TgjuOHLC[] | null = null;
+   945→  const taskPromise = (async () => {
+   946→    // Rate limit: wait if last call was too recent
+   947→    const timeSinceLastCall = Date.now() - lastPageReaderCall;
+   948→    if (timeSinceLastCall < PAGE_READER_MIN_INTERVAL) {
+   949→      const waitTime = PAGE_READER_MIN_INTERVAL - timeSinceLastCall;
+   950→      console.log(`[TGJU] Rate limiting page_reader: waiting ${waitTime}ms...`);
+   951→      await new Promise(r => setTimeout(r, waitTime));
+   952→    }
+   953→
+   954→    // Retry with exponential backoff
+   955→    for (let attempt = 1; attempt <= PAGE_READER_MAX_RETRIES; attempt++) {
+   956→      try {
+   957→        lastPageReaderCall = Date.now();
+   958→        const fetchResult = await fetchTgjuHistoryViaPageReader(tgjuKey);
+   959→        if (fetchResult && fetchResult.length >= 30) {
+   960→          result = fetchResult;
+   961→          return; // success
+   962→        }
+   963→        // Got data but not enough candles — don't retry
+   964→        if (fetchResult && fetchResult.length > 0) {
+   965→          console.warn(`[TGJU] page_reader returned only ${fetchResult.length} candles for ${tgjuKey}`);
+   966→          return;
+   967→        }
+   968→      } catch (err) {
+   969→        const errMsg = err instanceof Error ? err.message : String(err);
+   970→        const isRateLimit = errMsg.includes('429') || errMsg.includes('Too many requests');
+   971→        if (isRateLimit && attempt < PAGE_READER_MAX_RETRIES) {
+   972→          const delay = PAGE_READER_RETRY_BASE_DELAY * Math.pow(3, attempt - 1); // 3s, 9s, 27s
+   973→          console.warn(`[TGJU] page_reader 429 for ${tgjuKey}, retry ${attempt}/${PAGE_READER_MAX_RETRIES} in ${delay}ms...`);
+   974→          await new Promise(r => setTimeout(r, delay));
+   975→          continue;
+   976→        }
+   977→        console.error(`[TGJU] page_reader error for ${tgjuKey} (attempt ${attempt}):`, errMsg);
+   978→        return;
+   979→      }
+   980→    }
+   981→  })();
+   982→
+   983→  // Chain onto the queue
+   984→  pageReaderQueue = pageReaderQueue.then(() => taskPromise, () => taskPromise);
+   985→  await pageReaderQueue;
+   986→  return result;
+   987→}
+   988→
+   989→/**
+   990→ * Single page_reader call to fetch TGJU historical data.
+   991→ * Uses z-ai SDK to bypass Cloudflare challenges.
+   992→ * Throws on failure so the caller (fetchViaQueuedPageReader) can retry.
+   993→ */
+   994→async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+   995→  const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=asc&start=0&length=365`;
+   996→
+   997→  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+   998→  const zai = await ZAI.create();
+   999→  console.log(`[TGJU] Using z-ai SDK page_reader for ${tgjuKey}...`);
+  1000→  const invokeResult = await zai.functions.invoke('page_reader', { url: apiUrl });
+  1001→
+  1002→  if (invokeResult.code !== 200 || !invokeResult.data?.html) {
+  1003→    const errMsg = invokeResult.error || `code=${invokeResult.code}`;
+  1004→    throw new Error(errMsg);
+  1005→  }
+  1006→
+  1007→  // Extract JSON from <pre> tag in the HTML
+  1008→  const html = invokeResult.data.html;
+  1009→  const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
+  1010→  if (!preMatch) {
+  1011→    throw new Error('no <pre> block found in page_reader response');
+  1012→  }
+  1013→
+  1014→  // Unescape HTML entities and strip HTML tags from values
+  1015→  const jsonStr = preMatch[1]
+  1016→    .replace(/<[^>]*>/g, '')        // Strip ALL HTML tags first
+  1017→    .replace(/&quot;/g, '"')
+  1018→    .replace(/&amp;/g, '&')
+  1019→    .replace(/&lt;/g, '<')
+  1020→    .replace(/&gt;/g, '>')
+  1021→    .replace(/\s+/g, ' ')           // Normalize whitespace
+  1022→    .trim();
+  1023→
+  1024→  if (!jsonStr.startsWith('{')) {
+  1025→    throw new Error('extracted content is not JSON');
+  1026→  }
+  1027→
+  1028→  return parseTgjuChartData(tgjuKey, jsonStr);
+  1029→}
+  1030→
+  1031→/**
+  1032→ * Parse the JSON data from TGJU chart API response.
+  1033→ * Used by both direct fetch and page_reader paths.
+  1034→ */
+  1035→function parseTgjuChartData(tgjuKey: string, jsonStr: string): TgjuOHLC[] | null {
+  1036→  try {
+  1037→    const parsed = JSON.parse(jsonStr);
+  1038→    const rawRows: (string | number)[][] = parsed.data;
+  1039→
+  1040→    if (!rawRows || rawRows.length === 0) {
+  1041→      console.warn(`[TGJU] Empty data array for ${tgjuKey}`);
+  1042→      return null;
+  1043→    }
+  1044→
+  1045→    // Sanitize row values: strip any residual HTML tags and trim
+  1046→    const rows = rawRows.map(row =>
+  1047→      row.map(cell => {
+  1048→        const s = String(cell).trim();
+  1049→        // Strip HTML tags if any remain (safety for direct fetch path)
+  1050→        return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
+  1051→      })
+  1052→    );
+  1053→
+  1054→    // ── Auto-detect column mapping from first valid row ──
+  1055→    let colMap = detectColumnMap(rows[0]);
+  1056→    if (!colMap) {
+  1057→      for (let r = 1; r < Math.min(5, rows.length); r++) {
+  1058→        colMap = detectColumnMap(rows[r]);
+  1059→        if (colMap) break;
+  1060→      }
+  1061→    }
+  1062→    if (!colMap) {
+  1063→      console.warn(`[TGJU] Could not auto-detect columns for ${tgjuKey}, using default order`);
+  1064→      colMap = { openIdx: 0, highIdx: 2, lowIdx: 1, closeIdx: 3, jalaliDateIdx: 7, gregorianDateIdx: 6 };
+  1065→    } else {
+  1066→      console.log(`[TGJU] Column map for ${tgjuKey}: O=${colMap.openIdx} H=${colMap.highIdx} L=${colMap.lowIdx} C=${colMap.closeIdx} Date=${colMap.jalaliDateIdx}`);
+  1067→    }
+  1068→
+  1069→    const { openIdx, highIdx, lowIdx, closeIdx, jalaliDateIdx, gregorianDateIdx } = colMap;
+  1070→
+  1071→    // ── Parse rows ──
+  1072→    const candles: TgjuOHLC[] = [];
+  1073→    let invalidCount = 0;
+  1074→
+  1075→    for (const row of rows) {
+  1076→      const rawDate = String(row[jalaliDateIdx] || row[gregorianDateIdx] || '');
+  1077→      const date = rawDate.replace(/[\/]/g, '-');
+  1078→      const o = parsePersianNum(row[openIdx]);
+  1079→      const h = parsePersianNum(row[highIdx]);
+  1080→      const l = parsePersianNum(row[lowIdx]);
+  1081→      const c = parsePersianNum(row[closeIdx]);
+  1082→
+  1083→      if (!isValidCandle(o, h, l, c) || date.length === 0) {
+  1084→        invalidCount++;
+  1085→        continue;
+  1086→      }
+  1087→
+  1088→      candles.push({ date, open: o, high: h, low: l, close: c });
+  1089→    }
+  1090→
+  1091→    if (invalidCount > 0) {
+  1092→      console.warn(`[TGJU] ${tgjuKey}: ${invalidCount}/${rows.length} invalid candles skipped`);
+  1093→    }
+  1094→
+  1095→    if (candles.length === 0) {
+  1096→      return null;
+  1097→    }
+  1098→
+  1099→    // ── Detect and fix data drift ──
+  1100→    let driftCount = 0;
+  1101→    for (let i = 1; i < candles.length; i++) {
+  1102→      const prevClose = candles[i - 1].close;
+  1103→      const currClose = candles[i].close;
+  1104→      if (prevClose > 0) {
+  1105→        const pctChange = Math.abs(currClose - prevClose) / prevClose;
+  1106→        if (pctChange > 0.5) {
+  1107→          driftCount++;
+  1108→        }
+  1109→      }
+  1110→    }
+  1111→    if (driftCount > candles.length * 0.1) {
+  1112→      console.warn(`[TGJU] ${tgjuKey}: Possible data drift detected (${driftCount} suspicious jumps out of ${candles.length} candles)`);
+  1113→    }
+  1114→
+  1115→    // Reverse: API returns oldest-first (asc), we want newest-last for charting
+  1116→    const firstDate = candles[0].date;
+  1117→    const lastDate = candles[candles.length - 1].date;
+  1118→    if (firstDate > lastDate) {
+  1119→      candles.reverse();
+  1120→    }
+  1121→
+  1122→    console.log(`[TGJU] ${tgjuKey}: Parsed ${candles.length} candles (${candles[0]?.date} to ${candles[candles.length - 1]?.date})`);
+  1123→
+  1124→    return candles;
+  1125→  } catch (err) {
+  1126→    console.error(`[TGJU] Failed to parse chart data for ${tgjuKey}:`, err);
+  1127→    return null;
+  1128→  }
+  1129→}
+  1130→
+  1131→/**
+  1132→ * Cache parsed history data and update related caches.
+  1133→ */
+  1134→function cacheHistory(tgjuKey: string, candles: TgjuOHLC[], now: number): void {
+  1135→  historyCache.set(tgjuKey, { data: candles, ts: now });
+  1136→  // Also persist to file for server restart resilience
+  1137→  writeToFileCache(tgjuKey, candles).catch(() => {});
+  1138→
+  1139→  // Also update static price cache for this instrument
+  1140→  if (candles.length >= 2) {
+  1141→    const last = candles[candles.length - 1];
+  1142→    const prev = candles[candles.length - 2];
+  1143→    staticPriceCache.set(tgjuKey, {
+  1144→      close: last.close,
+  1145→      high: last.high,
+  1146→      low: last.low,
+  1147→      prevClose: prev.close,
+  1148→      ts: now,
+  1149→    });
+  1150→
+  1151→    // Update live instruments cache if this is a static instrument
+  1152→    if (liveInstrumentsCache.data) {
+  1153→      const inst = liveInstrumentsCache.data.find((i) => i.key === tgjuKey);
+  1154→      if (inst && inst.price === 0) {
+  1155→        inst.price = last.close;
+  1156→        inst.highPrice = last.high;
+  1157→        inst.lowPrice = last.low;
+  1158→        inst.change = last.close - prev.close;
+  1159→        inst.changePercent = prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : 0;
+  1160→      }
+  1161→    }
+  1162→  }
+  1163→}
+  1164→
+  1165→/* ─── Categories for UI ──────────────────────────────── */
+  1166→
+  1167→export const TGJU_CATEGORY_INFO: Record<string, { label: string; color: string; badge: string }> = {
+  1168→  currency:      { label: 'ارزها', color: 'bg-teal-500/15 text-teal-400', badge: 'ارز' },
+  1169→  gold:          { label: 'طلا و سکه', color: 'bg-yellow-500/15 text-yellow-400', badge: 'طلا' },
+  1170→  silver:        { label: 'نقره', color: 'bg-gray-400/15 text-gray-300', badge: 'نقره' },
+  1171→  gold_etf:      { label: 'صندوق طلای بورس', color: 'bg-amber-500/15 text-amber-400', badge: 'صندوق طلا' },
+  1172→  crypto:        { label: 'ارزهای دیجیتال', color: 'bg-orange-500/15 text-orange-400', badge: 'کریپتو' },
+  1173→  foreign_stock: { label: 'سهام خارجی', color: 'bg-sky-500/15 text-sky-400', badge: 'سهام خارجی' },
+  1174→  world_index:   { label: 'شاخص بورس جهانی', color: 'bg-blue-500/15 text-blue-400', badge: 'شاخص جهانی' },
+  1175→  forex:         { label: 'جفت ارزها', color: 'bg-violet-500/15 text-violet-400', badge: 'فارکس' },
+  1176→  energy:        { label: 'نفت و انرژی', color: 'bg-red-500/15 text-red-400', badge: 'انرژی' },
+  1177→  metal:         { label: 'فلزات جهانی', color: 'bg-emerald-500/15 text-emerald-400', badge: 'فلز' },
+  1178→  commodity:     { label: 'کالاهای جهانی', color: 'bg-lime-500/15 text-lime-400', badge: 'کالا' },
+  1179→};
+  1180→
