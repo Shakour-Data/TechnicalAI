@@ -98,9 +98,10 @@ export function getCurrencyUnit(
   // TSE instruments default to ریال
   if (source === 'tse') return 'ریال';
 
-  // TGJU categories
+  // TGJU Iranian categories — all prices from TGJU API are in Rials (ریال)
+  // Keys like price_dollar_rl explicitly have _rl suffix; gold/silver/gold_etf are always Rials per gram
+  if (category === 'currency' || category === 'gold' || category === 'silver' || category === 'gold_etf') return 'ریال';
   if (category === 'crypto') return 'تتر';
-  if (category === 'currency' || category === 'gold' || category === 'silver' || category === 'gold_etf') return 'تومان';
 
   // Everything else (forex, energy, metal, foreign_stock, commodity)
   return 'دلار';

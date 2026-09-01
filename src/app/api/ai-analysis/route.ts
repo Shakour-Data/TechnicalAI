@@ -245,12 +245,13 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     .slice(0, 5);
 
   const scenarioBlock = allScenarios
-    .map(s => `- ${s.name} (${s.key}): ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)}`)
+    .map(s => `- ${s.name}: ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)}`)
     .join('\n');
 
-  // Instrument type for currency unit rules
+  // Instrument type and currency unit — use client-provided unit when available
   const instType = (body.instrumentType as string) || 'tse';
-  const unitLabel = instType === 'tgju' || instType === 'yahoo' ? '\u0648\u0627\u062d\u062f' : '\u0631\u06cc\u0627\u0644';
+  const clientCurrencyUnit = (body.currencyUnit as string) || '';
+  const unitLabel = clientCurrencyUnit || (instType === 'tse' ? '\u0631\u06cc\u0627\u0644' : '\u0648\u0627\u062d\u062f');
   const instrumentLabel = instType === 'tgju' ? '\u06a9\u0627\u0644\u0627\u06cc \u0637\u0644\u0627/\u0627\u0631\u0632' : instType === 'yahoo' ? '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc' : '\u0633\u0647\u0627\u0645 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
 
   // Probability trend block (cumulative trends for scenarios and groups)
@@ -282,7 +283,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
       const todayCum = s.trend[0]?.cumulativeProb;
       const weekAgoCum = s.trend.length >= 7 ? s.trend[6].cumulativeProb : null;
       const cumChange = weekAgoCum !== null ? ((todayCum - weekAgoCum) * 100).toFixed(1) : null;
-      return `- ${s.scenarioKey} (${s.label}): \u062a\u062c\u0645\u0639\u06cc \u0627\u0645\u0631\u0648\u0632 ${toPersianNum((todayCum ?? 0) * 100)}\u066a | \u0631\u0648\u0646\u062f: ${dirLabel[s.trendDirection] || s.trendDirection}${cumChange !== null ? ' (' + (cumChange.startsWith('-') ? '' : '+') + cumChange + '%)' : ''}`;
+      return `- ${s.label}: \u062a\u062c\u0645\u0639\u06cc \u0627\u0645\u0631\u0648\u0632 ${toPersianNum((todayCum ?? 0) * 100)}\u066a | \u0631\u0648\u0646\u062f: ${dirLabel[s.trendDirection] || s.trendDirection}${cumChange !== null ? ' (' + (cumChange.startsWith('-') ? '' : '+') + cumChange + '%)' : ''}`;
     }).join('\n');
 
     trendBlock = `
@@ -422,6 +423,8 @@ export async function POST(req: NextRequest) {
       }
     );
 
+    // Post-process: strip leaked codes
+    const cleaned = content.replace(/\bSC[1-9]\b/g, "").replace(/\bMA\d+\b/g, "").replace(/\s{2,}/g, ).trim();
     const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
 
     // 7. Save to daily persistent cache
@@ -447,7 +450,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
-    return NextResponse.json({ text: content, ml: mlData });
+    return NextResponse.json({ text: cleaned, ml: mlData });
 
   } catch (err) {
     console.error(`[AI] Error [${Date.now() - startTime}ms]:`, err);
