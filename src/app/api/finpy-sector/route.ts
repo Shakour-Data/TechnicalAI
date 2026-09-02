@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMainIndexHistory, fetchSectorIndexHistory, fetchSectorByName } from '@/lib/tsetmc-index-api';
-import { SECTOR_INDICES, type IndustryIndex } from '@/lib/industry-indices';
+import { INDUSTRY_INDICES, type IndustryIndex } from '@/lib/industry-indices';
 import type { OHLCV } from '@/lib/ta-engine';
 import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
+import { analyze, computeHistoricalProbabilities } from '@/lib/ta-engine';
+import { buildTrendFromDailySnapshots } from '@/lib/probability-trend';
 
 export const dynamic = 'force-dynamic';
+
+// ── Find sector by name (Persian name or finpySector key) ────────
+function findSectorByName(name: string): IndustryIndex | undefined {
+  const n = name.trim();
+  return INDUSTRY_INDICES.find(
+    (s) =>
+      s.finpySector === n ||
+      s.symbol === n ||
+      s.name.includes(n) ||
+      s.group.includes(n),
+  );
+}
 
 // ── Helper: Build full response with TA analysis ────────────────
 function buildResponse(
@@ -66,23 +80,7 @@ function buildResponse(
   });
 }
 
-// ── Find sector by name (Persian name or finpySector key) ────────
-function findSectorByName(name: string): IndustryIndex | undefined {
-  const n = name.trim();
-  return SECTOR_INDICES.find(
-    (s) =>
-      s.finpySector === n ||
-      s.symbol === n ||
-      s.name.includes(n) ||
-      s.group.includes(n),
-  );
-}
-
 export async function GET(req: NextRequest) {
-  const taEngine = await import('@/lib/ta-engine');
-  const { analyze, computeHistoricalProbabilities } = taEngine;
-  const { buildTrendFromDailySnapshots } = await import('@/lib/probability-trend');
-
   const url = req.nextUrl;
   const sector = url.searchParams.get('sector');
   const indexKey = url.searchParams.get('indexKey');
@@ -98,14 +96,14 @@ export async function GET(req: NextRequest) {
     // ── Sector/industry index by webId (string to preserve precision) ──
     if (webIdParam) {
       // Check if this webId belongs to a main index (has finpyIndex) → use fetchMainIndexHistory
-      const mainIndexMatch = SECTOR_INDICES.find(s => s.webId === webIdParam && s.finpyIndex);
+      const mainIndexMatch = INDUSTRY_INDICES.find(s => s.webId === webIdParam && s.finpyIndex);
       if (mainIndexMatch?.finpyIndex) {
         const candles = await fetchMainIndexHistory(mainIndexMatch.finpyIndex);
         return buildResponse(candles, mainIndexMatch.symbol);
       }
 
       const candles = await fetchSectorIndexHistory(webIdParam);
-      const label = SECTOR_INDICES.find(s => s.webId === webIdParam)?.symbol || `شاخص ${webIdParam}`;
+      const label = INDUSTRY_INDICES.find(s => s.webId === webIdParam)?.symbol || `شاخص ${webIdParam}`;
       return buildResponse(candles, label);
     }
 
@@ -113,7 +111,6 @@ export async function GET(req: NextRequest) {
     if (sector) {
       const sectorDef = findSectorByName(sector);
       if (sectorDef) {
-        // Use finpySector name to route through Python service (which handles alias resolution)
         const candles = await fetchSectorByName(sectorDef.finpySector!);
         return buildResponse(candles, sectorDef.symbol);
       }

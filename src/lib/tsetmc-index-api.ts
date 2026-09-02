@@ -1,17 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════
 // TSETMC Index History API
 //
-// Fetches index OHLC data via Python micro-service (port 3031)
-// which uses z-ai CLI page_reader to proxy TSETMC CDN requests.
+// Fetches index OHLC data via the Next.js index-fetch-proxy endpoint
+// which uses z-ai SDK rate-limited page_reader to reach cdn.tsetmc.com.
 //
-// Sector names and web IDs match finpy-tse library exactly.
+// Fallback chain: memory cache → file cache → proxy fetch → expired cache
 // ═══════════════════════════════════════════════════════════════════
 
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { rateLimitedPageReader } from '@/lib/zai-shared';
 
-const SERVICE_BASE = 'http://localhost:3032';
 const FILE_CACHE_DIR = join(process.cwd(), 'db');
 const FILE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -25,7 +23,21 @@ export interface IndexCandle {
   volume: number;
 }
 
-// ── Sector name → webId mapping (from finpy-tse) ────────────
+// ── Main index web IDs ────────────────────────────────────────────
+const MAIN_INDEX_WEB_IDS: Record<string, string> = {
+  CWI:   '32097828799138957',
+  EWI:   '67130298613737946',
+  CWPI:  '5798407779416661',
+  EWPI:  '8384385859414435',
+  FFI:   '49579049405614711',
+  MKT1I: '62752761908615603',
+  MKT2I: '71704845530629737',
+  INDI:  '43754960038275285',
+  ACT50: '46342955726788357',
+  LCI30: '10523825119011581',
+};
+
+// ── Sector name → webId mapping ───────────────────────────────────
 const SECTOR_WEB_IDS: Record<string, string> = {
   'زراعت': '34408080767216529',
   'ذغال سنگ': '19219679288446732',
@@ -69,6 +81,8 @@ const SECTOR_WEB_IDS: Record<string, string> = {
   'بیمه و بازنشستگی': '59105676994811497',
 };
 
+export { SECTOR_WEB_IDS };
+
 // ── In-memory cache ──────────────────────────────────────────────
 interface CacheEntry {
   data: IndexCandle[];
@@ -78,7 +92,7 @@ const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // ── File-based cache helpers ────────────────────────────────────
-function indexFileCachePath(key: string): string {
+function fileCachePath(key: string): string {
   const safe = key.replace(/[^a-zA-Z0-9\u0600-\u06FF_-]/g, '_');
   return join(FILE_CACHE_DIR, `index-${safe}.json`);
 }
@@ -87,9 +101,9 @@ function sectorFileCachePath(sectorName: string): string {
   return join(FILE_CACHE_DIR, `sec-${sectorName}.json`);
 }
 
-function loadIndexFileCache(key: string, ignoreTTL = false): IndexCandle[] | null {
+function loadFileCache(key: string, ignoreTTL = false): IndexCandle[] | null {
   try {
-    const path = indexFileCachePath(key);
+    const path = fileCachePath(key);
     if (!existsSync(path)) return null;
     const content = readFileSync(path, 'utf-8');
     const entry = JSON.parse(content);
@@ -113,112 +127,16 @@ function loadSectorFileCache(sectorName: string, ignoreTTL = false): IndexCandle
   }
 }
 
-function saveIndexFileCache(key: string, data: IndexCandle[]): void {
+function saveFileCache(key: string, data: IndexCandle[]): void {
   try {
     if (!existsSync(FILE_CACHE_DIR)) {
       try { mkdirSync(FILE_CACHE_DIR, { recursive: true }); } catch { /* ignore */ }
     }
-    writeFileSync(indexFileCachePath(key), JSON.stringify({ data, time: Date.now() }), 'utf-8');
+    writeFileSync(fileCachePath(key), JSON.stringify({ data, time: Date.now() }), 'utf-8');
   } catch {
     // File cache is best-effort
   }
 }
-
-// ── Service health check ────────────────────────────────────────
-export async function isServiceHealthy(): Promise<boolean> {
-  try {
-    const res = await fetch(`${SERVICE_BASE}/health`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Resolve webId to sector name
- */
-function webIdToSectorName(webId: string): string | undefined {
-  for (const [name, wid] of Object.entries(SECTOR_WEB_IDS)) {
-    if (wid === webId) return name;
-  }
-  return undefined;
-}
-
-// ── Generic fetch with multi-tier cache ─────────────────────────
-async function fetchWithCache(
-  cacheKey: string,
-  serviceUrl: string,
-  sectorName?: string,
-): Promise<IndexCandle[]> {
-  const now = Date.now();
-
-  // Tier 1: In-memory cache
-  const memCached = cache.get(cacheKey);
-  if (memCached && now - memCached.timestamp < CACHE_TTL) {
-    return memCached.data;
-  }
-
-  // Tier 2: File cache (index-based key)
-  let fileCached = loadIndexFileCache(cacheKey);
-
-  // Tier 2b: Sector file cache (from prefetch-sectors.py)
-  if (!fileCached && sectorName) {
-    fileCached = loadSectorFileCache(sectorName);
-  }
-
-  if (fileCached) {
-    cache.set(cacheKey, { data: fileCached, timestamp: now });
-    return fileCached;
-  }
-
-  // Tier 3: Fetch from Python service
-  try {
-    const res = await fetch(serviceUrl, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Service error ${res.status}: ${body.slice(0, 200)}`);
-    }
-    const json = await res.json();
-    const candles: IndexCandle[] = json.candles || [];
-
-    if (candles.length === 0) {
-      const err = json.error || 'Unknown error';
-      throw new Error(err);
-    }
-
-    cache.set(cacheKey, { data: candles, timestamp: now });
-    saveIndexFileCache(cacheKey, candles);
-    return candles;
-  } catch (serviceErr) {
-    // Ultimate fallback: sector file cache ignoring TTL
-    if (sectorName) {
-      const fallback = loadSectorFileCache(sectorName, true);
-      if (fallback) {
-        cache.set(cacheKey, { data: fallback, timestamp: now });
-        return fallback;
-      }
-    }
-    throw serviceErr;
-  }
-}
-
-export { SECTOR_WEB_IDS };
-
-// ── Main index web IDs (same as tsetmc-index-service) ───────────
-const MAIN_INDEX_WEB_IDS: Record<string, string> = {
-  CWI:   '32097828799138957',
-  EWI:   '67130298613737946',
-  CWPI:  '5798407779416661',
-  EWPI:  '8384385859414435',
-  FFI:   '49579049405614711',
-  MKT1I: '62752761908615603',
-  MKT2I: '71704845530629737',
-  INDI:  '43754960038275285',
-  ACT50: '46342955726788357',
-  LCI30: '10523825119011581',
-};
 
 // ── Gregorian → Jalali conversion ─────────────────────────────────
 function gregorianToJalali(gy: number, gm: number, gd: number): string {
@@ -237,40 +155,8 @@ function gregorianToJalali(gy: number, gm: number, gd: number): string {
   return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
 }
 
-/**
- * Direct TSETMC CDN fetch via z-ai page_reader as ultimate fallback.
- * Used when the 3032 service is rate-limited or down.
- */
-async function fetchFromTsetmcCdn(webId: string): Promise<IndexCandle[]> {
-  const url = `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`;
-
-  // Try direct fetch first (no SDK dependency)
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-    if (res.ok) {
-      const jsonStr = await res.text();
-      return parseTsetmcCdnResponse(jsonStr);
-    }
-  } catch {
-    // Direct fetch failed (blocked, timeout, etc.) — try page_reader as fallback
-  }
-
-  // Fallback: z-ai page_reader
-  try {
-    const html = await rateLimitedPageReader(url, 30_000);
-    const preMatch = /<pre[^>]*>([\s\S]*?)<\/pre>/i.exec(html);
-    if (!preMatch) throw new Error('Failed to parse TSETMC CDN response');
-    return parseTsetmcCdnResponse(preMatch[1]);
-  } catch {
-    throw new Error('Failed to fetch from TSETMC CDN');
-  }
-}
-
-/**
- * Parse JSON response from TSETMC CDN (works with both raw JSON and HTML-wrapped responses)
- */
-function parseTsetmcCdnResponse(jsonStr: string): IndexCandle[] {
-  // Clean HTML entities if present
+// ── Parse TSETMC B2 response ─────────────────────────────────────
+function parseB2Response(jsonStr: string): IndexCandle[] {
   const cleaned = jsonStr
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -281,11 +167,12 @@ function parseTsetmcCdnResponse(jsonStr: string): IndexCandle[] {
   try {
     parsed = JSON.parse(cleaned);
   } catch {
+    // Try to fix truncated JSON
     const lastBrace = cleaned.lastIndexOf('}');
     if (lastBrace > 0) {
-      try { parsed = JSON.parse(cleaned.slice(0, lastBrace + 1)); } catch { throw new Error('Invalid JSON from TSETMC CDN'); }
+      try { parsed = JSON.parse(cleaned.slice(0, lastBrace + 1)); } catch { throw new Error('Invalid JSON from TSETMC'); }
     } else {
-      throw new Error('Invalid JSON from TSETMC CDN');
+      throw new Error('Invalid JSON from TSETMC');
     }
   }
 
@@ -317,47 +204,81 @@ function parseTsetmcCdnResponse(jsonStr: string): IndexCandle[] {
   return candles;
 }
 
+// ── Fetch from Next.js proxy ──────────────────────────────────────
+async function fetchViaProxy(webId: string): Promise<IndexCandle[]> {
+  const proxyUrl = `http://localhost:3000/api/index-fetch-proxy?webId=${encodeURIComponent(webId)}`;
+  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(120_000) });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Proxy error ${res.status}: ${body.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  if (json.error) {
+    throw new Error(json.error);
+  }
+  const rawJson = json.raw || '';
+  if (!rawJson || rawJson.length < 10) {
+    throw new Error('Empty response from proxy');
+  }
+  return parseB2Response(rawJson);
+}
+
+// ── Resolve webId to sector name ──────────────────────────────────
+function webIdToSectorName(webId: string): string | undefined {
+  for (const [name, wid] of Object.entries(SECTOR_WEB_IDS)) {
+    if (wid === webId) return name;
+  }
+  return undefined;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Public API
 // ═══════════════════════════════════════════════════════════════════
 
 /**
  * Fetch historical candle data for a main market index.
- * Tries: memory cache → file cache → 3032 service → direct TSETMC CDN fallback
+ * Tries: memory cache → file cache → proxy fetch → expired cache
  */
 export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCandle[]> {
   const key = indexKey.toUpperCase();
   const webId = MAIN_INDEX_WEB_IDS[key];
+  if (!webId) throw new Error(`شناسه شاخص «${key}» نامعتبر است`);
 
-  // Try multi-tier cache first
+  const cacheKey = `idx_${key}`;
+
+  // Tier 1: In-memory cache
+  const memCached = cache.get(cacheKey);
+  if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+    return memCached.data;
+  }
+
+  // Tier 2: File cache
+  const fileCached = loadFileCache(cacheKey);
+  if (fileCached && fileCached.length > 0) {
+    cache.set(cacheKey, { data: fileCached, timestamp: Date.now() });
+    return fileCached;
+  }
+
+  // Tier 3: Fetch via proxy
+  console.log(`[tsetmc-index] Fetching ${key} via proxy (webId=${webId})...`);
   try {
-    return await fetchWithCache(`idx_${key}`, `${SERVICE_BASE}/api/index-history?key=${key}`);
-  } catch (serviceErr) {
-    // Service failed (rate limit, down, etc.)
-    console.warn(`[tsetmc-index] Service failed for ${key}, trying fallbacks...`);
-  }
-
-  // Quick fallback: try expired file cache BEFORE slow CDN call
-  const expiredCache = loadIndexFileCache(`idx_${key}`, true);
-  if (expiredCache && expiredCache.length > 0) {
-    console.warn(`[tsetmc-index] Using expired file cache for ${key} (${expiredCache.length} candles)`);
-    return expiredCache;
-  }
-
-  // Direct TSETMC CDN fallback via z-ai page_reader
-  if (webId) {
-    console.log(`[tsetmc-index] Fetching ${key} directly from TSETMC CDN (webId=${webId})...`);
-    try {
-      const candles = await fetchFromTsetmcCdn(webId);
-      if (candles.length > 0) {
-        // Cache the result
-        cache.set(`idx_${key}`, { data: candles, timestamp: Date.now() });
-        saveIndexFileCache(`idx_${key}`, candles);
-        return candles;
-      }
-    } catch (cdnErr) {
-      console.error(`[tsetmc-index] CDN fallback also failed for ${key}:`, cdnErr instanceof Error ? cdnErr.message : String(cdnErr));
+    const candles = await fetchViaProxy(webId);
+    if (candles.length > 0) {
+      cache.set(cacheKey, { data: candles, timestamp: Date.now() });
+      saveFileCache(cacheKey, candles);
+      console.log(`[tsetmc-index] ${key}: ${candles.length} candles fetched`);
+      return candles;
     }
+  } catch (err) {
+    console.warn(`[tsetmc-index] Proxy fetch failed for ${key}:`, err instanceof Error ? err.message : String(err));
+  }
+
+  // Tier 4: Expired file cache fallback
+  const expiredCache = loadFileCache(cacheKey, true);
+  if (expiredCache && expiredCache.length > 0) {
+    console.warn(`[tsetmc-index] Using expired cache for ${key} (${expiredCache.length} candles)`);
+    cache.set(cacheKey, { data: expiredCache, timestamp: Date.now() });
+    return expiredCache;
   }
 
   throw new Error(`داده‌های تاریخی شاخص ${key} در دسترس نیست. لطفاً بعداً تلاش کنید.`);
@@ -365,48 +286,67 @@ export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCand
 
 /**
  * Fetch historical candle data for a sector/industry index by webId.
- * Tries: memory cache → file cache → 3032 service → direct TSETMC CDN fallback
+ * Tries: memory cache → file cache (by webId + sector name) → proxy fetch → expired cache
  */
 export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCandle[]> {
   if (!webIdStr) throw new Error('شناسه وب (webId) الزامی است');
   const sectorName = webIdToSectorName(webIdStr);
+  const cacheKey = `sec_${webIdStr}`;
 
-  // Try multi-tier cache + service first
-  try {
-    return await fetchWithCache(
-      `sec_${webIdStr}`,
-      `${SERVICE_BASE}/api/sector-history?webId=${encodeURIComponent(webIdStr)}`,
-      sectorName,
-    );
-  } catch (serviceErr) {
-    console.warn(`[tsetmc-index] Service failed for webId=${webIdStr}, trying direct CDN fallback...`);
+  // Tier 1: In-memory cache
+  const memCached = cache.get(cacheKey);
+  if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+    return memCached.data;
   }
 
-  // Quick fallback: try expired file cache BEFORE slow CDN call
+  // Tier 2: File cache (by webId)
+  let fileCached = loadFileCache(cacheKey);
+
+  // Tier 2b: Sector name file cache
+  if (!fileCached && sectorName) {
+    fileCached = loadSectorFileCache(sectorName);
+  }
+
+  if (fileCached && fileCached.length > 0) {
+    cache.set(cacheKey, { data: fileCached, timestamp: Date.now() });
+    return fileCached;
+  }
+
+  // Tier 3: Fetch via proxy
+  console.log(`[tsetmc-index] Fetching sector webId=${webIdStr}${sectorName ? ` (${sectorName})` : ''} via proxy...`);
+  try {
+    const candles = await fetchViaProxy(webIdStr);
+    if (candles.length > 0) {
+      cache.set(cacheKey, { data: candles, timestamp: Date.now() });
+      saveFileCache(cacheKey, candles);
+      // Also save as sector-named file for dual lookup
+      if (sectorName) {
+        try {
+          if (!existsSync(FILE_CACHE_DIR)) mkdirSync(FILE_CACHE_DIR, { recursive: true });
+          writeFileSync(sectorFileCachePath(sectorName), JSON.stringify({ data: candles, time: Date.now() }), 'utf-8');
+        } catch { /* ignore */ }
+      }
+      console.log(`[tsetmc-index] Sector ${sectorName || webIdStr}: ${candles.length} candles fetched`);
+      return candles;
+    }
+  } catch (err) {
+    console.warn(`[tsetmc-index] Proxy fetch failed for webId=${webIdStr}:`, err instanceof Error ? err.message : String(err));
+  }
+
+  // Tier 4: Expired file cache fallback
   if (sectorName) {
-    const expiredSector = loadSectorFileCache(sectorName);
+    const expiredSector = loadSectorFileCache(sectorName, true);
     if (expiredSector && expiredSector.length > 0) {
       console.warn(`[tsetmc-index] Using expired sector cache for ${sectorName} (${expiredSector.length} candles)`);
+      cache.set(cacheKey, { data: expiredSector, timestamp: Date.now() });
       return expiredSector;
     }
   }
-  const expiredWebId = loadIndexFileCache(`sec_${webIdStr}`, true);
+  const expiredWebId = loadFileCache(cacheKey, true);
   if (expiredWebId && expiredWebId.length > 0) {
-    console.warn(`[tsetmc-index] Using expired file cache for webId=${webIdStr} (${expiredWebId.length} candles)`);
+    console.warn(`[tsetmc-index] Using expired cache for webId=${webIdStr} (${expiredWebId.length} candles)`);
+    cache.set(cacheKey, { data: expiredWebId, timestamp: Date.now() });
     return expiredWebId;
-  }
-
-  // Direct TSETMC CDN fallback via z-ai page_reader
-  console.log(`[tsetmc-index] Fetching webId=${webIdStr} directly from TSETMC CDN...`);
-  try {
-    const candles = await fetchFromTsetmcCdn(webIdStr);
-    if (candles.length > 0) {
-      cache.set(`sec_${webIdStr}`, { data: candles, timestamp: Date.now() });
-      saveIndexFileCache(`sec_${webIdStr}`, candles);
-      return candles;
-    }
-  } catch (cdnErr) {
-    console.error(`[tsetmc-index] CDN fallback also failed for webId=${webIdStr}:`, cdnErr instanceof Error ? cdnErr.message : String(cdnErr));
   }
 
   throw new Error(`داده‌های تاریخی این شاخص گروه در دسترس نیست.`);
@@ -417,20 +357,14 @@ export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCa
  */
 export async function fetchSectorByName(sectorName: string): Promise<IndexCandle[]> {
   if (!sectorName) throw new Error('نام گروه الزامی است');
-  // The tsetmc-index-service (port 3032) only supports webId, not sector name.
-  // Resolve sector name to webId and use webId endpoint.
   const webId = SECTOR_WEB_IDS[sectorName];
   if (!webId) throw new Error(`شناسه وب برای «${sectorName}» یافت نشد`);
-  return fetchWithCache(
-    `sec_${sectorName}`,
-    `${SERVICE_BASE}/api/sector-history?webId=${encodeURIComponent(webId)}`,
-    sectorName,
-  );
+  return fetchSectorIndexHistory(webId);
 }
 
 /** No-op warmup */
 export function warmup(): void {
-  console.log('[tsetmc-index] Using Python service on port 3031 (no SDK warmup needed)');
+  console.log('[tsetmc-index] Using Next.js proxy for TSETMC CDN data');
 }
 
 /** Clear memory cache */

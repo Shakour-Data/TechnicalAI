@@ -147,16 +147,37 @@ export async function GET() {
     let indices: InstrumentItem[];
     const existingSymbols = new Set<string>();
 
-    // Build lookup map from INDUSTRY_INDICES for merging metadata into TSETMC/BrsApi indices  
+    // Build lookup map from INDUSTRY_INDICES for merging metadata into TSETMC/BrsApi indices
+    // Use both exact symbol and fuzzy name matching for BrsApi name variations
     const industryLookup = new Map<string, IndustryIndex>();
     for (const idx of INDUSTRY_INDICES) {
       industryLookup.set(idx.symbol, idx);
+    }
+    // BrsApi name → INDUSTRY_INDICES mapping (handles naming variations)
+    const brsNameAliases: Record<string, string> = {
+      'شاخص قیمت(وزنی-ارزشی)': 'شاخص قیمت وزنی',
+      'شاخص کل (هم وزن)': 'شاخص کل هم‌وزن',
+      'شاخص قیمت (هم وزن)': 'شاخص قیمت هم‌وزن',
+      'شاخص آزاد شناور': 'شاخص سهام شناور',
+    };
+    function findIndustryMatch(name: string): IndustryIndex | undefined {
+      const direct = industryLookup.get(name);
+      if (direct) return direct;
+      const aliased = brsNameAliases[name];
+      if (aliased) return industryLookup.get(aliased);
+      // Fuzzy: try removing spaces, parentheses, and zero-width non-joiner
+      const normalized = name.replace(/[\s()\u200c]/g, '');
+      for (const [key, val] of industryLookup) {
+        const normKey = key.replace(/[\s()\u200c]/g, '');
+        if (normalized === normKey || normalized.includes(normKey) || normKey.includes(normalized)) return val;
+      }
+      return undefined;
     }
 
     if (tsetmcIndices && tsetmcIndices.length > 0) {
       indices = tsetmcIndices.map((idx) => {
         existingSymbols.add(idx.symbol);
-        const industryMatch = industryLookup.get(idx.symbol);
+        const industryMatch = findIndustryMatch(idx.symbol);
         return {
           l18: idx.symbol,
           l30: idx.name,
@@ -194,7 +215,7 @@ export async function GET() {
     } else {
       indices = data.indices.map((idx) => {
         existingSymbols.add(idx.name);
-        const industryMatch = industryLookup.get(idx.name);
+        const industryMatch = findIndustryMatch(idx.name);
         return {
           l18: idx.name,
           l30: industryMatch?.name || '',
