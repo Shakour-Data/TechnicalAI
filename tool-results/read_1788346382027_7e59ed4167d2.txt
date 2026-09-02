@@ -1,0 +1,1031 @@
+     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→// Standalone Interactive HTML+CSS+JS Export for Decision Graph
+     3→// All visuals are Canvas-based (NO SVG) with full interactivity
+     4→// ═══════════════════════════════════════════════════════════════════════════════
+     5→
+     6→import { type GraphData } from './decision-graph';
+     7→import { type ProbabilityTrendResult, SCENARIO_KEYS, SCENARIO_META } from './probability-trend';
+     8→import { generateDecisionGraphNarrative } from '@/components/tse/vdss-graph';
+     9→import { toPersianDigits } from './jalali';
+    10→
+    11→export interface DecisionGraphExportData {
+    12→  symbolName: string;
+    13→  currentPrice: number;
+    14→  currencyUnit: string;
+    15→  scenarios: Record<string, { name: string; probability: number; targetMin: number; targetMax: number; description: string }>;
+    16→  decisionGraph: GraphData;
+    17→  probabilityTrend: ProbabilityTrendResult | null;
+    18→  branchProbabilities: { trend: number; breakout: number; reversal: number };
+    19→  pathContributions: Record<string, { trend: number; breakout: number; reversal: number }>;
+    20→  narrative: string;
+    21→}
+    22→
+    23→function esc(s: string): string {
+    24→  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    25→}
+    26→
+    27→function faNum(n: number): string {
+    28→  return toPersianDigits(Math.round(n).toLocaleString('en-US'));
+    29→}
+    30→
+    31→function faPct(n: number): string {
+    32→  return toPersianDigits((n * 100).toFixed(1));
+    33→}
+    34→
+    35→function faPct0(n: number): string {
+    36→  return toPersianDigits((n * 100).toFixed(0));
+    37→}
+    38→
+    39→// ═══════════════════════════════════════════════════════════════════════════════
+    40→// Build the inline JavaScript (no backticks — string concat only)
+    41→// ═══════════════════════════════════════════════════════════════════════════════
+    42→
+    43→function buildInlineJS(): string {
+    44→  return `
+    45→// ═══ DATA ═══
+    46→var DATA = window.__DG_DATA__;
+    47→var D = DATA.D;
+    48→
+    49→// ═══ PERSIAN DIGITS ═══
+    50→function toFa(n) {
+    51→  var s = String(Math.round(n)).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+    52→  var pd = ['\\u06F0','\\u06F1','\\u06F2','\\u06F3','\\u06F4','\\u06F5','\\u06F6','\\u06F7','\\u06F8','\\u06F9'];
+    53→  return s.replace(/[0-9]/g, function(d){ return pd[parseInt(d)]; });
+    54→}
+    55→function toFaStr(s) {
+    56→  var pd = ['\\u06F0','\\u06F1','\\u06F2','\\u06F3','\\u06F4','\\u06F5','\\u06F6','\\u06F7','\\u06F8','\\u06F9'];
+    57→  return String(s).replace(/[0-9]/g, function(d){ return pd[parseInt(d)]; });
+    58→}
+    59→
+    60→// ═══ HELPERS ═══
+    61→function getNode(id) { for (var i=0;i<DATA.nodes.length;i++) if (DATA.nodes[i].id===id) return DATA.nodes[i]; return null; }
+    62→var SCENARIO_KEYS = ['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9'];
+    63→var SCENARIO_LABELS = {SC1:'شوک نزولی',SC2:'نزولی شتاب‌دار',SC3:'نزولی قوی',SC4:'نزولی خفیف',SC5:'رنج',SC6:'صعودی خفیف',SC7:'صعودی قوی',SC8:'صعودی شتاب‌دار',SC9:'شوک صعودی'};
+    64→var SCENARIO_COLORS = {SC1:'#b91c1c',SC2:'#dc2626',SC3:'#ea580c',SC4:'#c2410c',SC5:'#b45309',SC6:'#047857',SC7:'#059669',SC8:'#0e7490',SC9:'#0891b2'};
+    65→var BRANCH_COLORS = {trend:D.cyan, breakout:D.gold, reversal:D.purple};
+    66→var BRANCH_LABELS = {trend:'پیروی از روند', breakout:'شکست', reversal:'بازگشت'};
+    67→var EDGE_COLORS = {'branch-trend':D.cyan,'branch-breakout':D.gold,'branch-reversal':D.purple,up:D.green,pullback:D.blue,down:D.orange,risk:D.red};
+    68→var LINE_COLORS = {SC1:'#b91c1c',SC2:'#dc2626',SC3:'#ea580c',SC4:'#f97316',SC5:'#f59e0b',SC6:'#65a30d',SC7:'#16a34a',SC8:'#059669',SC9:'#047857'};
+    69→
+    70→var SCENARIO_META_LOCAL = {
+    71→  SC1:{label:'شوک نزولی',color:'#b91c1c'}, SC2:{label:'نزولی شتاب‌دار',color:'#dc2626'},
+    72→  SC3:{label:'نزولی قوی',color:'#ea580c'}, SC4:{label:'نزولی خفیف',color:'#c2410c'},
+    73→  SC5:{label:'رنج',color:'#b45309'}, SC6:{label:'صعودی خفیف',color:'#047857'},
+    74→  SC7:{label:'صعودی قوی',color:'#059669'}, SC8:{label:'صعودی شتاب‌دار',color:'#0e7490'},
+    75→  SC9:{label:'شوک صعودی',color:'#0891b2'}
+    76→};
+    77→
+    78→// ═══════════════════════════════════════════════════════════════════
+    79→// SECTION 1: DECISION GRAPH (Canvas edges + HTML nodes)
+    80→// ═══════════════════════════════════════════════════════════════════
+    81→(function() {
+    82→  var canvas = document.getElementById('dg-canvas');
+    83→  var container = document.getElementById('dg-container');
+    84→  var nodesLayer = document.getElementById('dg-nodes');
+    85→  if (!canvas || !container || !nodesLayer) return;
+    86→  var ctx = canvas.getContext('2d');
+    87→  var dpr = window.devicePixelRatio || 1;
+    88→
+    89→  var DESIGN_W = 1200, DESIGN_H = 1100;
+    90→  var state = { filter: 'all', selectedNode: null, hoveredNode: null };
+    91→
+    92→  // ── Node dimensions ──
+    93→  function nodeDims(n) {
+    94→    var isTerm = n.isTerminal || n.type==='terminal' || SCENARIO_KEYS.indexOf(n.id)>=0;
+    95→    var isEvt = n.type==='event';
+    96→    return { w: isTerm ? 175 : isEvt ? 158 : 155, h: isTerm ? 84 : isEvt ? 56 : 72 };
+    97→  }
+    98→
+    99→  // ── Filter logic (matches React component) ──
+   100→  function computeVisibility(filter) {
+   101→    var edges = DATA.decisionGraph.edges;
+   102→    var nodes = DATA.decisionGraph.nodes;
+   103→    if (filter === 'all') {
+   104→      var allE = []; for (var i=0;i<edges.length;i++) allE.push(i);
+   105→      var allN = {}; for (var j=0;j<nodes.length;j++) allN[nodes[j].id]=true;
+   106→      return { visEdges: allE, visNodes: allN };
+   107→    }
+   108→    if (SCENARIO_KEYS.indexOf(filter) >= 0) {
+   109→      var eSet = {}, nSet = { ROOT: true };
+   110→      nSet[filter] = true;
+   111→      for (var i=0;i<edges.length;i++) {
+   112→        if (edges[i].to === filter) { eSet[i]=true; nSet[edges[i].from]=true; }
+   113→      }
+   114→      for (var i=0;i<edges.length;i++) {
+   115→        if (nSet[edges[i].to] && edges[i].to.indexOf('R')!==0) { eSet[i]=true; nSet[edges[i].from]=true; }
+   116→      }
+   117→      var arr=[]; for (var k in eSet) arr.push(parseInt(k));
+   118→      return { visEdges: arr, visNodes: nSet };
+   119→    }
+   120→    if (filter==='trend'||filter==='breakout'||filter==='reversal') {
+   121→      var bt = 'branch-'+filter;
+   122→      var eSet={}, nSet={ROOT:true};
+   123→      for (var i=0;i<edges.length;i++) {
+   124→        if (edges[i].type===bt) { eSet[i]=true; nSet[edges[i].from]=true; nSet[edges[i].to]=true; }
+   125→      }
+   126→      var exp={}; var expN={}; for (var k in nSet) expN[k]=true;
+   127→      for (var i=0;i<edges.length;i++) {
+   128→        if (expN[edges[i].from]) { exp[i]=true; expN[edges[i].to]=true; }
+   129→      }
+   130→      var arr=[]; for (var k in exp) arr.push(parseInt(k));
+   131→      return { visEdges: arr, visNodes: expN };
+   132→    }
+   133→    // Type filter
+   134→    var eSet={}, nSet={ROOT:true};
+   135→    for (var i=0;i<edges.length;i++) {
+   136→      if (edges[i].type===filter) { eSet[i]=true; nSet[edges[i].from]=true; nSet[edges[i].to]=true; }
+   137→    }
+   138→    var arr=[]; for (var k in eSet) arr.push(parseInt(k));
+   139→    return { visEdges: arr, visNodes: nSet };
+   140→  }
+   141→
+   142→  // ── Scale ──
+   143→  function getScale() {
+   144→    var cw = container.clientWidth;
+   145→    var sx = cw / DESIGN_W;
+   146→    return sx;
+   147→  }
+   148→
+   149→  // ── Resize canvas ──
+   150→  function resizeCanvas() {
+   151→    var w = container.clientWidth;
+   152→    var h = container.clientHeight;
+   153→    canvas.width = w * dpr;
+   154→    canvas.height = h * dpr;
+   155→    canvas.style.width = w + 'px';
+   156→    canvas.style.height = h + 'px';
+   157→    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+   158→  }
+   159→
+   160→  // ── Draw edges ──
+   161→  function drawEdges() {
+   162→    var w = container.clientWidth, h = container.clientHeight;
+   163→    ctx.clearRect(0, 0, w, h);
+   164→    var sx = getScale();
+   165→    var edges = DATA.decisionGraph.edges;
+   166→    var pos = DATA.decisionGraph.nodePositions;
+   167→    var probs = DATA.decisionGraph.edgeProbabilities;
+   168→    var vis = computeVisibility(state.filter);
+   169→    var visSet = {}; for (var i=0;i<vis.visEdges.length;i++) visSet[vis.visEdges[i]]=true;
+   170→
+   171→    for (var ei=0; ei<edges.length; ei++) {
+   172→      var e = edges[ei];
+   173→      var fp = pos[e.from], tp = pos[e.to];
+   174→      if (!fp || !tp) continue;
+   175→      var fn = getNode(e.from), tn = getNode(e.to);
+   176→      if (!fn || !tn) continue;
+   177→      var fd = nodeDims(fn), td = nodeDims(tn);
+   178→      var ax = (fp.right + fd.w/2)*sx, ay = (fp.top + fd.h/2)*sx;
+   179→      var bx = (tp.right + td.w/2)*sx, by = (tp.top + td.h/2)*sx;
+   180→      var dx = bx-ax, dy = by-ay, dist = Math.sqrt(dx*dx+dy*dy);
+   181→      if (dist === 0) continue;
+   182→      var bend = Math.min(52, Math.max(18, dist*0.11));
+   183→      var mx = (ax+bx)/2, my = (ay+by)/2;
+   184→      var nx = -dy/dist, ny = dx/dist;
+   185→      var cx = mx + nx*bend, cy = my + ny*bend;
+   186→      var isVis = visSet[ei];
+   187→      var ec = EDGE_COLORS[e.type] || '#6b7280';
+   188→
+   189→      // Draw curve
+   190→      ctx.save();
+   191→      ctx.globalAlpha = isVis ? 0.72 : 0.06;
+   192→      ctx.strokeStyle = ec;
+   193→      ctx.lineWidth = isVis ? 2 : 0.8;
+   194→      ctx.beginPath();
+   195→      ctx.moveTo(ax, ay);
+   196→      ctx.quadraticCurveTo(cx, cy, bx, by);
+   197→      ctx.stroke();
+   198→
+   199→      // Arrow
+   200→      if (isVis) {
+   201→        var t = 0.92;
+   202→        var arx = (1-t)*(1-t)*ax + 2*(1-t)*t*cx + t*t*bx;
+   203→        var ary = (1-t)*(1-t)*ay + 2*(1-t)*t*cy + t*t*by;
+   204→        var atx = 2*(1-t)*(cx-ax) + 2*t*(bx-cx);
+   205→        var aty = 2*(1-t)*(cy-ay) + 2*t*(by-cy);
+   206→        var ang = Math.atan2(aty, atx);
+   207→        var al = 8;
+   208→        ctx.fillStyle = ec;
+   209→        ctx.beginPath();
+   210→        ctx.moveTo(bx, by);
+   211→        ctx.lineTo(bx - al*Math.cos(ang-0.4), by - al*Math.sin(ang-0.4));
+   212→        ctx.lineTo(bx - al*Math.cos(ang+0.4), by - al*Math.sin(ang+0.4));
+   213→        ctx.closePath();
+   214→        ctx.fill();
+   215→      }
+   216→      ctx.restore();
+   217→
+   218→      // Labels on visible edges (not branch edges)
+   219→      if (isVis && ei >= 6) {
+   220→        var prob = probs[ei] || 0;
+   221→        var probLabel = toFa(prob*100) + '٪';
+   222→        ctx.save();
+   223→        ctx.font = '10px Vazirmatn, Tahoma, sans-serif';
+   224→        ctx.textAlign = 'center';
+   225→        ctx.fillStyle = '#ffffff';
+   226→        ctx.globalAlpha = 0.95;
+   227→        ctx.strokeStyle = '#07111b';
+   228→        ctx.lineWidth = 4; ctx.lineJoin = 'round';
+   229→        ctx.strokeText(e.label, cx, cy-5);
+   230→        ctx.fillText(e.label, cx, cy-5);
+   231→        ctx.font = 'bold 9px Vazirmatn, Tahoma, sans-serif';
+   232→        ctx.fillStyle = ec;
+   233→        ctx.globalAlpha = 0.9;
+   234→        ctx.strokeText(probLabel, cx, cy+8);
+   235→        ctx.fillText(probLabel, cx, cy+8);
+   236→        ctx.restore();
+   237→      }
+   238→    }
+   239→  }
+   240→
+   241→  // ── Render nodes as HTML ──
+   242→  var nodeElements = {};
+   243→  function renderNodes() {
+   244→    nodesLayer.innerHTML = '';
+   245→    nodeElements = {};
+   246→    var sx = getScale();
+   247→    var vis = computeVisibility(state.filter);
+   248→    var pos = DATA.decisionGraph.nodePositions;
+   249→    var scProbs = DATA.decisionGraph.scenarioProbabilities;
+   250→    var bProbs = DATA.decisionGraph.branchProbabilities;
+   251→    var nodes = DATA.decisionGraph.nodes;
+   252→
+   253→    for (var i=0; i<nodes.length; i++) {
+   254→      var n = nodes[i];
+   255→      var p = pos[n.id]; if (!p) continue;
+   256→      var isVis = vis.visNodes[n.id];
+   257→      var isRoot = n.id === 'ROOT';
+   258→      var isTerm = n.isTerminal || n.type==='terminal' || SCENARIO_KEYS.indexOf(n.id)>=0;
+   259→      var isEvt = n.type==='event';
+   260→      var isMainBr = ['N_TREND','N_BREAK','N_REVERSAL'].indexOf(n.id)>=0;
+   261→      var isSubBr = n.type==='decision' && !isRoot && !isMainBr;
+   262→      var dm = nodeDims(n);
+   263→
+   264→      var el = document.createElement('div');
+   265→      el.style.cssText = 'position:absolute;cursor:pointer;text-align:center;padding:8px 9px;border-radius:13px;transition:transform .2s,filter .2s,opacity .2s,box-shadow .2s;user-select:none;';
+   266→      el.style.right = (p.right * sx) + 'px';
+   267→      el.style.top = (p.top * sx) + 'px';
+   268→      el.style.width = dm.w + 'px';
+   269→      el.style.minWidth = dm.w + 'px';
+   270→      el.style.minHeight = dm.h + 'px';
+   271→      el.style.opacity = isVis ? '1' : '0.12';
+   272→
+   273→      var col = SCENARIO_COLORS[n.id] || n.color || '#6b7280';
+   274→      var bw = isTerm ? '2px' : '1px';
+   275→      var bd = isEvt ? 'dotted' : 'solid';
+   276→      el.style.border = bw + ' ' + bd + ' ' + col;
+   277→
+   278→      if (isTerm) {
+   279→        el.style.background = 'linear-gradient(160deg,' + col + '1f,rgba(8,22,35,.65))';
+   280→        el.style.boxShadow = 'inset 0 0 24px ' + col + '18, 0 10px 25px rgba(0,0,0,.25)';
+   281→      } else if (isRoot) {
+   282→        el.style.background = 'linear-gradient(145deg,rgba(18,42,61,.97),rgba(6,21,34,.96))';
+   283→        el.style.boxShadow = 'inset 0 0 22px ' + D.cyan + '1f, 0 10px 25px rgba(0,0,0,.25)';
+   284→      } else {
+   285→        el.style.background = 'linear-gradient(145deg,rgba(18,42,61,.97),rgba(6,21,34,.96))';
+   286→        el.style.boxShadow = 'inset 0 0 22px ' + col + '22, 0 10px 25px rgba(0,0,0,.25)';
+   287→      }
+   288→
+   289→      // Inner content
+   290→      if (isRoot) {
+   291→        el.innerHTML = '<div style="font-size:14px;font-weight:800;color:#fff;line-height:1.45">ریشه تصمیم</div>' +
+   292→          '<div style="font-size:10px;color:' + D.cyan + ';font-weight:700;margin-top:3px">Decision Root</div>';
+   293→      } else if (isMainBr) {
+   294→        var pv = bProbs[n.id==='N_TREND'?'trend':n.id==='N_BREAK'?'breakout':'reversal'] || 0;
+   295→        el.innerHTML = '<div style="font-size:13px;font-weight:800;color:#fff;line-height:1.45">' + n.title + '</div>' +
+   296→          '<div style="font-size:10px;color:' + col + ';font-weight:700;margin-top:2px">' + n.titleEn + '</div>' +
+   297→          '<div style="font-size:11px;color:' + col + ';margin-top:3px;font-weight:800">' + toFa(pv*100) + '٪</div>';
+   298→      } else if (isSubBr) {
+   299→        // Find edge prob from parent
+   300→        var ep = 0;
+   301→        for (var ei=0;ei<DATA.decisionGraph.edges.length;ei++) {
+   302→          var ed = DATA.decisionGraph.edges[ei];
+   303→          if (ed.to === n.id) { ep = DATA.decisionGraph.edgeProbabilities[ei] || 0; break; }
+   304→        }
+   305→        el.innerHTML = '<div style="font-size:12px;font-weight:800;color:#fff;line-height:1.45">' + n.title + '</div>' +
+   306→          '<div style="font-size:9px;color:' + col + ';font-weight:700;margin-top:1px">' + n.titleEn + '</div>' +
+   307→          '<div style="font-size:10px;color:#d4e8f0;margin-top:2px">' + toFa(ep*100) + '٪</div>';
+   308→      } else if (isEvt) {
+   309→        el.innerHTML = '<div style="font-size:11px;font-weight:800;color:#fff;line-height:1.35">' + n.title + '</div>' +
+   310→          '<div style="font-size:9px;color:' + col + ';font-weight:700;margin-top:1px">' + n.titleEn + '</div>';
+   311→      } else if (isTerm) {
+   312→        var scProb = scProbs[n.id] || 0;
+   313→        el.innerHTML = '<div style="font-size:12px;font-weight:800;color:#fff;line-height:1.4">' + (SCENARIO_LABELS[n.id]||n.title) + '</div>' +
+   314→          '<span style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999;background:' + col + '30;color:#fff;font-size:16px;font-weight:900;text-shadow:0 0 8px ' + col + '88">' + toFa(scProb*100) + '٪</span>';
+   315→      }
+   316→
+   317→      // Events
+   318→      (function(nodeId, elem) {
+   319→        elem.addEventListener('click', function() {
+   320→          state.selectedNode = state.selectedNode === nodeId ? null : nodeId;
+   321→          updateNodeStyles();
+   322→        });
+   323→        elem.addEventListener('mouseenter', function() {
+   324→          state.hoveredNode = nodeId;
+   325→          updateNodeStyles();
+   326→        });
+   327→        elem.addEventListener('mouseleave', function() {
+   328→          state.hoveredNode = null;
+   329→          updateNodeStyles();
+   330→        });
+   331→      })(n.id, el);
+   332→
+   333→      nodesLayer.appendChild(el);
+   334→      nodeElements[n.id] = el;
+   335→    }
+   336→  }
+   337→
+   338→  function updateNodeStyles() {
+   339→    for (var id in nodeElements) {
+   340→      var el = nodeElements[id];
+   341→      var isSelected = state.selectedNode === id;
+   342→      var isHovered = state.hoveredNode === id;
+   343→      var col = SCENARIO_COLORS[id] || (getNode(id)||{}).color || '#6b7280';
+   344→      if (isSelected) {
+   345→        el.style.transform = 'translateY(-4px) scale(1.025)';
+   346→        el.style.filter = 'brightness(1.18)';
+   347→        el.style.boxShadow = '0 0 0 2px ' + col + '47, 0 0 28px ' + col + '40';
+   348→      } else if (isHovered) {
+   349→        el.style.transform = 'translateY(-4px) scale(1.025)';
+   350→        el.style.filter = 'brightness(1.18)';
+   351→        el.style.boxShadow = '0 0 0 2px ' + col + '47, 0 0 28px ' + col + '40';
+   352→      } else {
+   353→        el.style.transform = 'none';
+   354→        el.style.filter = 'none';
+   355→      }
+   356→      // Dim non-selected when something is selected
+   357→      if (state.selectedNode && state.selectedNode !== id) {
+   358→        el.style.opacity = '0.15';
+   359→      }
+   360→    }
+   361→  }
+   362→
+   363→  // ── Filter buttons ──
+   364→  var filterBtns = container.parentElement.querySelectorAll('.dg-filter-btn');
+   365→  for (var i=0; i<filterBtns.length; i++) {
+   366→    (function(btn) {
+   367→      btn.addEventListener('click', function() {
+   368→        var key = btn.getAttribute('data-filter');
+   369→        state.filter = key;
+   370→        state.selectedNode = null;
+   371→        // Update active state
+   372→        for (var j=0;j<filterBtns.length;j++) {
+   373→          var b = filterBtns[j];
+   374→          var isAct = b.getAttribute('data-filter') === key;
+   375→          var bCol = b.getAttribute('data-color') || D.cyan;
+   376→          b.style.borderColor = isAct ? bCol + 'b3' : 'rgba(255,255,255,.15)';
+   377→          b.style.background = isAct ? bCol + '24' : 'rgba(255,255,255,.04)';
+   378→          b.style.boxShadow = isAct ? '0 0 18px ' + bCol + '1a' : 'none';
+   379→          b.style.transform = isAct ? 'translateY(-1px)' : 'none';
+   380→        }
+   381→        renderNodes();
+   382→        drawEdges();
+   383→      });
+   384→    })(filterBtns[i]);
+   385→  }
+   386→
+   387→  // Reset button
+   388→  var resetBtn = document.getElementById('dg-reset-btn');
+   389→  if (resetBtn) {
+   390→    resetBtn.addEventListener('click', function() {
+   391→      state.filter = 'all';
+   392→      state.selectedNode = null;
+   393→      for (var j=0;j<filterBtns.length;j++) {
+   394→        var b = filterBtns[j];
+   395→        b.style.borderColor = 'rgba(255,255,255,.15)';
+   396→        b.style.background = 'rgba(255,255,255,.04)';
+   397→        b.style.boxShadow = 'none';
+   398→        b.style.transform = 'none';
+   399→      }
+   400→      renderNodes();
+   401→      drawEdges();
+   402→    });
+   403→  }
+   404→
+   405→  // ── Init & Resize ──
+   406→  function fullRedraw() {
+   407→    resizeCanvas();
+   408→    renderNodes();
+   409→    drawEdges();
+   410→  }
+   411→  fullRedraw();
+   412→  var ro; try { ro = new ResizeObserver(function(){ fullRedraw(); }); ro.observe(container); } catch(e) {}
+   413→})();
+   414→
+   415→// ═══════════════════════════════════════════════════════════════════
+   416→// SECTION 2: CUMULATIVE PROBABILITY CHART (Canvas)
+   417→// ═══════════════════════════════════════════════════════════════════
+   418→(function() {
+   419→  var canvas = document.getElementById('cumul-canvas');
+   420→  var tooltipEl = document.getElementById('cumul-tooltip');
+   421→  if (!canvas) return;
+   422→  var ctx = canvas.getContext('2d');
+   423→  var dpr = window.devicePixelRatio || 1;
+   424→  var trend = DATA.probabilityTrend;
+   425→  if (!trend || !trend.groups || trend.groups.length < 3) return;
+   426→
+   427→  var gMap = {}; for (var i=0;i<trend.groups.length;i++) gMap[trend.groups[i].group] = trend.groups[i];
+   428→  var sMap = {}; for (var i=0;i<trend.scenarios.length;i++) sMap[trend.scenarios[i].scenarioKey] = trend.scenarios[i];
+   429→  var bull = gMap['bullish'], neut = gMap['neutral'], bear = gMap['bearish'];
+   430→  if (!bull || !neut || !bear) return;
+   431→  var maxDays = Math.max(bull.trend.length, neut.trend.length, bear.trend.length);
+   432→
+   433→  var cW = 1100, cH = 300, pL=55, pR=20, pT=20, pB=40;
+   434→  var plW = cW-pL-pR, plH = cH-pT-pB;
+   435→  var hoveredDay = null;
+   436→
+   437→  function xOf(d) { return pL + plW - ((d-1)/Math.max(1,maxDays-1))*plW; }
+   438→  function yOf(p) { return pT + plH - p*plH; }
+   439→
+   440→  function resize() {
+   441→    var parent = canvas.parentElement;
+   442→    var w = parent.clientWidth, h = cH;
+   443→    canvas.width = w * dpr; canvas.height = h * dpr;
+   444→    canvas.style.width = w+'px'; canvas.style.height = h+'px';
+   445→    ctx.setTransform(dpr * w/cW, 0, 0, dpr * h/cH, 0, 0);
+   446→  }
+   447→
+   448→  function draw() {
+   449→    ctx.clearRect(0,0,cW,cH);
+   450→    // Grid
+   451→    ctx.strokeStyle = 'rgba(170,208,229,.12)'; ctx.lineWidth = 0.7;
+   452→    for (var p=0;p<=100;p+=20) {
+   453→      var y=yOf(p/100);
+   454→      ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(cW-pR,y); ctx.stroke();
+   455→      ctx.fillStyle = '#9db4c2'; ctx.font = '10px Vazirmatn,Tahoma,sans-serif'; ctx.textAlign = 'right';
+   456→      ctx.fillText(toFaStr(p)+'٪', pL-8, y+3.5);
+   457→    }
+   458→    // X labels
+   459→    ctx.textAlign = 'center'; ctx.fillStyle = '#9db4c2';
+   460→    for (var d=1;d<=maxDays;d+=5) {
+   461→      ctx.fillText(toFaStr(d), xOf(d), cH-8);
+   462→    }
+   463→    // Axes
+   464→    ctx.strokeStyle = 'rgba(170,208,229,.2)'; ctx.lineWidth = 0.7;
+   465→    ctx.beginPath(); ctx.moveTo(pL,pT); ctx.lineTo(pL,cH-pB); ctx.stroke();
+   466→    ctx.beginPath(); ctx.moveTo(pL,cH-pB); ctx.lineTo(cW-pR,cH-pB); ctx.stroke();
+   467→
+   468→    // Individual scenario dashed lines
+   469→    for (var i=0;i<trend.scenarios.length;i++) {
+   470→      var sc = trend.scenarios[i];
+   471→      var col = SCENARIO_COLORS[sc.scenarioKey] || '#9ca3af';
+   472→      ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+   473→      ctx.setLineDash([3,2]);
+   474→      ctx.beginPath();
+   475→      for (var j=0;j<sc.trend.length;j++) {
+   476→        var px = xOf(sc.trend[j].day), py = yOf(sc.trend[j].individualProb);
+   477→        if (j===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+   478→      }
+   479→      ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+   480→    }
+   481→
+   482→    // Group lines
+   483→    var gColors = {bullish:'#16a34a', neutral:'#b45309', bearish:'#dc2626'};
+   484→    var gArr = [bear, neut, bull];
+   485→    var gKeys = ['bearish','neutral','bullish'];
+   486→    for (var gi=0;gi<gArr.length;gi++) {
+   487→      var g = gArr[gi]; if (!g) continue;
+   488→      var col = gColors[gKeys[gi]];
+   489→      ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2.8; ctx.globalAlpha = 0.95;
+   490→      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+   491→      ctx.beginPath();
+   492→      for (var j=0;j<g.trend.length;j++) {
+   493→        var px = xOf(g.trend[j].day), py = yOf(g.trend[j].cumulativeProb);
+   494→        if (j===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+   495→      }
+   496→      ctx.stroke();
+   497→      // Dots
+   498→      ctx.fillStyle = col;
+   499→      for (var j=0;j<g.trend.length;j++) {
+   500→        ctx.beginPath(); ctx.arc(xOf(g.trend[j].day), yOf(g.trend[j].cumulativeProb), 2.5, 0, Math.PI*2); ctx.fill();
+   501→      }
+   502→      ctx.restore();
+   503→    }
+   504→
+   505→    // Hover line
+   506→    if (hoveredDay !== null) {
+   507→      ctx.save(); ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.6;
+   508→      ctx.setLineDash([3,3]);
+   509→      var hx = xOf(hoveredDay);
+   510→      ctx.beginPath(); ctx.moveTo(hx, pT); ctx.lineTo(hx, cH-pB); ctx.stroke();
+   511→      ctx.setLineDash([]); ctx.restore();
+   512→    }
+   513→  }
+   514→
+   515→  function showTooltip(day) {
+   516→    if (!tooltipEl) return;
+   517→    var html = '<div style="font-weight:bold;margin-bottom:4px">روز ' + toFaStr(day) + '</div>';
+   518→    var gLabels = {bullish:'گاوی', neutral:'خنثی', bearish:'خرسی'};
+   519→    var gColors = {bullish:'#16a34a', neutral:'#b45309', bearish:'#dc2626'};
+   520→    for (var gi=0;gi<['bearish','neutral','bullish'].length;gi++) {
+   521→      var gk = ['bearish','neutral','bullish'][gi];
+   522→      var g = gMap[gk]; if (!g) continue;
+   523→      var dp = null; for (var j=0;j<g.trend.length;j++) if (g.trend[j].day===day) { dp=g.trend[j]; break; }
+   524→      if (!dp) continue;
+   525→      html += '<div style="display:flex;justify-content:space-between;gap:12px"><span>' + gLabels[gk] + '</span><span style="font-weight:bold;color:' + gColors[gk] + '">' + (dp.cumulativeProb*100).toFixed(1) + '٪</span></div>';
+   526→    }
+   527→    tooltipEl.innerHTML = html;
+   528→    tooltipEl.style.display = 'block';
+   529→    var canvasRect = canvas.getBoundingClientRect();
+   530→    var parentW = canvas.parentElement.clientWidth;
+   531→    var xRatio = parentW / cW;
+   532→    var xPos = xOf(day) * xRatio + 10;
+   533→    tooltipEl.style.left = xPos + 'px';
+   534→    tooltipEl.style.top = '10px';
+   535→  }
+   536→
+   537→  canvas.addEventListener('mousemove', function(e) {
+   538→    var rect = canvas.getBoundingClientRect();
+   539→    var scaleX = cW / rect.width;
+   540→    var svgX = (e.clientX - rect.left) * scaleX;
+   541→    var closestDay = 1, closestDist = Infinity;
+   542→    for (var d=1;d<=maxDays;d++) { var dist = Math.abs(xOf(d)-svgX); if (dist<closestDist) { closestDist=dist; closestDay=d; } }
+   543→    if (closestDist < 40) { hoveredDay = closestDay; showTooltip(closestDay); }
+   544→    else { hoveredDay = null; if (tooltipEl) tooltipEl.style.display='none'; }
+   545→    draw();
+   546→  });
+   547→  canvas.addEventListener('mouseleave', function() { hoveredDay = null; if (tooltipEl) tooltipEl.style.display='none'; draw(); });
+   548→
+   549→  resize(); draw();
+   550→  var ro; try { ro = new ResizeObserver(function(){ resize(); draw(); }); ro.observe(canvas.parentElement); } catch(e) {}
+   551→})();
+   552→
+   553→// ═══════════════════════════════════════════════════════════════════
+   554→// SECTION 3: PER-SCENARIO MULTI-SELECT CHARTS (Canvas)
+   555→// ═══════════════════════════════════════════════════════════════════
+   556→(function() {
+   557→  var trend = DATA.probabilityTrend;
+   558→  if (!trend || !trend.scenarios || trend.scenarios.length < 9 || !trend.scenarios[0].trend || trend.scenarios[0].trend.length < 2) return;
+   559→
+   560→  var maxDays = trend.scenarios[0].trend.length;
+   561→  var selectedKeys = {}; for (var i=0;i<SCENARIO_KEYS.length;i++) selectedKeys[SCENARIO_KEYS[i]] = true;
+   562→
+   563→  // Individual chart
+   564→  var indCanvas = document.getElementById('ind-canvas');
+   565→  var indTooltip = document.getElementById('ind-tooltip');
+   566→  // Cumulative chart
+   567→  var cumCanvas = document.getElementById('sc-cum-canvas');
+   568→  var cumTooltip = document.getElementById('sc-cum-tooltip');
+   569→
+   570→  function setupChart(canvas, tooltip, mode) {
+   571→    if (!canvas) return;
+   572→    var ctx = canvas.getContext('2d');
+   573→    var dpr = window.devicePixelRatio || 1;
+   574→    var cW = 1100, cH = 300, pL=55, pR=20, pT=20, pB=40;
+   575→    var plW = cW-pL-pR, plH = cH-pT-pB;
+   576→    var hoveredDay = null;
+   577→
+   578→    function getScenarios() { return trend.scenarios.filter(function(s){ return selectedKeys[s.scenarioKey]; }); }
+   579→
+   580→    function yRange() {
+   581→      var scs = getScenarios();
+   582→      var yMin=0, yMax=0;
+   583→      for (var i=0;i<scs.length;i++) for (var j=0;j<scs[i].trend.length;j++) {
+   584→        var v = mode==='individual' ? scs[i].trend[j].individualProb : scs[i].trend[j].cumulativeProb;
+   585→        if (v>yMax) yMax=v;
+   586→      }
+   587→      if (yMax<=0) yMax=0.1;
+   588→      var range = yMax-yMin, pad = range*0.15;
+   589→      return { min: Math.max(0,yMin-pad*0.3), max: yMax+pad };
+   590→    }
+   591→
+   592→    function xOf(d) { return pL + plW - ((d-1)/Math.max(1,maxDays-1))*plW; }
+   593→    function yOf(v) { var yr=yRange(); return pT + plH - ((v-yr.min)/Math.max(0.001,yr.max-yr.min))*plH; }
+   594→
+   595→    function resize() {
+   596→      var parent = canvas.parentElement; var w = parent.clientWidth, h = cH;
+   597→      canvas.width = w*dpr; canvas.height = h*dpr;
+   598→      canvas.style.width = w+'px'; canvas.style.height = h+'px';
+   599→      ctx.setTransform(dpr*w/cW, 0, 0, dpr*h/cH, 0, 0);
+   600→    }
+   601→
+   602→    function draw() {
+   603→      ctx.clearRect(0,0,cW,cH);
+   604→      var yr = yRange();
+   605→      // Grid
+   606→      var range = yr.max-yr.min;
+   607→      var rawStep = range/5;
+   608→      var steps = [0.01,0.02,0.025,0.05,0.1,0.15,0.2,0.25,0.5,1.0];
+   609→      var step = steps[0]; for (var si=0;si<steps.length;si++) if (steps[si]>=rawStep) { step=steps[si]; break; }
+   610→      var gridMin = Math.floor(yr.min/step)*step;
+   611→      var gridMax = Math.ceil(yr.max/step)*step;
+   612→      ctx.strokeStyle = 'rgba(170,208,229,.12)'; ctx.lineWidth = 0.7;
+   613→      for (var v=gridMin; v<=gridMax+step*0.01; v+=step) {
+   614→        var y = yOf(v); if (y<pT-2||y>cH-pB+2) continue;
+   615→        ctx.beginPath(); ctx.moveTo(pL,y); ctx.lineTo(cW-pR,y); ctx.stroke();
+   616→        ctx.fillStyle = '#9db4c2'; ctx.font = '9px Vazirmatn,Tahoma,sans-serif'; ctx.textAlign = 'right';
+   617→        var pVal = v*100; var pLabel = Number.isInteger(pVal) ? String(pVal) : pVal.toFixed(step<0.05?2:1);
+   618→        ctx.fillText(toFaStr(pLabel)+'%', pL-6, y+3.5);
+   619→      }
+   620→      // X labels
+   621→      ctx.textAlign = 'center'; ctx.fillStyle = '#9db4c2'; ctx.font = '8px Vazirmatn,Tahoma,sans-serif';
+   622→      for (var d=1;d<=maxDays;d+=5) ctx.fillText(toFaStr(d), xOf(d), cH-8);
+   623→      // Axes
+   624→      ctx.strokeStyle = 'rgba(170,208,229,.2)'; ctx.lineWidth = 0.7;
+   625→      ctx.beginPath(); ctx.moveTo(pL,pT); ctx.lineTo(pL,cH-pB); ctx.stroke();
+   626→      ctx.beginPath(); ctx.moveTo(pL,cH-pB); ctx.lineTo(cW-pR,cH-pB); ctx.stroke();
+   627→
+   628→      // Lines
+   629→      var scs = getScenarios();
+   630→      for (var i=0;i<scs.length;i++) {
+   631→        var sc = scs[i]; var col = LINE_COLORS[sc.scenarioKey]||'#9ca3af';
+   632→        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.globalAlpha = 0.9;
+   633→        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+   634→        ctx.beginPath();
+   635→        for (var j=0;j<sc.trend.length;j++) {
+   636→          var vv = mode==='individual' ? sc.trend[j].individualProb : sc.trend[j].cumulativeProb;
+   637→          var px = xOf(sc.trend[j].day), py = yOf(vv);
+   638→          if (j===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+   639→        }
+   640→        ctx.stroke();
+   641→        // Start dot
+   642→        var firstV = mode==='individual' ? sc.trend[0].individualProb : sc.trend[0].cumulativeProb;
+   643→        ctx.fillStyle = col;
+   644→        ctx.beginPath(); ctx.arc(xOf(sc.trend[0].day), yOf(firstV), 3.5, 0, Math.PI*2); ctx.fill();
+   645→        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+   646→        ctx.beginPath(); ctx.arc(xOf(sc.trend[0].day), yOf(firstV), 3.5, 0, Math.PI*2); ctx.stroke();
+   647→        ctx.restore();
+   648→      }
+   649→
+   650→      // Hover line
+   651→      if (hoveredDay !== null) {
+   652→        ctx.save(); ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.6;
+   653→        ctx.setLineDash([3,3]);
+   654→        ctx.beginPath(); ctx.moveTo(xOf(hoveredDay),pT); ctx.lineTo(xOf(hoveredDay),cH-pB); ctx.stroke();
+   655→        ctx.setLineDash([]); ctx.restore();
+   656→      }
+   657→    }
+   658→
+   659→    function showTooltip(day) {
+   660→      if (!tooltip) return;
+   661→      var scs = getScenarios();
+   662→      var html = '<div style="font-weight:bold;margin-bottom:4px">روز ' + toFaStr(day) + '</div>';
+   663→      for (var i=0;i<scs.length;i++) {
+   664→        var sc = scs[i]; var col = LINE_COLORS[sc.scenarioKey]||'#9ca3af';
+   665→        var dp = null; for (var j=0;j<sc.trend.length;j++) if (sc.trend[j].day===day) { dp=sc.trend[j]; break; }
+   666→        if (!dp) continue;
+   667→        var val = mode==='individual' ? dp.individualProb : dp.cumulativeProb;
+   668→        var dir = sc.trendDirection==='rising'?'↑':sc.trendDirection==='falling'?'↓':'→';
+   669→        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+   670→          '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + col + ';margin-left:4px"></span>' + sc.label + ' ' + dir + '</span>' +
+   671→          '<span style="font-weight:bold;color:' + col + '">' + (val*100).toFixed(1) + '٪</span></div>';
+   672→      }
+   673→      tooltip.innerHTML = html; tooltip.style.display = 'block';
+   674→      var parentW = canvas.parentElement.clientWidth;
+   675→      var xRatio = parentW / cW;
+   676→      tooltip.style.left = (xOf(day)*xRatio + 10) + 'px';
+   677→      tooltip.style.top = '10px';
+   678→    }
+   679→
+   680→    canvas.addEventListener('mousemove', function(e) {
+   681→      var rect = canvas.getBoundingClientRect();
+   682→      var scaleX = cW / rect.width;
+   683→      var svgX = (e.clientX - rect.left) * scaleX;
+   684→      var closestDay=1, closestDist=Infinity;
+   685→      for (var d=1;d<=maxDays;d++) { var dist=Math.abs(xOf(d)-svgX); if (dist<closestDist) { closestDist=dist; closestDay=d; } }
+   686→      if (closestDist < 40) { hoveredDay=closestDay; showTooltip(closestDay); }
+   687→      else { hoveredDay=null; if (tooltip) tooltip.style.display='none'; }
+   688→      draw();
+   689→    });
+   690→    canvas.addEventListener('mouseleave', function() { hoveredDay=null; if (tooltip) tooltip.style.display='none'; draw(); });
+   691→
+   692→    return { resize: function() { resize(); draw(); }, draw: draw };
+   693→  }
+   694→
+   695→  var indChart = setupChart(indCanvas, indTooltip, 'individual');
+   696→  var cumChart = setupChart(cumCanvas, cumTooltip, 'cumulative');
+   697→
+   698→  // Toggle buttons
+   699→  var toggleBtns = document.querySelectorAll('.sc-toggle-btn');
+   700→  for (var i=0;i<toggleBtns.length;i++) {
+   701→    (function(btn) {
+   702→      btn.addEventListener('click', function() {
+   703→        var key = btn.getAttribute('data-key');
+   704→        selectedKeys[key] = !selectedKeys[key];
+   705→        btn.style.opacity = selectedKeys[key] ? '1' : '0.35';
+   706→        btn.style.borderColor = selectedKeys[key] ? 'rgba(170,208,229,.3)' : 'transparent';
+   707→        btn.style.background = selectedKeys[key] ? 'rgba(170,208,229,.08)' : 'rgba(170,208,229,.03)';
+   708→        if (indChart) indChart.resize();
+   709→        if (cumChart) cumChart.resize();
+   710→      });
+   711→    })(toggleBtns[i]);
+   712→  }
+   713→
+   714→  // Resize
+   715→  var ro; try { ro = new ResizeObserver(function(){ if (indChart) indChart.resize(); if (cumChart) cumChart.resize(); }); if (indCanvas) ro.observe(indCanvas.parentElement); if (cumCanvas) ro.observe(cumCanvas.parentElement); } catch(e) {}
+   716→})();
+   717→`;
+   718→}
+   719→
+   720→// ═══════════════════════════════════════════════════════════════════════════════
+   721→// Main Export Function
+   722→// ═══════════════════════════════════════════════════════════════════════════════
+   723→
+   724→export function exportDecisionGraphHTML(data: DecisionGraphExportData): void {
+   725→  const { symbolName, currentPrice, currencyUnit, scenarios, decisionGraph, probabilityTrend, branchProbabilities, pathContributions, narrative } = data;
+   726→
+   727→  const SCENARIO_LABELS: Record<string, string> = {
+   728→    SC1: 'شوک نزولی', SC2: 'نزولی شتاب‌دار', SC3: 'نزولی قوی', SC4: 'نزولی خفیف',
+   729→    SC5: 'رنج',
+   730→    SC6: 'صعودی خفیف', SC7: 'صعودی قوی', SC8: 'صعودی شتاب‌دار', SC9: 'شوک صعودی',
+   731→  };
+   732→
+   733→  const SCENARIO_COLORS: Record<string, string> = {
+   734→    SC1: '#b91c1c', SC2: '#dc2626', SC3: '#ea580c', SC4: '#c2410c', SC5: '#b45309',
+   735→    SC6: '#047857', SC7: '#059669', SC8: '#0e7490', SC9: '#0891b2',
+   736→  };
+   737→
+   738→  const LINE_COLORS: Record<string, string> = {
+   739→    SC1: '#b91c1c', SC2: '#dc2626', SC3: '#ea580c', SC4: '#f97316', SC5: '#f59e0b',
+   740→    SC6: '#65a30d', SC7: '#16a34a', SC8: '#059669', SC9: '#047857',
+   741→  };
+   742→
+   743→  const BRANCH_LABELS: Record<string, string> = { trend: 'پیروی از روند', breakout: 'شکست', reversal: 'بازگشت' };
+   744→  const BRANCH_COLORS: Record<string, string> = { trend: '#3ad5db', breakout: '#ffb11b', reversal: '#a04ac5' };
+   745→
+   746→  const D = {
+   747→    bg: '#07111b', bg2: '#0b1c2b', line: 'rgba(170,208,229,.18)', text: '#eaf5fb', muted: '#9db4c2',
+   748→    cyan: '#3ad5db', blue: '#4186ff', purple: '#a04ac5', gold: '#ffb11b', orange: '#ff7b32',
+   749→    red: '#ef4d62', green: '#34c98b',
+   750→  };
+   751→
+   752→  // ── Filter buttons HTML ──
+   753→  const TYPE_FILTERS = [
+   754→    { key: 'all', label: 'همه مسیرها' }, { key: 'up', label: 'صعودی' },
+   755→    { key: 'pullback', label: 'رنج و خنثی' }, { key: 'down', label: 'نزولی' }, { key: 'risk', label: 'شوک و ریسک' },
+   756→  ];
+   757→  const BRANCH_FILTERS = [
+   758→    { key: 'trend', label: 'پیروی از روند', color: D.cyan },
+   759→    { key: 'breakout', label: 'شکست', color: D.gold },
+   760→    { key: 'reversal', label: 'بازگشت', color: D.purple },
+   761→  ];
+   762→
+   763→  let filterBtnsHtml = '';
+   764→  for (const f of TYPE_FILTERS) {
+   765→    filterBtnsHtml += `<button class="dg-filter-btn" data-filter="${f.key}" data-color="${D.cyan}" style="color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04);padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;transition:.2s ease">${esc(f.label)}</button>`;
+   766→  }
+   767→  filterBtnsHtml += '<span style="color:rgba(170,208,229,.18);margin:0 4px;user-select:none">│</span>';
+   768→  for (const f of BRANCH_FILTERS) {
+   769→    filterBtnsHtml += `<button class="dg-filter-btn" data-filter="${f.key}" data-color="${f.color}" style="color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04);padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;transition:.2s ease">${esc(f.label)}</button>`;
+   770→  }
+   771→  filterBtnsHtml += '<span style="color:rgba(170,208,229,.18);margin:0 4px;user-select:none">│</span>';
+   772→  for (const key of SCENARIO_KEYS) {
+   773→    const col = SCENARIO_COLORS[key];
+   774→    filterBtnsHtml += `<button class="dg-filter-btn" data-filter="${key}" data-color="${col}" style="color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04);padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;transition:.2s ease">${esc(SCENARIO_LABELS[key])}</button>`;
+   775→  }
+   776→
+   777→  // ── Scenario boxes HTML ──
+   778→  let scenarioBoxesHtml = '';
+   779→  for (const key of SCENARIO_KEYS) {
+   780→    const s = scenarios[key];
+   781→    if (!s) continue;
+   782→    const color = SCENARIO_COLORS[key];
+   783→    const contrib = pathContributions[key] ?? { trend: 0, breakout: 0, reversal: 0 };
+   784→    scenarioBoxesHtml += `
+   785→        <div style="border:1px solid ${color};border-radius:12px;padding:12px;background:linear-gradient(160deg,${color}1f,rgba(8,22,35,.65))">
+   786→          <strong style="display:block;color:${color};font-size:20px;font-weight:900;margin-bottom:4px">${faPct0(s.probability / 100)}٪</strong>
+   787→          <span style="font-size:12px;font-weight:700;color:#ffffff">${SCENARIO_LABELS[key]}</span>
+   788→          <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px">
+   789→            ${['trend', 'breakout', 'reversal'].map(b => `<div style="display:flex;align-items:center;justify-content:space-between;font-size:9px"><span style="color:#e0eaf0;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${BRANCH_COLORS[b]}"></span>${BRANCH_LABELS[b]}</span><span style="font-weight:700;color:#ffffff">${faPct(contrib[b as 'trend' | 'breakout' | 'reversal'])}٪</span></div>`).join('')}
+   790→          </div>
+   791→          <small style="display:block;color:#e0eaf0;font-size:10px;margin-top:6px;direction:ltr;text-align:center">${faNum(s.targetMin)} — ${faNum(s.targetMax)}</small>
+   792→        </div>`;
+   793→  }
+   794→
+   795→  // ── Scenario toggle buttons (for per-scenario charts) ──
+   796→  let toggleBtnsHtml = '';
+   797→  for (const sc of probabilityTrend?.scenarios ?? []) {
+   798→    const col = LINE_COLORS[sc.scenarioKey] || '#9ca3af';
+   799→    const dirIcon = sc.trendDirection === 'rising' ? '↑' : sc.trendDirection === 'falling' ? '↓' : '→';
+   800→    const curVal = sc.trend[0] ? (sc.trend[0].individualProb * 100).toFixed(1) : '0';
+   801→    toggleBtnsHtml += `<button class="sc-toggle-btn" data-key="${sc.scenarioKey}" style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:8px;border:1px solid rgba(170,208,229,.3);background:rgba(170,208,229,.08);cursor:pointer;opacity:1;transition:all .15s;font-family:inherit">
+   802→      <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${col}"></span>
+   803→      <span style="font-size:10px;color:#eaf5fb">${sc.scenarioKey}</span>
+   804→      <span style="font-size:10px;color:${col}">${dirIcon}</span>
+   805→      <span style="font-size:9px;color:#9db4c2" class="sc-toggle-val">${toPersianDigits(curVal)}٪</span>
+   806→    </button>`;
+   807→  }
+   808→
+   809→  // ── 30-day trend table ──
+   810→  let trendTableHtml = '';
+   811→  if (probabilityTrend && probabilityTrend.scenarios && probabilityTrend.scenarios.length === 9 && (probabilityTrend.scenarios[0]?.trend?.length ?? 0) > 1) {
+   812→    const totalDays = probabilityTrend.scenarios[0]?.trend?.length ?? 30;
+   813→    const allDays = Array.from({ length: totalDays }, (_, i) => i + 1);
+   814→    const scenarioMap: Record<string, (typeof probabilityTrend.scenarios)[number]> = {};
+   815→    for (const s of probabilityTrend.scenarios) scenarioMap[s.scenarioKey] = s;
+   816→    const groupMap: Record<string, (typeof probabilityTrend.groups)[number]> = {};
+   817→    if (probabilityTrend.groups) for (const g of probabilityTrend.groups) groupMap[g.group] = g;
+   818→    const groupColors: Record<string, string> = { bearish: '#dc2626', neutral: '#6b7280', bullish: '#16a34a' };
+   819→    const groupLabels: Record<string, string> = { bearish: 'خرسی', neutral: 'خنثی', bullish: 'گاوی' };
+   820→
+   821→    let tableRows = '';
+   822→    for (const key of SCENARIO_KEYS) {
+   823→      const sc = scenarioMap[key]; if (!sc) continue;
+   824→      const gc = groupColors[sc.group] ?? '#6b7280';
+   825→      let dayCells = '';
+   826→      for (const day of allDays) {
+   827→        const dp = sc.trend.find(d => d.day === day);
+   828→        const isPeak = sc.peakDay === day;
+   829→        const indVal = dp ? toPersianDigits((dp.individualProb * 100).toFixed(1)) + '٪' : '—';
+   830→        const cumVal = dp ? toPersianDigits((dp.cumulativeProb * 100).toFixed(1)) + '٪' : '—';
+   831→        const bgStyle = isPeak ? `background:${gc}18;font-weight:900;` : '';
+   832→        dayCells += `<td style="${bgStyle}font-size:9px;text-align:center;padding:3px 2px;white-space:nowrap">${indVal}</td>`;
+   833→        dayCells += `<td style="${bgStyle}font-size:9px;text-align:center;padding:3px 2px;color:#9db4c2;white-space:nowrap">${cumVal}</td>`;
+   834→      }
+   835→      tableRows += `<tr><td style="font-size:10px;font-weight:700;color:${gc};padding:4px 8px;white-space:nowrap"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${gc};margin-left:4px"></span>${key} — ${esc(sc.label)}</td>${dayCells}</tr>\n`;
+   836→    }
+   837→    let groupRows = '';
+   838→    for (const g of ['bearish', 'neutral', 'bullish'] as const) {
+   839→      const gData = groupMap[g]; if (!gData) continue;
+   840→      const gc = groupColors[g];
+   841→      let dayCells = '';
+   842→      for (const day of allDays) {
+   843→        const dp = gData.trend.find(d => d.day === day);
+   844→        dayCells += `<td colspan="2" style="font-size:9px;text-align:center;padding:4px 2px;font-weight:700;color:${gc};white-space:nowrap">${dp ? toPersianDigits((dp.cumulativeProb * 100).toFixed(1)) + '٪' : '—'}</td>`;
+   845→      }
+   846→      groupRows += `<tr><td style="font-size:10px;font-weight:700;color:${gc};padding:4px 8px;white-space:nowrap">تجمعی ${groupLabels[g]}</td>${dayCells}</tr>\n`;
+   847→    }
+   848→    const dayHeaders = allDays.map(d => `<th colspan="2" style="font-size:9px;padding:3px 2px;text-align:center">${toPersianDigits(d.toString())}</th>`).join('');
+   849→    const subHeaders = allDays.map(() => '<th style="font-size:7px;padding:1px;text-align:center;color:#9db4c2">اخ</th><th style="font-size:7px;padding:1px;text-align:center;color:#9db4c2">تج</th>').join('');
+   850→    trendTableHtml = `
+   851→      <h3 style="font-size:14px;font-weight:700;color:${D.text};margin:24px 0 12px">جدول روند ۳۰ روزه احتمالات</h3>
+   852→      <div style="overflow-x:auto;border-radius:10px;border:1px solid ${D.line}">
+   853→        <table style="width:100%;border-collapse:collapse;min-width:1200px">
+   854→          <thead><tr><th style="font-size:10px;padding:4px 8px;text-align:right;position:sticky;right:0;background:#0b1c2b;z-index:1">سناریو</th>${dayHeaders}</tr>
+   855→          <tr style="background:rgba(170,208,229,.05)"><th></th>${subHeaders}</tr></thead>
+   856→          <tbody>${tableRows}<tr><td colspan="${1 + allDays.length * 2}" style="border-bottom:2px solid ${D.line}"></td></tr>${groupRows}</tbody>
+   857→        </table>
+   858→      </div>`;
+   859→  }
+   860→
+   861→  // ── Narrative text ──
+   862→  const narrativeHtml = esc(narrative).replace(/\n/g, '<br>');
+   863→
+   864→  // ── Embed data as JSON ──
+   865→  const dataJson = JSON.stringify({
+   866→    symbolName, currentPrice, currencyUnit, scenarios, decisionGraph, probabilityTrend, branchProbabilities, pathContributions,
+   867→    D,
+   868→  });
+   869→
+   870→  // ── Date ──
+   871→  const today = new Date();
+   872→  const persianDate = toPersianDigits(`${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`);
+   873→
+   874→  // ── Build HTML ──
+   875→  const html = `<!DOCTYPE html>
+   876→<html lang="fa" dir="rtl">
+   877→<head>
+   878→<meta charset="UTF-8">
+   879→<meta name="viewport" content="width=device-width, initial-scale=1.0">
+   880→<title>گراف تصمیم ${esc(symbolName)}</title>
+   881→<link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+   882→<style>
+   883→  * { box-sizing: border-box; margin: 0; padding: 0; }
+   884→  body { font-family: Vazirmatn, Tahoma, sans-serif; background: ${D.bg}; color: ${D.text}; line-height: 1.8; padding: 20px; }
+   885→  .container { max-width: 1200px; margin: 0 auto; }
+   886→  .header { text-align: center; padding: 30px 20px; margin-bottom: 24px; border: 1px solid ${D.line}; border-radius: 16px; background: linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77)); box-shadow: 0 18px 55px rgba(0,0,0,.35); }
+   887→  .header h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+   888→  .header .sub { font-size: 12px; color: ${D.muted}; }
+   889→  .header .date { font-size: 11px; color: ${D.muted}; margin-top: 6px; }
+   890→  .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+   891→  .metric-card { padding: 15px 16px; border: 1px solid ${D.line}; border-radius: 14px; background: linear-gradient(145deg, rgba(18,42,61,.85), rgba(9,24,38,.86)); }
+   892→  .metric-card .label { display: block; color: #ffffff; font-size: 12px; margin-bottom: 8px; }
+   893→  .metric-card .value { font-size: 18px; font-weight: 700; }
+   894→  .graph-section { margin-bottom: 24px; border: 1px solid ${D.line}; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 49% 49%, rgba(47,108,145,.12), transparent 36%), rgba(4,15,25,.72); }
+   895→  .graph-section canvas { display: block; }
+   896→  .scenarios-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+   897→  .section { padding: 20px; border: 1px solid ${D.line}; border-radius: 16px; background: rgba(8,22,35,.76); margin-bottom: 24px; }
+   898→  .chart-section { margin-bottom: 24px; border: 1px solid ${D.line}; border-radius: 16px; background: rgba(8,22,35,.76); overflow: hidden; }
+   899→  .chart-header { padding: 14px 18px; border-bottom: 1px solid ${D.line}; }
+   900→  .chart-header h3 { font-size: 14px; font-weight: 700; margin: 0; }
+   901→  .chart-body { padding: 16px; position: relative; }
+   902→  .mini-charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-bottom: 24px; }
+   903→  .narrative { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 2.2; direction: rtl; text-align: right; }
+   904→  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 14px; background: rgba(9,24,37,.92); border: 1px solid ${D.line}; border-bottom: none; }
+   905→  .toolbar-label { font-size: 13px; color: ${D.muted}; margin-left: 6px; }
+   906→  .tooltip { position: absolute; z-index: 10; background: rgba(8,22,35,.95); border: 1px solid ${D.line}; border-radius: 10px; padding: 10px 14px; font-size: 10px; color: ${D.text}; pointer-events: none; display: none; min-width: 160px; backdrop-filter: blur(8px); }
+   907→  .toggle-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+   908→  .legend-row { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 8px; }
+   909→  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+   910→  .legend-line { display: inline-block; width: 16px; height: 3px; border-radius: 2px; }
+   911→  .legend-dash { display: inline-block; width: 10px; height: 1px; border-radius: 1px; }
+   912→  @media (max-width: 768px) { .scenarios-grid { grid-template-columns: repeat(3, 1fr); } .metric-cards { grid-template-columns: repeat(2, 1fr); } }
+   913→  @media print { body { background: #fff; color: #111; } .header, .metric-card, .section, .chart-section { border-color: #ddd; } }
+   914→</style>
+   915→</head>
+   916→<body>
+   917→<div class="container">
+   918→  <!-- Header -->
+   919→  <div class="header">
+   920→    <h1>گراف تصمیم ${esc(symbolName)}</h1>
+   921→    <div class="sub">مدل ۳ شاخه ای | پیرویی از روند، شکست، بازگشت | ۲۷ مسیر به ۹ سناریو</div>
+   922→    <div class="date">تاریخ تولید: ${persianDate} | نقطه مرجع: <b style="color:${D.cyan}">${faNum(currentPrice)}</b> ${esc(currencyUnit)}</div>
+   923→  </div>
+   924→
+   925→  <!-- Metric Cards -->
+   926→  <div class="metric-cards">
+   927→    <div class="metric-card"><span class="label">مقدار مرجع</span><span class="value" style="color:${D.cyan}">${faNum(currentPrice)} ${esc(currencyUnit)}</span></div>
+   928→    <div class="metric-card"><span class="label">احتمال روند</span><span class="value" style="color:${D.cyan}">${faPct0(branchProbabilities.trend)}٪</span></div>
+   929→    <div class="metric-card"><span class="label">احتمال شکست</span><span class="value" style="color:${D.gold}">${faPct0(branchProbabilities.breakout)}٪</span></div>
+   930→    <div class="metric-card"><span class="label">احتمال بازگشت</span><span class="value" style="color:${D.purple}">${faPct0(branchProbabilities.reversal)}٪</span></div>
+   931→  </div>
+   932→
+   933→  <!-- Decision Graph (Canvas edges + HTML nodes) -->
+   934→  <div class="graph-section">
+   935→    <div style="padding:14px 18px;border-bottom:1px solid ${D.line}"><h2 style="font-size:15px;font-weight:700">گراف تصمیم</h2></div>
+   936→    <div class="toolbar">
+   937→      <span class="toolbar-label">نمایش مسیرها:</span>
+   938→      ${filterBtnsHtml}
+   939→      <button id="dg-reset-btn" style="color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04);padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;transition:.2s ease;margin-right:auto">بازنشانی انتخاب</button>
+   940→    </div>
+   941→    <div id="dg-container" style="position:relative;overflow:auto;min-height:500px;padding:20px">
+   942→      <canvas id="dg-canvas" style="position:absolute;top:0;right:0;pointer-events:none;z-index:1"></canvas>
+   943→      <div id="dg-nodes" style="position:relative;z-index:2;width:1200px;height:1100px;margin:0 auto"></div>
+   944→      <!-- Legend -->
+   945→      <div style="position:absolute;left:17px;bottom:15px;padding:10px;border:1px solid ${D.line};border-radius:10px;background:rgba(7,17,27,.8);font-size:10px;color:#fff;line-height:2">
+   946→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.cyan}"></span>پیروی از روند</div>
+   947→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.gold}"></span>شکست</div>
+   948→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.purple}"></span>بازگشت</div>
+   949→        <div style="border-top:1px solid ${D.line};margin:4px 0"></div>
+   950→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.green}"></span>صعودی</div>
+   951→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.blue}"></span>خنثی / رنج</div>
+   952→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.orange}"></span>نزولی</div>
+   953→        <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.red}"></span>شوک / ریسک</div>
+   954→      </div>
+   955→    </div>
+   956→  </div>
+   957→
+   958→  <!-- Scenario Boxes -->
+   959→  <div class="section">
+   960→    <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">گره های نتیجه و سهم استراتژی ها</h2>
+   961→    <div class="scenarios-grid">${scenarioBoxesHtml}</div>
+   962→  </div>
+   963→
+   964→  <!-- Cumulative Chart (Canvas) -->
+   965→  <div class="chart-section">
+   966→    <div class="chart-header">
+   967→      <h3>نمودار روند احتمالات گروه‌ها</h3>
+   968→    </div>
+   969→    <div style="padding:12px 18px 0">
+   970→      <div class="legend-row">
+   971→        <span class="legend-item"><span class="legend-line" style="background:#16a34a"></span><span style="color:#16a34a">گاوی (تجمعی)</span></span>
+   972→        <span class="legend-item"><span class="legend-line" style="background:#b45309"></span><span style="color:#b45309">خنثی (تجمعی)</span></span>
+   973→        <span class="legend-item"><span class="legend-line" style="background:#dc2626"></span><span style="color:#dc2626">خرسی (تجمعی)</span></span>
+   974→      </div>
+   975→    </div>
+   976→    <div class="chart-body" style="overflow-x:auto">
+   977→      <div id="cumul-tooltip" class="tooltip"></div>
+   978→      <canvas id="cumul-canvas"></canvas>
+   979→    </div>
+   980→  </div>
+   981→
+   982→  <!-- Per-Scenario Charts (Canvas) -->
+   983→  <div class="chart-section">
+   984→    <div class="chart-header">
+   985→      <h3>نمودار روند احتمالات سناریوها</h3>
+   986→      <p style="font-size:11px;color:${D.muted};margin:4px 0 0">نمودارهای تعاملی با قابلیت مولتی سِلکت برای مقایسه سناریوها</p>
+   987→    </div>
+   988→    <div style="padding:12px 18px 0">
+   989→      <div class="toggle-row">${toggleBtnsHtml}</div>
+   990→    </div>
+   991→    <!-- Individual -->
+   992→    <div class="chart-body" style="overflow-x:auto">
+   993→      <div id="ind-tooltip" class="tooltip"></div>
+   994→      <canvas id="ind-canvas"></canvas>
+   995→    </div>
+   996→    <div style="border-top:1px solid ${D.line}"></div>
+   997→    <!-- Cumulative -->
+   998→    <div class="chart-body" style="overflow-x:auto">
+   999→      <div id="sc-cum-tooltip" class="tooltip"></div>
+  1000→      <canvas id="sc-cum-canvas"></canvas>
+  1001→    </div>
+  1002→  </div>
+  1003→
+  1004→  <!-- Trend Table -->
+  1005→  ${trendTableHtml}
+  1006→
+  1007→  <!-- Narrative -->
+  1008→  <div class="section">
+  1009→    <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">متن تخصصی تحلیل گراف تصمیم</h2>
+  1010→    <div class="narrative">${narrativeHtml}</div>
+  1011→  </div>
+  1012→</div>
+  1013→
+  1014→<script>
+  1015→window.__DG_DATA__ = ${dataJson};
+  1016→${buildInlineJS()}
+  1017→</script>
+  1018→</body>
+  1019→</html>`;
+  1020→
+  1021→  // Trigger download
+  1022→  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  1023→  const url = URL.createObjectURL(blob);
+  1024→  const a = document.createElement('a');
+  1025→  a.href = url;
+  1026→  a.download = `${symbolName}-گراف-تصمیم.html`;
+  1027→  document.body.appendChild(a);
+  1028→  a.click();
+  1029→  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  1030→}
+  1031→
