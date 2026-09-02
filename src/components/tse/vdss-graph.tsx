@@ -1006,9 +1006,242 @@ function DecisionGraphNarrative(p: {
 
 // ═══════════════════════════════════════════════════════════════════
 
-// AI Decision Graph Analysis Component
+// ═══════════════════════════════════════════════════════════════════════════════
+// Advanced Algorithmic Decision Graph Analysis
+// ═══════════════════════════════════════════════════════════════════════════════
 
-/** Parse {color:...}text{/color} and **bold** from AI text */
+function generateAdvancedDGAnalysis(p: {
+  symbolName: string;
+  currentPrice: number;
+  currencyUnit: string;
+  scenarios: VdssGraphProps['scenarios'];
+  decisionGraph: GraphData | null;
+  probabilityTrend: ProbabilityTrendResult | null;
+  rsi: number;
+  adx: number;
+  atr: number;
+  trendDirection: string;
+  bullScore: number;
+  resistances: number[];
+  supports: number[];
+  instrumentType?: string;
+  instrumentCategory?: string;
+}): string {
+  const { symbolName, currentPrice, currencyUnit, scenarios, decisionGraph, probabilityTrend,
+    rsi, adx, atr, trendDirection, bullScore, resistances, supports, instrumentCategory } = p;
+
+  const unit = currencyUnit || 'ریال';
+  const fa = (n: number) => toPersianDigits(Math.round(n).toLocaleString('en-US'));
+  const pctW = (n: number) => `${toPersianDigits(String(Math.round(n * 100)))} درصد`;
+
+  // ── Compute derived data ──
+  const ranked = SCENARIO_KEYS.map(k => ({
+    key: k,
+    prob: scenarios[k as keyof typeof scenarios]?.probability ?? 0,
+    label: SCENARIO_META_LOCAL[k].label,
+    group: SCENARIO_META[k]?.group ?? 'neutral',
+    targetMin: scenarios[k as keyof typeof scenarios]?.targetMin ?? 0,
+    targetMax: scenarios[k as keyof typeof scenarios]?.targetMax ?? 0,
+  })).sort((a, b) => b.prob - a.prob);
+
+  const bearProb = ranked.filter(r => r.group === 'bearish').reduce((s, r) => s + r.prob, 0);
+  const bullProb = ranked.filter(r => r.group === 'bullish').reduce((s, r) => s + r.prob, 0);
+  const neutProb = ranked.filter(r => r.group === 'neutral').reduce((s, r) => s + r.prob, 0);
+
+  const branchProbs = decisionGraph?.branchProbabilities ?? { trend: 0.333, breakout: 0.333, reversal: 0.334 };
+  const pathContribs = decisionGraph?.pathContributions ?? {} as Record<string, { trend: number; breakout: number; reversal: number }>;
+
+  const topSc = ranked[0];
+  const secondSc = ranked[1];
+  const topGroup = topSc?.group ?? 'neutral';
+  const topGroupLabel = topGroup === 'bullish' ? 'گاوی' : topGroup === 'bearish' ? 'خرسی' : 'خنثی';
+
+  const R1 = resistances[0] ?? 0;
+  const S1 = supports[0] ?? 0;
+  const rrRatio = (R1 > 0 && S1 > 0 && currentPrice > S1)
+    ? ((R1 - currentPrice) / (currentPrice - S1)).toFixed(1) : null;
+
+  const rsiZone = rsi > 70 ? 'اشباع خرید' : rsi > 60 ? 'نزدیک اشباع خرید' : rsi < 30 ? 'اشباع فروش' : rsi < 40 ? 'نزدیک اشباع فروش' : 'منطقه نرمال';
+  const adxStrength = adx > 40 ? 'روند قدرتمند' : adx > 25 ? 'روند متوسط' : 'روند ضعیف یا رنج';
+  const atrPct = currentPrice > 0 ? (atr / currentPrice * 100).toFixed(1) : '0';
+  const volLevel = parseFloat(atrPct) > 3 ? 'نوسان بالا' : parseFloat(atrPct) > 1.5 ? 'نوسان متوسط' : 'نوسان کم';
+
+  // Branch dominance
+  const branches = [
+    { key: 'trend', label: 'پیروی از روند', prob: branchProbs.trend, color: 'emerald' as const },
+    { key: 'breakout', label: 'شکست', prob: branchProbs.breakout, color: 'amber' as const },
+    { key: 'reversal', label: 'بازگشت', prob: branchProbs.reversal, color: 'purple' as const },
+  ].sort((a, b) => b.prob - a.prob);
+  const dominantBranch = branches[0];
+  const weakBranch = branches[2];
+
+  // Probability trend analysis
+  const risingScs: string[] = [];
+  const fallingScs: string[] = [];
+  const stableScs: string[] = [];
+  if (probabilityTrend?.scenarios?.length === 9) {
+    for (const sc of probabilityTrend.scenarios) {
+      const meta = SCENARIO_META_LOCAL[sc.scenarioKey];
+      const entry = `${meta?.label ?? sc.label}`;
+      if (sc.trendDirection === 'rising') risingScs.push(entry);
+      else if (sc.trendDirection === 'falling') fallingScs.push(entry);
+      else stableScs.push(entry);
+    }
+  }
+
+  // Dominant branch contribution to top scenarios
+  const topScContrib = pathContribs[topSc?.key ?? 'SC5'] ?? { trend: 0, breakout: 0, reversal: 0 };
+  const topScDominantStrategy = Object.entries(topScContrib).sort(([,a],[,b]) => (b as number) - (a as number))[0];
+  const topScDominantLabel = topScDominantStrategy?.[0] === 'trend' ? 'پیروی از روند'
+    : topScDominantStrategy?.[0] === 'breakout' ? 'شکست' : 'بازگشت';
+
+  // ── Build analysis paragraphs ──
+  const paragraphs: string[] = [];
+
+  // ── Title ──
+  paragraphs.push(`**تحلیل پیشرفته گراف تصمیم ${symbolName}** ⚡`);
+  paragraphs.push('');
+
+  // ── Paragraph 1: Graph structure & overall picture ──
+  const p1Parts: string[] = [];
+  p1Parts.push(`گراف تصمیم ${symbolName} در نقطه مرجع {color:green}${fa(currentPrice)} ${unit}{/color} یک مدل تحلیلی سه لایه با {color:blue}${toPersianDigits(String(27))} مسیر مستقل{/color} است که از ترکیب 3 استراتژی اصلی شامل پیروی از روند، شکست و بازگشت تشکیل شده است.`);
+
+  if (topSc) {
+    p1Parts.push(`سناریوی غالب با احتمال {color:${topGroup === 'bullish' ? 'green' : topGroup === 'bearish' ? 'red' : 'amber'}}${pctW(topSc.prob)}{/color}، **${topSc.label}** است که در گروه {color:${topGroup === 'bullish' ? 'green' : topGroup === 'bearish' ? 'red' : 'amber'}}${topGroupLabel}{/color} قرار می گیرد.`);
+  }
+
+  if (secondSc) {
+    p1Parts.push(`سناریوی دوم با ${pctW(secondSc.prob)} احتمال، ${secondSc.label} می باشد و فاصله احتمالی بین دو سناریوی اول و دوم برابر ${toPersianDigits(String(Math.round((topSc.prob - secondSc.prob) * 100)))} درصد است${(topSc.prob - secondSc.prob) > 10 ? ' که نشان دهنده تمرکز بالای احتمالات است' : ''}.`);
+  }
+
+  p1Parts.push(`مجموع احتمال گروه گاوی {color:green}${pctW(bullProb)}{/color}، گروه خنثی ${pctW(neutProb)} و گروه خرسی {color:red}${pctW(bearProb)}{/color} محاسبه شده است.`);
+
+  if (bullProb > bearProb + 0.2) {
+    p1Parts.push(`اختلاف قابل توجه ${toPersianDigits(String(Math.round((bullProb - bearProb) * 100)))} درصدی بین گروه گاوی و خرسی، چشم انداز صعودی بازار را تایید می کند.`);
+  } else if (bearProb > bullProb + 0.2) {
+    p1Parts.push(`اختلاف ${toPersianDigits(String(Math.round((bearProb - bullProb) * 100)))} درصدی به نفع گروه خرسی، هشدار جدی برای معاملات خرید صادر می کند.`);
+  } else {
+    p1Parts.push(`فاصله کم بین گروه گاوی و خرسی نشان دهنده **عدم قطعیت بازار** و لزوم مدیریت ریسک دقیق است.`);
+  }
+
+  paragraphs.push(p1Parts.join(' '));
+  paragraphs.push('');
+
+  // ── Paragraph 2: Branch strategy analysis ──
+  const p2Parts: string[] = [];
+  p2Parts.push(`در ساختار درختی گراف تصمیم، استراتژی **${dominantBranch.label}** با سهم {color:${dominantBranch.color}}${pctW(dominantBranch.prob)}{/color} بیشترین تاثیر را در تعیین سناریوهای نهایی دارد.`);
+
+  if (weakBranch) {
+    p2Parts.push(`در مقابل، استراتژی ${weakBranch.label} تنها ${pctW(weakBranch.prob)} سهم دارد که نشان می دهد بازار کمتر انتظار ${weakBranch.key === 'reversal' ? 'واگرایی و بازگشت' : weakBranch.key === 'breakout' ? 'شکست سطوح' : 'ادامه روند'} را دارد.`);
+  }
+
+  // Which branch feeds the top scenario most
+  p2Parts.push(`بررسی سهم استراتژی‌ها در سناریوی غالب (${topSc?.label}) نشان می دهد که ${topScDominantLabel} با سهم ${pctW(topScContrib[topScDominantStrategy?.[0] as 'trend' | 'breakout' | 'reversal'] ?? 0)} بیشترین نقش را ایفا می کند.`);
+
+  // Branch-specific insights
+  if (branchProbs.trend > 0.45) {
+    p2Parts.push(`غلبگی استراتژی پیروی از روند (${pctW(branchProbs.trend)}) تایید می کند که بازار در فاز **رونددار** قرار دارد و تحلیل بر اساس ادامه مسیر فعلی قابل اتکاتر است.`);
+  } else if (branchProbs.breakout > 0.4) {
+    p2Parts.push(`سهم بالای استراتژی شکست (${pctW(branchProbs.breakout)}) هشدار می دهد که احتمال **حرکات شارپ و خارج از محدوده** وجود دارد و نوسان گیری ممکن است ریسک بالایی داشته باشد.`);
+  } else if (branchProbs.reversal > 0.4) {
+    p2Parts.push(`سهم بالای استراتژی بازگشت (${pctW(branchProbs.reversal)}) نشان دهنده **احتمال تغییر فاز بازار** است و معامله گران باید با احتیاط بیشتری عمل کنند.`);
+  }
+
+  paragraphs.push(p2Parts.join(' '));
+  paragraphs.push('');
+
+  // ── Paragraph 3: Risk/Reward + Indicators context ──
+  const p3Parts: string[] = [];
+
+  if (R1 > 0 && S1 > 0) {
+    p3Parts.push(`نزدیک ترین مقاومت در سطح {color:red}${fa(R1)} ${unit}{/color} و نزدیک ترین حمایت در سطح {color:green}${fa(S1)} ${unit}{/color} قرار دارد.`);
+    if (rrRatio) {
+      const rrColor = parseFloat(rrRatio) >= 2 ? 'green' : parseFloat(rrRatio) >= 1 ? 'amber' : 'red';
+      p3Parts.push(`نسبت ریسک به بازده بر اساس این سطوح برابر {color:${rrColor}}${toPersianDigits(rrRatio)}{/color} محاسبه شده که ${parseFloat(rrRatio) >= 2 ? 'شرایط معاملاتی مطلوبی را نشان می دهد' : parseFloat(rrRatio) >= 1 ? 'شرایط متعادلی حاکم است' : 'نسبت ریسک بالاتر از بازده مورد انتظار است و احتیاط لازم می باشد'}.`);
+    }
+  }
+
+  p3Parts.push(`اندیکاتور قدرت نسبی در ناحیه **${rsiZone}** (${toPersianDigits(String(Math.round(rsi)))}) قرار دارد. شاخص جهت دار با مقدار ${toPersianDigits(String(Math.round(adx)))} نشان دهنده **${adxStrength}** است. میانگین نوسانات روزانه بر اساس اندیکاتور واقعی، حدود ${toPersianDigits(atrPct)} درصد قیمت جاری است که به معنای **${volLevel}** می باشد.`);
+
+  if (rsi > 70 && topGroup === 'bullish') {
+    p3Parts.push(`اگرچه اندیکاتور قدرت نسبی در منطقه اشباع خرید قرار دارد، اما ساختار گراف تصمیم همچنان سناریوهای گاوی را با احتمال بالاتر نشان می دهد که نشان دهنده **قدرت خریداران** حتی در شرایط اشباع است.`);
+  } else if (rsi < 30 && topGroup === 'bearish') {
+    p3Parts.push(`قرارگیری اندیکاتور قدرت نسبی در اشباع فروش همسو با ساختار خرسی گراف تصمیم است و احتمال **ادامه فشار فروش** در کوتاه مدت وجود دارد.`);
+  } else if (rsi > 60 && trendDirection === 'up' && adx > 25) {
+    p3Parts.push(`ترکیب اندیکاتور قدرت نسبی بالاتر از 60، روند صعودی و شاخص جهت دار قوی، همگی تایید کننده **ادامه روند صعودی** هستند.`);
+  } else if (rsi < 40 && trendDirection === 'down' && adx > 25) {
+    p3Parts.push(`قرارگیری اندیکاتور قدرت نسبی زیر 40 به همراه روند نزولی و شاخص جهت دار بالای 25، الگوی **فشار فروش مستمر** را تایید می کند.`);
+  }
+
+  paragraphs.push(p3Parts.join(' '));
+  paragraphs.push('');
+
+  // ── Paragraph 4: Probability trend dynamics ──
+  if (risingScs.length > 0 || fallingScs.length > 0) {
+    const p4Parts: string[] = [];
+    p4Parts.push(`بررسی روند 30 روزه احتمالات تغییرات مهمی را آشکار می کند. ${risingScs.length > 0 ? `سناریوهای ${risingScs.join(' و ')} در مسیر **تقویت** قرار دارند${risingScs.length >= 3 ? ' که نشانه تغییر فاز بازار است' : ''}.` : ''} ${fallingScs.length > 0 ? `سناریوهای ${fallingScs.join(' و ')} در حال **تضعیف** هستند${fallingScs.length >= 3 ? ' و احتمال وقوع آنها کاهش یافته' : ''}.` : ''}`);
+
+    if (stableScs.length > 0) {
+      p4Parts.push(`سناریوهای ${stableScs.join(' و ')} پایدار مانده اند.`);
+    }
+
+    // Group trend analysis
+    if (probabilityTrend?.groups?.length === 3) {
+      const bullGroup = probabilityTrend.groups.find(g => g.group === 'bullish');
+      const bearGroup = probabilityTrend.groups.find(g => g.group === 'bearish');
+      if (bullGroup && bearGroup) {
+        const bullDir = bullGroup.trendDirection;
+        const bearDir = bearGroup.trendDirection;
+        if (bullDir === 'rising' && bearDir === 'falling') {
+          p4Parts.push(`تقویت همزمان گروه گاوی و تضعیف گروه خرسی در 30 روز اخیر، یک **سیگنال مثبت قوی** محسوب می شود و نشان دهنده تغییر جریان سرمایه به سمت خرید است.`);
+        } else if (bullDir === 'falling' && bearDir === 'rising') {
+          p4Parts.push(`تقویت گروه خرسی و تضعیف گروه گاوی یک **هشدار منفی** است که ممکن است نشانه شروع فاز اصلاحی یا نزولی باشد.`);
+        } else if (bullDir === 'rising' && bearDir === 'rising') {
+          p4Parts.push(`تقویت همزمان هر دو گروه گاوی و خرسی نشان دهنده **افزایش نوسانات** و بلاتکلیفی بازار است.`);
+        }
+      }
+    }
+
+    paragraphs.push(p4Parts.join(' '));
+    paragraphs.push('');
+  }
+
+  // ── Paragraph 5: Actionable insights ──
+  const p5Parts: string[] = [];
+  p5Parts.push(`📊 بر اساس تحلیل ساختاری گراف تصمیم ${symbolName}، ${topGroup === 'bullish' ? 'چشم انداز کلی بازار به سمت صعود متمایل است و موقعیت‌های خرید با مدیریت ریسک مناسب قابل بررسی هستند' : topGroup === 'bearish' ? 'وضعیت کلی بازار به سمت نزول متمایل است و توصیه می شود معاملات خرید با احتیاط زیادی انجام شود یا در صورت امکان از پوزیشن‌های فروش محتاطانه استفاده شود' : 'بازار در وضعیت رنج و بلاتکلیفی قرار دارد و تا روشن شدن جهت بازار، معاملات با حجم کم و حد ضرر کوتاه توصیه می شود'}.`);
+
+  if (topSc?.targetMin && topSc?.targetMax && topSc.prob > 0.12) {
+    const targetDir = topSc.targetMax > currentPrice ? 'صعودی' : 'نزولی';
+    const color = targetDir === 'صعودی' ? 'green' : 'red';
+    p5Parts.push(`بازه هدف سناریوی غالب ({topSc.label}): {color:${color}}${fa(topSc.targetMin)} تا ${fa(topSc.targetMax)} ${unit}{/color}.`);
+  }
+
+  if (atr > 0) {
+    const slDistance = Math.round(atr * 1.5);
+    p5Parts.push(`حد ضرر پیشنهادی بر اساس 1.5 برابر نوسان واقعی: حدود {color:red}${fa(currentPrice - slDistance)} ${unit}{/color}.`);
+  }
+
+  // Bull score context
+  if (bullScore > 65) {
+    p5Parts.push(`امتیاز صعودی ${toPersianDigits(String(Math.round(bullScore)))} از 100 تایید می کند که فشار خرید بر بازار غالب است. **توصیه عملی:** در صورت تایید ورود به نقطه حمایت، موقعیت خرید با ریسک محدود قابل اتکا است.`);
+  } else if (bullScore < 35) {
+    p5Parts.push(`امتیاز صعودی ${toPersianDigits(String(Math.round(bullScore)))} از 100 نشان دهنده ضعف خریداران و غلبه فشار فروش است. **توصیه عملی:** از ورود به معاملات خرید خودداری کرده و منتظر سیگنال بازگشت بمانید.`);
+  } else {
+    p5Parts.push(`امتیاز صعودی ${toPersianDigits(String(Math.round(bullScore)))} از 100 نشان دهنده **تعادل نسبی** بین خریداران و فروشندگان است.`);
+  }
+
+  paragraphs.push(p5Parts.join(' '));
+  paragraphs.push('');
+
+  // ── Closing line ──
+  const closingColor = topGroup === 'bullish' ? 'green' : topGroup === 'bearish' ? 'red' : 'amber';
+  paragraphs.push(`**خلاصه عملی:** {color:${closingColor}}${topGroup === 'bullish' ? 'گراف تصمیم چشم انداز صعودی را تایید می کند — مدیریت ریسک اولویت اول' : topGroup === 'bearish' ? 'گراف تصمیم هشدار نزولی صادر کرده — احتیاط در خرید ضروری' : 'بازار بلاتکلیف — منتظر سیگنال جهت دار بمانید'}{/color}.`);
+
+  return paragraphs.join('\n');
+}
+
+
+/** Parse {color:...}text{/color} and **bold** from analysis text */
 function renderDGAIText(text: string) {
   const lines = text.split('\n');
   return lines.map((line, li) => {
@@ -1049,78 +1282,7 @@ function DecisionGraphAIAnalysis(p: {
   instrumentCategory?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [cached, setCached] = useState(false);
-  const fetchRef = useRef(false);
-
-  const fetchAnalysis = useCallback(async () => {
-    if (fetchRef.current || text) return;
-    fetchRef.current = true;
-    setLoading(true);
-    setError('');
-
-    try {
-      const body: Record<string, unknown> = {
-        symbolName: p.symbolName,
-        currentPrice: p.currentPrice,
-        currencyUnit: p.currencyUnit,
-        rsi: p.rsi,
-        adx: p.adx,
-        atr: p.atr,
-        trendDirection: p.trendDirection,
-        bullScore: p.bullScore,
-        resistances: p.resistances,
-        supports: p.supports,
-        instrumentType: p.instrumentType || 'tse',
-        instrumentCategory: p.instrumentCategory || '',
-      };
-
-      const sc: Record<string, unknown> = {};
-      for (const k of Object.keys(p.scenarios)) {
-        const s = p.scenarios[k as keyof typeof p.scenarios];
-        if (s) sc[k] = { name: s.name, nameEn: s.nameEn, probability: s.probability, targetMin: s.targetMin, targetMax: s.targetMax };
-      }
-      body.scenarios = sc;
-
-      if (p.decisionGraph) {
-        body.decisionGraph = {
-          branchProbabilities: p.decisionGraph.branchProbabilities,
-          pathContributions: p.decisionGraph.pathContributions,
-          scenarioProbabilities: p.decisionGraph.scenarioProbabilities,
-        };
-      }
-
-      if (p.probabilityTrend) {
-        body.probabilityTrend = p.probabilityTrend;
-      }
-
-      const res = await fetch('/api/ai-decision-graph', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-      } else if (data.text) {
-        setText(data.text);
-        setCached(!!data.cached);
-      } else {
-        setError('متنی دریافت نشد.');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطای ناشناخته');
-    } finally {
-      setLoading(false);
-    }
-  }, [p, text]);
-
-  useEffect(() => {
-    if (open && !text && !loading) fetchAnalysis();
-  }, [open, text, loading, fetchAnalysis]);
+  const analysisText = useMemo(() => generateAdvancedDGAnalysis(p), [p]);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
@@ -1139,8 +1301,8 @@ function DecisionGraphAIAnalysis(p: {
             boxShadow: 'inset 0 0 22px rgba(52,201,139,.12), 0 0 22px rgba(52,201,139,.08)',
           }}>🤖</div>
           <div className="text-right">
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: D.text, margin: 0 }}>تحلیل هوشمند گراف تصمیم</h2>
-            <p style={{ fontSize: 11, color: D.muted, margin: '3px 0 0' }}>تحلیل AI مخصوص {p.symbolName} — ساختار گراف، احتمالات و استراتژی‌ها</p>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: D.text, margin: 0 }}>تحلیل پیشرفته گراف تصمیم</h2>
+            <p style={{ fontSize: 11, color: D.muted, margin: '3px 0 0' }}>تحلیل هوشمند مخصوص {p.symbolName} — ساختار گراف، احتمالات و استراتژی‌ها</p>
           </div>
         </div>
         <span style={{ color: D.muted, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
@@ -1151,28 +1313,7 @@ function DecisionGraphAIAnalysis(p: {
           border: `1px solid ${D.line}`, borderRadius: 16,
           background: 'rgba(8,22,35,.76)',
         }}>
-          {loading && (
-            <div className="flex items-center gap-3 py-6">
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-t-transparent" style={{ borderColor: D.green, borderTopColor: 'transparent' }} />
-              <span style={{ fontSize: 13, color: D.muted }}>در حال تولید تحلیل هوشمند...</span>
-            </div>
-          )}
-          {error && !loading && (
-            <div style={{ padding: '12px 16px', borderRight: `3px solid ${D.red}`, background: 'rgba(239,77,98,.08)', borderRadius: 8, marginBottom: 8 }}>
-              <p style={{ fontSize: 12, color: '#fca5a5', margin: 0 }}>{error}</p>
-            </div>
-          )}
-          {text && !loading && (
-            <>
-              {cached && (
-                <div style={{ fontSize: 10, color: D.muted, marginBottom: 10, opacity: 0.7 }}>● تحلیل از حافظه بارگذاری شد</div>
-              )}
-              <div style={{ direction: 'rtl', textAlign: 'right' }}>{renderDGAIText(text)}</div>
-            </>
-          )}
-          {!text && !loading && !error && (
-            <p style={{ fontSize: 13, color: D.muted }}>برای مشاهده تحلیل هوشمند، این بخش را باز کنید.</p>
-          )}
+          <div style={{ direction: 'rtl', textAlign: 'right' }}>{renderDGAIText(analysisText)}</div>
         </div>
       </CollapsibleContent>
     </Collapsible>

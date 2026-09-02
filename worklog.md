@@ -244,3 +244,26 @@ Stage Summary:
 - All AI text quality issues already addressed in system prompt
 - No code changes needed
 
+---
+Task ID: 8
+Agent: main
+Task: Replace API-based decision graph AI analysis with algorithmic text generation (same as VDES)
+
+Work Log:
+- Analyzed VDES section: uses algorithmic generateAnalysisText() function (no API) for procedural text
+- Analyzed decision graph: was using fetch('/api/ai-decision-graph') API call
+- Created generateAdvancedDGAnalysis() function that produces comprehensive symbol-specific analysis
+- Function covers 5 sections: graph structure, branch strategy analysis, risk/reward + indicators, probability trends, actionable insights
+- Uses same formatting as AI text ({color:X}text{/color}, **bold**)
+- Replaced DecisionGraphAIAnalysis component: removed fetch/API call, loading state, error state, cache state
+- Now uses useMemo to generate text instantly (no network requests)
+- Fixed parsing error (missing closing paren in template literal)
+- Removed unused variables (isIndex, faPct, faPctInt, trendLabel)
+- Verified: zero lint errors in modified file
+- Verified: server compiles and serves HTTP 200
+
+Stage Summary:
+- Decision graph advanced analysis now generates text algorithmically (same technology as VDES visual explanation)
+- No API calls needed - Z.ai generates text directly via algorithmic function
+- Text is symbol-specific, uses real data (probabilities, branches, RSI, ADX, ATR, supports/resistances)
+- Instant display (no loading spinner needed)
