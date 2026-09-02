@@ -100,3 +100,42 @@ Stage Summary:
 - AI text now uses correct 'واحد' for indices
 - AI text now uses spaces instead of ZWNJ for compound words
 - AI text has proper paragraph separation
+
+---
+Task ID: 5
+Agent: main
+Task: Add professional narrative, HTML export, and fixes to decision graph page
+
+Work Log:
+- Task 4: Fixed currencyUnit hardcoding in VdssGraph
+  - Added `currencyUnit?: string` to VdssGraphProps
+  - Changed hardcoded 'ریال' in metric card to use `props.currencyUnit ?? 'ریال'`
+  - Passed `currencyUnit={currencyUnit}` from page.tsx to VdssGraph
+- Task 1: Added professional Persian narrative text to decision graph
+  - Created `generateDecisionGraphNarrative()` function in vdss-graph.tsx (exported)
+  - Generates 5-section algorithmic Persian text: graph explanation, exclusive probabilities (ranked), cumulative probabilities (CDF), 30-day trends (rising/falling/stable/volatile), branch contributions
+  - All text uses regular spaces (no ZWNJ), toPersianDigits for numbers
+  - Added `DecisionGraphNarrative` component as Collapsible section after ProbabilityTrendTable
+  - Matches dark theme styling of the VdssGraph component
+- Task 2: Created standalone HTML+CSS+JS export
+  - Created /src/lib/decision-graph-export.ts with `exportDecisionGraphHTML()` function
+  - Export data type: DecisionGraphExportData interface
+  - Generates self-contained HTML with: header, metric cards, SVG decision graph, scenario boxes with branch contributions, cumulative chart, per-scenario trend mini-charts, 30-day trend table, narrative text
+  - Dark theme matching VdssGraph (#07111b background)
+  - RTL direction, Vazirmatn font from CDN with Tahoma fallback
+  - Interactive elements: hoverable nodes, node highlighting on hover
+  - Responsive design for mobile
+- Task 3: Added export option in visual explanatory page
+  - Added `Network` icon import from lucide-react
+  - Added `DropdownMenuSeparator` import from dropdown-menu
+  - Added `decisionGraph` prop to VdesAnalysisProps
+  - Created `exportDecisionGraph` async callback using dynamic imports
+  - Added separator + new menu item "گراف تصمیم (HTML)" after PNG option
+  - Passed `decisionGraph={data.ta.decisionGraph}` from page.tsx to VdesAnalysis
+- All lint errors in modified files resolved (pre-existing errors in candlestick-chart.tsx unchanged)
+
+Stage Summary:
+- Decision graph page now has comprehensive professional Persian narrative text
+- Users can export the full decision graph analysis as a standalone HTML file
+- Currency unit correctly shows 'واحد' for indices instead of hardcoded 'ریال'
+- All 4 tasks implemented, zero new lint errors introduced

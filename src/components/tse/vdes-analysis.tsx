@@ -21,6 +21,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -32,6 +33,7 @@ import {
   Download,
   ChevronDown,
   ImageIcon,
+  Network,
 } from 'lucide-react';
 import { computeDailyIndicators } from '@/lib/indicator-arrays';
 import { formatPriceFa } from '@/lib/format-price';
@@ -135,6 +137,16 @@ export interface VdesAnalysisProps {
   probabilityTrend?: {
     scenarios: { scenarioKey: string; label: string; group: string; currentProbability: number; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
     groups: { group: string; label: string; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+  };
+  decisionGraph?: {
+    nodes: { id: string; title: string; titleEn: string; type: string; desc: string; color: string; branch?: string; isTerminal?: boolean }[];
+    edges: { from: string; to: string; label: string; type: string }[];
+    nodePositions: Record<string, { right: number; top: number }>;
+    edgeProbabilities: Record<number, number>;
+    nodeValues: Record<string, string>;
+    branchProbabilities: { trend: number; breakout: number; reversal: number };
+    scenarioProbabilities: Record<string, number>;
+    pathContributions: Record<string, { trend: number; breakout: number; reversal: number }>;
   };
 }
 
@@ -554,7 +566,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
     instrumentCategory,
     currencyUnit: propCurrencyUnit, priceDecimals: propPriceDecimals,
-    probabilityTrend,
+    probabilityTrend, decisionGraph,
   } = props;
   const unit = propCurrencyUnit || 'ریال';
   const decimals = propPriceDecimals ?? 0;
@@ -1250,6 +1262,43 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     nativeSaveAs(blob, `${fileBase}.csv`);
   }, [dailyIndicators, fileBase]);
 
+  // ── Decision Graph Export ─────────────────────────────────────
+  const exportDecisionGraph = useCallback(async () => {
+    if (!decisionGraph) return;
+    const { exportDecisionGraphHTML } = await import('@/lib/decision-graph-export');
+    const { generateDecisionGraphNarrative } = await import('@/components/tse/vdss-graph');
+
+    const scenariosRecord: Record<string, { name: string; probability: number; targetMin: number; targetMax: number; description: string }> = {};
+    for (const [k, v] of Object.entries(scenarios)) {
+      const s = v as { name: string; nameEn: string; probability: number; targetMin: number; targetMax: number; description: string };
+      scenariosRecord[k] = { name: s.name, probability: s.probability, targetMin: s.targetMin, targetMax: s.targetMax, description: s.description };
+    }
+
+    const narrative = generateDecisionGraphNarrative({
+      symbolName,
+      currentPrice,
+      currencyUnit: unit,
+      scenarios,
+      decisionGraph: decisionGraph as any,
+      probabilityTrend: probabilityTrend as any,
+      branchProbs: decisionGraph.branchProbabilities,
+      pathContributions: decisionGraph.pathContributions,
+      scenarioProbabilities: decisionGraph.scenarioProbabilities,
+    });
+
+    exportDecisionGraphHTML({
+      symbolName,
+      currentPrice,
+      currencyUnit: unit,
+      scenarios: scenariosRecord,
+      decisionGraph: decisionGraph as any,
+      probabilityTrend: probabilityTrend as any,
+      branchProbabilities: decisionGraph.branchProbabilities,
+      pathContributions: decisionGraph.pathContributions,
+      narrative,
+    });
+  }, [decisionGraph, symbolName, currentPrice, unit, scenarios, probabilityTrend]);
+
   // ── Chart Image Export ─────────────────────────────────────────
   const exportChartImage = useCallback(async () => {
     const chartEl = document.getElementById('chart-export-wrapper');
@@ -1354,6 +1403,11 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
             <DropdownMenuItem onClick={exportChartImage} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
               <ImageIcon className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-xs">عکس نمودار (PNG)</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator style={{ background: C.cardBorder }} />
+            <DropdownMenuItem onClick={exportDecisionGraph} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <Network className="w-4 h-4" style={{ color: '#a04ac5' }} />
+              <span className="text-xs">گراف تصمیم (HTML)</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

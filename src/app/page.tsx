@@ -711,6 +711,7 @@ export default function Home() {
                   scenarios={data.ta.scenarios}
                   decisionGraph={data.ta.decisionGraph}
                   probabilityTrend={data.probabilityTrend}
+                  currencyUnit={currencyUnit}
                 />
               )}
 
@@ -768,6 +769,7 @@ export default function Home() {
                     currencyUnit={currencyUnit}
                     priceDecimals={decimals}
                     probabilityTrend={data.probabilityTrend}
+                    decisionGraph={data.ta.decisionGraph}
                   />
                 </div>
               )}

@@ -47,6 +47,7 @@ export interface VdssGraphProps {
   };
   decisionGraph: GraphData | null;
   probabilityTrend?: ProbabilityTrendResult | null;
+  currencyUnit?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -463,7 +464,7 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       {/* ═══ Metric Cards ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <DarkMetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ریال'} color={D.cyan} />
+        <DarkMetricCard label="مقدار مرجع" value={toFa(currentPrice) + ' ' + (props.currencyUnit ?? 'ریال')} color={D.cyan} />
         <DarkMetricCard label="احتمال روند" value={toPersianDigits((branchProbs.trend * 100).toFixed(0)) + '٪'} color={D.cyan} />
         <DarkMetricCard label="احتمال شکست" value={toPersianDigits((branchProbs.breakout * 100).toFixed(0)) + '٪'} color={D.gold} />
         <DarkMetricCard label="احتمال بازگشت" value={toPersianDigits((branchProbs.reversal * 100).toFixed(0)) + '٪'} color={D.purple} />
@@ -754,13 +755,236 @@ export default function VdssGraph(props: VdssGraphProps) {
 
       {/* ═══ Probability Trend Table ═══ */}
       <ProbabilityTrendTable data={correctedTrend} />
+
+      {/* ═══ Professional Narrative Text ═══ */}
+      <DecisionGraphNarrative
+        symbolName={symbolName}
+        currentPrice={currentPrice}
+        currencyUnit={props.currencyUnit ?? 'ریال'}
+        scenarios={scenarios}
+        decisionGraph={decisionGraph}
+        probabilityTrend={correctedTrend}
+        branchProbs={branchProbs}
+        pathContributions={pathContributions}
+        scenarioProbabilities={scenarioProbabilities}
+      />
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Multi-Select Scenario Trend Charts (Individual & Cumulative)
+// Narrative Generation (deterministic, algorithmic Persian text)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+export function generateDecisionGraphNarrative(p: {
+  symbolName: string;
+  currentPrice: number;
+  currencyUnit: string;
+  scenarios: VdssGraphProps['scenarios'];
+  decisionGraph: GraphData | null;
+  probabilityTrend: ProbabilityTrendResult | null;
+  branchProbs: { trend: number; breakout: number; reversal: number };
+  pathContributions: Record<string, { trend: number; breakout: number; reversal: number }>;
+  scenarioProbabilities: Record<string, number>;
+}): string {
+  const { symbolName, currentPrice, currencyUnit, scenarios, decisionGraph, probabilityTrend, branchProbs, pathContributions, scenarioProbabilities } = p;
+  const fa = (n: number) => toPersianDigits(Math.round(n).toLocaleString('en-US'));
+  const faPct = (n: number) => toPersianDigits((n * 100).toFixed(1));
+  const faPct0 = (n: number) => toPersianDigits((n * 100).toFixed(0));
+
+  const lines: string[] = [];
+
+  // ── 1. Graph explanation ──
+  lines.push(`گراف تصمیم: ${symbolName}`);
+  lines.push('');
+  lines.push('گراف تصمیم یک مدل محاسباتی بر پایه گراف جریانی مسیردار (DAG) است که برای تخمین احتمال 9 سناریوی آینده قیمت طراحی شده است. این گراف دارای 3 شاخه اصلی استراتژی شامل پیرویی از روند، شکست و بازگشت می باشد. هر شاخه 3 زیرشاخه دارد و هر زیرشاخه 3 یال شرطی به 3 سناریوی نهایی متصل می شود که در مجموع 27 مسیر مستقل را تشکیل می دهند. احتمال نهایی هر سناریو برابر با جمع احتمالات تمامی مسیرهایی است که به آن سناریو ختم می شوند.');
+  lines.push(`نقطه مرجع محاسبات: ${fa(currentPrice)} ${currencyUnit} | افق برآورد: 10 تا 25 جلسه معاملاتی.`);
+  lines.push('');
+
+  // ── 2. Exclusive probabilities ──
+  const ranked = SCENARIO_KEYS.map(k => ({
+    key: k,
+    prob: scenarios[k as keyof typeof scenarios]?.probability ?? 0,
+    label: SCENARIO_META_LOCAL[k].label,
+  })).sort((a, b) => b.prob - a.prob);
+
+  lines.push('احتمالات اختصاصی (Exclusive Probabilities)');
+  lines.push('');
+  lines.push('احتمال اختصاصی هر سناریو نشان دهنده احتمال وقوع دقیق آن سناریو در افق زمانی مورد نظر است. مجموع 9 احتمال باید برابر 100 درصد باشد:');
+  lines.push('');
+
+  for (const r of ranked) {
+    const s = scenarios[r.key as keyof typeof scenarios];
+    const targetRange = s ? `${fa(s.targetMin)} تا ${fa(s.targetMax)} ${currencyUnit}` : '';
+    lines.push(`• ${r.key} — ${r.label}: ${toPersianDigits(String(r.prob))}٪ (${faPct0(r.prob / 100)} درصد)${targetRange ? ' | بازه: ' + targetRange : ''}`);
+  }
+
+  const totalProb = ranked.reduce((s, r) => s + r.prob, 0);
+  lines.push(`
+مجموع: ${toPersianDigits(String(totalProb))}٪ — ${totalProb === 100 ? 'صحیح' : 'خطا در مجموع'}`);
+  lines.push('');
+
+  // Interpretation of top scenario
+  const topSc = ranked[0];
+  if (topSc) {
+    const group = SCENARIO_META[topSc.key]?.group;
+    const groupLabel = group === 'bullish' ? 'گاوی' : group === 'bearish' ? 'خرسی' : 'خنثی';
+    lines.push(`تفسیر: با احتمال ${toPersianDigits(String(topSc.prob))}٪، سناریو ${topSc.key} (${topSc.label}) بیشترین احتمال را دارد که در گروه ${groupLabel} قرار می گیرد. این بدان معناست که موتور تحلیلی انتظار حاصل ${topSc.label} را دارد.`);
+  }
+  lines.push('');
+
+  // ── 3. Cumulative probabilities ──
+  const bearishProb = ['SC1', 'SC2', 'SC3', 'SC4'].reduce((s, k) => s + (scenarios[k as keyof typeof scenarios]?.probability ?? 0), 0);
+  const neutralProb = scenarios.SC5?.probability ?? 0;
+  const bullishProb = ['SC6', 'SC7', 'SC8', 'SC9'].reduce((s, k) => s + (scenarios[k as keyof typeof scenarios]?.probability ?? 0), 0);
+
+  lines.push('احتمالات تجمعی (Cumulative Probabilities)');
+  lines.push('');
+  lines.push('احتمال تجمعی (CDF) در این مدل به این معنی است که از شدیدترین سناریو تا سناریوی مورد نظر را جمع می کند. به عنوان مثال، CDF سناریو SC6 (صعودی خفیف) مجموع احتمالات SC9+SC8+SC7+SC6 را شامل می شود که نشان دهنده احتمال حداقل یک بار صعود خفیف یا قوی تر است.');
+  lines.push('');
+  lines.push(`• گروه گاوی (SC6+SC7+SC8+SC9): ${toPersianDigits(String(bullishProb))}٪ (${faPct0(bullishProb / 100)} درصد)`);
+  lines.push(`• گروه خنثی (SC5): ${toPersianDigits(String(neutralProb))}٪ (${faPct0(neutralProb / 100)} درصد)`);
+  lines.push(`• گروه خرسی (SC1+SC2+SC3+SC4): ${toPersianDigits(String(bearishProb))}٪ (${faPct0(bearishProb / 100)} درصد)`);
+  lines.push('');
+
+  // Interpretation
+  if (bullishProb > bearishProb && bullishProb > neutralProb) {
+    lines.push(`تفسیر: با احتمال تجمعی ${faPct0(bullishProb / 100)} درصد برای سناریوهای گاوی، چشم انداز بازار به سمت صعود است. بازار با احتمال ${faPct0(bullishProb / 100)} درصد حداقل یک بار صعود خفیف یا قوی تر را تجربه خواهد کرد.`);
+  } else if (bearishProb > bullishProb && bearishProb > neutralProb) {
+    lines.push(`تفسیر: با احتمال تجمعی ${faPct0(bearishProb / 100)} درصد برای سناریوهای خرسی، چشم انداز بازار به سمت نزول است. بازار با احتمال ${faPct0(bearishProb / 100)} درصد حداقل یک بار نزول خفیف یا قوی تر را تجربه خواهد کرد.`);
+  } else {
+    lines.push(`تفسیر: بازار در وضعیت تعادل قرار دارد. احتمال گروه گاوی ${faPct0(bullishProb / 100)} درصد و گروه خرسی ${faPct0(bearishProb / 100)} درصد است که فاصله کمی بین آنها نشان دهنده عدم تعیین بازار است.`);
+  }
+  lines.push('');
+
+  // ── 4. Probability trends ──
+  if (probabilityTrend && probabilityTrend.scenarios && probabilityTrend.scenarios.length === 9 && probabilityTrend.scenarios[0]?.trend?.length > 1) {
+    lines.push('روند احتمالات (30 روزه)');
+    lines.push('');
+    lines.push('بررسی روند 30 روزه احتمالات نشان می دهد که کدام سناریوها در حال تقویت و کدام در حال تضعیف هستند:');
+    lines.push('');
+
+    const rising: string[] = [];
+    const falling: string[] = [];
+    const stable: string[] = [];
+    const volatile: string[] = [];
+
+    for (const sc of probabilityTrend.scenarios) {
+      const meta = SCENARIO_META_LOCAL[sc.scenarioKey];
+      const entry = `${sc.scenarioKey} (${meta?.label ?? sc.label})`;
+      if (sc.trendDirection === 'rising') rising.push(entry);
+      else if (sc.trendDirection === 'falling') falling.push(entry);
+      else if (sc.trendDirection === 'stable') stable.push(entry);
+      else volatile.push(entry);
+    }
+
+    if (rising.length > 0) {
+      lines.push(`• سناریوهای صعودی (تقویت شده): ${rising.join('، ')}`);
+    }
+    if (falling.length > 0) {
+      lines.push(`• سناریوهای نزولی (تضعیف شده): ${falling.join('، ')}`);
+    }
+    if (stable.length > 0) {
+      lines.push(`• سناریوهای پایدار: ${stable.join('، ')}`);
+    }
+    if (volatile.length > 0) {
+      lines.push(`• سناریوهای ناپایدار: ${volatile.join('، ')}`);
+    }
+    lines.push('');
+
+    // Group trends
+    if (probabilityTrend.groups && probabilityTrend.groups.length === 3) {
+      lines.push('روند گروه‌ها:');
+      for (const g of probabilityTrend.groups) {
+        const dirLabel = g.trendDirection === 'rising' ? 'صعودی' : g.trendDirection === 'falling' ? 'نزولی' : g.trendDirection === 'volatile' ? 'ناپایدار' : 'پایدار';
+        const gLabel = g.group === 'bullish' ? 'گاوی' : g.group === 'bearish' ? 'خرسی' : 'خنثی';
+        lines.push(`• گروه ${gLabel}: روند ${dirLabel} | احتمال اختصاصی فعلی: ${faPct(g.trend[0]?.individualProb ?? 0)} درصد`);
+      }
+      lines.push('');
+    }
+  }
+
+  // ── 5. Branch contributions ──
+  lines.push('سهم استراتژی‌ها (Branch Contributions)');
+  lines.push('');
+  lines.push(`در این مدل، هر سناریو از سه مسیر مستقل غیرمتقاطع تغذیه می شود. سهم هر استراتژی نشان می دهد که چند درصد از احتمال نهایی سناریو از آن استراتژی تامین شده است.`);
+  lines.push('');
+  lines.push(`احتمال شاخه‌ها: پیرویی از روند ${faPct0(branchProbs.trend)}٪، شکست ${faPct0(branchProbs.breakout)}٪، بازگشت ${faPct0(branchProbs.reversal)}٪`);
+  lines.push('');
+
+  for (const key of SCENARIO_KEYS) {
+    const contrib = pathContributions[key] ?? { trend: 0, breakout: 0, reversal: 0 };
+    const meta = SCENARIO_META_LOCAL[key];
+    const s = scenarios[key as keyof typeof scenarios];
+    lines.push(`${key} (${meta?.label ?? ''}): پیرویی از روند ${faPct(contrib.trend)}٪، شکست ${faPct(contrib.breakout)}٪، بازگشت ${faPct(contrib.reversal)}٪ — احتمال نهایی: ${toPersianDigits(String(s?.probability ?? 0))}٪`);
+  }
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Narrative Display Component
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function DecisionGraphNarrative(p: {
+  symbolName: string;
+  currentPrice: number;
+  currencyUnit: string;
+  scenarios: VdssGraphProps['scenarios'];
+  decisionGraph: GraphData | null;
+  probabilityTrend: ProbabilityTrendResult | null;
+  branchProbs: { trend: number; breakout: number; reversal: number };
+  pathContributions: Record<string, { trend: number; breakout: number; reversal: number }>;
+  scenarioProbabilities: Record<string, number>;
+}) {
+  const [open, setOpen] = useState(false);
+  const narrative = useMemo(() => generateDecisionGraphNarrative(p), [p]);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+      <CollapsibleTrigger
+        className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer hover:opacity-90 transition-opacity"
+        style={{
+          border: `1px solid ${D.line}`,
+          background: 'linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77))',
+          boxShadow: D.shadow,
+        }}>
+        <div className="flex items-center gap-3">
+          <div style={{
+            width: 40, height: 40, display: 'grid', placeItems: 'center',
+            border: '1px solid rgba(160,74,197,.7)', borderRadius: 12,
+            color: D.purple, fontSize: 20,
+            boxShadow: 'inset 0 0 22px rgba(160,74,197,.12), 0 0 22px rgba(160,74,197,.08)',
+          }}>متن</div>
+          <div className="text-right">
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: D.text, margin: 0 }}>متن تخصصی تحلیل گراف تصمیم</h2>
+            <p style={{ fontSize: 11, color: D.muted, margin: '3px 0 0' }}>توضیحات احتمالات، روندها و سهم استراتژی‌ها</p>
+          </div>
+        </div>
+        <span style={{ color: D.muted, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div style={{
+          marginTop: 8, padding: '18px 22px',
+          border: `1px solid ${D.line}`, borderRadius: 16,
+          background: 'rgba(8,22,35,.76)',
+        }}>
+          <pre style={{
+            fontFamily: 'inherit', fontSize: 13, lineHeight: 2.2,
+            color: D.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+            direction: 'rtl', textAlign: 'right',
+          }}>{narrative}</pre>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// Multi-Select Scenario Trend Charts (Individual & Cumulative)
+// ═══════════════════════════════════════════════════════════════════
 
 const SCENARIO_LINE_COLORS: Record<string, string> = {
   SC1: '#b91c1c', SC2: '#dc2626', SC3: '#ea580c', SC4: '#f97316',
