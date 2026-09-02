@@ -12,6 +12,7 @@ import {
   buildMSLV4PromptSection,
   type MSLV4Context,
 } from '@/lib/msl-v4';
+import { postProcessAIOutput, buildPriceReferences } from '@/lib/ai-postprocess';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -381,6 +382,8 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 23. **دقت عددی مطلق — تطابق با گراف تصمیم:** تحلیل شما باید کاملاً بر اساس داده‌های گراف تصمیم باشد. هر عددی که در متن می‌آورید (قیمت، درصد، سطح حمایت/مقاومت) باید **دقیقاً** با همان عددی که در داده‌های پایه ارائه شده مطابقت داشته باشد. **ممنوعیت مطلق:** هرگز عددی را از خودتان نسازید، تخمین نزنید، یا گرد نکنید. مثلاً اگر قیمت فعلی ۲,۰۷۶,۹۵۰ ریال است، نباید بنویسید ۲,۰۰۰,۰۰۰ یا ۲,۱۰۰,۰۰۰. اگر سطح مقاومت ۲,۱۸۰,۰۰۰ است، همان را بنویسید. اگر سناریوی صعودی ۳۵ درصد احتمال دارد، همان ۳۵ درصد را بنویسید.
 24. **قیمت فعلی الزامی:** قیمت فعلی ذکرشده در تحلیل باید دقیقاً همان قیمتی باشد که در داده‌های پایه با برچسب «قیمت فعلی» مشخص شده است. این قیمت نقطه شروع تمام تحلیل‌ها و محاسبات شماست.
 25. **منع تناقض:** هیچ جمله‌ای در تحلیل نباید با داده‌های ارائه‌شده تناقض داشته باشد. اگر داده‌ها نشان‌دهنده روند صعودی هستند، تحلیل نباید نزولی باشد و بالعکس. اگر احتمال صعودی بیشتر است، تحلیل باید بازتاب‌دهنده این اولویت باشد.
+26. **حفظ مقیاس قیمت — ممنوعیت تغییر مقیاس:** تمام قیمت‌ها (میانگین متحرک، باند بولینگر، اهداف سناریو، حد ضرر، حمایت، مقاومت) باید در همان مقیاس قیمت فعلی باشند. اگر قیمت فعلی ۲,۱۴۰,۰۰۰ ریال است، میانگین متحرک باید حدود ۱,۸۰۰,۰۰۰ تا ۲,۱۰۰,۰۰۰ ریال باشد (نه ۳۰,۰۰۰ یا ۲۴,۰۰۰). هرگز صفرهای قیمت را حذف نکنید. هرگز مقیاس قیمت را تغییر ندهید. اگر میانگین ۲۱ روزه در داده‌ها ۱,۹۳۴,۳۹۵ است، دقیقاً همان عدد را بیاورید.
+27. **نگارش بی‌نقص فارسی:** متن باید از نظر املایی، انشایی و نگارشی کاملاً بی‌نقص باشد. کلمات فارسی را کامل و صحیح بنویسید. استفاده از کلمات ترکیبی فارسی-انگلیسی (مثل «بولینger» یا «استوکاستic») ممنوع است. بین هر دو کلمه دقیقاً یک فاصله باشد. نقطه‌گذاری صحیح رعایت شود.
 `;
 
 // ─── POST Handler ────────────────────────────────────────────────
@@ -493,45 +496,40 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // Post-process: strip ALL leaked technical codes
-    const cleaned = content
-      .replace(/\bSC\d+\b/g, '')
-      .replace(/\bR\d+\b(?=[\s,.;:!?\)\-\u0627-\u06cc]|$)/g, '')
-      .replace(/\bMA\d+\b/g, '')
-      .replace(/\bRSI\b/g, 'شاخص قدرت نسبی')
-      .replace(/\bMACD\b/g, 'واگراف هیستوگرام')
-      .replace(/\bMFI\b/g, 'شاخص جریان نقدي')
-      .replace(/\bCCI\b/g, 'شاخص کانال کالا')
-      .replace(/\bADX\b/g, 'شاخص شدت روند')
-      .replace(/\bATR\b/g, 'دامنه تلواتي')
-      .replace(/\bSAR\b/g, 'حمایت پویا')
-      .replace(/\bOBV\b/g, 'جریان تجمعی حجم')
-      .replace(/\bDI[+\-]/g, '')
-      .replace(/\bR\s*\u00b2\s*=\s*[\d.]+/g, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+    // Post-process: validate prices, fix Persian text, strip technical codes
+    const priceRefs = buildPriceReferences(body);
+    const { text: cleaned, priceValid, hallucinationCount } = postProcessAIOutput(content, priceRefs);
+
+    // If prices are severely hallucinated, log but still return (don't crash)
+    if (!priceValid) {
+      console.warn(`[AI] Price hallucination detected for ${symbolName}: ${hallucinationCount} bad prices found. NOT caching.`);
+    }
     const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
 
-    // 7. Save to daily persistent cache (save CLEANED text, not raw)
-    try {
-      await db.aiAnalysisCache.upsert({
-        where: { symbol_date: { symbol: symbolName, date: today } },
-        create: {
-          symbol: symbolName,
-          date: today,
-          text: cleaned,
-          ml: JSON.stringify(mlData),
-          price: Number(body.currentPrice) || 0,
-        },
-        update: {
-          text: cleaned,
-          ml: JSON.stringify(mlData),
-          price: Number(body.currentPrice) || 0,
-        },
-      });
-      console.log(`[AI] Saved to daily cache: ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
-    } catch (dbErr) {
-      console.warn('[AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
+    // 7. Save to daily persistent cache — ONLY if prices are valid
+    if (priceValid) {
+      try {
+        await db.aiAnalysisCache.upsert({
+          where: { symbol_date: { symbol: symbolName, date: today } },
+          create: {
+            symbol: symbolName,
+            date: today,
+            text: cleaned,
+            ml: JSON.stringify(mlData),
+            price: Number(body.currentPrice) || 0,
+          },
+          update: {
+            text: cleaned,
+            ml: JSON.stringify(mlData),
+            price: Number(body.currentPrice) || 0,
+          },
+        });
+        console.log(`[AI] Saved to daily cache: ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+      } catch (dbErr) {
+        console.warn('[AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
+      }
+    } else {
+      console.log(`[AI] Skipped cache save for ${symbolName} due to price hallucination`);
     }
 
     console.log(`[AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
