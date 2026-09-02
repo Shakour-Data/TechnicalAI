@@ -193,3 +193,54 @@ Stage Summary:
 - AI text focuses on graph structure, branch strategy contributions, probability trends
 - Daily caching with price-validation prevents re-generation for same-day same-price requests
 - Zero new lint errors in modified files
+---
+Task ID: 1
+Agent: main
+Task: Verify and fix candlestick colors in visual explanation section
+
+Work Log:
+- Searched all candlestick chart components in the codebase
+- candlestick-chart.tsx: BULL=#22c55e (green) for up, BEAR=#ef4444 (red) for down
+- vdes-analysis.tsx export: BULL=#22c55e (green), BEAR=#ef4444 (red)
+- export-utils.ts: upColor=#34c98b (green), downColor=#ef4d62 (red)
+- tradingview-chart.tsx: BULL=#22a366 (green), BEAR=#e04060 (red)
+- Volume bars in all charts use same green=up, red=down convention
+- Checked for CSS color inversion, theme overrides, and filter conditions - none found
+
+Stage Summary:
+- All candlestick charts already follow international convention (green=up, red=down)
+- No code changes needed
+---
+Task ID: 2
+Agent: main
+Task: Verify AI decision graph analysis implementation
+
+Work Log:
+- Read /api/ai-decision-graph/route.ts - comprehensive AI prompt with all decision graph data
+- Read vdss-graph.tsx DecisionGraphAIAnalysis component (line 1034-1180)
+- Confirmed it calls /api/ai-decision-graph with symbol-specific data
+- API passes: symbolName, scenarios, branchProbabilities, pathContributions, probabilityTrend, RSI, ADX, ATR, supports, resistances
+- Has DB caching with price validation
+- System prompt enforces 600-1200 words, no technical codes, Persian-only text
+
+Stage Summary:
+- AI decision graph analysis is fully implemented and symbol-specific
+- No code changes needed
+---
+Task ID: 3
+Agent: main
+Task: Verify AI analysis prompt fixes (units, Persian writing, price scale)
+
+Work Log:
+- Verified /api/ai-analysis/route.ts system prompt (lines 366-415)
+- Rule 21 (lines 404-408): Explicitly requires indices to use واحد, not ریال/دلار
+- Rule 18-19 (lines 387-403): Regular spaces only, no ZWNJ, proper paragraph separation
+- Rule 27 (line 414): Explicitly prohibits price scale changes
+- Rule 24 (line 411): Requires exact numerical accuracy
+- format-price.ts getCurrencyUnit() returns واحد for index categories
+- Unit detection in AI route (lines 258-278) correctly maps indices to واحد
+
+Stage Summary:
+- All AI text quality issues already addressed in system prompt
+- No code changes needed
+
