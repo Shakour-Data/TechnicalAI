@@ -48,6 +48,9 @@ export interface VdssGraphProps {
   decisionGraph: GraphData | null;
   probabilityTrend?: ProbabilityTrendResult | null;
   currencyUnit?: string;
+  atr?: number;
+  instrumentType?: string;
+  instrumentCategory?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -768,6 +771,25 @@ export default function VdssGraph(props: VdssGraphProps) {
         pathContributions={pathContributions}
         scenarioProbabilities={scenarioProbabilities}
       />
+
+      {/* ═══ AI Decision Graph Analysis ═══ */}
+      <DecisionGraphAIAnalysis
+        symbolName={symbolName}
+        currentPrice={currentPrice}
+        currencyUnit={props.currencyUnit ?? 'ریال'}
+        scenarios={scenarios}
+        decisionGraph={decisionGraph}
+        probabilityTrend={correctedTrend}
+        rsi={props.rsi}
+        adx={props.adx}
+        atr={props.atr ?? 0}
+        trendDirection={props.trendDirection}
+        bullScore={props.bullScore}
+        resistances={props.resistances}
+        supports={props.supports}
+        instrumentType={props.instrumentType}
+        instrumentCategory={props.instrumentCategory}
+      />
     </div>
   );
 }
@@ -983,6 +1005,181 @@ function DecisionGraphNarrative(p: {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════
+
+// AI Decision Graph Analysis Component
+
+/** Parse {color:...}text{/color} and **bold** from AI text */
+function renderDGAIText(text: string) {
+  const lines = text.split('\n');
+  return lines.map((line, li) => {
+    if (!line.trim()) return <br key={li} />;
+    let html = line;
+    html = html.replace(/\{color:([a-z]+)\}([^\{]*?)\{\/color\}/g, (_m: string, color: string, inner: string) => {
+      const colorMap: Record<string, string> = {
+        red: '#ef4444', green: '#22c55e', amber: '#f59e0b', blue: '#3b82f6',
+        orange: '#f97316', purple: '#a855f7', emerald: '#10b981',
+      };
+      return '<span style="color:' + (colorMap[color] || color) + ';font-weight:700">' + inner + '</span>';
+    });
+    html = html.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+    const isHeading = /^\*{0,2}[^*]{3,40}:$/.test(line.trim());
+    if (isHeading) {
+      return <h3 key={li} style={{ fontSize: 14, fontWeight: 700, color: D.text, marginTop: 12, marginBottom: 4 }} dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    return <p key={li} style={{ margin: '2px 0', lineHeight: 2.1, fontSize: 13, color: D.text }} dangerouslySetInnerHTML={{ __html: html }} />;
+  });
+}
+
+
+function DecisionGraphAIAnalysis(p: {
+  symbolName: string;
+  currentPrice: number;
+  currencyUnit: string;
+  scenarios: VdssGraphProps['scenarios'];
+  decisionGraph: GraphData | null;
+  probabilityTrend: ProbabilityTrendResult | null;
+  rsi: number;
+  adx: number;
+  atr: number;
+  trendDirection: string;
+  bullScore: number;
+  resistances: number[];
+  supports: number[];
+  instrumentType?: string;
+  instrumentCategory?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [cached, setCached] = useState(false);
+  const fetchRef = useRef(false);
+
+  const fetchAnalysis = useCallback(async () => {
+    if (fetchRef.current || text) return;
+    fetchRef.current = true;
+    setLoading(true);
+    setError('');
+
+    try {
+      const body: Record<string, unknown> = {
+        symbolName: p.symbolName,
+        currentPrice: p.currentPrice,
+        currencyUnit: p.currencyUnit,
+        rsi: p.rsi,
+        adx: p.adx,
+        atr: p.atr,
+        trendDirection: p.trendDirection,
+        bullScore: p.bullScore,
+        resistances: p.resistances,
+        supports: p.supports,
+        instrumentType: p.instrumentType || 'tse',
+        instrumentCategory: p.instrumentCategory || '',
+      };
+
+      const sc: Record<string, unknown> = {};
+      for (const k of Object.keys(p.scenarios)) {
+        const s = p.scenarios[k as keyof typeof p.scenarios];
+        if (s) sc[k] = { name: s.name, nameEn: s.nameEn, probability: s.probability, targetMin: s.targetMin, targetMax: s.targetMax };
+      }
+      body.scenarios = sc;
+
+      if (p.decisionGraph) {
+        body.decisionGraph = {
+          branchProbabilities: p.decisionGraph.branchProbabilities,
+          pathContributions: p.decisionGraph.pathContributions,
+          scenarioProbabilities: p.decisionGraph.scenarioProbabilities,
+        };
+      }
+
+      if (p.probabilityTrend) {
+        body.probabilityTrend = p.probabilityTrend;
+      }
+
+      const res = await fetch('/api/ai-decision-graph', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else if (data.text) {
+        setText(data.text);
+        setCached(!!data.cached);
+      } else {
+        setError('متنی دریافت نشد.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'خطای ناشناخته');
+    } finally {
+      setLoading(false);
+    }
+  }, [p, text]);
+
+  useEffect(() => {
+    if (open && !text && !loading) fetchAnalysis();
+  }, [open, text, loading, fetchAnalysis]);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} dir="rtl">
+      <CollapsibleTrigger
+        className="w-full mt-4 flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer hover:opacity-90 transition-opacity"
+        style={{
+          border: `1px solid ${D.line}`,
+          background: 'linear-gradient(105deg, rgba(14,35,53,.94), rgba(8,22,35,.77))',
+          boxShadow: D.shadow,
+        }}>
+        <div className="flex items-center gap-3">
+          <div style={{
+            width: 40, height: 40, display: 'grid', placeItems: 'center',
+            border: '1px solid rgba(52,201,139,.7)', borderRadius: 12,
+            color: D.green, fontSize: 20,
+            boxShadow: 'inset 0 0 22px rgba(52,201,139,.12), 0 0 22px rgba(52,201,139,.08)',
+          }}>🤖</div>
+          <div className="text-right">
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: D.text, margin: 0 }}>تحلیل هوشمند گراف تصمیم</h2>
+            <p style={{ fontSize: 11, color: D.muted, margin: '3px 0 0' }}>تحلیل AI مخصوص {p.symbolName} — ساختار گراف، احتمالات و استراتژی‌ها</p>
+          </div>
+        </div>
+        <span style={{ color: D.muted, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div style={{
+          marginTop: 8, padding: '18px 22px',
+          border: `1px solid ${D.line}`, borderRadius: 16,
+          background: 'rgba(8,22,35,.76)',
+        }}>
+          {loading && (
+            <div className="flex items-center gap-3 py-6">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-t-transparent" style={{ borderColor: D.green, borderTopColor: 'transparent' }} />
+              <span style={{ fontSize: 13, color: D.muted }}>در حال تولید تحلیل هوشمند...</span>
+            </div>
+          )}
+          {error && !loading && (
+            <div style={{ padding: '12px 16px', borderRight: `3px solid ${D.red}`, background: 'rgba(239,77,98,.08)', borderRadius: 8, marginBottom: 8 }}>
+              <p style={{ fontSize: 12, color: '#fca5a5', margin: 0 }}>{error}</p>
+            </div>
+          )}
+          {text && !loading && (
+            <>
+              {cached && (
+                <div style={{ fontSize: 10, color: D.muted, marginBottom: 10, opacity: 0.7 }}>● تحلیل از حافظه بارگذاری شد</div>
+              )}
+              <div style={{ direction: 'rtl', textAlign: 'right' }}>{renderDGAIText(text)}</div>
+            </>
+          )}
+          {!text && !loading && !error && (
+            <p style={{ fontSize: 13, color: D.muted }}>برای مشاهده تحلیل هوشمند، این بخش را باز کنید.</p>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+
 // Multi-Select Scenario Trend Charts (Individual & Cumulative)
 // ═══════════════════════════════════════════════════════════════════
 

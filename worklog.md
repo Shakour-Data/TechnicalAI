@@ -161,3 +161,35 @@ Stage Summary:
 - Filter toolbar replicated from in-page component
 - All 4 visual elements (graph, cumulative chart, per-scenario charts, trend table) are present
 - Narrative text embedded in export output
+
+---
+Task ID: 7
+Agent: main
+Task: Add AI-powered advanced analysis to decision graph page (per-symbol)
+
+Work Log:
+- Created /src/app/api/ai-decision-graph/route.ts — new API endpoint specialized for decision graph analysis
+  - Specialized DG_SYSTEM_PROMPT focused on: graph structure (27 paths, 3 branches), scenario probabilities, branch contributions, probability trends
+  - buildDGPrompt() constructs data payload with: scenarios (sorted by prob), branch probabilities, path contributions, group probabilities, 30-day trends, support/resistance
+  - Reuses dedicatedAIChatCompletion from zai-shared, postProcessAIOutput from ai-postprocess
+  - Daily cache via DecisionGraphAiCache Prisma model, previous-day fallback (2% price tolerance)
+  - Price validation prevents caching hallucinated analyses
+- Added DecisionGraphAiCache model to prisma/schema.prisma (symbol, date, text, price)
+- Ran db:push to sync database schema
+- Added new props to VdssGraphProps: atr, instrumentType, instrumentCategory
+- Created DecisionGraphAIAnalysis component in vdss-graph.tsx
+  - Collapsible section with green-themed trigger (🤖 icon)
+  - Lazy-fetches AI analysis on first open (no auto-fetch on page load)
+  - Loading spinner, error display, cached indicator
+  - renderDGAIText() helper parses {color:X}text{/color} and **bold** from AI output
+  - Dark theme styling matching VdssGraph
+- Created renderDGAIText() helper function for parsing AI text formatting
+- Passed additional props (atr, instrumentType, instrumentCategory) from page.tsx to VdssGraph
+- Fixed regex issues: escaped \* in regex patterns, used RegExp literals instead of string patterns
+- Verified via agent-browser: section visible, click triggers API, AI text generated and displayed successfully
+
+Stage Summary:
+- Decision graph page now has per-symbol AI analysis via collapsible "تحلیل هوشمند گراف تصمیم" section
+- AI text focuses on graph structure, branch strategy contributions, probability trends
+- Daily caching with price-validation prevents re-generation for same-day same-price requests
+- Zero new lint errors in modified files

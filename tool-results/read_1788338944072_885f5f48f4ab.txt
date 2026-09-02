@@ -1,0 +1,585 @@
+     1→import { NextRequest, NextResponse } from 'next/server';
+     2→import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
+     3→import { db } from '@/lib/db';
+     4→import {
+     5→  selectMLCombination,
+     6→  selectMethods,
+     7→  getScenarioName,
+     8→  type MLSelectorInput,
+     9→} from '@/lib/analysis-ml-selector';
+    10→import {
+    11→  selectMSLV4,
+    12→  buildMSLV4PromptSection,
+    13→  type MSLV4Context,
+    14→} from '@/lib/msl-v4';
+    15→import { postProcessAIOutput, buildPriceReferences } from '@/lib/ai-postprocess';
+    16→
+    17→export const dynamic = 'force-dynamic';
+    18→export const maxDuration = 120;
+    19→
+    20→// ─── Helpers ──────────────────────────────────────────────────────
+    21→function toPersianNum(n: number): string {
+    22→  if (!isFinite(n) || isNaN(n)) return '\u06f0';
+    23→  return Math.round(n).toLocaleString('fa-IR');
+    24→}
+    25→function srGrade(strength: number): string {
+    26→  if (strength >= 8.5) return '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc';
+    27→  if (strength >= 7) return '\u0642\u0648\u06cc';
+    28→  if (strength >= 5) return '\u0645\u062a\u0648\u0633\u0637';
+    29→  if (strength >= 3) return '\u0636\u0639\u06cc\u0641';
+    30→  return '\u0628\u0633\u06cc\u0627\u0631 \u0636\u0639\u06cc\u0641';
+    31→}
+    32→
+    33→function getTodayDateStr(): string {
+    34→  const now = new Date();
+    35→  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    36→}
+    37→
+    38→
+    39→
+    40→// ─── Build ML Selector Input ──────────────────────────────────────
+    41→function buildMLInput(body: Record<string, unknown>): MLSelectorInput {
+    42→  const price = (body.currentPrice as number) || 0;
+    43→  const trendDir = (body.trendDirection as string) || 'range';
+    44→  const adx = (body.adx as number) || 0;
+    45→  const rsi = (body.rsi as number) || 50;
+    46→  const stochK = (body.stochK as number) || 50;
+    47→  const macdHist = (body.macdHist as number) || 0;
+    48→  const obv = (body.obv as number) || 0;
+    49→  const bollingerUpper = (body.bollingerUpper as number) || 0;
+    50→  const bollingerLower = (body.bollingerLower as number) || 0;
+    51→  const resistance = (body.resistanceStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
+    52→  const support = (body.supportStrengths as Array<{ price: number }> | undefined)?.[0]?.price ?? 0;
+    53→  const atr = (body.atr as number) || 0;
+    54→  const bbRange = bollingerUpper - bollingerLower;
+    55→  const bbPosition = bbRange > 0 ? Math.min(100, Math.max(0, Math.round((price - bollingerLower) / bbRange * 100))) : 50;
+    56→
+    57→  // Find dominant scenario across ALL SC1-SC9
+    58→  const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
+    59→  let dominantKey = 'SC5';
+    60→  let dominantProb = 0;
+    61→  for (const k of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const) {
+    62→    const p = scenarios?.[k]?.probability ?? 0;
+    63→    if (p > dominantProb) { dominantProb = p; dominantKey = k; }
+    64→  }
+    65→
+    66→  return {
+    67→    price,
+    68→    trend: trendDir === 'up' ? 'up' : trendDir === 'down' ? 'down' : 'range',
+    69→    adx, diPlus: (body.diPlus as number) || 0, diMinus: (body.diMinus as number) || 0,
+    70→    rsi, stochK, macdHist, obv, bbPosition, resistance, support, atr,
+    71→    scenarioDominant: dominantKey,
+    72→    hasVolume: (body.hasVolume as boolean) ?? false,
+    73→  };
+    74→}
+    75→
+    76→// ─── Build MSL v4 Context ────────────────────────────────────────
+    77→function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
+    78→  const price = (body.currentPrice as number) || 0;
+    79→  const atr = (body.atr as number) || 0;
+    80→  const atrRatio = price > 0 ? atr / price : 0;
+    81→
+    82→  const v11Probs = body.v11Probabilities as {
+    83→    scenarios: Array<{ key: string; name: string; rawProbability: number }>;
+    84→  } | undefined;
+    85→  let dominantScenario = '';
+    86→  if (v11Probs?.scenarios) {
+    87→    const sorted = [...v11Probs.scenarios].sort((a, b) => b.rawProbability - a.rawProbability);
+    88→    dominantScenario = sorted[0]?.name ?? '';
+    89→  } else {
+    90→    const scenarios = body.scenarios as Record<string, { name?: string; probability: number }> | undefined;
+    91→    let maxProb = 0;
+    92→    for (const k of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9']) {
+    93→      const p = scenarios?.[k]?.probability ?? 0;
+    94→      if (p > maxProb) { maxProb = p; dominantScenario = scenarios?.[k]?.name ?? k; }
+    95→    }
+    96→  }
+    97→
+    98→  const trendDir = (body.trendDirection as string) || 'range';
+    99→  const isBull = trendDir === 'up';
+   100→  const isBear = trendDir === 'down';
+   101→  const adx = (body.adx as number) || 0;
+   102→  const trendStrength = adx > 40 ? 0.9 : adx > 25 ? 0.7 : adx > 15 ? 0.4 : 0.15;
+   103→
+   104→  let regime: MSLV4Context['regime'] = 'Range';
+   105→  if (isBull && trendStrength > 0.6) regime = 'Strong Bull';
+   106→  else if (isBull) regime = 'Weak Bull';
+   107→  else if (isBear && trendStrength > 0.6) regime = 'Strong Bear';
+   108→  else if (isBear) regime = 'Weak Bear';
+   109→
+   110→  const instrumentType = (body.instrumentType as string) || (body.symbolName as string) || 'stock';
+   111→  const ta = body.technicalAnalysis as {
+   112→    classicPatternCount?: number; harmonicPatternCount?: number;
+   113→    elliottWaveCount?: number; divergenceCount?: number;
+   114→  } | undefined;
+   115→  const overallConfidence = (body.overallConfidence as number) ?? (body.confidence as number) ?? 0.6;
+   116→
+   117→  // Extract probability trend signals for MSL selection
+   118→  const probTrend = extractProbTrendSignals(body);
+   119→
+   120→  return {
+   121→    asset: instrumentType, timeframe: (body.timeframe as string) || 'daily',
+   122→    regime, confidence: Math.max(0, Math.min(1, overallConfidence)),
+   123→    volatility: atrRatio, trend_strength: trendStrength, dominantScenario,
+   124→    pattern_counts: { classical: ta?.classicPatternCount ?? 0, harmonic: ta?.harmonicPatternCount ?? 0, elliott: ta?.elliottWaveCount ?? 0 },
+   125→    divergence_present: (ta?.divergenceCount ?? 0) > 0,
+   126→    hasVolume: (body.hasVolume as boolean) ?? false,
+   127→    rsi: (body.rsi as number) || 50, adx,
+   128→    audience_level: (body.audienceLevel as string) || 'pro',
+   129→    probTrend,
+   130→  };
+   131→}
+   132→
+   133→// ─── Extract probability trend signals from body ──────────────────
+   134→function extractProbTrendSignals(body: Record<string, unknown>): MSLV4Context['probTrend'] {
+   135→  const pt = body.probabilityTrend as {
+   136→    scenarios?: { scenarioKey: string; group: string; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+   137→    groups?: { group: string; trendDirection: string; trend: { cumulativeProb: number }[] }[];
+   138→  } | undefined;
+   139→  if (!pt?.groups || pt.groups.length === 0) return undefined;
+   140→
+   141→  const findGroup = (g: string) => pt.groups!.find(x => x.group === g);
+   142→  const bullG = findGroup('bullish');
+   143→  const bearG = findGroup('bearish');
+   144→  const neutralG = findGroup('neutral');
+   145→
+   146→  // Find dominant scenario trend
+   147→  const scenarios = body.scenarios as Record<string, { probability: number }> | undefined;
+   148→  let domKey = 'SC5'; let domProb = 0;
+   149→  for (const k of ['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9']) {
+   150→    const p = scenarios?.[k]?.probability ?? 0;
+   151→    if (p > domProb) { domProb = p; domKey = k; }
+   152→  }
+   153→  const domScenario = pt.scenarios?.find(s => s.scenarioKey === domKey);
+   154→
+   155→  // 7-day change (day 1 = today, day 7 = 7 days ago)
+   156→  const get7dChange = (trend: { cumulativeProb: number }[]) => {
+   157→    if (!trend || trend.length < 7) return 0;
+   158→    return trend[0].cumulativeProb - trend[6].cumulativeProb;
+   159→  };
+   160→
+   161→  return {
+   162→    bullGroupDir: bullG?.trendDirection as MSLV4Context['probTrend']['bullGroupDir'],
+   163→    bearGroupDir: bearG?.trendDirection as MSLV4Context['probTrend']['bearGroupDir'],
+   164→    neutralGroupDir: neutralG?.trendDirection as MSLV4Context['probTrend']['neutralGroupDir'],
+   165→    bullGroupCum: bullG?.trend?.[0]?.cumulativeProb,
+   166→    bearGroupCum: bearG?.trend?.[0]?.cumulativeProb,
+   167→    neutralGroupCum: neutralG?.trend?.[0]?.cumulativeProb,
+   168→    dominantCumDir: domScenario?.trendDirection as MSLV4Context['probTrend']['dominantCumDir'],
+   169→    dominantIndivDir: domScenario?.trendDirection as MSLV4Context['probTrend']['dominantIndivDir'],
+   170→    bullGroupChange7d: get7dChange(bullG?.trend ?? []),
+   171→    bearGroupChange7d: get7dChange(bearG?.trend ?? []),
+   172→    neutralGroupChange7d: get7dChange(neutralG?.trend ?? []),
+   173→  };
+   174→}
+   175→
+   176→// ─── Build Prompt (optimized, concise) ────────────────────────────
+   177→function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<typeof selectMLCombination>, methods: string[]): string {
+   178→  const {
+   179→    symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
+   180→    stochK, stochD, macdLine, macdSignal, macdHist,
+   181→    diPlus, diMinus, sar, atr, obv, hasVolume,
+   182→    bollingerUpper, bollingerLower,
+   183→    trendDirection, trendAngle, trendR2,
+   184→    scenarios, resistanceStrengths, supportStrengths,
+   185→  } = body as {
+   186→    symbolName: string; currentPrice: number; ma21: number; ma100: number;
+   187→    rsi: number; mfi: number; cci: number; adx: number;
+   188→    stochK: number; stochD: number; macdLine: number; macdSignal: number; macdHist: number;
+   189→    diPlus: number; diMinus: number; sar: number; atr: number; obv: number;
+   190→    bollingerUpper: number; bollingerLower: number;
+   191→    trendDirection: string; trendAngle: number; trendR2: number;
+   192→    scenarios: Record<string, { name?: string; probability: number; targetMin: number; targetMax: number }>;
+   193→    hasVolume: boolean;
+   194→    resistanceStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+   195→    supportStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+   196→  };
+   197→
+   198→  const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
+   199→  const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
+   200→  const rsiSignal = rsi > 70 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f \u0634\u062f\u06cc\u062f' : rsi > 60 ? '\u0627\u0634\u0628\u0627\u0639 \u062e\u0631\u06cc\u062f' : rsi > 40 ? '\u062e\u0646\u062b\u06cc' : rsi > 30 ? '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634' : '\u0627\u0634\u0628\u0627\u0639 \u0641\u0631\u0648\u0634 \u0634\u062f\u06cc\u062f';
+   201→  const diPressure = diPlus > diMinus ? '\u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f \u063a\u0627\u0644\u0628' : '\u0641\u0634\u0627\u0631 \u0641\u0631\u0648\u0634 \u063a\u0627\u0644\u0628';
+   202→
+   203→  const R1 = resistanceStrengths?.[0];
+   204→  const S1 = supportStrengths?.[0];
+   205→  const R1Price = R1?.price ?? Math.round(currentPrice * 1.05);
+   206→  const S1Price = S1?.price ?? Math.round(currentPrice * 0.95);
+   207→  const R1Grade = R1?.strength ? srGrade(R1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+   208→  const S1Grade = S1?.strength ? srGrade(S1.strength) : '\u0646\u0627\u0645\u0634\u062e\u0635';
+   209→
+   210→  const obvDesc = hasVolume
+   211→    ? (obv > 0 ? `\u0645\u062b\u0628\u062a (+${(obv / 1e6).toFixed(1)}M)` : `\u0645\u0646\u0641\u06cc (${(obv / 1e6).toFixed(1)}M)`)
+   212→    : '\u0628\u062f\u0648\u0646 \u062f\u0627\u062f\u0647 \u062d\u062c\u0645';
+   213→
+   214→  const macdDesc = macdHist > 0 && macdLine > macdSignal
+   215→    ? '\u0635\u0639\u0648\u062f\u06cc \u062c\u0647\u062a \u0628\u0627\u0644\u0627'
+   216→    : macdHist > 0 ? '\u0635\u0639\u0648\u062f\u06cc' : '\u0646\u0632\u0648\u0644\u06cc';
+   217→
+   218→  const methodsStr = methods.map((m, i) => `${i + 1}. ${m}`).join('\n');
+   219→
+   220→  // V11 probabilities
+   221→  let v11Block = '';
+   222→  const v11Probs = body.v11Probabilities as {
+   223→    scenarios: Array<{ key: string; name: string; rawProbability: number; cumulativeProbability: number }>;
+   224→    bullishCumulative: number; bearishCumulative: number; neutralCumulative: number; riskProfile: string;
+   225→  } | undefined;
+   226→  if (v11Probs?.scenarios) {
+   227→    const v11Lines = v11Probs.scenarios.map((s, i) =>
+   228→      `- R${i + 1} (${s.name}): \u0627\u062e\u062a\u0635\u0627\u0635\u06cc ${toPersianNum(s.rawProbability)}\u066a | \u062a\u062c\u0645\u0639\u06cc ${toPersianNum(s.cumulativeProbability)}\u066a`
+   229→    ).join('\n');
+   230→    const riskLabels: Record<string, string> = {
+   231→      very_bullish: '\u0635\u0639\u0648\u062f\u06cc \u0642\u0648\u06cc', bullish: '\u0635\u0639\u0648\u062f\u06cc', neutral: '\u062e\u0646\u062b\u06cc', bearish: '\u0646\u0632\u0648\u0644\u06cc', very_bearish: '\u0646\u0632\u0648\u0644\u06cc \u0642\u0648\u06cc',
+   232→    };
+   233→    v11Block = `\n**\u0627\u062d\u062a\u0645\u0627\u0644\u0627\u062a v11:**\n${v11Lines}\n- \u0645\u062c\u0645\u0648\u0639 \u0635\u0639\u0648\u062f\u06cc: ${toPersianNum(v11Probs.bullishCumulative)}\u066a | \u0646\u0632\u0648\u0644\u06cc: ${toPersianNum(v11Probs.bearishCumulative)}\u066a | \u067e\u0631\u0648\u0641\u0627\u06cc\u0644: ${riskLabels[v11Probs.riskProfile] || v11Probs.riskProfile}`;
+   234→  }
+   235→
+   236→  // Top 5 scenarios by probability
+   237→  const allScenarios = (['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const)
+   238→    .map((k, i) => ({
+   239→      key: k,
+   240→      name: scenarios?.[k]?.name || getScenarioName(k),
+   241→      prob: scenarios?.[k]?.probability ?? 0,
+   242→      min: scenarios?.[k]?.targetMin ?? 0,
+   243→      max: scenarios?.[k]?.targetMax ?? 0,
+   244→    }))
+   245→    .sort((a, b) => b.prob - a.prob)
+   246→    .slice(0, 5);
+   247→
+   248→  const scenarioBlock = allScenarios
+   249→    .map(s => `- ${s.name}: ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)}`)
+   250→    .join('\n');
+   251→
+   252→  // Instrument type and currency unit — use client-provided unit when available
+   253→  const instType = (body.instrumentType as string) || 'tse';
+   254→  const clientCurrencyUnit = (body.currencyUnit as string) || '';
+   255→  const clientCategory = (body.instrumentCategory as string) || '';
+   256→
+   257→  // Determine unit label: client-provided > index detection > category-based > fallback
+   258→  let unitLabel: string;
+   259→  if (clientCurrencyUnit) {
+   260→    unitLabel = clientCurrencyUnit;
+   261→  } else if (['index', 'tse_index', 'world_index'].includes(clientCategory) || symbolName.includes('\u0634\u0627\u062e\u0635')) {
+   262→    // All indices (TSE, TGJU, Yahoo) use واحد, never ریال or دلار
+   263→    unitLabel = '\u0648\u0627\u062d\u062f';
+   264→  } else if (instType === 'tse') {
+   265→    unitLabel = '\u0631\u06cc\u0627\u0644';
+   266→  } else if (instType === 'tgju') {
+   267→    if (['currency', 'gold', 'silver', 'gold_etf'].includes(clientCategory)) {
+   268→      unitLabel = '\u0631\u06cc\u0627\u0644';
+   269→    } else if (clientCategory === 'crypto') {
+   270→      unitLabel = '\u062a\u062a\u0631';
+   271→    } else {
+   272→      unitLabel = '\u062f\u0644\u0627\u0631';
+   273→    }
+   274→  } else if (instType === 'yahoo') {
+   275→    unitLabel = clientCategory === 'world_index' ? '\u0648\u0627\u062d\u062f' : '\u062f\u0644\u0627\u0631';
+   276→  } else {
+   277→    unitLabel = '\u0648\u0627\u062d\u062f';
+   278→  }
+   279→
+   280→  // Determine instrument label
+   281→  let instrumentLabel: string;
+   282→  if (instType === 'tgju') {
+   283→    instrumentLabel = ['currency', 'gold', 'silver', 'gold_etf'].includes(clientCategory)
+   284→      ? '\u0627\u0628\u0632\u0627\u0631 \u0645\u0627\u0644\u06cc \u0627\u06cc\u0631\u0627\u0646\u06cc'
+   285→      : '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc';
+   286→  } else if (instType === 'yahoo') {
+   287→    instrumentLabel = '\u0646\u0634\u0627\u0646\u06af\u0631 \u0628\u06cc\u0646 \u0627\u0644\u0645\u0644\u0644\u06cc';
+   288→  } else if (clientCategory === 'index' || symbolName.includes('\u0634\u0627\u062e\u0635')) {
+   289→    instrumentLabel = '\u0634\u0627\u062e\u0635 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
+   290→  } else {
+   291→    instrumentLabel = '\u0633\u0647\u0627\u0645 \u0628\u0648\u0631\u0633 \u0627\u06cc\u0631\u0627\u0646';
+   292→  }
+   293→
+   294→  // Probability trend block (cumulative trends for scenarios and groups)
+   295→  let trendBlock = '';
+   296→  const probTrendData = body.probabilityTrend as {
+   297→    scenarios?: { scenarioKey: string; label: string; group: string; currentProbability: number; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
+   298→    groups?: { group: string; label: string; trendDirection: string; trend: { cumulativeProb: number }[] }[];
+   299→  } | undefined;
+   300→
+   301→  const dirLabel: Record<string, string> = {
+   302→    rising: '\u0635\u0639\u0648\u062f\u06cc \u2191', falling: '\u0646\u0632\u0648\u0644\u06cc \u2193', stable: '\u062b\u0627\u0628\u062a \u2192', volatile: '\u0646\u0627\u067e\u0627\u06cc\u0631',
+   303→  };
+   304→
+   305→  if (probTrendData?.scenarios && probTrendData.scenarios.length > 0) {
+   306→    // Group cumulative trends
+   307→    const groupLines = (probTrendData.groups || []).map(g => {
+   308→      const today = g.trend[0]?.cumulativeProb;
+   309→      const weekAgo = g.trend.length >= 7 ? g.trend[6].cumulativeProb : null;
+   310→      const change = weekAgo !== null ? ((today - weekAgo) * 100).toFixed(1) : null;
+   311→      const changeStr = change !== null ? (change.startsWith('-') ? '' : '+') + change + '%' : '';
+   312→      return `- ${g.label}: \u0627\u0645\u0631\u0648\u0632 \u062a\u062c\u0645\u0639\u06cc \u0627\u0645\u0631\u0648\u0632 ${toPersianNum((today ?? 0) * 100)}\u066a | \u0631\u0648\u0646\u062f: ${dirLabel[g.trendDirection] || g.trendDirection}${changeStr ? ' (' + changeStr + ' \u062f\u0631 7 \u0631\u0648\u0632)' : ''}`;
+   313→    }).join('\n');
+   314→
+   315→    // Top 5 scenario cumulative trends (sorted by currentProbability)
+   316→    const topScenarios = [...probTrendData.scenarios]
+   317→      .sort((a, b) => b.currentProbability - a.currentProbability)
+   318→      .slice(0, 5);
+   319→    const scenarioTrendLines = topScenarios.map(s => {
+   320→      const todayCum = s.trend[0]?.cumulativeProb;
+   321→      const weekAgoCum = s.trend.length >= 7 ? s.trend[6].cumulativeProb : null;
+   322→      const cumChange = weekAgoCum !== null ? ((todayCum - weekAgoCum) * 100).toFixed(1) : null;
+   323→      return `- ${s.label}: \u062a\u062c\u0645\u0639\u06cc \u0627\u0645\u0631\u0648\u0632 ${toPersianNum((todayCum ?? 0) * 100)}\u066a | \u0631\u0648\u0646\u062f: ${dirLabel[s.trendDirection] || s.trendDirection}${cumChange !== null ? ' (' + (cumChange.startsWith('-') ? '' : '+') + cumChange + '%)' : ''}`;
+   324→    }).join('\n');
+   325→
+   326→    trendBlock = `
+   327→**\u0631\u0648\u0646\u062f \u0627\u062d\u062a\u0645\u0627\u0644 \u062a\u062c\u0645\u0639\u06cc (7 \u0631\u0648\u0632 \u0627\u062e\u06cc\u0631):**
+   328→\u06af\u0631\u0648\u0647\u200c\u0647\u0627:\n${groupLines}
+   329→\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631:\n${scenarioTrendLines}`;
+   330→  }
+   331→
+   332→  // Persian descriptions for technical indicators (no codes in prompt)
+   333→  const maDesc = `\u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a (\u06f2\u06f1 \u0631\u0648\u0632\u0647): ${toPersianNum(ma21)} | \u0628\u0644\u0646\u062f\u0645\u062f\u062a (\u06f1\u06f0\u06f0 \u0631\u0648\u0632\u0647): ${toPersianNum(ma100)}`;
+   334→  const maRelation = currentPrice > ma21 && currentPrice > ma100
+   335→    ? '\u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0647\u0631 \u062f\u0648 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u0627\u0633\u062a'
+   336→    : currentPrice > ma21 ? '\u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a \u0627\u0645\u0627 \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0628\u0644\u0646\u062f\u0645\u062f\u062a \u0627\u0633\u062a'
+   337→    : currentPrice > ma100 ? '\u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a \u0627\u0645\u0627 \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0628\u0644\u0646\u062f\u0645\u062f\u062a \u0627\u0633\u062a'
+   338→    : '\u0642\u06cc\u0645\u062a \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0647\u0631 \u062f\u0648 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u0627\u0633\u062a';
+   339→  const rsiDesc = `\u0634\u0627\u062e\u0635 \u0642\u062f\u0631\u062a \u0646\u0633\u0628\u06cc: ${toPersianNum(rsi)} (${rsiSignal})`;
+   340→  const adxDesc = `\u0634\u0627\u062e\u0635 \u0634\u062f\u062a \u0631\u0648\u0646\u062f: ${toPersianNum(adx)} (${adxStrength}) | \u0641\u0634\u0627\u0631 \u062e\u0631\u06cc\u062f/\u0641\u0631\u0648\u0634: ${toPersianNum(diPlus)}/${toPersianNum(diMinus)} (${diPressure})`;
+   341→  const stochDesc = `\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9: ${toPersianNum(stochK)}/${toPersianNum(stochD)}`;
+   342→  const cciMfiDesc = `\u0634\u0627\u062e\u0635 \u06a9\u0627\u0646\u0627\u0644 \u06a9\u0627\u0644\u0627: ${toPersianNum(cci)}${mfi > 0 ? ` | \u0634\u0627\u062e\u0635 \u062c\u0631\u06cc\u0627\u0646 \u0646\u0642\u062f\u06cc: ${toPersianNum(mfi)}` : ''}`;
+   343→  const macdFullDesc = `\u0648\u0627\u06af\u0631\u0627\u0641 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645: ${macdDesc} | \u062c\u0631\u06cc\u0627\u0646 \u062a\u062c\u0645\u0639\u06cc \u062d\u062c\u0645: ${obvDesc}`;
+   344→  const bbSarDesc = `\u0628\u0627\u0646\u062f \u0628\u0648\u0644\u06cc\u0646\u06af\u0631: ${toPersianNum(bollingerLower)} \u2014 ${toPersianNum(bollingerUpper)} | \u062d\u0645\u0627\u06cc\u062a \u067e\u0648\u06cc\u0627: ${toPersianNum(sar)} | \u062f\u0627\u0645\u0646\u0647 \u062a\u0644\u0648\u0627\u062a\u06cc: ${toPersianNum(atr)}`;
+   345→
+   346→  return `
+   347→**\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647:**
+   348→- \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a \u0641\u0639\u0644\u06cc: **${toPersianNum(currentPrice)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0)
+   349→- ${maDesc}. ${maRelation}.
+   350→- ${rsiDesc}
+   351→- ${adxDesc}
+   352→- ${stochDesc} | ${cciMfiDesc}
+   353→- ${macdFullDesc}
+   354→- ${bbSarDesc}
+   355→- \u0645\u0642\u0627\u0648\u0645\u062a: ${toPersianNum(R1Price)} (${R1Grade}) | \u062d\u0645\u0627\u06cc\u062a: ${toPersianNum(S1Price)} (${S1Grade})
+   356→
+   357→**\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631 (\u0645\u0631\u062a\u0628 \u0628\u0631 \u0627\u062d\u062a\u0645\u0627\u0644):**
+   358→${scenarioBlock}
+   359→${v11Block}
+   360→${trendBlock}
+   361→**\u0631\u0648\u0634\u200c\u0647\u0627:**\n${methodsStr}
+   362→`;
+   363→}
+   364→
+   365→// ─── System prompt ────────────────────────────────────────────────
+   366→const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.
+   367→یک تحلیل حرفه‌ای و کاربردی بنویسید.
+   368→
+   369→قواعد خروجی:
+   370→1. حداقل 800 کلمه و حداکثر 1,500 کلمه.
+   371→2. تمام اعداد به فارسی و سه رقم سه رقم جدا شوند.
+   372→3. از ایموجی‌های تحلیلی مناسب استفاده کنید: 📊 📈 📉 ⚡ 🔑 ⚠️ 🎯 ✅ ❌ ❓ 💡 🔴 🟢. حداکثر 6 تا در کل متن. **ممنوعیت مطلق:** به هیچ عنوان از ایموجی‌های آدمک، چهره، شخص یا بدن انسان استفاده نکنید (مثل 🧑‍💼 👤 🙋 💂 🧑‍💻 🧑‍🔧 و مشابه آن‌ها).
+   373→4. متن شامل 3 تا 5 پاراگراف باشد. هر پاراگراف بلند و عمیق (200 تا 500 کلمه).
+   374→5. متن کاملاً به زبان فارسی باشد. **ممنوعیت مطلق:** به هیچ عنوان از کلمات، عبارات یا جمله‌سازی‌های زبان چینی در متن استفاده نشود.
+   375→6. تحلیل یک‌پارچه و پیوسته بنویسید. **ممنوعیت مطلق:** به هیچ عنوان از عباراتی مثل «از منظر عملیاتی»، «از دیدگاه عملیاتی»، «از زاویه عملیاتی» یا هر عبارت مشابه که متن را به بخش‌های جداگانه تقسیم می‌کند استفاده نکنید. تحلیل باید یک جریان یکپارچه و روان باشد بدون هیچ‌گونه برچسب‌گذاری داخلی یا دسته‌بندی لایه‌ای.
+   376→7. شامل سناریوی معاملاتی کامل باشد: جهت، نقطه ورود، حد ضرر، اهداف، نسبت ریسک/ریوارد.
+   377→8. شامل درخت سناریویی انشعابی و تحلیل حساسیت باشد.
+   378→9. اگر در متن سؤالی یا ابهامی مطرح می‌شود، **حتماً** باید در همان پاراگراف یا پاراگراف بعدی با استناد به سناریوها و احتمالات ارائه‌شده به آن پاسخ داده شود. هیچ سؤالی بدون پاسخ باقی نماند.
+   379→10. هیچ اشاره‌ای به مکتب، سبک، لحن، سیستم هوشمند، روش ML یا هر اصطلاح داخلی سیستم نشود.
+   380→11. در ابتدا یک عنوان مختصر و در انتها جمله روایت غالب (پررنگ) و خلاصه عملی (حداکثر 30 کلمه) بیاورید.
+   381→12. درصدها را به صورت کامل بنویسید: مثلاً «5 درصد» نه «5٪». درصدها باید منطقی و معقول باشند (مثلاً بین 1 تا 99 درصد).
+   382→13. برای کلمات و عبارات مهم از **بولد** استفاده کنید (حداقل 8 مورد بولد در کل متن).
+   383→14. هیچ سرفصل یا عنوان داخلی سیستم (مثل مرحله، فاز، خروجی سه‌لایه، تحلیل عملیاتی، تحلیل تحلیلی، تحلیل روانشناختی و غیره) در متن نباشد. متن باید یکپارچه و روان باشد.
+   384→15. متن خروجی فقط و فقط تحلیل باشد. هیچ دستورالعمل، ساختار یا راهنمای داخلی در خروجی نیاید.
+   385→16. برای رنگی کلمات مهم از دستور {color:COLOR}متن{/color} استفاده کنید. رنگهای مجاز: red, green, amber, blue, orange, purple, emerald. مثال: {color:red}**خطر شکست سطح مقاومت**{/color}. حداکثر 8 مورد رنگی در کل متن.
+   386→17. درصدهایی که در داده‌های ورودی به شما ارائه شده‌اند را دقیقاً همان‌طور که هست استفاده کنید. هرگز درصدی را ضربدر 100 نکنید.
+   387→18. **فاصله‌گذاری صحیح (بسیار مهم):**
+   388→   - بین هر دو کلمه مستقل حتماً یک فاصله (Space) باشد. هیچ دو کلمه‌ای نباید به هم بچسبند.
+   389→   - از نیم‌فاصله (ZWNJ) استفاده نکنید. در متنی که می‌نویسید فقط از فاصله معمولی (Space) استفاده کنید.
+   390→   - مثال‌های صحیح: «کوتاه مدت»، «بلند مدت»، «نشان دهنده»، «حد ضرر»، «نقطه ورود»، «فشار خرید»، «سطح مقاومت»، «نسبت ریسک»، «در صورت»، «به طور»، «به دلیل»، «از جمله»، «در نتیجه»، «در حال»، «در مقابل»، «قابل توجه»، «هم زمان»، «انجام شده»، «ارائه شده».
+   391→   - مثال‌های غلط: «کوتاهمدت»، «بلندمدت»، «نشاندهنده»، «حدضرر»، «نقطهورود»، «فشارخرید»، «درصورت»، «بدلیل»، «درنتیجه»، «درحال»، «بصورت»، «بتدریج».
+   392→   - حروف اضافه مثل «در»، «به»، «از»، «با» همیشه با فاصله نوشته شوند.
+   393→19. **پاراگراف‌بندی صحیح (بسیار مهم):**
+   394→   - هر پاراگراف باید با یک خط خالی (دو newline) از پاراگراف بعدی جدا شود.
+   395→   - هر پاراگراف یک ایده اصلی دارد و باید پیوسته و منسجم باشد.
+   396→   - پاراگراف‌ها نباید خیلی کوتاه (کمتر از 150 کلمه) باشند.
+   397→20. **نگارش بی‌نقص فارسی:**
+   398→   - متن از نظر املایی، انشایی و نگارشی کاملاً بی‌نقص باشد.
+   399→   - هیچ غلط املایی، خطای دستوری یا عبارت نادرست فارسی در متن نباشد.
+   400→   - از کلمات مترادف و متنوع استفاده کنید و از تکرار بیش از حد یک کلمه یا عبارت پرهیز کنید.
+   401→   - استفاده از کلمات ترکیبی فارسی-انگلیسی (مثل «بولینger» یا «استوکاستic») ممنوع است.
+   402→   - نقطه‌گذاری صحیح: بعد از هر نقطه (.) یک فاصله باشد. بعد از ویرگول (،) یک فاصله باشد.
+   403→   - «در صد» غلط است، صحیح «درصد» است (یک کلمه).
+   404→21. **واحد اندازه‌گیری:**
+   405→   - در داده‌های پایه، واحد دقیقاً ذکر شده است (مثلاً «ریال»، «تومان»، «دلار» یا «واحد»).
+   406→   - شما باید دقیقاً همان واحدی را که در داده‌ها ارائه شده است استفاده کنید.
+   407→   - شاخص‌ها (مثل شاخص کل، شاخص هم وزن، شاخص صنایع) واحدشان «واحد» است نه «ریال» یا «دلار».
+   408→   - هرگز واحد ریال یا دلار را برای شاخص‌ها استفاده نکنید. مثال صحیح: «شاخص کل هم وزن به ۱,۸۲۵,۴۳۰ واحد رسید».
+   409→22. **ممنوعیت مطلق کدها و شناسه‌ها:** به هیچ وجه در متن خروجی از کدهای تخصصی سیستم استفاده نکنید. ممنوع: SC1 تا SC9، R1 تا R9، MA21، MA100، RSI، ADX، MACD، CCI، MFI، ATR، SAR، OBV، DI+، DI-، R² و هر واژه فنی انگلیسی دیگر. فقط نام فارسی سناریوها و نام ابزار مالی مجاز است. اندیکاتورها را فقط به صورت توصیفی بیاورید (مثلاً «شاخص قدرت نسبی» به جای RSI).
+   410→23. **تحلیل آینده‌نگر:** تحلیل شما باید کاملاً آینده‌نگر باشد. از توصیف دوباره موضوعاتی که در گذشته رخ داده است خودداری کنید. تمرکز شما باید بر پیش‌بینی روند آینده، سطوح کلیدی و استراتژی معاملاتی باشد. قیمت فعلی نقطه شروع تحلیل است، نه نتیجه تحلیل. از عباراتی مثل «در 7 روز اخیر» یا «در گذشته» استفاده نکنید. بگویید: «در روزهای آینده»، «پیش‌بینی می‌شود»، «احتمال دارد».
+   411→24. **دقت عددی مطلق — تطابق با گراف تصمیم:** تحلیل شما باید کاملاً بر اساس داده‌های گراف تصمیم باشد. هر عددی که در متن می‌آورید (قیمت، درصد، سطح حمایت/مقاومت) باید **دقیقاً** با همان عددی که در داده‌های پایه ارائه شده مطابقت داشته باشد. **ممنوعیت مطلق:** هرگز عددی را از خودتان نسازید، تخمین نزنید، یا گرد نکنید. مثلاً اگر قیمت فعلی ۲,۰۷۶,۹۵۰ ریال است، نباید بنویسید ۲,۰۰۰,۰۰۰ یا ۲,۱۰۰,۰۰۰. اگر سطح مقاومت ۲,۱۸۰,۰۰۰ است، همان را بنویسید. اگر سناریوی صعودی ۳۵ درصد احتمال دارد، همان ۳۵ درصد را بنویسید.
+   412→25. **قیمت فعلی الزامی:** قیمت فعلی ذکرشده در تحلیل باید دقیقاً همان قیمتی باشد که در داده‌های پایه با برچسب «قیمت فعلی» مشخص شده است. این قیمت نقطه شروع تمام تحلیل‌ها و محاسبات شماست.
+   413→26. **منع تناقض:** هیچ جمله‌ای در تحلیل نباید با داده‌های ارائه‌شده تناقض داشته باشد. اگر داده‌ها نشان‌دهنده روند صعودی هستند، تحلیل نباید نزولی باشد و بالعکس. اگر احتمال صعودی بیشتر است، تحلیل باید بازتاب‌دهنده این اولویت باشد.
+   414→27. **حفظ مقیاس قیمت — ممنوعیت تغییر مقیاس:** تمام قیمت‌ها (میانگین متحرک، باند بولینگر، اهداف سناریو، حد ضرر، حمایت، مقاومت) باید در همان مقیاس قیمت فعلی باشند. اگر قیمت فعلی ۲,۱۴۰,۰۰۰ ریال است، میانگین متحرک باید حدود ۱,۸۰۰,۰۰۰ تا ۲,۱۰۰,۰۰۰ ریال باشد (نه ۳۰,۰۰۰ یا ۲۴,۰۰۰). هرگز صفرهای قیمت را حذف نکنید. هرگز مقیاس قیمت را تغییر ندهید.
+   415→`;
+   416→
+   417→// ─── POST Handler ────────────────────────────────────────────────
+   418→export async function POST(req: NextRequest) {
+   419→  const startTime = Date.now();
+   420→  try {
+   421→    const body = await req.json();
+   422→    if (!body.currentPrice) {
+   423→      return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
+   424→    }
+   425→
+   426→    const symbolName = String(body.symbolName || 'unknown');
+   427→    const today = getTodayDateStr();
+   428→
+   429→    // 1. Check daily persistent cache (Prisma/SQLite)
+   430→    // Also validate price match — if cached price is wildly different, re-generate
+   431→    try {
+   432→      const currentPrice = Number(body.currentPrice) || 0;
+   433→      const cached = await db.aiAnalysisCache.findUnique({
+   434→        where: { symbol_date: { symbol: symbolName, date: today } },
+   435→      });
+   436→      if (cached && cached.text) {
+   437→        // Price sanity check: if cached price differs by >5%, the cached analysis
+   438→        // was likely generated with wrong/stale data (e.g. 1392-era chart data)
+   439→        const cachedPrice = Number(cached.price) || 0;
+   440→        if (cachedPrice > 0 && currentPrice > 0) {
+   441→          const priceDiff = Math.abs(cachedPrice - currentPrice) / currentPrice;
+   442→          if (priceDiff > 0.05) {
+   443→            console.log(`[AI] Daily cache INVALIDATED for ${symbolName} (cached price diff ${(priceDiff * 100).toFixed(1)}% > 5%), re-generating`);
+   444→          } else {
+   445→            console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+   446→            return NextResponse.json({
+   447→              text: cached.text,
+   448→              ml: cached.ml ? JSON.parse(cached.ml) : undefined,
+   449→              cached: true,
+   450→              cachedDate: cached.date,
+   451→            });
+   452→          }
+   453→        } else {
+   454→          console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+   455→          return NextResponse.json({
+   456→            text: cached.text,
+   457→            ml: cached.ml ? JSON.parse(cached.ml) : undefined,
+   458→            cached: true,
+   459→            cachedDate: cached.date,
+   460→          });
+   461→        }
+   462→      }
+   463→    } catch (dbErr) {
+   464→      console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
+   465→    }
+   466→
+   467→    // 1b. Check for previous day's cache (fallback only if price is within 2%)
+   468→    try {
+   469→      const currentPrice = Number(body.currentPrice) || 0;
+   470→      const prevCached = await db.aiAnalysisCache.findFirst({
+   471→        where: { symbol: symbolName, date: { not: today } },
+   472→        orderBy: { createdAt: 'desc' },
+   473→      });
+   474→      if (prevCached && prevCached.text && prevCached.price > 0 && currentPrice > 0) {
+   475→        const priceDiff = Math.abs(prevCached.price - currentPrice) / currentPrice;
+   476→        if (priceDiff < 0.02) { // Less than 2% price difference
+   477→          console.log(`[AI] Previous cache fallback HIT for ${symbolName} (${prevCached.date}, price diff ${((priceDiff)*100).toFixed(1)}%) [${Date.now() - startTime}ms]`);
+   478→          return NextResponse.json({
+   479→            text: prevCached.text,
+   480→            ml: prevCached.ml ? JSON.parse(prevCached.ml) : undefined,
+   481→            cached: true,
+   482→            cachedDate: prevCached.date,
+   483→            isFallback: true,
+   484→          });
+   485→        } else {
+   486→          console.log(`[AI] Previous cache SKIP for ${symbolName} (price diff ${((priceDiff)*100).toFixed(1)}% > 2%)`);
+   487→        }
+   488→      }
+   489→    } catch (dbErr) {
+   490→      console.warn('[AI] Previous cache fallback read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
+   491→    }
+   492→
+   493→    // 2. ML selection
+   494→    const mlInput = buildMLInput(body);
+   495→    const mlSelection = selectMLCombination(mlInput);
+   496→    const methods = selectMethods(mlInput);
+   497→
+   498→    // 3. MSL v4 selection
+   499→    const mslCtx = buildMSLV4Context(body);
+   500→    const mslResult = selectMSLV4(mslCtx);
+   501→    mlSelection.school = mslResult.school_of_analysis.primary.id as typeof mlSelection.school;
+   502→    mlSelection.style = mslResult.analysis_style.primary.id as typeof mlSelection.style;
+   503→    mlSelection.tone = mslResult.analysis_tone.primary.id as typeof mlSelection.tone;
+   504→    mlSelection.reasoning = `MSLv4: ${mslResult.school_of_analysis.primary.id}/${mslResult.analysis_style.primary.id}/${mslResult.analysis_tone.primary.id}`;
+   505→
+   506→    // 4. Build prompt
+   507→    const mslSystemPrompt = buildMSLV4PromptSection(mslResult);
+   508→    const userMessage = buildPrompt(body, mlSelection, methods);
+   509→    const dynamicSystemPrompt = `${SYSTEM_PROMPT}\n\n${mslSystemPrompt}`;
+   510→
+   511→    console.log(`[AI] Generating for ${symbolName} (cache miss) [${Date.now() - startTime}ms]`);
+   512→
+   513→    // 5. Call AI through dedicated channel — fail fast on 429
+   514→    //    Only retry 2 times max (3 total attempts) to avoid wasting time.
+   515→    //    If rate-limited, the previous-day fallback above already returned.
+   516→    const content = await dedicatedAIChatCompletion(
+   517→      [
+   518→        { role: 'system', content: dynamicSystemPrompt },
+   519→        { role: 'user', content: userMessage },
+   520→      ],
+   521→      {
+   522→        timeoutMs: 90_000,  // 90s max (1 initial + 2 retries)
+   523→        maxRetries: 2,
+   524→      }
+   525→    );
+   526→
+   527→    // Post-process: validate prices, fix Persian text, strip technical codes
+   528→    const priceRefs = buildPriceReferences(body);
+   529→    const { text: cleaned, priceValid, hallucinationCount } = postProcessAIOutput(content, priceRefs);
+   530→
+   531→    // If prices are severely hallucinated, log but still return (don't crash)
+   532→    if (!priceValid) {
+   533→      console.warn(`[AI] Price hallucination detected for ${symbolName}: ${hallucinationCount} bad prices found. NOT caching.`);
+   534→    }
+   535→    const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
+   536→
+   537→    // 7. Save to daily persistent cache — ONLY if prices are valid
+   538→    if (priceValid) {
+   539→      try {
+   540→        await db.aiAnalysisCache.upsert({
+   541→          where: { symbol_date: { symbol: symbolName, date: today } },
+   542→          create: {
+   543→            symbol: symbolName,
+   544→            date: today,
+   545→            text: cleaned,
+   546→            ml: JSON.stringify(mlData),
+   547→            price: Number(body.currentPrice) || 0,
+   548→          },
+   549→          update: {
+   550→            text: cleaned,
+   551→            ml: JSON.stringify(mlData),
+   552→            price: Number(body.currentPrice) || 0,
+   553→          },
+   554→        });
+   555→        console.log(`[AI] Saved to daily cache: ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+   556→      } catch (dbErr) {
+   557→        console.warn('[AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
+   558→      }
+   559→    } else {
+   560→      console.log(`[AI] Skipped cache save for ${symbolName} due to price hallucination`);
+   561→    }
+   562→
+   563→    console.log(`[AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
+   564→    return NextResponse.json({ text: cleaned, ml: mlData });
+   565→
+   566→  } catch (err) {
+   567→    console.error(`[AI] Error [${Date.now() - startTime}ms]:`, err);
+   568→    return NextResponse.json({ error: userFriendlyError(err), text: '' }, { status: 500 });
+   569→  }
+   570→}
+   571→
+   572→function userFriendlyError(err: unknown): string {
+   573→  const msg = err instanceof Error ? err.message : String(err);
+   574→  if (msg.includes('Rate limited') || msg.includes('429')) {
+   575→    return 'سرور هوشمند محدودیت سرعت دارد.';
+   576→  }
+   577→  if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
+   578→    return 'زمان پاسخدهی هوشمند به پایان رسید.';
+   579→  }
+   580→  if (msg.includes('concurrent')) {
+   581→    return 'درخواست تحلیل قبلی هنوز در حال اجراست.';
+   582→  }
+   583→  return 'خطایی در تولید تحلیل رخ داد.';
+   584→}
+   585→

@@ -712,6 +712,9 @@ export default function Home() {
                   decisionGraph={data.ta.decisionGraph}
                   probabilityTrend={data.probabilityTrend}
                   currencyUnit={currencyUnit}
+                  atr={data.ta.atr}
+                  instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
+                  instrumentCategory={data.info?.category}
                 />
               )}
 

@@ -44,3 +44,16 @@ model AiAnalysisCache {
   @@index([symbol])
   @@index([date])
 }
+
+model DecisionGraphAiCache {
+  id        String   @id @default(cuid())
+  symbol    String
+  date      String   // YYYY-MM-DD
+  text      String
+  price     Float
+  createdAt DateTime @default(now())
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+}
