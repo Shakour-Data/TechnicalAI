@@ -139,3 +139,25 @@ Stage Summary:
 - Users can export the full decision graph analysis as a standalone HTML file
 - Currency unit correctly shows 'واحد' for indices instead of hardcoded 'ریال'
 - All 4 tasks implemented, zero new lint errors introduced
+---
+Task ID: 6
+Agent: main
+Task: Rewrite decision-graph-export.ts with Canvas-based interactivity (no SVG)
+
+Work Log:
+- Completely rewrote /src/lib/decision-graph-export.ts
+- Decision graph: Canvas for edges + HTML divs for nodes (full click/hover/filter interactivity)
+- Cumulative probability chart: Canvas with mouse hover line + tooltip
+- Per-scenario trend charts: Canvas with multi-select toggle buttons + hover line + tooltip
+- Filter toolbar included: all/up/pullback/down/risk/trend/breakout/reversal/SC1-SC9
+- All data embedded as JSON in window.__DG_DATA__
+- All inline JS uses string concatenation (no backticks) to avoid template literal conflicts
+- Professional narrative text included in export
+- Responsive with ResizeObserver for canvas redraw
+- Zero new lint errors
+
+Stage Summary:
+- Export file is now fully interactive Canvas-based (no SVG)
+- Filter toolbar replicated from in-page component
+- All 4 visual elements (graph, cumulative chart, per-scenario charts, trend table) are present
+- Narrative text embedded in export output
