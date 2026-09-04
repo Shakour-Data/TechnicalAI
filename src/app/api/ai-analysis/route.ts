@@ -18,9 +18,20 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 // ─── Helpers ──────────────────────────────────────────────────────
-function toPersianNum(n: number): string {
+function toPersianNum(n: number, decimals: number = 0): string {
   if (!isFinite(n) || isNaN(n)) return '\u06f0';
-  return Math.round(n).toLocaleString('fa-IR');
+  return n.toLocaleString('fa-IR', {
+    maximumFractionDigits: decimals,
+    minimumFractionDigits: 0,
+  });
+}
+
+function toFaPrice(n: number, decimals: number = 0): string {
+  if (!isFinite(n) || isNaN(n)) return '\u06f0';
+  return n.toLocaleString('fa-IR', {
+    maximumFractionDigits: decimals,
+    minimumFractionDigits: decimals > 0 ? Math.min(decimals, 2) : 0,
+  });
 }
 function srGrade(strength: number): string {
   if (strength >= 8.5) return '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc';
@@ -159,14 +170,14 @@ function extractProbTrendSignals(body: Record<string, unknown>): MSLV4Context['p
   };
 
   return {
-    bullGroupDir: bullG?.trendDirection as MSLV4Context['probTrend']['bullGroupDir'],
-    bearGroupDir: bearG?.trendDirection as MSLV4Context['probTrend']['bearGroupDir'],
-    neutralGroupDir: neutralG?.trendDirection as MSLV4Context['probTrend']['neutralGroupDir'],
+    bullGroupDir: bullG?.trendDirection as NonNullable<MSLV4Context['probTrend']>['bullGroupDir'],
+    bearGroupDir: bearG?.trendDirection as NonNullable<MSLV4Context['probTrend']>['bearGroupDir'],
+    neutralGroupDir: neutralG?.trendDirection as NonNullable<MSLV4Context['probTrend']>['neutralGroupDir'],
     bullGroupCum: bullG?.trend?.[0]?.cumulativeProb,
     bearGroupCum: bearG?.trend?.[0]?.cumulativeProb,
     neutralGroupCum: neutralG?.trend?.[0]?.cumulativeProb,
-    dominantCumDir: domScenario?.trendDirection as MSLV4Context['probTrend']['dominantCumDir'],
-    dominantIndivDir: domScenario?.trendDirection as MSLV4Context['probTrend']['dominantIndivDir'],
+    dominantCumDir: domScenario?.trendDirection as NonNullable<MSLV4Context['probTrend']>['dominantCumDir'],
+    dominantIndivDir: domScenario?.trendDirection as NonNullable<MSLV4Context['probTrend']>['dominantIndivDir'],
     bullGroupChange7d: get7dChange(bullG?.trend ?? []),
     bearGroupChange7d: get7dChange(bearG?.trend ?? []),
     neutralGroupChange7d: get7dChange(neutralG?.trend ?? []),
@@ -193,7 +204,10 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     hasVolume: boolean;
     resistanceStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
     supportStrengths: Array<{ price: number; strength: number; methods?: unknown[] }>;
+    decimals: number;
   };
+
+  const decimals = (body.decimals as number) ?? 0;
 
   const trendLabel = trendDirection === 'up' ? '\u0635\u0639\u0648\u062f\u06cc' : trendDirection === 'down' ? '\u0646\u0632\u0648\u0644\u06cc' : '\u062e\u0646\u062b\u06cc';
   const adxStrength = adx > 40 ? '\u0628\u0633\u06cc\u0627\u0631 \u0642\u0648\u06cc' : adx > 25 ? '\u0642\u0648\u06cc' : adx > 15 ? '\u0645\u062a\u0648\u0633\u0637' : '\u0636\u0639\u06cc\u0641';
@@ -246,7 +260,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
     .slice(0, 5);
 
   const scenarioBlock = allScenarios
-    .map(s => `- ${s.name}: ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toPersianNum(s.min)} \u2014 ${toPersianNum(s.max)}`)
+    .map(s => `- ${s.name}: ${toPersianNum(s.prob)} \u062f\u0631\u0635\u062f | \u0647\u062f\u0641: ${toFaPrice(s.min, decimals)} \u2014 ${toFaPrice(s.max, decimals)}`)
     .join('\n');
 
   // Instrument type and currency unit — use client-provided unit when available
@@ -330,7 +344,7 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   }
 
   // Persian descriptions for technical indicators (no codes in prompt)
-  const maDesc = `\u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a (\u06f2\u06f1 \u0631\u0648\u0632\u0647): ${toPersianNum(ma21)} | \u0628\u0644\u0646\u062f\u0645\u062f\u062a (\u06f1\u06f0\u06f0 \u0631\u0648\u0632\u0647): ${toPersianNum(ma100)}`;
+  const maDesc = `\u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a (\u06f2\u06f1 \u0631\u0648\u0632\u0647): ${toFaPrice(ma21, decimals)} | \u0628\u0644\u0646\u062f\u0645\u062f\u062a (\u06f1\u06f0\u06f0 \u0631\u0648\u0632\u0647): ${toFaPrice(ma100, decimals)}`;
   const maRelation = currentPrice > ma21 && currentPrice > ma100
     ? '\u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0647\u0631 \u062f\u0648 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062a\u062d\u0631\u06a9 \u0627\u0633\u062a'
     : currentPrice > ma21 ? '\u0642\u06cc\u0645\u062a \u0628\u0627\u0644\u0627\u062a\u0631 \u0627\u0632 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u06a9\u0648\u062a\u0627\u0647\u200c\u0645\u062f\u062a \u0627\u0645\u0627 \u067e\u0627\u06cc\u06cc\u0646\u200c\u062a\u0631 \u0627\u0632 \u0628\u0644\u0646\u062f\u0645\u062f\u062a \u0627\u0633\u062a'
@@ -341,18 +355,18 @@ function buildPrompt(body: Record<string, unknown>, mlSelection: ReturnType<type
   const stochDesc = `\u0627\u0633\u062a\u0648\u06a9\u0627\u0633\u062a\u06cc\u06a9: ${toPersianNum(stochK)}/${toPersianNum(stochD)}`;
   const cciMfiDesc = `\u0634\u0627\u062e\u0635 \u06a9\u0627\u0646\u0627\u0644 \u06a9\u0627\u0644\u0627: ${toPersianNum(cci)}${mfi > 0 ? ` | \u0634\u0627\u062e\u0635 \u062c\u0631\u06cc\u0627\u0646 \u0646\u0642\u062f\u06cc: ${toPersianNum(mfi)}` : ''}`;
   const macdFullDesc = `\u0648\u0627\u06af\u0631\u0627\u0641 \u0647\u06cc\u0633\u062a\u0648\u06af\u0631\u0627\u0645: ${macdDesc} | \u062c\u0631\u06cc\u0627\u0646 \u062a\u062c\u0645\u0639\u06cc \u062d\u062c\u0645: ${obvDesc}`;
-  const bbSarDesc = `\u0628\u0627\u0646\u062f \u0628\u0648\u0644\u06cc\u0646\u06af\u0631: ${toPersianNum(bollingerLower)} \u2014 ${toPersianNum(bollingerUpper)} | \u062d\u0645\u0627\u06cc\u062a \u067e\u0648\u06cc\u0627: ${toPersianNum(sar)} | \u062f\u0627\u0645\u0646\u0647 \u062a\u0644\u0648\u0627\u062a\u06cc: ${toPersianNum(atr)}`;
+  const bbSarDesc = `\u0628\u0627\u0646\u062f \u0628\u0648\u0644\u06cc\u0646\u06af\u0631: ${toFaPrice(bollingerLower, decimals)} \u2014 ${toFaPrice(bollingerUpper, decimals)} | \u062d\u0645\u0627\u06cc\u062a \u067e\u0648\u06cc\u0627: ${toFaPrice(sar, decimals)} | \u062f\u0627\u0645\u0646\u0647 \u062a\u0644\u0648\u0627\u062a\u06cc: ${toFaPrice(atr, decimals)}`;
 
   return `
 **\u062f\u0627\u062f\u0647\u200c\u0647\u0627\u06cc \u067e\u0627\u06cc\u0647:**
-- \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a \u0641\u0639\u0644\u06cc: **${toPersianNum(currentPrice)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0)
+- \u0646\u0627\u0645: **${symbolName}** | \u0646\u0648\u0639: **${instrumentLabel}** | \u0642\u06cc\u0645\u062a \u0641\u0639\u0644\u06cc: **${toFaPrice(currentPrice, decimals)}** ${unitLabel} | \u0631\u0648\u0646\u062f: **${trendLabel}** (${toPersianNum(Math.abs(trendAngle))}\u00b0)
 - ${maDesc}. ${maRelation}.
 - ${rsiDesc}
 - ${adxDesc}
 - ${stochDesc} | ${cciMfiDesc}
 - ${macdFullDesc}
 - ${bbSarDesc}
-- \u0645\u0642\u0627\u0648\u0645\u062a: ${toPersianNum(R1Price)} (${R1Grade}) | \u062d\u0645\u0627\u06cc\u062a: ${toPersianNum(S1Price)} (${S1Grade})
+- \u0645\u0642\u0627\u0648\u0645\u062a: ${toFaPrice(R1Price, decimals)} (${R1Grade}) | \u062d\u0645\u0627\u06cc\u062a: ${toFaPrice(S1Price, decimals)} (${S1Grade})
 
 **\u0633\u0646\u0627\u0631\u06cc\u0648\u0647\u0627\u06cc \u0628\u0631\u062a\u0631 (\u0645\u0631\u062a\u0628 \u0628\u0631 \u0627\u062d\u062a\u0645\u0627\u0644):**
 ${scenarioBlock}
@@ -409,9 +423,10 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 22. **ممنوعیت مطلق کدها و شناسه‌ها:** به هیچ وجه در متن خروجی از کدهای تخصصی سیستم استفاده نکنید. ممنوع: SC1 تا SC9، R1 تا R9، MA21، MA100، RSI، ADX، MACD، CCI، MFI، ATR، SAR، OBV، DI+، DI-، R² و هر واژه فنی انگلیسی دیگر. فقط نام فارسی سناریوها و نام ابزار مالی مجاز است. اندیکاتورها را فقط به صورت توصیفی بیاورید (مثلاً «شاخص قدرت نسبی» به جای RSI).
 23. **تحلیل آینده‌نگر:** تحلیل شما باید کاملاً آینده‌نگر باشد. از توصیف دوباره موضوعاتی که در گذشته رخ داده است خودداری کنید. تمرکز شما باید بر پیش‌بینی روند آینده، سطوح کلیدی و استراتژی معاملاتی باشد. قیمت فعلی نقطه شروع تحلیل است، نه نتیجه تحلیل. از عباراتی مثل «در 7 روز اخیر» یا «در گذشته» استفاده نکنید. بگویید: «در روزهای آینده»، «پیش‌بینی می‌شود»، «احتمال دارد».
 24. **دقت عددی مطلق — تطابق با گراف تصمیم:** تحلیل شما باید کاملاً بر اساس داده‌های گراف تصمیم باشد. هر عددی که در متن می‌آورید (قیمت، درصد، سطح حمایت/مقاومت) باید **دقیقاً** با همان عددی که در داده‌های پایه ارائه شده مطابقت داشته باشد. **ممنوعیت مطلق:** هرگز عددی را از خودتان نسازید، تخمین نزنید، یا گرد نکنید. مثلاً اگر قیمت فعلی ۲,۰۷۶,۹۵۰ ریال است، نباید بنویسید ۲,۰۰۰,۰۰۰ یا ۲,۱۰۰,۰۰۰. اگر سطح مقاومت ۲,۱۸۰,۰۰۰ است، همان را بنویسید. اگر سناریوی صعودی ۳۵ درصد احتمال دارد، همان ۳۵ درصد را بنویسید.
-25. **قیمت فعلی الزامی:** قیمت فعلی ذکرشده در تحلیل باید دقیقاً همان قیمتی باشد که در داده‌های پایه با برچسب «قیمت فعلی» مشخص شده است. این قیمت نقطه شروع تمام تحلیل‌ها و محاسبات شماست.
-26. **منع تناقض:** هیچ جمله‌ای در تحلیل نباید با داده‌های ارائه‌شده تناقض داشته باشد. اگر داده‌ها نشان‌دهنده روند صعودی هستند، تحلیل نباید نزولی باشد و بالعکس. اگر احتمال صعودی بیشتر است، تحلیل باید بازتاب‌دهنده این اولویت باشد.
-27. **حفظ مقیاس قیمت — ممنوعیت تغییر مقیاس:** تمام قیمت‌ها (میانگین متحرک، باند بولینگر، اهداف سناریو، حد ضرر، حمایت، مقاومت) باید در همان مقیاس قیمت فعلی باشند. اگر قیمت فعلی ۲,۱۴۰,۰۰۰ ریال است، میانگین متحرک باید حدود ۱,۸۰۰,۰۰۰ تا ۲,۱۰۰,۰۰۰ ریال باشد (نه ۳۰,۰۰۰ یا ۲۴,۰۰۰). هرگز صفرهای قیمت را حذف نکنید. هرگز مقیاس قیمت را تغییر ندهید.
+25. **جهت اعداد:** تمام اعداد در متن فارسی باید از چپ به راست نوشته شوند. هرگز اعداد را برعکس یا از راست به چپ ننویسید. مثلاً «۱,۲۳۴» نه «۴,۳۲۱».
+26. **قیمت فعلی الزامی:** قیمت فعلی ذکرشده در تحلیل باید دقیقاً همان قیمتی باشد که در داده‌های پایه با برچسب «قیمت فعلی» مشخص شده است. این قیمت نقطه شروع تمام تحلیل‌ها و محاسبات شماست.
+27. **منع تناقض:** هیچ جمله‌ای در تحلیل نباید با داده‌های ارائه‌شده تناقض داشته باشد. اگر داده‌ها نشان‌دهنده روند صعودی هستند، تحلیل نباید نزولی باشد و بالعکس. اگر احتمال صعودی بیشتر است، تحلیل باید بازتاب‌دهنده این اولویت باشد.
+28. **حفظ مقیاس قیمت — ممنوعیت تغییر مقیاس:** تمام قیمت‌ها (میانگین متحرک، باند بولینگر، اهداف سناریو، حد ضرر، حمایت، مقاومت) باید در همان مقیاس قیمت فعلی باشند. اگر قیمت فعلی ۲,۱۴۰,۰۰۰ ریال است، میانگین متحرک باید حدود ۱,۸۰۰,۰۰۰ تا ۲,۱۰۰,۰۰۰ ریال باشد (نه ۳۰,۰۰۰ یا ۲۴,۰۰۰). هرگز صفرهای قیمت را حذف نکنید. هرگز مقیاس قیمت را تغییر ندهید.
 `;
 
 // ─── POST Handler ────────────────────────────────────────────────
@@ -419,8 +434,19 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
     const body = await req.json();
-    if (!body.currentPrice) {
-      return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
+
+    // ─── Input validation ─────────────────────────────────────────
+    if (!body.currentPrice || typeof body.currentPrice !== 'number' || body.currentPrice <= 0) {
+      return NextResponse.json({ error: 'currentPrice باید یک عدد مثبت باشد.' }, { status: 400 });
+    }
+    if (!body.symbolName || typeof body.symbolName !== 'string' || body.symbolName.trim().length === 0) {
+      return NextResponse.json({ error: 'symbolName باید یک رشته غیرخالی باشد.' }, { status: 400 });
+    }
+    // Validate at least some key indicator values are present
+    const indicatorKeys = ['rsi', 'adx', 'macdHist', 'stochK', 'bollingerUpper', 'bollingerLower'];
+    const presentIndicators = indicatorKeys.filter(k => body[k] !== undefined && body[k] !== null);
+    if (presentIndicators.length === 0) {
+      return NextResponse.json({ error: 'حداقل چند اندیکاتور فنی باید ارائه شود.' }, { status: 400 });
     }
 
     const symbolName = String(body.symbolName || 'unknown');
@@ -564,7 +590,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text: cleaned, ml: mlData });
 
   } catch (err) {
-    console.error(`[AI] Error [${Date.now() - startTime}ms]:`, err);
+    const elapsed = Date.now() - startTime;
+    const errorType = err instanceof Error ? err.constructor.name : 'Unknown';
+    console.error(`[AI] ${errorType} error after ${elapsed}ms:`, err instanceof Error ? err.message : err);
+    if (err instanceof Error && err.stack) {
+      console.error('[AI] Stack trace:', err.stack);
+    }
     return NextResponse.json({ error: userFriendlyError(err), text: '' }, { status: 500 });
   }
 }
@@ -572,13 +603,25 @@ export async function POST(req: NextRequest) {
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes('Rate limited') || msg.includes('429')) {
-    return 'سرور هوشمند محدودیت سرعت دارد.';
+    return 'سرور هوشمند محدودیت سرعت دارد. لطفاً چند دقیقه دیگر تلاش کنید.';
   }
   if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
-    return 'زمان پاسخدهی هوشمند به پایان رسید.';
+    return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً دوباره تلاش کنید.';
   }
   if (msg.includes('concurrent')) {
-    return 'درخواست تحلیل قبلی هنوز در حال اجراست.';
+    return 'درخواست تحلیل قبلی هنوز در حال اجراست. لطفاً صبر کنید.';
   }
-  return 'خطایی در تولید تحلیل رخ داد.';
+  if (msg.includes('quota') || msg.includes('limit') || msg.includes('capacity')) {
+    return 'ظرفیت هوشمند در حال حاضر پر است. لطفاً بعداً تلاش کنید.';
+  }
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('ECONNREFUSED')) {
+    return 'خطای شبکه در ارتباط با سرور هوشمند. لطفاً اتصال اینترنت خود را بررسی کنید.';
+  }
+  if (msg.includes('ReferenceError') || msg.includes('TypeError') || msg.includes('SyntaxError')) {
+    // Internal error - don't expose details to user
+    console.error('[AI] Internal error (hidden from user):', msg);
+    return 'خطای داخلی سیستم. تیم فنی در جریان است.';
+  }
+  // Generic fallback
+  return 'خطایی در تولید تحلیل رخ داد. لطفاً دوباره تلاش کنید.';
 }

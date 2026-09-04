@@ -464,6 +464,18 @@ export default function SymbolSearch({
     return promise;
   }, []);
 
+  /* ── Deduplicate TGJU+Yahoo merged items ── */
+  const deduplicateMergedItems = React.useCallback((tgjuItems: InstrumentItem[], yahooItems: InstrumentItem[]): InstrumentItem[] => {
+    // Collect Yahoo fallback symbols from TGJU items — these already represent the same instrument
+    const yahooFallbackSymbols = new Set<string>();
+    for (const item of tgjuItems) {
+      if (item.yahooFallbackSymbol) yahooFallbackSymbols.add(item.yahooFallbackSymbol);
+    }
+    // Filter out Yahoo items whose symbol is already covered by a TGJU fallback
+    const uniqueYahooItems = yahooItems.filter((item) => !yahooFallbackSymbols.has(item.yahooSymbol || ''));
+    return [...tgjuItems, ...uniqueYahooItems];
+  }, []);
+
   /* ── Get items for category ── */
   const getItemsForCategory = React.useCallback(async (cat: CategoryKey): Promise<InstrumentItem[]> => {
     if (cat === 'yahoo_stock') {
@@ -489,12 +501,12 @@ export default function SymbolSearch({
         case 'currency': items = tgju?.currencies || []; break;
         case 'gold': items = [...(tgju?.gold || []), ...(tgju?.silver || [])]; break;
         case 'gold_etf': items = tgju?.goldEtfs || []; break;
-        case 'crypto': items = [...(tgju?.crypto || []), ...(yahoo?.yahooCrypto || [])]; break;
-        case 'world_index': items = [...(tgju?.worldIndices || []), ...(tgju?.foreignStocks || []), ...(yahoo?.yahooIndices || [])]; break;
-        case 'forex': items = [...(tgju?.forex || []), ...(yahoo?.yahooForex || [])]; break;
-        case 'energy': items = [...(tgju?.energy || []), ...(yahoo?.yahooEnergy || [])]; break;
-        case 'metal': items = [...(tgju?.metals || []), ...(yahoo?.yahooMetals || [])]; break;
-        case 'commodity': items = [...(tgju?.commodities || []), ...(yahoo?.yahooCommodities || [])]; break;
+        case 'crypto': items = deduplicateMergedItems(tgju?.crypto || [], yahoo?.yahooCrypto || []); break;
+        case 'world_index': items = deduplicateMergedItems([...(tgju?.worldIndices || []), ...(tgju?.foreignStocks || [])], yahoo?.yahooIndices || []); break;
+        case 'forex': items = deduplicateMergedItems(tgju?.forex || [], yahoo?.yahooForex || []); break;
+        case 'energy': items = deduplicateMergedItems(tgju?.energy || [], yahoo?.yahooEnergy || []); break;
+        case 'metal': items = deduplicateMergedItems(tgju?.metals || [], yahoo?.yahooMetals || []); break;
+        case 'commodity': items = deduplicateMergedItems(tgju?.commodities || [], yahoo?.yahooCommodities || []); break;
         default: items = [];
       }
       return items;
@@ -511,21 +523,29 @@ export default function SymbolSearch({
       default: {
         const tgju = tgjuCacheRef.current || await fetchTgjuData();
         const yahoo = yahooCacheRef.current || await fetchYahooData();
+        // Deduplicate each TGJU+Yahoo pair, then combine
+        const cryptoItems = deduplicateMergedItems(tgju?.crypto || [], yahoo?.yahooCrypto || []);
+        const forexItems = deduplicateMergedItems(tgju?.forex || [], yahoo?.yahooForex || []);
+        const worldIndexItems = deduplicateMergedItems([...(tgju?.worldIndices || []), ...(tgju?.foreignStocks || [])], yahoo?.yahooIndices || []);
+        const energyItems = deduplicateMergedItems(tgju?.energy || [], yahoo?.yahooEnergy || []);
+        const metalItems = deduplicateMergedItems(tgju?.metals || [], yahoo?.yahooMetals || []);
+        const commodityItems = deduplicateMergedItems(tgju?.commodities || [], yahoo?.yahooCommodities || []);
         return [
           ...data.indices, ...data.stocks, ...data.etfs,
-          ...(tgju?.currencies || []), ...(tgju?.forex || []), ...(yahoo?.yahooForex || []),
-          ...(tgju?.crypto || []), ...(yahoo?.yahooCrypto || []),
+          ...(tgju?.currencies || []),
+          ...forexItems,
+          ...cryptoItems,
           ...(tgju?.gold || []), ...(tgju?.silver || []), ...(tgju?.goldEtfs || []),
-          ...(tgju?.worldIndices || []), ...(yahoo?.yahooIndices || []),
-          ...(tgju?.energy || []), ...(yahoo?.yahooEnergy || []),
-          ...(tgju?.metals || []), ...(yahoo?.yahooMetals || []),
-          ...(tgju?.commodities || []), ...(yahoo?.yahooCommodities || []),
+          ...worldIndexItems,
+          ...energyItems,
+          ...metalItems,
+          ...commodityItems,
           ...(yahoo?.yahooStocks || []), ...(yahoo?.yahooEtfs || []),
           ...data.bonds, ...data.futures, ...data.salaf, ...data.mortgage,
         ];
       }
     }
-  }, [activeIndustry, activeCountry, activeSector, fetchData, fetchTgjuData, fetchYahooData]);
+  }, [activeIndustry, activeCountry, activeSector, fetchData, fetchTgjuData, fetchYahooData, deduplicateMergedItems]);
 
   /* ── Advanced multi-field search with operator support ── */
   const doFilter = React.useCallback((items: InstrumentItem[], q: string) => {

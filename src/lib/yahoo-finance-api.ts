@@ -236,6 +236,14 @@ export const YAHOO_INDICES: YahooInstrument[] = [
   { symbol: '^MIB', name: 'ام‌آی‌بی', nameEn: 'MIB', country: 'ایتالیا', countryEn: 'IT', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
   { symbol: '^SSMI', name: 'اس‌ام‌آی', nameEn: 'SMI', country: 'سوئیس', countryEn: 'CH', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
   { symbol: '^AEX', name: 'ای‌ای‌ایکس', nameEn: 'AEX', country: 'هلند', countryEn: 'NL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^STOXX50E', name: 'یورواستاکس ۵۰', nameEn: 'Euro Stoxx 50', country: 'اروپا', countryEn: 'INTL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^STOXX', name: 'استوکس ۶۰۰', nameEn: 'STOXX 600', country: 'اروپا', countryEn: 'INTL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^N100', name: 'یورونکست ۱۰۰', nameEn: 'Euronext 100', country: 'اروپا', countryEn: 'INTL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^OMX', name: 'او‌ام‌ایکس', nameEn: 'OMX Stockholm', country: 'سوئد', countryEn: 'SE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^BFX', name: 'بل ۲۰', nameEn: 'BEL 20', country: 'بلژیک', countryEn: 'BE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^ATX', name: 'ای‌تی‌ایکس', nameEn: 'ATX', country: 'اتریش', countryEn: 'AT', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^WIG', name: 'ویگ', nameEn: 'WIG', country: 'لهستان', countryEn: 'PL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+  { symbol: '^ISEQ', name: 'ای‌سیک', nameEn: 'ISEQ', country: 'ایرلند', countryEn: 'IE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
 
   /* ── Asia-Pacific Indices ──────────────────────────────── */
   { symbol: '^N225', name: 'نیکی ۲۲۵', nameEn: 'Nikkei 225', country: 'ژاپن', countryEn: 'JP', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
@@ -249,6 +257,7 @@ export const YAHOO_INDICES: YahooInstrument[] = [
   { symbol: '^AXJO', name: 'آ اس ایکس', nameEn: 'ASX All Ordinaries', country: 'استرالیا', countryEn: 'AU', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
 
   /* ── Americas (Non-US) Indices ────────────────────────── */
+  { symbol: '^GSPTSE', name: 'اس اند پی تی‌اس‌ایکس', nameEn: 'S&P/TSX', country: 'کانادا', countryEn: 'CA', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
   { symbol: '^BVSP', name: 'بوسپا', nameEn: 'Bovespa', country: 'برزیل', countryEn: 'BR', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
   { symbol: '^MXX', name: 'آی‌پی‌سی', nameEn: 'IPC', country: 'مکزیک', countryEn: 'MX', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
 
@@ -256,6 +265,7 @@ export const YAHOO_INDICES: YahooInstrument[] = [
   { symbol: '^TASI', name: 'تداول', nameEn: 'Tadawul', country: 'عربستان', countryEn: 'SA', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
   { symbol: '^DFMGI', name: 'دبی جی‌آی', nameEn: 'DFMGI', country: 'امارات', countryEn: 'AE', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
   { symbol: '^XU100', name: 'بیست ۱۰۰', nameEn: 'BIST 100', country: 'ترکیه', countryEn: 'TR', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
+  { symbol: '^TA125', name: 'تا-۱۲۵', nameEn: 'TA-125', country: 'اسرائیل', countryEn: 'IL', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
   { symbol: '^IMOEX', name: 'موسکس', nameEn: 'MOEX', country: 'روسیه', countryEn: 'RU', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
 
   /* ── Southeast Asia Indices ───────────────────────────── */
@@ -263,6 +273,7 @@ export const YAHOO_INDICES: YahooInstrument[] = [
   { symbol: '^KLSE', name: 'کی‌ال‌اس‌ایی', nameEn: 'KLSE', country: 'مالزی', countryEn: 'MY', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
   { symbol: '^SET', name: 'ست', nameEn: 'SET', country: 'تایلند', countryEn: 'TH', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
   { symbol: '^JKSE', name: 'جی‌سی‌آی', nameEn: 'JCI', country: 'اندونزی', countryEn: 'ID', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+  { symbol: 'XINA50.F', name: 'چین ای۵۰', nameEn: 'China A50', country: 'چین', countryEn: 'CN', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
 ];
 
 /* ─── Energy ────────────────────────────────────────── */
@@ -316,6 +327,7 @@ export const YAHOO_COMMODITIES: YahooInstrument[] = [
   { symbol: 'LE=F', name: 'گوشت خوک', nameEn: 'Lean Hogs', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
   { symbol: 'OJ=F', name: 'آب پرتقال', nameEn: 'Orange Juice', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
   { symbol: 'LBS=F', name: 'چوب', nameEn: 'Lumber', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+  { symbol: 'ZR=F', name: 'برنج', nameEn: 'Rough Rice', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
 ];
 
 /* ─── Forex ────────────────────────────────────────── */
@@ -349,6 +361,8 @@ export const YAHOO_FOREX: YahooInstrument[] = [
   { symbol: 'USDHKD=X', name: 'دلار/دلار هنگ کنگ', nameEn: 'USD/HKD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
   { symbol: 'USDINR=X', name: 'دلار/روپیه هند', nameEn: 'USD/INR', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
   { symbol: 'USDCNH=X', name: 'دلار/یوان آفشور', nameEn: 'USD/CNH', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+  { symbol: 'USDRUB=X', name: 'دلار/روبل', nameEn: 'USD/RUB', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+  { symbol: 'USDAED=X', name: 'دلار/درهم', nameEn: 'USD/AED', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
 ];
 
 /* ─── Crypto ───────────────────────────────────────── */

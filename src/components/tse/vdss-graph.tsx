@@ -838,7 +838,7 @@ export function generateDecisionGraphNarrative(p: {
   for (const r of ranked) {
     const s = scenarios[r.key as keyof typeof scenarios];
     const targetRange = s ? `${fa(s.targetMin)} تا ${fa(s.targetMax)} ${currencyUnit}` : '';
-    lines.push(`• ${r.key} — ${r.label}: ${toPersianDigits(String(r.prob))}٪ (${faPct0(r.prob / 100)} درصد)${targetRange ? ' | بازه: ' + targetRange : ''}`);
+    lines.push(`• ${r.key} — ${r.label}: ${toPersianDigits(String(r.prob))}٪ (${toPersianDigits(String(Math.round(r.prob)))} درصد)${targetRange ? ' | بازه: ' + targetRange : ''}`);
   }
 
   const totalProb = ranked.reduce((s, r) => s + r.prob, 0);
@@ -864,18 +864,18 @@ export function generateDecisionGraphNarrative(p: {
   lines.push('');
   lines.push('احتمال تجمعی (CDF) در این مدل به این معنی است که از شدیدترین سناریو تا سناریوی مورد نظر را جمع می کند. به عنوان مثال، CDF سناریو SC6 (صعودی خفیف) مجموع احتمالات SC9+SC8+SC7+SC6 را شامل می شود که نشان دهنده احتمال حداقل یک بار صعود خفیف یا قوی تر است.');
   lines.push('');
-  lines.push(`• گروه گاوی (SC6+SC7+SC8+SC9): ${toPersianDigits(String(bullishProb))}٪ (${faPct0(bullishProb / 100)} درصد)`);
-  lines.push(`• گروه خنثی (SC5): ${toPersianDigits(String(neutralProb))}٪ (${faPct0(neutralProb / 100)} درصد)`);
-  lines.push(`• گروه خرسی (SC1+SC2+SC3+SC4): ${toPersianDigits(String(bearishProb))}٪ (${faPct0(bearishProb / 100)} درصد)`);
+  lines.push(`• گروه گاوی (SC6+SC7+SC8+SC9): ${toPersianDigits(String(bullishProb))}٪ (${toPersianDigits(String(Math.round(bullishProb)))} درصد)`);
+  lines.push(`• گروه خنثی (SC5): ${toPersianDigits(String(neutralProb))}٪ (${toPersianDigits(String(Math.round(neutralProb)))} درصد)`);
+  lines.push(`• گروه خرسی (SC1+SC2+SC3+SC4): ${toPersianDigits(String(bearishProb))}٪ (${toPersianDigits(String(Math.round(bearishProb)))} درصد)`);
   lines.push('');
 
   // Interpretation
   if (bullishProb > bearishProb && bullishProb > neutralProb) {
-    lines.push(`تفسیر: با احتمال تجمعی ${faPct0(bullishProb / 100)} درصد برای سناریوهای گاوی، چشم انداز بازار به سمت صعود است. بازار با احتمال ${faPct0(bullishProb / 100)} درصد حداقل یک بار صعود خفیف یا قوی تر را تجربه خواهد کرد.`);
+    lines.push(`تفسیر: با احتمال تجمعی ${toPersianDigits(String(Math.round(bullishProb)))} درصد برای سناریوهای گاوی، چشم انداز بازار به سمت صعود است. بازار با احتمال ${toPersianDigits(String(Math.round(bullishProb)))} درصد حداقل یک بار صعود خفیف یا قوی تر را تجربه خواهد کرد.`);
   } else if (bearishProb > bullishProb && bearishProb > neutralProb) {
-    lines.push(`تفسیر: با احتمال تجمعی ${faPct0(bearishProb / 100)} درصد برای سناریوهای خرسی، چشم انداز بازار به سمت نزول است. بازار با احتمال ${faPct0(bearishProb / 100)} درصد حداقل یک بار نزول خفیف یا قوی تر را تجربه خواهد کرد.`);
+    lines.push(`تفسیر: با احتمال تجمعی ${toPersianDigits(String(Math.round(bearishProb)))} درصد برای سناریوهای خرسی، چشم انداز بازار به سمت نزول است. بازار با احتمال ${toPersianDigits(String(Math.round(bearishProb)))} درصد حداقل یک بار نزول خفیف یا قوی تر را تجربه خواهد کرد.`);
   } else {
-    lines.push(`تفسیر: بازار در وضعیت تعادل قرار دارد. احتمال گروه گاوی ${faPct0(bullishProb / 100)} درصد و گروه خرسی ${faPct0(bearishProb / 100)} درصد است که فاصله کمی بین آنها نشان دهنده عدم تعیین بازار است.`);
+    lines.push(`تفسیر: بازار در وضعیت تعادل قرار دارد. احتمال گروه گاوی ${toPersianDigits(String(Math.round(bullishProb)))} درصد و گروه خرسی ${toPersianDigits(String(Math.round(bearishProb)))} درصد است که فاصله کمی بین آنها نشان دهنده عدم تعیین بازار است.`);
   }
   lines.push('');
 
@@ -1032,7 +1032,8 @@ function generateAdvancedDGAnalysis(p: {
 
   const unit = currencyUnit || 'ریال';
   const fa = (n: number) => toPersianDigits(Math.round(n).toLocaleString('en-US'));
-  const pctW = (n: number) => `${toPersianDigits(String(Math.round(n * 100)))} درصد`;
+  const pctW = (n: number) => `${toPersianDigits(String(Math.round(n)))} درصد`;
+  const pctFrac = (n: number) => `${toPersianDigits(String(Math.round(n * 100)))} درصد`;
 
   // ── Compute derived data ──
   const ranked = SCENARIO_KEYS.map(k => ({
@@ -1111,15 +1112,15 @@ function generateAdvancedDGAnalysis(p: {
   }
 
   if (secondSc) {
-    p1Parts.push(`سناریوی دوم با ${pctW(secondSc.prob)} احتمال، ${secondSc.label} می باشد و فاصله احتمالی بین دو سناریوی اول و دوم برابر ${toPersianDigits(String(Math.round((topSc.prob - secondSc.prob) * 100)))} درصد است${(topSc.prob - secondSc.prob) > 10 ? ' که نشان دهنده تمرکز بالای احتمالات است' : ''}.`);
+    p1Parts.push(`سناریوی دوم با ${pctW(secondSc.prob)} احتمال، ${secondSc.label} می باشد و فاصله احتمالی بین دو سناریوی اول و دوم برابر ${toPersianDigits(String(Math.round(topSc.prob - secondSc.prob)))} درصد است${(topSc.prob - secondSc.prob) > 10 ? ' که نشان دهنده تمرکز بالای احتمالات است' : ''}.`);
   }
 
   p1Parts.push(`مجموع احتمال گروه گاوی {color:green}${pctW(bullProb)}{/color}، گروه خنثی ${pctW(neutProb)} و گروه خرسی {color:red}${pctW(bearProb)}{/color} محاسبه شده است.`);
 
   if (bullProb > bearProb + 0.2) {
-    p1Parts.push(`اختلاف قابل توجه ${toPersianDigits(String(Math.round((bullProb - bearProb) * 100)))} درصدی بین گروه گاوی و خرسی، چشم انداز صعودی بازار را تایید می کند.`);
+    p1Parts.push(`اختلاف قابل توجه ${toPersianDigits(String(Math.round(bullProb - bearProb)))} درصدی بین گروه گاوی و خرسی، چشم انداز صعودی بازار را تایید می کند.`);
   } else if (bearProb > bullProb + 0.2) {
-    p1Parts.push(`اختلاف ${toPersianDigits(String(Math.round((bearProb - bullProb) * 100)))} درصدی به نفع گروه خرسی، هشدار جدی برای معاملات خرید صادر می کند.`);
+    p1Parts.push(`اختلاف ${toPersianDigits(String(Math.round(bearProb - bullProb)))} درصدی به نفع گروه خرسی، هشدار جدی برای معاملات خرید صادر می کند.`);
   } else {
     p1Parts.push(`فاصله کم بین گروه گاوی و خرسی نشان دهنده **عدم قطعیت بازار** و لزوم مدیریت ریسک دقیق است.`);
   }
@@ -1129,22 +1130,22 @@ function generateAdvancedDGAnalysis(p: {
 
   // ── Paragraph 2: Branch strategy analysis ──
   const p2Parts: string[] = [];
-  p2Parts.push(`در ساختار درختی گراف تصمیم، استراتژی **${dominantBranch.label}** با سهم {color:${dominantBranch.color}}${pctW(dominantBranch.prob)}{/color} بیشترین تاثیر را در تعیین سناریوهای نهایی دارد.`);
+  p2Parts.push(`در ساختار درختی گراف تصمیم، استراتژی **${dominantBranch.label}** با سهم {color:${dominantBranch.color}}${pctFrac(dominantBranch.prob)}{/color} بیشترین تاثیر را در تعیین سناریوهای نهایی دارد.`);
 
   if (weakBranch) {
-    p2Parts.push(`در مقابل، استراتژی ${weakBranch.label} تنها ${pctW(weakBranch.prob)} سهم دارد که نشان می دهد بازار کمتر انتظار ${weakBranch.key === 'reversal' ? 'واگرایی و بازگشت' : weakBranch.key === 'breakout' ? 'شکست سطوح' : 'ادامه روند'} را دارد.`);
+    p2Parts.push(`در مقابل، استراتژی ${weakBranch.label} تنها ${pctFrac(weakBranch.prob)} سهم دارد که نشان می دهد بازار کمتر انتظار ${weakBranch.key === 'reversal' ? 'واگرایی و بازگشت' : weakBranch.key === 'breakout' ? 'شکست سطوح' : 'ادامه روند'} را دارد.`);
   }
 
   // Which branch feeds the top scenario most
-  p2Parts.push(`بررسی سهم استراتژی‌ها در سناریوی غالب (${topSc?.label}) نشان می دهد که ${topScDominantLabel} با سهم ${pctW(topScContrib[topScDominantStrategy?.[0] as 'trend' | 'breakout' | 'reversal'] ?? 0)} بیشترین نقش را ایفا می کند.`);
+  p2Parts.push(`بررسی سهم استراتژی‌ها در سناریوی غالب (${topSc?.label}) نشان می دهد که ${topScDominantLabel} با سهم ${pctFrac(topScContrib[topScDominantStrategy?.[0] as 'trend' | 'breakout' | 'reversal'] ?? 0)} بیشترین نقش را ایفا می کند.`);
 
   // Branch-specific insights
   if (branchProbs.trend > 0.45) {
-    p2Parts.push(`غلبگی استراتژی پیروی از روند (${pctW(branchProbs.trend)}) تایید می کند که بازار در فاز **رونددار** قرار دارد و تحلیل بر اساس ادامه مسیر فعلی قابل اتکاتر است.`);
+    p2Parts.push(`غلبگی استراتژی پیروی از روند (${pctFrac(branchProbs.trend)}) تایید می کند که بازار در فاز **رونددار** قرار دارد و تحلیل بر اساس ادامه مسیر فعلی قابل اتکاتر است.`);
   } else if (branchProbs.breakout > 0.4) {
-    p2Parts.push(`سهم بالای استراتژی شکست (${pctW(branchProbs.breakout)}) هشدار می دهد که احتمال **حرکات شارپ و خارج از محدوده** وجود دارد و نوسان گیری ممکن است ریسک بالایی داشته باشد.`);
+    p2Parts.push(`سهم بالای استراتژی شکست (${pctFrac(branchProbs.breakout)}) هشدار می دهد که احتمال **حرکات شارپ و خارج از محدوده** وجود دارد و نوسان گیری ممکن است ریسک بالایی داشته باشد.`);
   } else if (branchProbs.reversal > 0.4) {
-    p2Parts.push(`سهم بالای استراتژی بازگشت (${pctW(branchProbs.reversal)}) نشان دهنده **احتمال تغییر فاز بازار** است و معامله گران باید با احتیاط بیشتری عمل کنند.`);
+    p2Parts.push(`سهم بالای استراتژی بازگشت (${pctFrac(branchProbs.reversal)}) نشان دهنده **احتمال تغییر فاز بازار** است و معامله گران باید با احتیاط بیشتری عمل کنند.`);
   }
 
   paragraphs.push(p2Parts.join(' '));

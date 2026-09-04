@@ -353,6 +353,34 @@ export function fixPersianText(text: string): string {
   return result.trim();
 }
 
+// ─── Number Direction Fix ───────────────────────────────────────
+
+/**
+ * Fix number direction in Persian text.
+ * All number sequences (Persian or Latin digits, with optional decimal points,
+ * thousand separators, and +/- signs) should be LTR to prevent bidi reversal.
+ * Wraps each number sequence with LRM marks.
+ */
+function fixNumberDirection(text: string): string {
+  // LRM = U+200E (Left-to-Right Mark)
+  const LRM = '\u200E';
+
+  // Match sequences of digits (Persian ۰-۹ or Latin 0-9) with optional:
+  // - leading sign (+/-)
+  // - decimal point (٫ or .)
+  // - thousand separators (٬ or ,)
+  // - percent sign (٪ or %)
+  // - degree sign (°)
+  // This regex matches number sequences that might be displayed wrong in RTL
+  const numPattern = /([+\-]?[۰-۹0-9][۰-۹0-9٬,.٫]*(?:[.٫][۰-۹0-9]+)?[٪%°]?)/g;
+
+  return text.replace(numPattern, (match) => {
+    // Only add LRM if not already present
+    if (match.startsWith(LRM)) return match;
+    return LRM + match + LRM;
+  });
+}
+
 // ─── Technical Code Cleanup ───────────────────────────────────────
 
 export function stripTechnicalCodes(text: string): string {
@@ -400,6 +428,7 @@ export function postProcessAIOutput(
 ): PostProcessResult {
   let text = stripTechnicalCodes(rawText);
   text = fixPersianText(text);
+  text = fixNumberDirection(text);  // Fix LTR number direction
   const { valid, hallucinationCount } = validatePricesInText(text, priceRefs);
   return { text, priceValid: valid, hallucinationCount };
 }
