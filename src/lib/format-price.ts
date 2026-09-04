@@ -126,10 +126,12 @@ export function detectSource(item: { yahooSymbol?: string; tgjuKey?: string; cat
  */
 export function formatPriceFa(price: number, decimals: number): string {
   if (price == null || !Number.isFinite(price)) return '—';
-  return new Intl.NumberFormat('fa-IR', {
+  const raw = new Intl.NumberFormat('fa-IR', {
     maximumFractionDigits: decimals,
     minimumFractionDigits: decimals > 0 ? Math.min(decimals, 2) : 0,
   }).format(price);
+  // Wrap with LRM marks to ensure numbers render left-to-right in RTL context
+  return `\u200E${raw}\u200E`;
 }
 
 /**
@@ -163,7 +165,8 @@ export function formatChangePercent(pcp: number): string {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   }).format(Math.abs(pcp));
-  return `${sign}${formatted}٪`;
+  // Wrap number portion with LRM marks for correct RTL rendering
+  return `${sign}\u200E${formatted}\u200E٪`;
 }
 
 /* ─── Convenience: full auto-detect formatting ──────────── */

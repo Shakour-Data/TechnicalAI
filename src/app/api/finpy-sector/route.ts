@@ -5,6 +5,7 @@ import type { OHLCV } from '@/lib/ta-engine';
 import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
 import { analyze, computeHistoricalProbabilities } from '@/lib/ta-engine';
 import { buildTrendFromDailySnapshots } from '@/lib/probability-trend';
+import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,9 +75,9 @@ function buildResponse(
       trades: 0,
       eps: 0,
       pe: 0,
-      currencyUnit: 'واحد',
+      currencyUnit: getCurrencyUnit('index', 'tse'),
       category: 'index',
-      decimals: 0,
+      decimals: detectDecimals(lastClose, 'index', 'tse'),
     },
     ta,
     probabilityTrend,

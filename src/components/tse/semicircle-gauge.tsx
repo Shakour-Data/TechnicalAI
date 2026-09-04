@@ -39,21 +39,25 @@ export default function SemicircleGauge({
 }: SemicircleGaugeProps) {
   const { colors: C } = useTheme();
 
+  const strokeWidth = 8;
+  const padding = strokeWidth / 2 + 2; // ensure stroke doesn't clip
   const cx = size / 2;
   const cy = size / 2;
-  const radius = size / 2 - 6; // padding for stroke
-  const strokeWidth = 6;
+  const radius = Math.max(1, size / 2 - padding);
+  const svgHeight = size / 2 + padding; // enough room for the semicircle + stroke
 
   // ── Normalize value to 0..1 regardless of min/max signs ──
   const range = max - min;
   const clampedValue = Math.max(min, Math.min(max, value));
   const normalized = range !== 0 ? (clampedValue - min) / range : 0;
 
-  // ── Arc math: semicircle from π (left) to 0 (right), sweeping the top ──
-  // Angle 0 = right, π/2 = top, π = left
-  // We draw from left (π) to right (0), going counter-clockwise over the top
-  const startAngle = Math.PI; // left
-  const endAngle = 0; // right
+  // ── Arc math: semicircle from π (left) to 2π (right), sweeping the bottom ──
+  // Using standard SVG coordinates where y increases downward:
+  // - Start angle = π (left side of circle)
+  // - End angle = 0 (right side of circle)
+  // - Arc sweeps OVER THE TOP (counter-clockwise in math = clockwise in SVG)
+  const startAngle = Math.PI;
+  const endAngle = 0;
 
   // Needle angle: maps normalized 0→startAngle(π), 1→endAngle(0)
   const needleAngle = startAngle + (endAngle - startAngle) * normalized;
@@ -66,17 +70,20 @@ export default function SemicircleGauge({
     };
   }
 
-  // Create arc path from angle1 to angle2
-  function describeArc(a1: number, a2: number) {
+  // Create an SVG arc path from angle a1 to angle a2 (both in math convention)
+  // Always draws the shorter arc going clockwise in SVG (= over the top for our semicircle)
+  function describeArc(a1: number, a2: number): string {
     const start = polarToCartesian(a1);
     const end = polarToCartesian(a2);
-    const sweep = a1 - a2 > Math.PI ? 1 : 0;
-    return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${sweep} 1 ${end.x} ${end.y}`;
+    // Large arc flag: 1 if the arc spans more than 180°
+    const arcSpan = Math.abs(a1 - a2);
+    const largeArcFlag = arcSpan > Math.PI ? 1 : 0;
+    // Sweep flag: 1 = clockwise in SVG (which goes over the top for our angles)
+    return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
   }
 
   // ── Zone segments ──
-  // Default zones: normalize zone thresholds to the gauge's min/max range
-  let zoneSegments: Array<{ from: number; to: number; color: string }> = [];
+  const zoneSegments: Array<{ from: number; to: number; color: string }> = [];
 
   if (zones) {
     const bullishNorm = zones.bullishBelow !== undefined
@@ -86,35 +93,15 @@ export default function SemicircleGauge({
       ? (zones.bearishAbove - min) / range
       : 0.7;
 
-    // Bullish zone: 0 → bullishNorm
-    zoneSegments.push({
-      from: 0,
-      to: bullishNorm,
-      color: hexToRgba(C.bullColor, 0.3),
-    });
-    // Neutral zone: bullishNorm → bearishNorm
-    zoneSegments.push({
-      from: bullishNorm,
-      to: bearishNorm,
-      color: hexToRgba(C.neutralColor, 0.2),
-    });
-    // Bearish zone: bearishNorm → 1
-    zoneSegments.push({
-      from: bearishNorm,
-      to: 1,
-      color: hexToRgba(C.bearColor, 0.3),
-    });
+    zoneSegments.push({ from: 0, to: bullishNorm, color: hexToRgba(C.bullColor, 0.25) });
+    zoneSegments.push({ from: bullishNorm, to: bearishNorm, color: hexToRgba(C.neutralColor, 0.15) });
+    zoneSegments.push({ from: bearishNorm, to: 1, color: hexToRgba(C.bearColor, 0.25) });
   } else {
-    // No zones — single neutral arc
-    zoneSegments.push({
-      from: 0,
-      to: 1,
-      color: hexToRgba(C.neutralColor, 0.15),
-    });
+    zoneSegments.push({ from: 0, to: 1, color: hexToRgba(C.neutralColor, 0.12) });
   }
 
-  // Convert zone normalized ranges to angle ranges
-  function normToAngle(n: number) {
+  // Convert normalized value (0-1) to angle
+  function normToAngle(n: number): number {
     return startAngle + (endAngle - startAngle) * n;
   }
 
@@ -131,24 +118,22 @@ export default function SemicircleGauge({
     <div className="flex flex-col items-center gap-0.5">
       <svg
         width={size}
-        height={size / 2 + 8} // only need top half + some padding
-        viewBox={`0 0 ${size} ${size / 2 + 8}`}
-        className="overflow-visible"
+        height={svgHeight}
+        viewBox={`0 0 ${size} ${svgHeight}`}
       >
-        {/* Background track */}
+        {/* Background track (full semicircle) */}
         <path
           d={describeArc(startAngle, endAngle)}
           fill="none"
-          stroke={hexToRgba(C.cardBorder, 0.5)}
+          stroke={hexToRgba(C.cardBorder, 0.4)}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
 
-        {/* Zone segments */}
+        {/* Zone color segments (thin inner layer, no round caps to avoid overlap) */}
         {zoneSegments.map((z, i) => {
           const a1 = normToAngle(z.from);
           const a2 = normToAngle(z.to);
-          // Skip zero-length arcs
           if (Math.abs(a1 - a2) < 0.01) return null;
           return (
             <path
@@ -156,8 +141,8 @@ export default function SemicircleGauge({
               d={describeArc(a1, a2)}
               fill="none"
               stroke={z.color}
-              strokeWidth={strokeWidth - 1}
-              strokeLinecap="round"
+              strokeWidth={strokeWidth - 2}
+              strokeLinecap="butt"
             />
           );
         })}
@@ -170,29 +155,29 @@ export default function SemicircleGauge({
             stroke={needleColor}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            style={{ filter: `drop-shadow(0 0 2px ${hexToRgba(needleColor, 0.4)})` }}
           />
         )}
 
         {/* Needle dot at the value position */}
         {(() => {
-          const needlePos = polarToCartesian(needleAngle);
+          const pos = polarToCartesian(needleAngle);
           return (
             <circle
-              cx={needlePos.x}
-              cy={needlePos.y}
-              r={4}
+              cx={pos.x.toFixed(2)}
+              cy={pos.y.toFixed(2)}
+              r={3.5}
               fill={needleColor}
-              style={{ filter: `drop-shadow(0 0 3px ${hexToRgba(needleColor, 0.6)})` }}
+              stroke={hexToRgba(C.cardBg, 0.8)}
+              strokeWidth={1.5}
             />
           );
         })()}
 
-        {/* Value text inside the arc */}
+        {/* Value text centered inside the arc */}
         {showValue && (
           <text
             x={cx}
-            y={cy - 4}
+            y={cy - 6}
             textAnchor="middle"
             dominantBaseline="middle"
             fill={C.cardFg}

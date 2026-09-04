@@ -51,6 +51,7 @@ export interface VdssGraphProps {
   atr?: number;
   instrumentType?: string;
   instrumentCategory?: string;
+  priceDecimals?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -75,7 +76,7 @@ const D = {
   shadow: '0 18px 55px rgba(0,0,0,.35)',
 } as const;
 
-const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+const toFa = (n: number) => `\u200E${Math.round(n).toLocaleString('fa-IR')}\u200E`;
 
 const COLORS = {
   up: D.green,
@@ -789,6 +790,7 @@ export default function VdssGraph(props: VdssGraphProps) {
         supports={props.supports}
         instrumentType={props.instrumentType}
         instrumentCategory={props.instrumentCategory}
+        priceDecimals={props.priceDecimals}
       />
     </div>
   );
@@ -1026,12 +1028,18 @@ function generateAdvancedDGAnalysis(p: {
   supports: number[];
   instrumentType?: string;
   instrumentCategory?: string;
+  priceDecimals?: number;
 }): string {
   const { symbolName, currentPrice, currencyUnit, scenarios, decisionGraph, probabilityTrend,
-    rsi, adx, atr, trendDirection, bullScore, resistances, supports, instrumentCategory } = p;
+    rsi, adx, atr, trendDirection, bullScore, resistances, supports, instrumentCategory, priceDecimals } = p;
 
   const unit = currencyUnit || 'ریال';
-  const fa = (n: number) => toPersianDigits(Math.round(n).toLocaleString('en-US'));
+  const fa = (n: number) => {
+    if (priceDecimals !== undefined && priceDecimals > 0) {
+      return `\u200E${n.toLocaleString('fa-IR', { maximumFractionDigits: priceDecimals, minimumFractionDigits: 0 })}\u200E`;
+    }
+    return toPersianDigits(Math.round(n).toLocaleString('en-US'));
+  };
   const pctW = (n: number) => `${toPersianDigits(String(Math.round(n)))} درصد`;
   const pctFrac = (n: number) => `${toPersianDigits(String(Math.round(n * 100)))} درصد`;
 
@@ -1137,7 +1145,8 @@ function generateAdvancedDGAnalysis(p: {
   }
 
   // Which branch feeds the top scenario most
-  p2Parts.push(`بررسی سهم استراتژی‌ها در سناریوی غالب (${topSc?.label}) نشان می دهد که ${topScDominantLabel} با سهم ${pctFrac(topScContrib[topScDominantStrategy?.[0] as 'trend' | 'breakout' | 'reversal'] ?? 0)} بیشترین نقش را ایفا می کند.`);
+  // Note: pathContributions values are already 0-100 (percentages), so use pctW not pctFrac
+  p2Parts.push(`بررسی سهم استراتژی‌ها در سناریوی غالب (${topSc?.label}) نشان می دهد که ${topScDominantLabel} با سهم ${pctW(topScContrib[topScDominantStrategy?.[0] as 'trend' | 'breakout' | 'reversal'] ?? 0)} بیشترین نقش را ایفا می کند.`);
 
   // Branch-specific insights
   if (branchProbs.trend > 0.45) {
@@ -1281,6 +1290,7 @@ function DecisionGraphAIAnalysis(p: {
   supports: number[];
   instrumentType?: string;
   instrumentCategory?: string;
+  priceDecimals?: number;
 }) {
   const [open, setOpen] = useState(false);
   const analysisText = useMemo(() => generateAdvancedDGAnalysis(p), [p]);

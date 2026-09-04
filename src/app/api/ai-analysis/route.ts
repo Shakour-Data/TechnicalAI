@@ -617,11 +617,15 @@ function userFriendlyError(err: unknown): string {
   if (msg.includes('network') || msg.includes('fetch') || msg.includes('ECONNREFUSED')) {
     return 'خطای شبکه در ارتباط با سرور هوشمند. لطفاً اتصال اینترنت خود را بررسی کنید.';
   }
+  if (msg.includes('too short') || msg.includes('empty')) {
+    return 'پاسخ هوشمند ناقص بود. لطفاً دوباره تلاش کنید.';
+  }
   if (msg.includes('ReferenceError') || msg.includes('TypeError') || msg.includes('SyntaxError')) {
     // Internal error - don't expose details to user
     console.error('[AI] Internal error (hidden from user):', msg);
     return 'خطای داخلی سیستم. تیم فنی در جریان است.';
   }
-  // Generic fallback
-  return 'خطایی در تولید تحلیل رخ داد. لطفاً دوباره تلاش کنید.';
+  // Log unhandled errors for debugging
+  console.error('[AI] Unhandled error type:', msg);
+  return 'خطا در تولید تحلیل. لطفاً چند لحظه دیگر دوباره تلاش کنید.';
 }

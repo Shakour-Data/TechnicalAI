@@ -20,7 +20,11 @@ const PERSIAN_WEEKDAYS = [
 const PERSIAN_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
 
 export function toPersianDigits(n: number | string): string {
-  return String(n).replace(/\d/g, (d) => PERSIAN_DIGITS[parseInt(d)]);
+  const converted = String(n).replace(/\d/g, (d) => PERSIAN_DIGITS[parseInt(d)]);
+  // Wrap with LRM (Left-to-Right Mark, U+200E) to ensure numbers always render
+  // left-to-right even in RTL context. This prevents the bidi algorithm from
+  // reversing digit order when Persian digits appear inside RTL text.
+  return `\u200E${converted}\u200E`;
 }
 
 // ─── Gregorian → Jalali ─────────────────────────────────────────────────────

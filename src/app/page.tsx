@@ -691,7 +691,7 @@ export default function Home() {
 
               {/* PANEL: Indicators */}
               {activePanel === 'indicators' && (
-                <IndicatorsPanel ta={data.ta} />
+                <IndicatorsPanel ta={data.ta} instrumentCategory={data.info?.category} priceDecimals={decimals} />
               )}
 
               {/* PANEL: Decision Graph */}
@@ -715,6 +715,7 @@ export default function Home() {
                   atr={data.ta.atr}
                   instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
                   instrumentCategory={data.info?.category}
+                  priceDecimals={decimals}
                 />
               )}
 

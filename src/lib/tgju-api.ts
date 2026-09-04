@@ -151,8 +151,6 @@ export const STATIC_INSTRUMENTS: StaticInstrument[] = [
   { title: 'کوکاکولا (KO)', key: 'crypto-coca-cola-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مصرفی/بهداشت' },
   { title: 'پفایزر (PFE)', key: 'crypto-pfizer-tokenized-stock-ondo', category: 'foreign_stock', groupTitle: 'آمریکا - مصرفی/بهداشت' },
   // US Other
-  { title: 'تیسلا (TSLA) xStock', key: 'crypto-wrapped-tesla-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
-  { title: 'میتا (META) xStock', key: 'crypto-wrapped-meta-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
   { title: 'کوین‌بیس (COIN)', key: 'crypto-coinbase-tokenized-stock-xstock', category: 'foreign_stock', groupTitle: 'آمریکا - تکنولوژی' },
   // China / Asia
   { title: 'علی‌بابا (BABA)', key: 'crypto-baba', category: 'foreign_stock', groupTitle: 'چین' },
@@ -297,8 +295,6 @@ export const TGJU_TO_YAHOO_MAP: Record<string, string> = {
   'crypto-johnson-johnson-tokenized-stock-ondo': 'JNJ',
   'crypto-coca-cola-tokenized-stock-ondo': 'KO',
   'crypto-pfizer-tokenized-stock-ondo': 'PFE',
-  'crypto-wrapped-tesla-tokenized-stock-xstock': 'TSLA',
-  'crypto-wrapped-meta-tokenized-stock-xstock': 'META',
   'crypto-coinbase-tokenized-stock-xstock': 'COIN',
   'crypto-baba': 'BABA',
   'crypto-tencent': '0700.HK',

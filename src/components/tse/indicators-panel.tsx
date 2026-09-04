@@ -66,7 +66,7 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+const toFa = (n: number) => `\u200E${Math.round(n).toLocaleString('fa-IR')}\u200E`;
 
 function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
   if (v > 70) return 'bearish';
@@ -327,6 +327,12 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
     return toPersianDigits(Math.round(val).toString());
   };
 
+  // Price formatter: uses priceDecimals for all price-type values (SMA, EMA, SAR, BB, etc.)
+  const fmtPrice = (val: number): string => {
+    if (priceDecimals !== undefined && priceDecimals > 0) return formatPriceFa(val, priceDecimals);
+    return toFa(val);
+  };
+
   return (
     <div className="rounded-2xl p-4 space-y-1" dir="rtl" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
 
@@ -342,10 +348,10 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
           <SemicircleGauge label="ویلیامز %R" value={ta.williamsR} min={-100} max={0} signal={ta.williamsR > -20 ? 'bearish' : ta.williamsR < -80 ? 'bullish' : 'neutral'} zones={{ bearishAbove: -20, bullishBelow: -80 }} size={110} />
         </div>
 
-        {/* overall signal badge + bull/bear mini bar */}
+        {/* Compact overall signal with bull/bear bar */}
         <div className="flex items-center justify-center gap-3 mt-3">
           <span
-            className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
             style={
               ta.overallSignal === 'bullish'
                 ? { background: hexToRgba(C.bullColor, 0.1), border: `1px solid ${hexToRgba(C.bullColor, 0.25)}`, color: C.bullColor }
@@ -357,12 +363,10 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
             <SignalDot signal={ta.overallSignal} />
             {ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
           </span>
-          <div className="w-32 h-3 rounded-full overflow-hidden flex" style={{ background: C.cardBorder }}>
+          <div className="w-28 h-2.5 rounded-full overflow-hidden flex" style={{ background: C.cardBorder }}>
             <div className="h-full rounded-r-full transition-all duration-500" style={{ width: `${ta.bullScore}%`, background: hexToRgba(C.bullColor, 0.6) }} />
             <div className="h-full rounded-l-full transition-all duration-500" style={{ width: `${ta.bearScore}%`, background: hexToRgba(C.bearColor, 0.6) }} />
           </div>
-          <span className="text-[9px]" style={{ color: C.bullColor }}>خرید {toFa(ta.bullScore)}٪</span>
-          <span className="text-[9px]" style={{ color: C.bearColor }}>فروش {toFa(ta.bearScore)}٪</span>
         </div>
       </div>
 
@@ -412,17 +416,17 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
       {/* ═══ 4. میانگین‌های متحرک ═══ */}
       <SectionHeader title="میانگین‌های متحرک" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        <IndicatorCard label="SMA ۵" value={toFa(ta.sma.sma5 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="SMA ۱۰" value={toFa(ta.sma.sma10 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="SMA ۲۱" value={toFa(ta.sma.sma21 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="SMA ۵۰" value={toFa(ta.sma.sma50 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="SMA ۱۰۰" value={toFa(ta.sma.sma100 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="SMA ۲۰۰" value={toFa(ta.sma.sma200 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۹" value={toFa(ta.ema.ema9 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۲۱" value={toFa(ta.ema.ema21 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۵۰" value={toFa(ta.ema.ema50 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۱۰۰" value={toFa(ta.ema.ema100 ?? 0)} signal={maSignal} />
-        <IndicatorCard label="EMA ۲۰۰" value={toFa(ta.ema.ema200 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="SMA ۵" value={fmtPrice(ta.sma.sma5 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="SMA ۱۰" value={fmtPrice(ta.sma.sma10 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="SMA ۲۱" value={fmtPrice(ta.sma.sma21 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="SMA ۵۰" value={fmtPrice(ta.sma.sma50 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="SMA ۱۰۰" value={fmtPrice(ta.sma.sma100 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="SMA ۲۰۰" value={fmtPrice(ta.sma.sma200 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۹" value={fmtPrice(ta.ema.ema9 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۲۱" value={fmtPrice(ta.ema.ema21 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۵۰" value={fmtPrice(ta.ema.ema50 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۱۰۰" value={fmtPrice(ta.ema.ema100 ?? 0)} signal={maSignal} />
+        <IndicatorCard label="EMA ۲۰۰" value={fmtPrice(ta.ema.ema200 ?? 0)} signal={maSignal} />
       </div>
 
       {/* ═══ 5. جزئیات تکمیلی ═══ */}
@@ -433,16 +437,16 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
         <IndicatorCard label="Stochastic %D" value={toFa(ta.stochD)} signal={stochSignal(ta.stochD)} />
         <IndicatorCard label="DI+" value={toFa(ta.diPlus)} signal={adxSignal(ta.adx, ta.diPlus, ta.diMinus)} />
         <IndicatorCard label="DI-" value={toFa(ta.diMinus)} signal={adxSignal(ta.adx, ta.diPlus, ta.diMinus)} />
-        <IndicatorCard label="Parabolic SAR" value={toFa(ta.sar)} signal={maSignal} />
+        <IndicatorCard label="Parabolic SAR" value={fmtPrice(ta.sar)} signal={maSignal} />
       </div>
 
       {/* ═══ 6. نوسان‌پذیری ═══ */}
       <SectionHeader title="نوسان‌پذیری" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
         <IndicatorCard label="ATR" value={toFa(ta.atr)} signal="neutral" />
-        <IndicatorCard label="باندهای بولینگر (بالا)" value={toFa(ta.bollingerBands.upper)} signal="neutral" />
-        <IndicatorCard label="باندهای بولینگر (میانی)" value={toFa(ta.bollingerBands.middle)} signal="neutral" />
-        <IndicatorCard label="باندهای بولینگر (پایین)" value={toFa(ta.bollingerBands.lower)} signal="neutral" />
+        <IndicatorCard label="باندهای بولینگر (بالا)" value={fmtPrice(ta.bollingerBands.upper)} signal="neutral" />
+        <IndicatorCard label="باندهای بولینگر (میانی)" value={fmtPrice(ta.bollingerBands.middle)} signal="neutral" />
+        <IndicatorCard label="باندهای بولینگر (پایین)" value={fmtPrice(ta.bollingerBands.lower)} signal="neutral" />
       </div>
 
       {/* ═══ 7. حجم ═══ */}
@@ -451,7 +455,7 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
           <SectionHeader title="حجم" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />
-            <IndicatorCard label="VWAP" value={toFa(ta.vwap ?? 0)} signal="neutral" />
+            <IndicatorCard label="VWAP" value={fmtPrice(ta.vwap ?? 0)} signal="neutral" />
           </div>
         </>
       )}
@@ -459,11 +463,11 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
       {/* ═══ 8. ابر ایچیموکو ═══ */}
       <SectionHeader title="ابر ایچیموکو" />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        <IndicatorCard label="تنکان‌سن (۹)" value={toFa(ta.ichimoku?.tenkan ?? 0)} signal={maSignal} />
-        <IndicatorCard label="کیجون‌سن (۲۶)" value={toFa(ta.ichimoku?.kijun ?? 0)} signal={maSignal} />
-        <IndicatorCard label="سنکو اسپن A" value={toFa(ta.ichimoku?.senkouA ?? 0)} signal={maSignal} />
-        <IndicatorCard label="سنکو اسپن B" value={toFa(ta.ichimoku?.senkouB ?? 0)} signal={maSignal} />
-        <IndicatorCard label="چیکو اسپن" value={toFa(ta.ichimoku?.chikou ?? 0)} signal={maSignal} />
+        <IndicatorCard label="تنکان‌سن (۹)" value={fmtPrice(ta.ichimoku?.tenkan ?? 0)} signal={maSignal} />
+        <IndicatorCard label="کیجون‌سن (۲۶)" value={fmtPrice(ta.ichimoku?.kijun ?? 0)} signal={maSignal} />
+        <IndicatorCard label="سنکو اسپن A" value={fmtPrice(ta.ichimoku?.senkouA ?? 0)} signal={maSignal} />
+        <IndicatorCard label="سنکو اسپن B" value={fmtPrice(ta.ichimoku?.senkouB ?? 0)} signal={maSignal} />
+        <IndicatorCard label="چیکو اسپن" value={fmtPrice(ta.ichimoku?.chikou ?? 0)} signal={maSignal} />
       </div>
 
       {/* ═══ 9. حمایت و مقاومت هوشمند ═══ */}
@@ -482,7 +486,7 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
                     <span className="text-[11px] font-medium" style={{ color: C.bearColor }}>{r.isTarget ? '★ ' : ''}R{toFa(i + 1)}</span>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={gs}>{r.grade}</span>
                   </div>
-                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{toFa(r.price)}</p>
+                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{fmtPrice(r.price)}</p>
                   <div className="flex items-center justify-center gap-2 mt-1">
                     {r.fibLabel && <span className="text-[10px]" style={{ color: hexToRgba(C.bearColor, 0.5) }}>فیبو {r.fibLabel}</span>}
                     <span className="text-[10px]" style={{ color: hexToRgba(C.bearColor, 0.5) }}>({faMethods} روش)</span>
@@ -512,7 +516,7 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
                     <span className="text-[11px] font-medium" style={{ color: C.bullColor }}>{s.isTarget ? '★ ' : ''}S{toFa(i + 1)}</span>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={gs}>{s.grade}</span>
                   </div>
-                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{toFa(s.price)}</p>
+                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{fmtPrice(s.price)}</p>
                   <div className="flex items-center justify-center gap-2 mt-1">
                     {s.fibLabel && <span className="text-[10px]" style={{ color: hexToRgba(C.bullColor, 0.5) }}>فیبو {s.fibLabel}</span>}
                     <span className="text-[10px]" style={{ color: hexToRgba(C.bullColor, 0.5) }}>({faMethods} روش)</span>
