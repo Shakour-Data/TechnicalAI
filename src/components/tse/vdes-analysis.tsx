@@ -364,10 +364,24 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const diSignal = diPlus > diMinus
     ? `DI+ (${toFa(diPlus)}) بالاتر از DI- (${toFa(diMinus)}) — فشار خرید غالب`
     : `DI- (${toFa(diMinus)}) بالاتر از DI+ (${toFa(diPlus)}) — فشار فروش غالب`;
+  // Trend angle description: handle zero/very-small angle edge case
+  // "صعودی با زاویه ۰ درجه" is meaningless; classify qualitatively instead
+  const absAngle = Math.abs(trendAngle);
+  const angleDesc = absAngle < 1
+    ? 'تقریباً صفر'
+    : absAngle < 5 ? 'ملایم'
+    : absAngle < 15 ? 'متوسط'
+    : absAngle < 30 ? 'تند'
+    : 'بسیار تند';
+  const r2Str = toPersianDigits((trendR2 * 100).toFixed(1));
   const trendText = trendDirection === 'up'
-    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+    ? absAngle < 1
+      ? `صعودی با شیب بسیار ملایم و ضریب تعیین R²=${r2Str}٪`
+      : `صعودی با زاویه ${toFa(absAngle)} درجه (شیب ${angleDesc}) و ضریب تعیین R²=${r2Str}٪`
     : trendDirection === 'down'
-    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+    ? absAngle < 1
+      ? `نزولی با شیب بسیار ملایم و ضریب تعیین R²=${r2Str}٪`
+      : `نزولی با زاویه ${toFa(absAngle)} درجه (شیب ${angleDesc}) و ضریب تعیین R²=${r2Str}٪`
     : 'خنثی و بدون جهت مشخص';
 
   const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
@@ -669,10 +683,17 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
 
   // ── Trend text ─────────────────────────────────────────────────
+  // Handle zero/very-small angle edge case: "صعودی با زاویه ۰ درجه" is meaningless
+  const _absAngle = Math.abs(trendAngle);
+  const _r2Str = toPersianDigits((trendR2 * 100).toFixed(1));
   const trendText = trendDirection === 'up'
-    ? `صعودی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+    ? _absAngle < 1
+      ? `صعودی با شیب بسیار ملایم و ضریب تعیین R²=${_r2Str}٪`
+      : `صعودی با زاویه ${toFa(_absAngle)} درجه و ضریب تعیین R²=${_r2Str}٪`
     : trendDirection === 'down'
-    ? `نزولی با زاویه ${toFa(Math.abs(trendAngle))} درجه و ضریب تعیین R²=${toPersianDigits((trendR2 * 100).toFixed(1))}٪`
+    ? _absAngle < 1
+      ? `نزولی با شیب بسیار ملایم و ضریب تعیین R²=${_r2Str}٪`
+      : `نزولی با زاویه ${toFa(_absAngle)} درجه و ضریب تعیین R²=${_r2Str}٪`
     : 'خنثی و بدون جهت مشخص';
 
   // ── Shamsi dates ───────────────────────────────────────────────

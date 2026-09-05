@@ -94,31 +94,33 @@ export function validatePricesInText(
 // ─── Persian Text Quality Fixes ───────────────────────────────────
 
 /**
- * Comprehensive list of compound words that MUST have a space
- * (not ZWNJ, not stuck together).
- * Each entry: [regex for wrong form, correct form with space]
+ * Comprehensive list of compound word fixes.
+ * **Persian orthography standard (فرهنگستان زبان و ادب فارسی):**
+ * - نیم‌فاصله (ZWNJ) is MANDATORY for compound words (کوتاه‌مدت, نشان‌دهنده, انجام‌شده)
+ * - Regular space is used for separate words (نقطه ورود, فشار خرید, حدّ ضرر)
+ * Each entry: [regex for wrong form, correct form]
  */
 const COMPOUND_WORD_FIXES: [RegExp, string][] = [
-  // Time-related compounds
-  [/(\S)\u200c?کوتاه(\S)?مدت/g, '$1کوتاه مدت'],
-  [/(\S)\u200c?بلند(\S)?مدت/g, '$1بلند مدت'],
-  [/(\S)\u200c?میان(\S)?مدت/g, '$1میان مدت'],
-  [/(\S)\u200c?طولانی(\S)?مدت/g, '$1طولانی مدت'],
-  [/کوتاه\u200c?مدت/g, 'کوتاه مدت'],
-  [/بلند\u200c?مدت/g, 'بلند مدت'],
-  [/میان\u200c?مدت/g, 'میان مدت'],
-  [/طولانی\u200c?مدت/g, 'طولانی مدت'],
+  // Time-related compounds — ZWNJ required
+  [/(\S)\u200c?کوتاه(\S)?مدت/g, '$1کوتاه‌مدت'],
+  [/(\S)\u200c?بلند(\S)?مدت/g, '$1بلند‌مدت'],
+  [/(\S)\u200c?میان(\S)?مدت/g, '$1میان‌مدت'],
+  [/(\S)\u200c?طولانی(\S)?مدت/g, '$1طولانی‌مدت'],
+  [/کوتاه\u200c?مدت/g, 'کوتاه‌مدت'],
+  [/بلند\u200c?مدت/g, 'بلند‌مدت'],
+  [/میان\u200c?مدت/g, 'میان‌مدت'],
+  [/طولانی\u200c?مدت/g, 'طولانی‌مدت'],
 
-  // Demonstrative/participial compounds
-  [/نشان\u200c?دهنده/g, 'نشان دهنده'],
-  [/نشان\u200c?دهند/g, 'نشان دهند'],
+  // Demonstrative/participial compounds — ZWNJ required
+  [/نشان\u200c?دهنده/g, 'نشان‌دهنده'],
+  [/نشان\u200c?دهند/g, 'نشان‌دهند'],
   [/بازدارنده/g, 'بازدارنده'],  // This one is correct as one word
-  [/گزارش\u200c?دهنده/g, 'گزارش دهنده'],
-  [/تصمیم\u200c?گیری/g, 'تصمیم‌گیری'],  // ZWNJ is correct here
-  [/اطلاع\u200c?رسانی/g, 'اطلاع‌رسانی'],  // ZWNJ is correct here
+  [/گزارش\u200c?دهنده/g, 'گزارش‌دهنده'],
+  [/تصمیم\u200c?گیری/g, 'تصمیم‌گیری'],  // ZWNJ correct
+  [/اطلاع\u200c?رسانی/g, 'اطلاع‌رسانی'],  // ZWNJ correct
 
-  // financial/trading terms
-  [/حد\u200c?ضرر/g, 'حد ضرر'],
+  // financial/trading terms — separate words, space required
+  [/حد\u200c?ضرر/g, 'حدّ ضرر'],
   [/نقطه\u200c?ورود/g, 'نقطه ورود'],
   [/نقطه\u200c?خروج/g, 'نقطه خروج'],
   [/نسبت\u200c?ریسک/g, 'نسبت ریسک'],
@@ -132,18 +134,34 @@ const COMPOUND_WORD_FIXES: [RegExp, string][] = [
   [/خط\u200c?روند/g, 'خط روند'],
   [/الگوی\u200c?سر و شانه/g, 'الگوی سر و شانه'],
 
-  // Words that should NOT have ZWNJ — common errors
+  // Preposition + word — separate words, space required
   [/در\u200c?صورت/g, 'در صورت'],
   [/به\u200c?طور/g, 'به طور'],
   [/به\u200c?دلیل/g, 'به دلیل'],
   [/از\u200c?جمله/g, 'از جمله'],
-  [/می\u200c?تواند/g, 'می‌تواند'],  // Correct with ZWNJ
-  [/می\u200c?رسد/g, 'می‌رسد'],  // Correct with ZWNJ
-  [/می\u200c?باشد/g, 'می‌باشد'],  // Correct with ZWNJ
-  [/می\u200c?کند/g, 'می‌کند'],  // Correct with ZWNJ
-  [/می\u200c?شود/g, 'می‌شود'],  // Correct with ZWNJ
-  [/نمی\u200c?تواند/g, 'نمی‌تواند'],  // Correct with ZWNJ
-  [/نمی\u200c?رسد/g, 'نمی‌رسد'],  // Correct with ZWNJ
+
+  // Verb prefixes — ZWNJ required
+  [/می\u200c?تواند/g, 'می‌تواند'],
+  [/می\u200c?رسد/g, 'می‌رسد'],
+  [/می\u200c?باشد/g, 'می‌باشد'],
+  [/می\u200c?کند/g, 'می‌کند'],
+  [/می\u200c?شود/g, 'می‌شود'],
+  [/می\u200c?رود/g, 'می‌رود'],
+  [/می\u200c?رفت/g, 'می‌رفت'],
+  [/می\u200c?توان/g, 'می‌توان'],
+  [/نمی\u200c?تواند/g, 'نمی‌تواند'],
+  [/نمی\u200c?رسد/g, 'نمی‌رسد'],
+  [/نمی\u200c?شود/g, 'نمی‌شود'],
+  [/نمی\u200c?کند/g, 'نمی‌کند'],
+
+  // Compound participles — ZWNJ required
+  [/انجام\u200c?شده/g, 'انجام‌شده'],
+  [/ارائه\u200c?شده/g, 'ارائه‌شده'],
+  [/مطرح\u200c?شده/g, 'مطرح‌شده'],
+
+  // Compound adjectives/adverbs — ZWNJ required
+  [/قابل\u200c?توجه/g, 'قابل‌توجه'],
+  [/هم\u200c?زمان/g, 'هم‌زمان'],
 ];
 
 /**
@@ -152,18 +170,18 @@ const COMPOUND_WORD_FIXES: [RegExp, string][] = [
  */
 const STUCK_WORDS: [RegExp, string][] = [
   // Time compounds
-  [/کوتاهمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'کوتاه مدت'],
-  [/بلندمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'بلند مدت'],
-  [/میانمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'میان مدت'],
-  [/طولانیمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'طولانی مدت'],
+  [/کوتاهمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'کوتاه‌مدت'],
+  [/بلندمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'بلند‌مدت'],
+  [/میانمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'میان‌مدت'],
+  [/طولانیمدت(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'طولانی‌مدت'],
 
   // Demonstrative/participial
-  [/نشاندهنده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نشان دهنده'],
-  [/نشاندهند(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نشان دهند'],
-  [/گزارشدهنده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'گزارش دهنده'],
+  [/نشاندهنده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نشان‌دهنده'],
+  [/نشاندهند(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نشان‌دهند'],
+  [/گزارشدهنده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'گزارش‌دهنده'],
 
   // Financial
-  [/حدضرر(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'حد ضرر'],
+  [/حدضرر(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'حدّ ضرر'],
   [/نقطهورود(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نقطه ورود'],
   [/نقطهخروج(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نقطه خروج'],
   [/فشارخرید(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'فشار خرید'],
@@ -185,17 +203,17 @@ const STUCK_WORDS: [RegExp, string][] = [
   [/درمقابل(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'در مقابل'],
   [/بتدریج(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'به تدریج'],
   [/اعلامکرد(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'اعلام کرد'],
-  [/انجامشده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'انجام شده'],
-  [/ارائهشده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'ارائه شده'],
-  [/مطرحشده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'مطرح شده'],
+  [/انجامشده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'انجام‌شده'],
+  [/ارائهشده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'ارائه‌شده'],
+  [/مطرحشده(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'مطرح‌شده'],
   [/داشتهباش(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'داشته باشد'],
   [/خواهدبود(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'خواهد بود'],
   [/نخواهدبود(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نخواهد بود'],
   [/میتواند(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'می‌تواند'],
   [/نمیتواند(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'نمی‌تواند'],
   [/بایدتوجه(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'باید توجه'],
-  [/قابلتوجه(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'قابل توجه'],
-  [/همزمان(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'هم زمان'],
+  [/قابلتوجه(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'قابل‌توجه'],
+  [/همزمان(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'هم‌زمان'],
   [/همچنین(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'همچنین'],  // This is correct as-is
   [/قریبالوقوع(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'قریب‌الوقوع'],  // ZWNJ correct
   [/آیندهنگر(?=[\s\u0627-\u06cc.,؛:!?\)\]])/g, 'آینده‌نگر'],  // ZWNJ correct
@@ -211,18 +229,22 @@ const STUCK_WORDS: [RegExp, string][] = [
 ];
 
 /**
- * Replace ZWNJ with space where appropriate.
- * In analytical text, using space instead of ZWNJ for compound words
- * is more readable and matches common usage.
- * However, we preserve ZWNJ in certain verb constructions (می‌تواند, شده, etc.)
- * because removing it would create invalid word forms.
+ * Fix ZWNJ (نیم‌فاصله) spacing according to Persian orthography standards
+ * (فرهنگستان زبان و ادب فارسی).
+ *
+ * Two categories of fixes:
+ * 1. Compound words that REQUIRE ZWNJ — convert regular space to ZWNJ
+ *    (e.g., "کوتاه مدت" → "کوتاه‌مدت", "نشان دهنده" → "نشان‌دهنده")
+ * 2. Separate words that require regular SPACE — convert ZWNJ to space
+ *    (e.g., "در‌صورت" → "در صورت", "نقطه‌ورود" → "نقطه ورود")
+ *
+ * ZWNJ is mandatory for Persian compound words per orthography standards.
+ * The function also preserves ZWNJ in verb prefixes (می‌, نمی‌, بی‌, پیش‌).
  */
 function fixZwnjSpacing(text: string): string {
   let result = text;
 
-  // First: replace ZWNJ with space for most compound words
-  // But NOT for: می‌ prefix verbs (می‌رود, می‌کند, شده, etc.)
-  // Preserve ZWNJ in these specific patterns:
+  // Preserve ZWNJ in these specific patterns (verb prefixes etc.):
   const zwnjPreserve = [
     /می\u200c/g,       // می‌ verb prefix
     /نمی\u200c/g,     // نمی‌ verb prefix
@@ -231,21 +253,21 @@ function fixZwnjSpacing(text: string): string {
     /گذشته\u200c/g,  // گذشته‌ (past participle connector)
   ];
 
-  // For compound words with ZWNJ that should have space instead,
-  // replace ZWNJ with space
-  // Time compounds
-  result = result.replace(/کوتاه\u200cمدت/g, 'کوتاه مدت');
-  result = result.replace(/بلند\u200cمدت/g, 'بلند مدت');
-  result = result.replace(/میان\u200cمدت/g, 'میان مدت');
-  result = result.replace(/طولانی\u200cمدت/g, 'طولانی مدت');
+  // Category 1: Compound words that need ZWNJ — convert space → ZWNJ
+  // Category 2: Separate words that need space — convert ZWNJ → space
+  // Time compounds — ZWNJ required (convert space → ZWNJ)
+  result = result.replace(/کوتاه مدت/g, 'کوتاه\u200cمدت');
+  result = result.replace(/بلند مدت/g, 'بلند\u200cمدت');
+  result = result.replace(/میان مدت/g, 'میان\u200cمدت');
+  result = result.replace(/طولانی مدت/g, 'طولانی\u200cمدت');
 
-  // Demonstrative compounds
-  result = result.replace(/نشان\u200cدهنده/g, 'نشان دهنده');
-  result = result.replace(/نشان\u200cدهند/g, 'نشان دهند');
-  result = result.replace(/گزارش\u200cدهنده/g, 'گزارش دهنده');
+  // Demonstrative compounds — ZWNJ required (convert space → ZWNJ)
+  result = result.replace(/نشان دهنده/g, 'نشان\u200cدهنده');
+  result = result.replace(/نشان دهند/g, 'نشان\u200cدهند');
+  result = result.replace(/گزارش دهنده/g, 'گزارش\u200cدهنده');
 
   // Financial/trading compounds
-  result = result.replace(/حد\u200cضرر/g, 'حد ضرر');
+  result = result.replace(/حد\u200cضرر/g, 'حدّ ضرر');
   result = result.replace(/نقطه\u200cورود/g, 'نقطه ورود');
   result = result.replace(/نقطه\u200cخروج/g, 'نقطه خروج');
   result = result.replace(/فشار\u200cخرید/g, 'فشار خرید');
@@ -269,16 +291,16 @@ function fixZwnjSpacing(text: string): string {
   result = result.replace(/به\u200cتدریج/g, 'به تدریج');
   result = result.replace(/از\u200cجمله/g, 'از جمله');
 
-  // Participle compounds (past stems + shodeh/kardeh)
-  result = result.replace(/انجام\u200cشده/g, 'انجام شده');
-  result = result.replace(/ارائه\u200cشده/g, 'ارائه شده');
-  result = result.replace(/مطرح\u200cشده/g, 'مطرح شده');
-  result = result.replace(/انجام\u200cیافته/g, 'انجام یافته');
-  result = result.replace(/اعلام\u200cشده/g, 'اعلام شده');
+  // Participle compounds (past stems + shodeh/kardeh) — ZWNJ required (convert space → ZWNJ)
+  result = result.replace(/انجام شده/g, 'انجام\u200cشده');
+  result = result.replace(/ارائه شده/g, 'ارائه\u200cشده');
+  result = result.replace(/مطرح شده/g, 'مطرح\u200cشده');
+  result = result.replace(/انجام یافته/g, 'انجام\u200cیافته');
+  result = result.replace(/اعلام شده/g, 'اعلام\u200cشده');
 
-  // Common adjective compounds
-  result = result.replace(/قابل\u200cتوجه/g, 'قابل توجه');
-  result = result.replace(/هم\u200cزمان/g, 'هم زمان');
+  // Common adjective compounds — ZWNJ required (convert space → ZWNJ)
+  result = result.replace(/قابل توجه/g, 'قابل\u200cتوجه');
+  result = result.replace(/هم زمان/g, 'هم\u200cزمان');
 
   return result;
 }
