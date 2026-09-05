@@ -1,0 +1,589 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import { toPersianDigits } from '@/lib/jalali';
+     5→import {
+     6→  TrendingUp,
+     7→  TrendingDown,
+     8→  BrainCircuit,
+     9→  RefreshCw,
+    10→  ChevronDown,
+    11→  ChevronUp,
+    12→  AlertTriangle,
+    13→  CheckCircle2,
+    14→  BarChart3,
+    15→  Zap,
+    16→} from 'lucide-react';
+    17→
+    18→// ─── Types ───────────────────────────────────────────────────────────────────
+    19→
+    20→interface PredictionPoint {
+    21→  session: number;
+    22→  price: number;
+    23→  change_pct: number;
+    24→  lower: number;
+    25→  upper: number;
+    26→}
+    27→
+    28→interface ModelForecast {
+    29→  model_name: string;
+    30→  cv_r2: number;
+    31→  cv_rmse_pct: number;
+    32→  predictions: PredictionPoint[];
+    33→}
+    34→
+    35→interface EnsembleForecast {
+    36→  model_name: string;
+    37→  weights: Record<string, number>;
+    38→  predictions: PredictionPoint[];
+    39→}
+    40→
+    41→interface MLPredictResult {
+    42→  status: string;
+    43→  training_samples: number;
+    44→  features_count: number;
+    45→  forecasts: Record<string, ModelForecast>;
+    46→  ensemble: EnsembleForecast;
+    47→  feature_importance: Record<string, number>;
+    48→}
+    49→
+    50→interface Candle {
+    51→  date: string;
+    52→  open: number;
+    53→  high: number;
+    54→  low: number;
+    55→  close: number;
+    56→  volume: number;
+    57→}
+    58→
+    59→interface MLForecastProps {
+    60→  symbolName: string;
+    61→  candles: Candle[];
+    62→  currentPrice: number;
+    63→}
+    64→
+    65→// ─── Constants ────────────────────────────────────────────────────────────────
+    66→
+    67→const MODEL_COLORS: Record<string, string> = {
+    68→  rf: '#059669',
+    69→  xgboost: '#d97706',
+    70→  lightgbm: '#7c3aed',
+    71→  svr: '#dc2626',
+    72→  gbr: '#2563eb',
+    73→};
+    74→
+    75→const MODEL_LABELS: Record<string, string> = {
+    76→  rf: 'Random Forest',
+    77→  xgboost: 'XGBoost',
+    78→  lightgbm: 'LightGBM',
+    79→  svr: 'SVR',
+    80→  gbr: 'Gradient Boosting',
+    81→};
+    82→
+    83→const SESSION_OPTIONS = [5, 10, 15, 20, 30];
+    84→
+    85→// ─── Helper ──────────────────────────────────────────────────────────────────
+    86→
+    87→const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
+    88→const toFaDecimal = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: 2 });
+    89→
+    90→function r2Color(r2: number): string {
+    91→  if (r2 >= 0.5) return 'text-emerald-700';
+    92→  if (r2 >= 0.2) return 'text-amber-600';
+    93→  if (r2 >= 0) return 'text-orange-500';
+    94→  return 'text-red-600';
+    95→}
+    96→
+    97→function r2Label(r2: number): string {
+    98→  if (r2 >= 0.7) return 'عالی';
+    99→  if (r2 >= 0.5) return 'خوب';
+   100→  if (r2 >= 0.3) return 'متوسط';
+   101→  if (r2 >= 0) return 'ضعیف';
+   102→  return 'نامناسب';
+   103→}
+   104→
+   105→// ─── Mini Sparkline SVG ───────────────────────────────────────────────────────
+   106→
+   107→function MiniSparkline({ predictions, color, width = 120, height = 40 }: { predictions: PredictionPoint[]; color: string; width?: number; height?: number }) {
+   108→  if (predictions.length < 2) return null;
+   109→
+   110→  const prices = predictions.map(p => p.price);
+   111→  const min = Math.min(...prices, ...predictions.map(p => p.lower));
+   112→  const max = Math.max(...prices, ...predictions.map(p => p.upper));
+   113→  const range = max - min || 1;
+   114→  const pad = 4;
+   115→
+   116→  const toX = (i: number) => pad + (i / (predictions.length - 1)) * (width - 2 * pad);
+   117→  const toY = (v: number) => pad + (1 - (v - min) / range) * (height - 2 * pad);
+   118→
+   119→  // Main line
+   120→  const linePoints = predictions.map((p, i) => `${toX(i)},${toY(p.price)}`).join(' ');
+   121→  // Upper band
+   122→  const upperPoints = predictions.map((p, i) => `${toX(i)},${toY(p.upper)}`).join(' ');
+   123→  // Lower band
+   124→  const lowerPoints = predictions.map((p, i) => `${toX(i)},${toY(p.lower)}`).reverse().join(' ');
+   125→  // Fill area
+   126→  const fillPath = `M${upperPoints} L${lowerPoints} Z`;
+   127→
+   128→  return (
+   129→    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-10" style={{ minWidth: width }}>
+   130→      <defs>
+   131→        <linearGradient id={`fill-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+   132→          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+   133→          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+   134→        </linearGradient>
+   135→      </defs>
+   136→      <path d={fillPath} fill={`url(#fill-${color.replace('#', '')})`} />
+   137→      <polyline points={upperPoints} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" strokeDasharray="2,2" />
+   138→      <polyline points={predictions.map((p, i) => `${toX(i)},${toY(p.lower)}`).join(' ')} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" strokeDasharray="2,2" />
+   139→      <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+   140→      {predictions.map((p, i) => (
+   141→        <circle key={i} cx={toX(i)} cy={toY(p.price)} r="1.5" fill={color} />
+   142→      ))}
+   143→    </svg>
+   144→  );
+   145→}
+   146→
+   147→// ─── Main Component ──────────────────────────────────────────────────────────
+   148→
+   149→export default function MLForecast({ symbolName, candles, currentPrice }: MLForecastProps) {
+   150→  const [result, setResult] = useState<MLPredictResult | null>(null);
+   151→  const [loading, setLoading] = useState(false);
+   152→  const [error, setError] = useState<string | null>(null);
+   153→  const [sessions, setSessions] = useState(10);
+   154→  const [selectedModels, setSelectedModels] = useState<string[]>(['rf', 'xgboost', 'lightgbm', 'svr', 'gbr']);
+   155→  const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(null);
+   156→  const [expandedModel, setExpandedModel] = useState<string | null>(null);
+   157→  const [showTable, setShowTable] = useState(false);
+   158→
+   159→  // Check ML service health on mount (auto-starts service if down)
+   160→  useEffect(() => {
+   161→    fetch('/api/ml-predict')
+   162→      .then(r => r.json())
+   163→      .then(data => setServiceAvailable(data.status === 'ok'))
+   164→      .catch(() => setServiceAvailable(false));
+   165→  }, []);
+   166→
+   167→  const runPrediction = useCallback(async () => {
+   168→    if (candles.length < 60) {
+   169→      setError('حداقل ۶۰ کندل داده برای پیش‌بینی ML نیاز است. داده‌های فعلی کافی نیست.');
+   170→      return;
+   171→    }
+   172→    setLoading(true);
+   173→    setError(null);
+   174→    setResult(null);
+   175→    try {
+   176→      const resp = await fetch('/api/ml-predict', {
+   177→        method: 'POST',
+   178→        headers: { 'Content-Type': 'application/json' },
+   179→        body: JSON.stringify({ candles, sessions, models: selectedModels }),
+   180→      });
+   181→      const json = await resp.json();
+   182→      if (json.error) {
+   183→        setError(json.error);
+   184→      } else {
+   185→        setResult(json);
+   186→      }
+   187→    } catch (err) {
+   188→      const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
+   189→      // Auto-retry if service was starting
+   190→      if (msg.includes('راه‌اندازی') || msg.includes('دسترس نیست')) {
+   191→        setError('سرویس ML در حال راه‌اندازی است. لطفاً پس از ۱۰ ثانیه دوباره تلاش کنید.');
+   192→        // Re-check health after 10s
+   193→        setTimeout(() => {
+   194→          fetch('/api/ml-predict')
+   195→            .then(r => r.json())
+   196→            .then(data => setServiceAvailable(data.status === 'ok'))
+   197→            .catch(() => setServiceAvailable(false));
+   198→        }, 10000);
+   199→      } else {
+   200→        setError(msg);
+   201→      }
+   202→    } finally {
+   203→      setLoading(false);
+   204→    }
+   205→  }, [candles, sessions, selectedModels]);
+   206→
+   207→  // Feature importance sorted
+   208→  const topFeatures = useMemo(() => {
+   209→    if (!result?.feature_importance) return [];
+   210→    return Object.entries(result.feature_importance)
+   211→      .sort(([, a], [, b]) => b - a)
+   212→      .slice(0, 10);
+   213→  }, [result]);
+   214→
+   215→  // Ensemble predictions for chart
+   216→  const ensemblePredictions = result?.ensemble?.predictions ?? [];
+   217→
+   218→  // Determine if ensemble is overall bullish/bearish
+   219→  const ensembleTrend = useMemo(() => {
+   220→    if (ensemblePredictions.length < 1) return 'neutral';
+   221→    const lastPred = ensemblePredictions[ensemblePredictions.length - 1];
+   222→    if (lastPred.change_pct > 1) return 'bullish';
+   223→    if (lastPred.change_pct < -1) return 'bearish';
+   224→    return 'neutral';
+   225→  }, [ensemblePredictions]);
+   226→
+   227→  const trendIcon = ensembleTrend === 'bullish' ? TrendingUp : ensembleTrend === 'bearish' ? TrendingDown : BarChart3;
+   228→  const TrendIcon = trendIcon;
+   229→  const trendLabel = ensembleTrend === 'bullish' ? 'صعودی' : ensembleTrend === 'bearish' ? 'نزولی' : 'خنثی';
+   230→  const trendColor = ensembleTrend === 'bullish' ? 'text-emerald-700' : ensembleTrend === 'bearish' ? 'text-red-700' : 'text-amber-700';
+   231→
+   232→  return (
+   233→    <div className="space-y-4">
+   234→      {/* ═══ HEADER ═══ */}
+   235→      <div className="rounded-2xl px-6 py-5 border border-violet-200 bg-gradient-to-l from-violet-50 to-white shadow-sm">
+   236→        <div className="flex items-center justify-between flex-wrap gap-3">
+   237→          <div className="flex items-center gap-3">
+   238→            <div className="w-10 h-10 rounded-xl bg-violet-100 border border-violet-200 flex items-center justify-center">
+   239→              <BrainCircuit className="w-5 h-5 text-violet-700" />
+   240→            </div>
+   241→            <div>
+   242→              <h2 className="text-base font-bold text-gray-900">پیش‌بینی قیمت با هوش مصنوعی</h2>
+   243→              <p className="text-[10px] text-gray-500">۵ مدل ML × ۳۴ ویژگی تکنیکال — scikit-learn, XGBoost, LightGBM</p>
+   244→            </div>
+   245→          </div>
+   246→          <div className="flex items-center gap-2">
+   247→            {serviceAvailable === false && (
+   248→              <span className="px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-[10px] text-amber-600 flex items-center gap-1">
+   249→                <RefreshCw className="w-3 h-3 animate-spin" />
+   250→                در حال راه‌اندازی...
+   251→              </span>
+   252→            )}
+   253→            {serviceAvailable === true && (
+   254→              <span className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 flex items-center gap-1">
+   255→                <CheckCircle2 className="w-3 h-3" />
+   256→                آنلاین
+   257→              </span>
+   258→            )}
+   259→          </div>
+   260→        </div>
+   261→      </div>
+   262→
+   263→      {/* ═══ CONTROLS ═══ */}
+   264→      <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   265→        <div className="flex flex-wrap items-end gap-4">
+   266→          {/* Sessions selector */}
+   267→          <div className="flex flex-col gap-1.5">
+   268→            <label className="text-[10px] text-gray-500 font-medium">تعداد جلسات پیش‌بینی</label>
+   269→            <div className="flex items-center gap-1 bg-[#f3f4f6] rounded-lg p-0.5 border border-[#e5e7eb]">
+   270→              {SESSION_OPTIONS.map(s => (
+   271→                <button
+   272→                  key={s}
+   273→                  onClick={() => setSessions(s)}
+   274→                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+   275→                    sessions === s
+   276→                      ? 'bg-white text-violet-700 shadow-sm border border-[#e5e7eb]'
+   277→                      : 'text-gray-500 hover:text-gray-700'
+   278→                  }`}
+   279→                >
+   280→                  {toPersianDigits(String(s))}
+   281→                </button>
+   282→              ))}
+   283→            </div>
+   284→          </div>
+   285→
+   286→          {/* Model toggles */}
+   287→          <div className="flex flex-col gap-1.5">
+   288→            <label className="text-[10px] text-gray-500 font-medium">مدل‌ها</label>
+   289→            <div className="flex items-center gap-1.5 flex-wrap">
+   290→              {Object.entries(MODEL_LABELS).map(([key, label]) => (
+   291→                <button
+   292→                  key={key}
+   293→                  onClick={() => setSelectedModels(prev =>
+   294→                    prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+   295→                  )}
+   296→                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all cursor-pointer ${
+   297→                    selectedModels.includes(key)
+   298→                      ? 'border-current/30'
+   299→                      : 'border-gray-200 text-gray-400 opacity-50'
+   300→                  }`}
+   301→                  style={{
+   302→                    color: selectedModels.includes(key) ? MODEL_COLORS[key] : undefined,
+   303→                    background: selectedModels.includes(key) ? MODEL_COLORS[key] + '10' : undefined,
+   304→                  }}
+   305→                >
+   306→                  {label}
+   307→                </button>
+   308→              ))}
+   309→            </div>
+   310→          </div>
+   311→
+   312→          {/* Run button */}
+   313→          <button
+   314→            onClick={runPrediction}
+   315→            disabled={loading || selectedModels.length === 0 || candles.length < 60}
+   316→            className="mr-auto inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+   317→          >
+   318→            <Zap className={`w-3.5 h-3.5 ${loading ? 'animate-pulse' : ''}`} />
+   319→            {loading ? 'در حال تحلیل...' : 'شروع پیش‌بینی'}
+   320→          </button>
+   321→        </div>
+   322→
+   323→        {candles.length < 60 && (
+   324→          <p className="mt-3 text-[10px] text-amber-600 flex items-center gap-1">
+   325→            <AlertTriangle className="w-3 h-3" />
+   326→            تعداد کندل‌های فعلی ({toPersianDigits(String(candles.length))}) کمتر از حداقل مورد نیاز (۶۰) است.
+   327→          </p>
+   328→        )}
+   329→      </div>
+   330→
+   331→      {/* ═══ LOADING ═══ */}
+   332→      {loading && (
+   333→        <div className="rounded-2xl p-8 border border-violet-200 bg-violet-50/30">
+   334→          <div className="flex flex-col items-center justify-center gap-4">
+   335→            <div className="relative">
+   336→              <div className="w-12 h-12 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
+   337→              <BrainCircuit className="w-5 h-5 text-violet-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+   338→            </div>
+   339→            <div className="text-center">
+   340→              <p className="text-sm font-bold text-violet-800">در حال آموزش و پیش‌بینی مدل‌های ML ...</p>
+   341→              <p className="text-[10px] text-gray-500 mt-1">
+   342→                {toPersianDigits(String(selectedModels.length))} مدل × {toPersianDigits(String(sessions))} جلسه × ۳۴ ویژگی تکنیکال
+   343→              </p>
+   344→            </div>
+   345→          </div>
+   346→        </div>
+   347→      )}
+   348→
+   349→      {/* ═══ ERROR ═══ */}
+   350→      {error && !loading && (
+   351→        <div className="rounded-2xl p-5 border border-red-200 bg-red-50">
+   352→          <div className="flex items-start gap-3">
+   353→            <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+   354→            <div>
+   355→              <p className="text-sm font-bold text-red-700">خطا در پیش‌بینی</p>
+   356→              <p className="text-xs text-red-600 mt-1">{error}</p>
+   357→            </div>
+   358→          </div>
+   359→        </div>
+   360→      )}
+   361→
+   362→      {/* ═══ RESULTS ═══ */}
+   363→      {result && !loading && (
+   364→        <div className="space-y-4">
+   365→          {/* Summary Cards */}
+   366→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   367→            <div className="rounded-xl p-3 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   368→              <div className="text-[10px] text-gray-500">نمونه‌های آموزش</div>
+   369→              <div className="text-lg font-black text-gray-900">{toFa(result.training_samples)}</div>
+   370→            </div>
+   371→            <div className="rounded-xl p-3 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   372→              <div className="text-[10px] text-gray-500">ویژگی‌های تکنیکال</div>
+   373→              <div className="text-lg font-black text-gray-900">{toFa(result.features_count)}</div>
+   374→            </div>
+   375→            <div className="rounded-xl p-3 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   376→              <div className="text-[10px] text-gray-500">مدل‌های فعال</div>
+   377→              <div className="text-lg font-black text-violet-700">{toFa(Object.keys(result.forecasts).length)}</div>
+   378→            </div>
+   379→            <div className="rounded-xl p-3 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   380→              <div className="text-[10px] text-gray-500">روند ترکیبی (ML)</div>
+   381→              <div className={`flex items-center gap-1.5 text-lg font-black ${trendColor}`}>
+   382→                <TrendIcon className="w-4 h-4" />
+   383→                {trendLabel}
+   384→              </div>
+   385→            </div>
+   386→          </div>
+   387→
+   388→          {/* ═══ ENSEMBLE CHART ═══ */}
+   389→          {ensemblePredictions.length > 0 && (
+   390→            <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   391→              <div className="flex items-center justify-between mb-4">
+   392→                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+   393→                  <Zap className="w-4 h-4 text-violet-600" />
+   394→                  پیش‌بینی ترکیبی (Ensemble)
+   395→                  <span className="px-2 py-0.5 rounded-full bg-violet-50 text-[10px] text-violet-700 font-medium">
+   396→                    R²-Weighted Average
+   397→                  </span>
+   398→                </h3>
+   399→                <button
+   400→                  onClick={() => setShowTable(!showTable)}
+   401→                  className="flex items-center gap-1 px-3 py-1 rounded-lg border border-[#e5e7eb] text-[10px] text-gray-600 hover:bg-[#f3f4f6] transition-colors cursor-pointer"
+   402→                >
+   403→                  {showTable ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+   404→                  {showTable ? 'نمودار' : 'جدول'}
+   405→                </button>
+   406→              </div>
+   407→
+   408→              {/* Chart view */}
+   409→              {!showTable && (
+   410→                <div className="bg-[#f3f4f6]/50 rounded-xl p-4">
+   411→                  <MiniSparkline
+   412→                    predictions={ensemblePredictions}
+   413→                    color={ensembleTrend === 'bullish' ? '#059669' : ensembleTrend === 'bearish' ? '#dc2626' : '#d97706'}
+   414→                    width={600}
+   415→                    height={120}
+   416→                  />
+   417→                </div>
+   418→              )}
+   419→
+   420→              {/* Table view */}
+   421→              {showTable && (
+   422→                <div className="overflow-x-auto max-h-72 overflow-y-auto">
+   423→                  <table className="w-full text-xs">
+   424→                    <thead className="sticky top-0 bg-[#f3f4f6]">
+   425→                      <tr>
+   426→                        <th className="px-3 py-2 text-right text-gray-600 font-medium rounded-tr-lg">جلسه</th>
+   427→                        <th className="px-3 py-2 text-right text-gray-600 font-medium">قیمت پیش‌بینی</th>
+   428→                        <th className="px-3 py-2 text-right text-gray-600 font-medium">تغییر ٪</th>
+   429→                        <th className="px-3 py-2 text-right text-gray-600 font-medium rounded-tl-lg">بازه اطمینان</th>
+   430→                      </tr>
+   431→                    </thead>
+   432→                    <tbody>
+   433→                      {ensemblePredictions.map((p) => (
+   434→                        <tr key={p.session} className="border-t border-[#e5e7eb]">
+   435→                          <td className="px-3 py-2 font-medium text-gray-700">{toPersianDigits(String(p.session))}</td>
+   436→                          <td className="px-3 py-2 font-bold text-gray-900 tabular-nums" dir="ltr">{toFa(p.price)}</td>
+   437→                          <td className={`px-3 py-2 font-bold tabular-nums ${p.change_pct >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+   438→                            {p.change_pct >= 0 ? '+' : ''}{toFaDecimal(p.change_pct)}%
+   439→                          </td>
+   440→                          <td className="px-3 py-2 text-gray-500 tabular-nums" dir="ltr">
+   441→                            {toFa(p.lower)} — {toFa(p.upper)}
+   442→                          </td>
+   443→                        </tr>
+   444→                      ))}
+   445→                    </tbody>
+   446→                  </table>
+   447→                </div>
+   448→              )}
+   449→
+   450→              {/* Ensemble weights */}
+   451→              <div className="mt-3 flex flex-wrap gap-2">
+   452→                {Object.entries(result.ensemble.weights).map(([key, w]) => (
+   453→                  <span
+   454→                    key={key}
+   455→                    className="px-2 py-0.5 rounded-full text-[9px] font-medium border"
+   456→                    style={{
+   457→                      color: MODEL_COLORS[key] || '#666',
+   458→                      borderColor: (MODEL_COLORS[key] || '#666') + '40',
+   459→                      background: (MODEL_COLORS[key] || '#666') + '10',
+   460→                    }}
+   461→                  >
+   462→                    {MODEL_LABELS[key] || key}: {toFaDecimal(w * 100)}%
+   463→                  </span>
+   464→                ))}
+   465→              </div>
+   466→            </div>
+   467→          )}
+   468→
+   469→          {/* ═══ INDIVIDUAL MODELS ═══ */}
+   470→          <div className="rounded-2xl border border-[#e5e7eb] bg-[#ffffff] shadow-sm overflow-hidden">
+   471→            <div className="px-5 py-3 border-b border-[#e5e7eb] bg-[#f3f4f6]/50">
+   472→              <h3 className="text-sm font-bold text-gray-900">نتایج مدل‌های فردی</h3>
+   473→            </div>
+   474→            <div className="divide-y divide-[#e5e7eb]">
+   475→              {Object.entries(result.forecasts).map(([key, model]) => {
+   476→                const isExpanded = expandedModel === key;
+   477→                const color = MODEL_COLORS[key] || '#666';
+   478→                const lastPred = model.predictions[model.predictions.length - 1];
+   479→                return (
+   480→                  <div key={key}>
+   481→                    <button
+   482→                      onClick={() => setExpandedModel(isExpanded ? null : key)}
+   483→                      className="w-full flex items-center gap-4 px-5 py-3 hover:bg-[#f3f4f6]/50 transition-colors cursor-pointer"
+   484→                    >
+   485→                      <div className="w-2 h-8 rounded-full" style={{ background: color }} />
+   486→                      <div className="flex-1 min-w-0">
+   487→                        <div className="flex items-center gap-2">
+   488→                          <span className="text-sm font-bold text-gray-900">{model.model_name}</span>
+   489→                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${r2Color(model.cv_r2)} bg-gray-100`}>
+   490→                            R²: {toPersianDigits(model.cv_r2.toFixed(4))} ({r2Label(model.cv_r2)})
+   491→                          </span>
+   492→                          <span className="text-[10px] text-gray-400">RMSE: {toFaDecimal(model.cv_rmse_pct)}%</span>
+   493→                        </div>
+   494→                        {lastPred && (
+   495→                          <div className="flex items-center gap-3 mt-1">
+   496→                            <span className="text-[10px] text-gray-500">
+   497→                              پیش‌بینی S{toPersianDigits(String(lastPred.session))}: {toFa(lastPred.price)}
+   498→                            </span>
+   499→                            <span className={`text-[10px] font-bold ${lastPred.change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+   500→                              {lastPred.change_pct >= 0 ? '+' : ''}{toFaDecimal(lastPred.change_pct)}%
+   501→                            </span>
+   502→                          </div>
+   503→                        )}
+   504→                      </div>
+   505→                      {/* Mini sparkline */}
+   506→                      <div className="w-24 h-8 hidden sm:block">
+   507→                        <MiniSparkline predictions={model.predictions} color={color} width={96} height={32} />
+   508→                      </div>
+   509→                      {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+   510→                    </button>
+   511→                    {isExpanded && (
+   512→                      <div className="px-5 pb-4 pt-1 bg-[#f3f4f6]/30">
+   513→                        <div className="overflow-x-auto max-h-48 overflow-y-auto">
+   514→                          <table className="w-full text-xs">
+   515→                            <thead className="sticky top-0 bg-[#f3f4f6]">
+   516→                              <tr>
+   517→                                <th className="px-2 py-1.5 text-right text-gray-600 font-medium">جلسه</th>
+   518→                                <th className="px-2 py-1.5 text-right text-gray-600 font-medium">قیمت</th>
+   519→                                <th className="px-2 py-1.5 text-right text-gray-600 font-medium">تغییر٪</th>
+   520→                                <th className="px-2 py-1.5 text-right text-gray-600 font-medium">بازه</th>
+   521→                              </tr>
+   522→                            </thead>
+   523→                            <tbody>
+   524→                              {model.predictions.map((p) => (
+   525→                                <tr key={p.session} className="border-t border-[#e5e7eb]">
+   526→                                  <td className="px-2 py-1.5 text-gray-600">{toPersianDigits(String(p.session))}</td>
+   527→                                  <td className="px-2 py-1.5 font-bold text-gray-900 tabular-nums" dir="ltr">{toFa(p.price)}</td>
+   528→                                  <td className={`px-2 py-1.5 font-bold tabular-nums ${p.change_pct >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+   529→                                    {p.change_pct >= 0 ? '+' : ''}{toFaDecimal(p.change_pct)}%
+   530→                                  </td>
+   531→                                  <td className="px-2 py-1.5 text-gray-500 tabular-nums" dir="ltr">
+   532→                                    {toFa(p.lower)}—{toFa(p.upper)}
+   533→                                  </td>
+   534→                                </tr>
+   535→                              ))}
+   536→                            </tbody>
+   537→                          </table>
+   538→                        </div>
+   539→                      </div>
+   540→                    )}
+   541→                  </div>
+   542→                );
+   543→              })}
+   544→            </div>
+   545→          </div>
+   546→
+   547→          {/* ═══ FEATURE IMPORTANCE ═══ */}
+   548→          {topFeatures.length > 0 && (
+   549→            <div className="rounded-2xl p-5 border border-[#e5e7eb] bg-[#ffffff] shadow-sm">
+   550→              <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+   551→                <BarChart3 className="w-4 h-4 text-violet-600" />
+   552→                اهمیت ویژگی‌ها (Feature Importance)
+   553→              </h3>
+   554→              <div className="space-y-2">
+   555→                {topFeatures.map(([name, importance], i) => {
+   556→                  const maxImp = topFeatures[0][1];
+   557→                  const pct = maxImp > 0 ? (importance / maxImp) * 100 : 0;
+   558→                  return (
+   559→                    <div key={name} className="flex items-center gap-3">
+   560→                      <span className="text-[10px] text-gray-400 w-4 text-left">{toPersianDigits(String(i + 1))}</span>
+   561→                      <span className="text-xs text-gray-700 w-28 truncate" dir="ltr" title={name}>{name}</span>
+   562→                      <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+   563→                        <div
+   564→                          className="h-full rounded-full bg-gradient-to-l from-violet-500 to-violet-300 transition-all duration-500"
+   565→                          style={{ width: `${pct}%` }}
+   566→                        />
+   567→                      </div>
+   568→                      <span className="text-[10px] text-gray-500 tabular-nums w-12 text-left">{importance.toFixed(4)}</span>
+   569→                    </div>
+   570→                  );
+   571→                })}
+   572→              </div>
+   573→            </div>
+   574→          )}
+   575→
+   576→          {/* Disclaimer */}
+   577→          <div className="rounded-xl p-3 bg-amber-50 border border-amber-200">
+   578→            <p className="text-[10px] text-amber-700 leading-relaxed">
+   579→              <strong>توجه:</strong> پیش‌بینی‌های ML بر اساس داده‌های تاریخی و ویژگی‌های تکنیکال تولید می‌شوند و
+   580→              ضامن عملکرد آینده نیستند. R² منفی نشان‌دهنده عملکرد ضعیف مدل روی داده‌های این نماد است.
+   581→              همیشه از تحلیل بنیادی و مدیریت ریسک در کنار این ابزار استفاده کنید.
+   582→            </p>
+   583→          </div>
+   584→        </div>
+   585→      )}
+   586→    </div>
+   587→  );
+   588→}
+   589→

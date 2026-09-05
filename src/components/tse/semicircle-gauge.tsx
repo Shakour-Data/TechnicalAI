@@ -51,11 +51,11 @@ export default function SemicircleGauge({
   const clampedValue = Math.max(min, Math.min(max, value));
   const normalized = range !== 0 ? (clampedValue - min) / range : 0;
 
-  // ── Arc math: semicircle from π (left) to 2π (right), sweeping the bottom ──
+  // ── Arc math: semicircle from π (left) to 0 (right), sweeping over the top ──
   // Using standard SVG coordinates where y increases downward:
   // - Start angle = π (left side of circle)
   // - End angle = 0 (right side of circle)
-  // - Arc sweeps OVER THE TOP (counter-clockwise in math = clockwise in SVG)
+  // - Arc sweeps OVER THE TOP (clockwise in SVG)
   const startAngle = Math.PI;
   const endAngle = 0;
 
@@ -71,14 +71,15 @@ export default function SemicircleGauge({
   }
 
   // Create an SVG arc path from angle a1 to angle a2 (both in math convention)
-  // Always draws the shorter arc going clockwise in SVG (= over the top for our semicircle)
+  // Draws the arc going clockwise in SVG (= over the top for our semicircle)
   function describeArc(a1: number, a2: number): string {
     const start = polarToCartesian(a1);
     const end = polarToCartesian(a2);
-    // Large arc flag: 1 if the arc spans more than 180°
+    // Arc span: a1 > a2 always (since normToAngle is decreasing), so span = a1 - a2
     const arcSpan = Math.abs(a1 - a2);
+    // Large arc flag: 1 if the arc spans more than 180°
     const largeArcFlag = arcSpan > Math.PI ? 1 : 0;
-    // Sweep flag: 1 = clockwise in SVG (which goes over the top for our angles)
+    // Sweep flag: 1 = clockwise in SVG (goes over the top from left to right)
     return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
   }
 
@@ -127,7 +128,7 @@ export default function SemicircleGauge({
           fill="none"
           stroke={hexToRgba(C.cardBorder, 0.4)}
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
+          strokeLinecap="butt"
         />
 
         {/* Zone color segments (thin inner layer, no round caps to avoid overlap) */}
@@ -154,7 +155,7 @@ export default function SemicircleGauge({
             fill="none"
             stroke={needleColor}
             strokeWidth={strokeWidth}
-            strokeLinecap="round"
+            strokeLinecap="butt"
           />
         )}
 
@@ -177,12 +178,12 @@ export default function SemicircleGauge({
         {showValue && (
           <text
             x={cx}
-            y={cy - 6}
+            y={cy - radius * 0.35}
             textAnchor="middle"
             dominantBaseline="middle"
             fill={C.cardFg}
-            fontSize={size > 100 ? 13 : 11}
-            fontWeight="600"
+            fontSize={size > 100 ? 14 : 11}
+            fontWeight="700"
             fontFamily="system-ui, sans-serif"
             dir="ltr"
           >

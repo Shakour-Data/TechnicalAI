@@ -43,8 +43,9 @@ function renderAIText(text: string): string {
   // Remove CJK (Chinese/Japanese/Korean) characters — prohibited in output
   const noCjk = text.replace(/[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\uff00-\uffef]/g, '');
 
-  // Normalize zero-width and look-alike characters that may interfere with regex
-  const normalized = noCjk.replace(/[\u200c\u200d\u200b\ufeff]/g, '');
+  // Normalize zero-width BOM and look-alike characters that may interfere with regex
+  // but PRESERVE ZWNJ (\u200C) which is essential for Persian compound words
+  const normalized = noCjk.replace(/[\u200d\u200b\ufeff]/g, '');
 
   // Color syntax: {color:hex}text{/color} or {color:named}text{/color} → <span>
   const colorMap: Record<string, string> = {
@@ -56,21 +57,58 @@ function renderAIText(text: string): string {
     'purple': '#9333ea', 'purple-600': '#9333ea', 'purple-700': '#7e22ce',
   };
 
-  const withColors = normalized.replace(/\{color:([^}]+)\}([\s\S]*?)\{\/color\}/g, (_match, colorName: string, inner: string) => {
-    const hex = colorMap[colorName.trim()] || (colorName.startsWith('#') ? colorName : null);
-    if (!hex) return inner; // Unknown color: just return text without color
-    return `<span style="color:${hex}">${inner}</span>`;
-  });
+  const processInline = (raw: string) => {
+    let html = raw;
+    html = html.replace(/\{color:([^}]+)\}([\s\S]*?)\{\/color\}/g, (_match, colorName: string, inner: string) => {
+      const hex = colorMap[colorName.trim()] || (colorName.startsWith('#') ? colorName : null);
+      if (!hex) return inner; // Unknown color: just return text without color
+      return `<span style="color:${hex};font-weight:700">${inner}</span>`;
+    });
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
+    return html;
+  };
 
-  return withColors
-    .split('\n\n')
-    .map(p => {
-      // Convert **bold** to <strong>
-      const html = p.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>');
-      // Convert newlines within paragraph to <br>
-      return `<p class="mb-4">${html.replace(/\n/g, '<br>')}</p>`;
-    })
-    .join('');
+  // Process line by line to detect headings
+  const lines = normalized.split('\n');
+  const htmlParts: string[] = [];
+  let currentParagraph: string[] = [];
+
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      const content = currentParagraph.join('<br>');
+      htmlParts.push(`<p class="mb-3" style="line-height:2.2">${content}</p>`);
+      currentParagraph = [];
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // ## Main heading
+    if (trimmed.startsWith('## ')) {
+      flushParagraph();
+      htmlParts.push(`<h2 class="mb-2 pb-1" style="font-size:16px;font-weight:800;border-bottom:1px solid #e5e7eb">${processInline(trimmed.slice(3))}</h2>`);
+      continue;
+    }
+    // ### Section heading
+    if (trimmed.startsWith('### ')) {
+      flushParagraph();
+      htmlParts.push(`<h3 class="mt-3 mb-1" style="font-size:14px;font-weight:700">${processInline(trimmed.slice(4))}</h3>`);
+      continue;
+    }
+
+    // Empty line = paragraph break
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    // Regular line — accumulate into current paragraph
+    currentParagraph.push(processInline(trimmed));
+  }
+  flushParagraph();
+
+  return htmlParts.join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -153,8 +191,6 @@ export interface VdesAnalysisProps {
 // ═══════════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════════
-
-const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
 
 const SCENARIO_KEYS = ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9'] as const;
 
@@ -284,6 +320,7 @@ interface AnalysisContext {
   instrumentType?: string;
   instrumentCategory?: string;
   currencyUnit?: string;
+  priceDecimals?: number;
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -296,9 +333,11 @@ function generateAnalysisText(ctx: AnalysisContext) {
     highestKey, highestProb, scenarios, S1, R1, R2,
     hasVolume, resistanceStrengths, supportStrengths,
     v11Result, currencyUnit: ctxCurrencyUnit,
-    instrumentCategory,
+    instrumentCategory, priceDecimals: ctxPriceDecimals,
   } = ctx;
   const unit = ctxCurrencyUnit || 'ریال';
+  // Dynamic price formatter using data-source-derived decimals
+  const toFa = (n: number) => formatPriceFa(n, ctxPriceDecimals ?? 0);
   const terms = getInstrumentTerms(instrumentCategory);
 
   const R1_info = resistanceStrengths[0];
@@ -570,6 +609,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   } = props;
   const unit = propCurrencyUnit || 'ریال';
   const decimals = propPriceDecimals ?? 0;
+  // Dynamic price formatter using data-source-derived decimals
+  const toFa = (n: number) => formatPriceFa(n, decimals);
 
   const vdesRef = useRef<HTMLDivElement>(null);
 
@@ -653,6 +694,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       v11Result,
       currencyUnit: propCurrencyUnit,
       instrumentCategory,
+      priceDecimals: decimals,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -663,7 +705,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     highestKey, highestProb, scenarios,
     S1_level, R1_level, R2_level, hasVolume,
     resistanceStrengths, supportStrengths, v11Result, propCurrencyUnit,
-    instrumentCategory,
+    instrumentCategory, decimals,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────
@@ -734,6 +776,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     // Always fetch fresh analysis; cache is used as placeholder only
     let cancelled = false;
     const controller = new AbortController();
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     (async () => {
       try {
@@ -789,6 +832,20 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             return;
           }
           setAiError(errMsg);
+          setAiLoading(false);
+          // Auto-retry for transient errors (rate limit, timeout, server busy)
+          // Up to 2 auto-retries with exponential backoff (8s, 20s)
+          const isTransientError = res.status === 429 || res.status === 502 || res.status === 503
+            || errMsg.includes('محدودیت') || errMsg.includes('پایان رسید')
+            || errMsg.includes('موقتی') || errMsg.includes('در دسترس');
+          if (isTransientError && aiAutoRetryRef.current < 2) {
+            aiAutoRetryRef.current++;
+            const delay = 8000 * Math.pow(2.5, aiAutoRetryRef.current - 1); // 8s, 20s
+            console.log(`[AI] Auto-retry ${aiAutoRetryRef.current}/2 in ${Math.round(delay / 1000)}s...`);
+            retryTimer = setTimeout(() => {
+              if (!cancelled) setAiRetryKey(k => k + 1);
+            }, delay);
+          }
           return;
         }
         const data = await res.json();
@@ -797,6 +854,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           setAiText(data.text);
           setAiIsFallback(!!data.isFallback);
           setAiError(null);
+          aiAutoRetryRef.current = 0; // Reset retry counter on success
           // Save to localStorage
           saveLocalCache(symbolName, data.text, !!data.isFallback);
         } else if (data.error) {
@@ -806,6 +864,17 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             setAiIsFallback(true);
           } else {
             setAiError(data.error);
+            // Auto-retry for transient errors
+            const isTransientError = data.error.includes('محدودیت') || data.error.includes('پایان رسید')
+              || data.error.includes('موقتی') || data.error.includes('در دسترس');
+            if (isTransientError && aiAutoRetryRef.current < 2) {
+              aiAutoRetryRef.current++;
+              const delay = 8000 * Math.pow(2.5, aiAutoRetryRef.current - 1);
+              console.log(`[AI] Auto-retry ${aiAutoRetryRef.current}/2 in ${Math.round(delay / 1000)}s...`);
+              retryTimer = setTimeout(() => {
+                if (!cancelled) setAiRetryKey(k => k + 1);
+              }, delay);
+            }
           }
         }
       } catch (err: unknown) {
@@ -820,13 +889,26 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           setAiIsFallback(true);
         } else {
           setAiError(msg.length > 200 ? msg.slice(0, 200) : msg);
+          // Auto-retry for network errors
+          if (aiAutoRetryRef.current < 2) {
+            aiAutoRetryRef.current++;
+            const delay = 8000 * Math.pow(2.5, aiAutoRetryRef.current - 1);
+            console.log(`[AI] Auto-retry (network) ${aiAutoRetryRef.current}/2 in ${Math.round(delay / 1000)}s...`);
+            retryTimer = setTimeout(() => {
+              if (!cancelled) setAiRetryKey(k => k + 1);
+            }, delay);
+          }
         }
       } finally {
         if (!cancelled) setAiLoading(false);
       }
     })();
 
-    return () => { cancelled = true; controller.abort(); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [aiFetchKey, aiRetryKey]);
 
   // Helper: save AI text to localStorage (per-day key) with price for validation
@@ -1001,7 +1083,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
 
   var PD='\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669';
   function toPD(s){return String(s).replace(/\d/g,function(m){return PD[+m]})}
-  function toFa(n){return toPD(Math.round(n))}
+  function toFa(n){return toPD(n.toLocaleString('en',{maximumFractionDigits:${decimals},minimumFractionDigits:0}))}
   function formatVol(v){if(v>=1e9)return toPD((v/1e9).toFixed(1))+'B';if(v>=1e6)return toPD((v/1e6).toFixed(1))+'M';if(v>=1e3)return toPD((v/1e3).toFixed(1))+'K';return toFa(v)}
 
   var chartEl = document.getElementById('chart-container');

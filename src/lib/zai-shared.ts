@@ -274,25 +274,41 @@ export async function dedicatedAIChatCompletion(
           throw new Error('AI response too short or empty');
         }
         console.log(`[AI-dedicated] Success in ${((Date.now() - startTime) / 1000).toFixed(1)}s (attempt ${attempt})`);
+        // Clear any stale global cooldown on success
+        aiGlobalCooldownUntil = 0;
         return raw.trim();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
 
         if (msg.includes('429')) {
           // Set global cooldown so future calls fail fast
-          const GLOBAL_COOLDOWN_MS = 600_000; // 10 minutes
+          // Reduced from 10min to 3min — 10min was too aggressive and caused unnecessary failures
+          const GLOBAL_COOLDOWN_MS = 180_000; // 3 minutes
           aiGlobalCooldownUntil = Date.now() + GLOBAL_COOLDOWN_MS;
           console.warn(`[AI-dedicated] 429 on attempt ${attempt}/${maxRetries + 1}, setting global cooldown ${GLOBAL_COOLDOWN_MS / 1000}s`);
 
-          // Only retry once with a short delay (10s), then give up
-          if (attempt === 1 && deadline - Date.now() > 40_000) {
-            await sleep(10_000);
+          // Retry up to maxRetries with exponential backoff (10s, 25s, ...)
+          if (attempt <= maxRetries && deadline - Date.now() > 30_000) {
+            const backoff = 10_000 * Math.pow(1.4, attempt - 1);
+            console.log(`[AI-dedicated] Backing off ${Math.round(backoff / 1000)}s before retry...`);
+            await sleep(backoff);
             continue;
           }
           throw new Error(`Rate limited after ${attempt} attempts: ${msg}`);
         }
 
-        // Non-429 error: throw immediately
+        // Transient errors: retry up to 2 times with short delay
+        const isTransient = msg.includes('too short') || msg.includes('empty')
+          || msg.includes('network') || msg.includes('ECONNREFUSED')
+          || msg.includes('fetch') || msg.includes('socket hang up')
+          || msg.includes('ETIMEDOUT');
+        if (isTransient && attempt <= 2 && deadline - Date.now() > 15_000) {
+          console.log(`[AI-dedicated] Transient error, retrying in 5s (attempt ${attempt})...`);
+          await sleep(5_000);
+          continue;
+        }
+
+        // Non-transient, non-429 error: throw immediately
         throw new Error(msg);
       }
     }

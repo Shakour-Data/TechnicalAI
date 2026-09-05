@@ -647,6 +647,7 @@ export default function Home() {
                 data={data}
                 collapsed={sidebarCollapsed}
                 setCollapsed={setSidebarCollapsed}
+                priceDecimals={decimals}
               />
             )}
 
@@ -725,6 +726,7 @@ export default function Home() {
                   symbolName={data.info?.name ?? data.symbol}
                   candles={data.candles}
                   currentPrice={lastPrice}
+                  priceDecimals={decimals}
                 />
               )}
 

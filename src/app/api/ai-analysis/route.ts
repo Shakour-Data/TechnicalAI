@@ -602,30 +602,33 @@ export async function POST(req: NextRequest) {
 
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes('Rate limited') || msg.includes('429')) {
-    return 'سرور هوشمند محدودیت سرعت دارد. لطفاً چند دقیقه دیگر تلاش کنید.';
+  if (msg.includes('Rate limited') || msg.includes('429') || msg.includes('ZAI_RATE_LIMITED')) {
+    return 'سرور هوشمند در حال حاضر محدودیت درخواست دارد. لطفاً ۲ تا ۵ دقیقه دیگر دوباره تلاش کنید.';
   }
   if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
-    return 'زمان پاسخدهی هوشمند به پایان رسید. لطفاً دوباره تلاش کنید.';
+    return 'زمان پاسخدهی هوشمند به پایان رسید. این مشکل معمولاً موقتی است — لطفاً دوباره تلاش کنید.';
   }
   if (msg.includes('concurrent')) {
-    return 'درخواست تحلیل قبلی هنوز در حال اجراست. لطفاً صبر کنید.';
+    return 'درخواست تحلیل قبلی هنوز در حال اجراست. لطفاً چند ثانیه صبر کنید.';
   }
   if (msg.includes('quota') || msg.includes('limit') || msg.includes('capacity')) {
-    return 'ظرفیت هوشمند در حال حاضر پر است. لطفاً بعداً تلاش کنید.';
+    return 'ظرفیت هوشمند در حال حاضر پر است. لطفاً چند دقیقه دیگر تلاش کنید.';
   }
   if (msg.includes('network') || msg.includes('fetch') || msg.includes('ECONNREFUSED')) {
-    return 'خطای شبکه در ارتباط با سرور هوشمند. لطفاً اتصال اینترنت خود را بررسی کنید.';
+    return 'خطای شبکه در ارتباط با سرور هوشمند. لطفاً اتصال اینترنت خود را بررسی و دوباره تلاش کنید.';
   }
   if (msg.includes('too short') || msg.includes('empty')) {
+    return 'پاسخ هوشمند ناقص بود. لطفاً دوباره تلاش کنید — این مشکل معمولاً با تلاش مجدد برطرف می‌شود.';
+  }
+  if (msg.includes('AI response too short')) {
     return 'پاسخ هوشمند ناقص بود. لطفاً دوباره تلاش کنید.';
   }
   if (msg.includes('ReferenceError') || msg.includes('TypeError') || msg.includes('SyntaxError')) {
     // Internal error - don't expose details to user
     console.error('[AI] Internal error (hidden from user):', msg);
-    return 'خطای داخلی سیستم. تیم فنی در جریان است.';
+    return 'خطای داخلی سیستم. لطفاً چند لحظه دیگر دوباره تلاش کنید.';
   }
   // Log unhandled errors for debugging
   console.error('[AI] Unhandled error type:', msg);
-  return 'خطا در تولید تحلیل. لطفاً چند لحظه دیگر دوباره تلاش کنید.';
+  return 'خطا در تولید تحلیل. این مشکل معمولاً موقتی است — لطفاً چند لحظه دیگر دوباره تلاش کنید.';
 }

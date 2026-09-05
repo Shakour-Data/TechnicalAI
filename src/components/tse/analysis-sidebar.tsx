@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { Activity, TrendingUp, TrendingDown, ChevronRight, ChevronLeft, ArrowUpRight, ArrowDownRight, Minus, Target } from 'lucide-react';
 import { toPersianDigits } from '@/lib/jalali';
+import { formatPriceFa } from '@/lib/format-price';
 import { useTheme } from '@/lib/theme-store';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -18,6 +19,7 @@ interface AnalysisSidebarProps {
       openPrice: number;
       minPrice: number;
       maxPrice: number;
+      yesterdayClose: number;
       volume: number;
       value: number;
       trades: number;
@@ -33,6 +35,7 @@ interface AnalysisSidebarProps {
   } | null;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  priceDecimals?: number;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -45,7 +48,8 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 const safeNum = (n: number | null | undefined, fallback = 0) => (n ?? fallback);
-const toFa = (n: number | null | undefined) => Math.round(safeNum(n)).toLocaleString('fa-IR');
+// Dynamic price formatter using data-source-derived decimals
+const toFaDyn = (n: number | null | undefined, decimals: number) => formatPriceFa(safeNum(n), decimals);
 const toFa1 = (n: number | null | undefined) => toPersianDigits(safeNum(n).toFixed(1)).replace(/\./g, '٫').replace(/-/g, '−');
 const toFa2 = (n: number | null | undefined) => toPersianDigits(safeNum(n).toFixed(2)).replace(/\./g, '٫').replace(/-/g, '−');
 
@@ -104,7 +108,7 @@ function formatNumber(n: number | null | undefined): string {
   if (Math.abs(v) >= 1e9) return toPersianDigits((v / 1e9).toFixed(1)) + 'B';
   if (Math.abs(v) >= 1e6) return toPersianDigits((v / 1e6).toFixed(1)) + 'M';
   if (Math.abs(v) >= 1e3) return toPersianDigits((v / 1e3).toFixed(1)) + 'K';
-  return toFa(v);
+  return Math.round(v).toLocaleString('fa-IR');
 }
 
 function pctDistance(from: number, to: number): number {
@@ -154,7 +158,7 @@ function ProgressBar({ value, max, color, height = 4 }: { value: number; max: nu
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function AnalysisSidebar({ data, collapsed, setCollapsed }: AnalysisSidebarProps) {
+export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDecimals }: AnalysisSidebarProps) {
   const { colors: TC } = useTheme();
 
   // Local color aliases matching original C.* property names
@@ -174,6 +178,10 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed }: Analy
   const ta = data?.ta;
   const info = data?.info;
   const lastPrice = info?.lastPrice ?? 0;
+  // Derive decimals: explicit prop > data source info > default 0
+  const decimals = priceDecimals ?? info?.decimals ?? 0;
+  // Price formatter using dynamic decimals
+  const toFa = (n: number | null | undefined) => toFaDyn(n, decimals);
   const change = info?.change ?? 0;
   const changeColor = change > 0 ? C.bull : change < 0 ? C.bear : C.neutral;
   const changeArrow = change > 0 ? '▲' : change < 0 ? '▼' : '—';

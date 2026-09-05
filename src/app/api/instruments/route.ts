@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { fetchAllInstruments, fetchTsetmcInstruments } from '@/lib/tse-api';
-import { INDUSTRY_INDICES } from '@/lib/industry-indices';
+import { INDUSTRY_INDICES, type IndustryIndex } from '@/lib/industry-indices';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
 export const dynamic = 'force-dynamic';
@@ -174,10 +174,24 @@ export async function GET() {
       return undefined;
     }
 
+    // ── Normalize Persian text for dedup: Arabic ك/ي → Persian ک/ی, remove ZWNJ ──
+    function normalizePersian(s: string): string {
+      return s
+        .replace(/\u0643/g, '\u06A9')  // Arabic ك → Persian ک
+        .replace(/\u064A/g, '\u06CC')  // Arabic ي/ي → Persian ی
+        .replace(/[\u200c\s()]/g, '');  // Remove ZWNJ, spaces, parens
+    }
+
     if (tsetmcIndices && tsetmcIndices.length > 0) {
       indices = tsetmcIndices.map((idx) => {
         existingSymbols.add(idx.symbol);
+        existingSymbols.add(normalizePersian(idx.symbol));
         const industryMatch = findIndustryMatch(idx.symbol);
+        // Also mark the INDUSTRY_INDICES symbol as existing to prevent duplicates
+        if (industryMatch) {
+          existingSymbols.add(industryMatch.symbol);
+          existingSymbols.add(normalizePersian(industryMatch.symbol));
+        }
         return {
           l18: idx.symbol,
           l30: idx.name,
@@ -198,10 +212,27 @@ export async function GET() {
       });
 
       // Merge BrsApi real-time values for main indices
+      // Build a lookup map by both exact name and industry-matched symbol for robust matching
+      const indexByName = new Map<string, InstrumentItem>();
+      for (const item of indices) {
+        indexByName.set(item.l18, item);
+        indexByName.set(normalizePersian(item.l18), item);
+        if (item.l30) {
+          indexByName.set(item.l30, item);
+          indexByName.set(normalizePersian(item.l30), item);
+        }
+        // Also map via industry match
+        const im = findIndustryMatch(item.l18);
+        if (im) indexByName.set(im.symbol, item);
+      }
       for (const brsIdx of data.indices) {
-        const match = indices.find(
-          (t) => t.l18 === brsIdx.name || t.l30 === brsIdx.name,
-        );
+        // Try exact match first, then normalized, then via industry match
+        let match = indexByName.get(brsIdx.name)
+          || indexByName.get(normalizePersian(brsIdx.name));
+        if (!match) {
+          const brsIndustryMatch = findIndustryMatch(brsIdx.name);
+          if (brsIndustryMatch) match = indexByName.get(brsIndustryMatch.symbol);
+        }
         if (match) {
           match.pl = brsIdx.index;
           match.pcp = brsIdx.index_change_percent;
@@ -215,7 +246,13 @@ export async function GET() {
     } else {
       indices = data.indices.map((idx) => {
         existingSymbols.add(idx.name);
+        existingSymbols.add(normalizePersian(idx.name));
         const industryMatch = findIndustryMatch(idx.name);
+        // Also mark the INDUSTRY_INDICES symbol as existing to prevent duplicates
+        if (industryMatch) {
+          existingSymbols.add(industryMatch.symbol);
+          existingSymbols.add(normalizePersian(industryMatch.symbol));
+        }
         return {
           l18: idx.name,
           l30: industryMatch?.name || '',
@@ -241,27 +278,40 @@ export async function GET() {
     }
 
     // ── Add industry indices not already in the list ──
+    // Use both exact and normalized symbol matching for dedup
     for (const idx of INDUSTRY_INDICES) {
-      if (!existingSymbols.has(idx.symbol)) {
-        const sectorPrice = idx.finpySector ? sectorPricesFinal.get(idx.finpySector) : undefined;
-        indices.push({
-          l18: idx.symbol,
-          l30: idx.name,
-          pl: sectorPrice?.close || 0,
-          pcp: sectorPrice?.pcp || 0,
-          tno: 0,
-          tvol: 0,
-          tval: 0,
-          cs: idx.group,
-          category: 'index',
-          finpySector: idx.finpySector || undefined,
-          finpyIndex: idx.finpyIndex || undefined,
-          webId: idx.webId || undefined,
-          isMainIndex: idx.isMainIndex || undefined,
-          index: sectorPrice?.close || undefined,
-          indexChangePercent: sectorPrice?.pcp || undefined,
-        });
+      if (existingSymbols.has(idx.symbol) || existingSymbols.has(normalizePersian(idx.symbol))) {
+        continue;
       }
+      const sectorPrice = idx.finpySector ? sectorPricesFinal.get(idx.finpySector) : undefined;
+      indices.push({
+        l18: idx.symbol,
+        l30: idx.name,
+        pl: sectorPrice?.close || 0,
+        pcp: sectorPrice?.pcp || 0,
+        tno: 0,
+        tvol: 0,
+        tval: 0,
+        cs: idx.group,
+        category: 'index',
+        finpySector: idx.finpySector || undefined,
+        finpyIndex: idx.finpyIndex || undefined,
+        webId: idx.webId || undefined,
+        isMainIndex: idx.isMainIndex || undefined,
+        index: sectorPrice?.close || undefined,
+        indexChangePercent: sectorPrice?.pcp || undefined,
+      });
+    }
+
+    // ── Final dedup pass: remove indices with duplicate l18 (normalized) ──
+    {
+      const seen = new Set<string>();
+      indices = indices.filter((item) => {
+        const norm = normalizePersian(item.l18);
+        if (seen.has(norm)) return false;
+        seen.add(norm);
+        return true;
+      });
     }
 
     // ── Merge sector prices into TSETMC-sourced indices that have no price ──

@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { toPersianDigits } from '@/lib/jalali';
+import {
+  toPersianDigits
+} from '@/lib/jalali';
+import { formatPriceFa } from '@/lib/format-price';
 import {
   TrendingUp,
   TrendingDown,
@@ -60,6 +63,7 @@ interface MLForecastProps {
   symbolName: string;
   candles: Candle[];
   currentPrice: number;
+  priceDecimals?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -84,8 +88,9 @@ const SESSION_OPTIONS = [5, 10, 15, 20, 30];
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
-const toFa = (n: number) => Math.round(n).toLocaleString('fa-IR');
-const toFaDecimal = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: 2 });
+// Price formatter: uses priceDecimals for price values, 0 default (integers)
+const toFaDyn = (n: number, decimals: number) => formatPriceFa(n, decimals);
+const toFaDecimalDyn = (n: number, decimals: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: Math.max(decimals, 2) });
 
 function r2Color(r2: number): string {
   if (r2 >= 0.5) return 'text-emerald-700';
@@ -146,7 +151,7 @@ function MiniSparkline({ predictions, color, width = 120, height = 40 }: { predi
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function MLForecast({ symbolName, candles, currentPrice }: MLForecastProps) {
+export default function MLForecast({ symbolName, candles, currentPrice, priceDecimals }: MLForecastProps) {
   const [result, setResult] = useState<MLPredictResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +160,11 @@ export default function MLForecast({ symbolName, candles, currentPrice }: MLFore
   const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(null);
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
+
+  // Derive decimals from prop (default 0 for TSE integers)
+  const decimals = priceDecimals ?? 0;
+  const toFa = (n: number) => toFaDyn(n, decimals);
+  const toFaDecimal = (n: number) => toFaDecimalDyn(n, decimals);
 
   // Check ML service health on mount (auto-starts service if down)
   useEffect(() => {

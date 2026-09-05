@@ -323,14 +323,12 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
   const totalIndicators = trendInfos.length;
 
   const fmtKeyVal = (val: number): string => {
-    if (priceDecimals !== undefined && priceDecimals > 0) return formatPriceFa(val, priceDecimals);
-    return toPersianDigits(Math.round(val).toString());
+    return formatPriceFa(val, priceDecimals ?? 0);
   };
 
   // Price formatter: uses priceDecimals for all price-type values (SMA, EMA, SAR, BB, etc.)
   const fmtPrice = (val: number): string => {
-    if (priceDecimals !== undefined && priceDecimals > 0) return formatPriceFa(val, priceDecimals);
-    return toFa(val);
+    return formatPriceFa(val, priceDecimals ?? 0);
   };
 
   return (
@@ -348,25 +346,16 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
           <SemicircleGauge label="ویلیامز %R" value={ta.williamsR} min={-100} max={0} signal={ta.williamsR > -20 ? 'bearish' : ta.williamsR < -80 ? 'bullish' : 'neutral'} zones={{ bearishAbove: -20, bullishBelow: -80 }} size={110} />
         </div>
 
-        {/* Compact overall signal with bull/bear bar */}
-        <div className="flex items-center justify-center gap-3 mt-3">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-            style={
-              ta.overallSignal === 'bullish'
-                ? { background: hexToRgba(C.bullColor, 0.1), border: `1px solid ${hexToRgba(C.bullColor, 0.25)}`, color: C.bullColor }
-                : ta.overallSignal === 'bearish'
-                  ? { background: hexToRgba(C.bearColor, 0.1), border: `1px solid ${hexToRgba(C.bearColor, 0.25)}`, color: C.bearColor }
-                  : { background: hexToRgba(C.neutralColor, 0.1), border: `1px solid ${hexToRgba(C.neutralColor, 0.25)}`, color: C.neutralColor }
-            }
-          >
-            <SignalDot signal={ta.overallSignal} />
+        {/* Informative signal summary with score breakdown */}
+        <div className="flex items-center justify-center gap-2 mt-3 text-[11px] font-medium">
+          <SignalDot signal={ta.overallSignal} />
+          <span style={{ color: ta.overallSignal === 'bullish' ? C.bullColor : ta.overallSignal === 'bearish' ? C.bearColor : C.neutralColor }}>
             {ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
           </span>
-          <div className="w-28 h-2.5 rounded-full overflow-hidden flex" style={{ background: C.cardBorder }}>
-            <div className="h-full rounded-r-full transition-all duration-500" style={{ width: `${ta.bullScore}%`, background: hexToRgba(C.bullColor, 0.6) }} />
-            <div className="h-full rounded-l-full transition-all duration-500" style={{ width: `${ta.bearScore}%`, background: hexToRgba(C.bearColor, 0.6) }} />
-          </div>
+          <span style={{ color: hexToRgba(C.cardSubFg, 0.5) }}>·</span>
+          <span style={{ color: C.bullColor }}>خرید {toPersianDigits(String(ta.bullScore))}٪</span>
+          <span style={{ color: hexToRgba(C.cardSubFg, 0.5) }}>|</span>
+          <span style={{ color: C.bearColor }}>فروش {toPersianDigits(String(ta.bearScore))}٪</span>
         </div>
       </div>
 

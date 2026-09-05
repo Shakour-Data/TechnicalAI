@@ -267,3 +267,52 @@ Stage Summary:
 - No API calls needed - Z.ai generates text directly via algorithmic function
 - Text is symbol-specific, uses real data (probabilities, branches, RSI, ADX, ATR, supports/resistances)
 - Instant display (no loading spinner needed)
+---
+Task ID: 1
+Agent: main
+Task: Fix all 6 critical bugs permanently as reported by user
+
+Work Log:
+- Fixed Persian text formatting in VDSS analysis (generateAdvancedDGAnalysis):
+  - Added proper title with ## markdown syntax (removed emoji)
+  - Added section headings with ### syntax (ساختار کلی گراف, تحلیل استراتژی‌ها, شاخص‌های تکنیکال, پویایی احتمالات, توصیه عملی)
+  - Changed from joining sentences with spaces to putting each on its own line
+  - Added ZWNJ (نیم‌فاصله) in all Persian compound words (نشان‌دهنده, سه‌لایه, می‌شود, قرار می‌گیرد, etc.)
+  - Renamed pctW→pctWhole for clarity
+- Fixed renderDGAIText to detect ## and ### headings and render as <h2>/<h3>
+- Fixed percentage bug: pathContributions are already 0-100 but faPct multiplied by 100 again → added faPctWhole function
+- Fixed narrative text ZWNJ issues in generateDecisionGraphNarrative
+- Fixed renderAIText in vdes-analysis.tsx:
+  - Preserved ZWNJ characters (previously stripped)
+  - Added ##/### heading detection
+  - Improved paragraph structure
+- Fixed decimal precision across all components:
+  - analysis-sidebar.tsx: Added priceDecimals prop, dynamic toFa via formatPriceFa
+  - ml-forecast.tsx: Added priceDecimals prop, dynamic formatters
+  - vdes-analysis.tsx: Component-level toFa using formatPriceFa
+  - indicators-panel.tsx: Simplified to always use formatPriceFa
+  - vdss-graph.tsx: fa() always uses priceDecimals
+  - page.tsx: Passes priceDecimals to all components
+- Fixed semicircle gauge rendering:
+  - Repositioned value text to visual center of arc
+  - Changed stroke caps to butt to eliminate double-thickness artifact
+- Replaced meaningless capsule badges with informative summary line
+- Fixed instrument data fetching:
+  - Added normalizePersian() for Arabic/Persian character matching
+  - Fixed BrsApi index merge with Map-based lookup
+  - Added final dedup pass
+- Fixed AI analysis errors:
+  - Reduced 429 cooldown from 10→3 minutes
+  - Added exponential backoff retry for 429 and transient errors
+  - Added client-side auto-retry with exponential backoff
+  - Improved error messages
+
+Stage Summary:
+- All 6 critical bugs fixed permanently
+- Persian text now follows proper writing conventions (ZWNJ, paragraph structure, headings)
+- Decimal precision derives from data source across all components
+- Percentage bug fixed (no more 2500% instead of 25%)
+- Gauge rendering improved (centered text, clean stroke caps)
+- Meaningless badges replaced with informative summary
+- Instrument dedup and data fetching fixed with Persian normalization
+- AI analysis more resilient with auto-retry and better error handling

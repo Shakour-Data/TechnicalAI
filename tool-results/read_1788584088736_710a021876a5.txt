@@ -1,0 +1,577 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React from 'react';
+     4→     4→import { Skeleton } from '@/components/ui/skeleton';
+     5→     5→import { toPersianDigits } from '@/lib/jalali';
+     6→     6→import { useTheme } from '@/lib/theme-store';
+     7→     7→import { formatPriceFa } from '@/lib/format-price';
+     8→     8→import SemicircleGauge from '@/components/tse/semicircle-gauge';
+     9→     9→
+    10→    10→// ─── Types ─────────────────────────────────────────────────────────────────────
+    11→    11→
+    12→    12→interface IndicatorsPanelProps {
+    13→    13→  ta: {
+    14→    14→    sma: Record<string, number>;
+    15→    15→    ema: Record<string, number>;
+    16→    16→    rsi: number;
+    17→    17→    mfi: number;
+    18→    18→    cci: number;
+    19→    19→    stochK: number;
+    20→    20→    stochD: number;
+    21→    21→    williamsR: number;
+    22→    22→    macd: { line: number; signal: number; histogram: number };
+    23→    23→    adx: number;
+    24→    24→    diPlus: number;
+    25→    25→    diMinus: number;
+    26→    26→    sar: number;
+    27→    27→    atr: number;
+    28→    28→    bollingerBands: { upper: number; middle: number; lower: number };
+    29→    29→    obv: number;
+    30→    30→    ichimoku: {
+    31→    31→      tenkan: number; kijun: number; senkouA: number; senkouB: number; chikou: number;
+    32→    32→    };
+    33→    33→    vwap: number;
+    34→    34→    hasVolume?: boolean;
+    35→    35→    resistances: number[];
+    36→    36→    supports: number[];
+    37→    37→    supportStrengths: {
+    38→    38→      price: number; strength: number; isTarget: boolean;
+    39→    39→      fibRatio: string; fibLabel: string; score: number; grade: string;
+    40→    40→      overlapCount: number; methods: string[];
+    41→    41→    }[];
+    42→    42→    resistanceStrengths: {
+    43→    43→      price: number; strength: number; isTarget: boolean;
+    44→    44→      fibRatio: string; fibLabel: string; score: number; grade: string;
+    45→    45→      overlapCount: number; methods: string[];
+    46→    46→    }[];
+    47→    47→    trend: {
+    48→    48→      short: { direction: string; slope: number; angle: number; r2: number };
+    49→    49→      medium: { direction: string; slope: number; angle: number; r2: number };
+    50→    50→      long: { direction: string; slope: number; angle: number; r2: number };
+    51→    51→    };
+    52→    52→    bullScore: number;
+    53→    53→    bearScore: number;
+    54→    54→    overallSignal: 'bullish' | 'bearish' | 'neutral';
+    55→    55→  } | null;
+    56→    56→  instrumentCategory?: string;
+    57→    57→  priceDecimals?: number;
+    58→    58→}
+    59→    59→
+    60→    60→// ─── Helpers ───────────────────────────────────────────────────────────────────
+    61→    61→
+    62→    62→function hexToRgba(hex: string, alpha: number): string {
+    63→    63→  const r = parseInt(hex.slice(1, 3), 16);
+    64→    64→  const g = parseInt(hex.slice(3, 5), 16);
+    65→    65→  const b = parseInt(hex.slice(5, 7), 16);
+    66→    66→  return `rgba(${r},${g},${b},${alpha})`;
+    67→    67→}
+    68→    68→
+    69→    69→const toFa = (n: number) => `\u200E${Math.round(n).toLocaleString('fa-IR')}\u200E`;
+    70→    70→
+    71→    71→function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
+    72→    72→  if (v > 70) return 'bearish';
+    73→    73→  if (v < 30) return 'bullish';
+    74→    74→  return 'neutral';
+    75→    75→}
+    76→    76→
+    77→    77→function mfiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
+    78→    78→  if (v > 80) return 'bearish';
+    79→    79→  if (v < 20) return 'bullish';
+    80→    80→  return 'neutral';
+    81→    81→}
+    82→    82→
+    83→    83→function stochSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
+    84→    84→  if (v > 80) return 'bearish';
+    85→    85→  if (v < 20) return 'bullish';
+    86→    86→  return 'neutral';
+    87→    87→}
+    88→    88→
+    89→    89→function macdSignal(v: { line: number; signal: number; histogram: number }): 'bullish' | 'bearish' | 'neutral' {
+    90→    90→  if (v.histogram > 0 && v.line > v.signal) return 'bullish';
+    91→    91→  if (v.histogram < 0 && v.line < v.signal) return 'bearish';
+    92→    92→  return 'neutral';
+    93→    93→}
+    94→    94→
+    95→    95→function adxSignal(adx: number, diP: number, diM: number): 'bullish' | 'bearish' | 'neutral' {
+    96→    96→  if (adx < 20) return 'neutral';
+    97→    97→  return diP > diM ? 'bullish' : 'bearish';
+    98→    98→}
+    99→    99→
+   100→   100→function trendDirSignal(dir: string): 'bullish' | 'bearish' | 'neutral' {
+   101→   101→  if (dir === 'up') return 'bullish';
+   102→   102→  if (dir === 'down') return 'bearish';
+   103→   103→  return 'neutral';
+   104→   104→}
+   105→   105→
+   106→   106→function gradeStyle(grade: string, cardSubFg: string): React.CSSProperties {
+   107→   107→  switch (grade) {
+   108→   108→    case 'Very Strong': return { background: 'rgba(239,68,68,0.2)', color: '#f87171' };
+   109→   109→    case 'Strong': return { background: 'rgba(245,158,11,0.2)', color: '#fbbf24' };
+   110→   110→    case 'Moderate': return { background: 'rgba(14,165,233,0.2)', color: '#38bdf8' };
+   111→   111→    default: return { background: 'rgba(255,255,255,0.1)', color: cardSubFg };
+   112→   112→  }
+   113→   113→}
+   114→   114→
+   115→   115→function SignalDot({ signal }: { signal: 'bullish' | 'bearish' | 'neutral' }) {
+   116→   116→  const { colors: C } = useTheme();
+   117→   117→  const bg = signal === 'bullish' ? C.bullColor : signal === 'bearish' ? C.bearColor : C.cardSubFg;
+   118→   118→  return <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: bg }} />;
+   119→   119→}
+   120→   120→
+   121→   121→// ─── Indicator Card ────────────────────────────────────────────────────────────
+   122→   122→
+   123→   123→function IndicatorCard({ label, value, signal }: { label: string; value: string; signal: 'bullish' | 'bearish' | 'neutral' }) {
+   124→   124→  const { colors: C } = useTheme();
+   125→   125→  return (
+   126→   126→    <div className="rounded-xl p-3 flex items-center justify-between gap-2" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+   127→   127→      <div className="flex flex-col gap-0.5 min-w-0">
+   128→   128→        <span className="text-[11px] truncate" style={{ color: C.cardSubFg }}>{label}</span>
+   129→   129→        <span className="text-sm font-medium tabular-nums" style={{ color: C.cardFg }} dir="ltr">{value}</span>
+   130→   130→      </div>
+   131→   131→      <SignalDot signal={signal} />
+   132→   132→    </div>
+   133→   133→  );
+   134→   134→}
+   135→   135→
+   136→   136→// ─── Section Header ────────────────────────────────────────────────────────────
+   137→   137→
+   138→   138→function SectionHeader({ title }: { title: string }) {
+   139→   139→  return <h3 className="col-span-full text-xs font-semibold text-amber-400/80 mt-5 mb-1.5 first:mt-0">{title}</h3>;
+   140→   140→}
+   141→   141→
+   142→   142→// ─── Key Indicators by Category ────────────────────────────────────────────────
+   143→   143→
+   144→   144→type KeyIndicator = {
+   145→   145→  id: string;
+   146→   146→  label: string;
+   147→   147→  getValue: (ta: NonNullable<IndicatorsPanelProps['ta']>) => number;
+   148→   148→  signal: 'bullish' | 'bearish' | 'neutral';
+   149→   149→};
+   150→   150→
+   151→   151→function getKeyIndicators(ta: NonNullable<IndicatorsPanelProps['ta']>, category?: string): KeyIndicator[] {
+   152→   152→  const cat = (category ?? '').toLowerCase();
+   153→   153→
+   154→   154→  if (cat === 'crypto') {
+   155→   155→    return [
+   156→   156→      { id: 'rsi', label: 'RSI', getValue: (t) => t.rsi, signal: rsiSignal(ta.rsi) },
+   157→   157→      { id: 'macd', label: 'هیستوگرام MACD', getValue: (t) => t.macd.histogram, signal: ta.macd.histogram > 0 ? 'bullish' : ta.macd.histogram < 0 ? 'bearish' : 'neutral' },
+   158→   158→      { id: 'stochK', label: 'استوکاستیک %K', getValue: (t) => t.stochK, signal: stochSignal(ta.stochK) },
+   159→   159→      { id: 'bb', label: 'باندهای بولینگر', getValue: (t) => { const range = t.bollingerBands.upper - t.bollingerBands.lower; return t.bollingerBands.middle > 0 ? (range / t.bollingerBands.middle) * 100 : 50; }, signal: 'neutral' },
+   160→   160→      { id: 'mfi', label: 'MFI', getValue: (t) => t.mfi, signal: mfiSignal(ta.mfi) },
+   161→   161→    ];
+   162→   162→  }
+   163→   163→
+   164→   164→  if (cat === 'forex') {
+   165→   165→    return [
+   166→   166→      { id: 'rsi', label: 'RSI', getValue: (t) => t.rsi, signal: rsiSignal(ta.rsi) },
+   167→   167→      { id: 'stochK', label: 'استوکاستیک %K', getValue: (t) => t.stochK, signal: stochSignal(ta.stochK) },
+   168→   168→      { id: 'adx', label: 'ADX', getValue: (t) => t.adx, signal: ta.adx > 25 ? 'bullish' : 'neutral' },
+   169→   169→      { id: 'cci', label: 'CCI', getValue: (t) => t.cci, signal: ta.cci > 100 ? 'bearish' : ta.cci < -100 ? 'bullish' : 'neutral' },
+   170→   170→      { id: 'macd', label: 'هیستوگرام MACD', getValue: (t) => t.macd.histogram, signal: ta.macd.histogram > 0 ? 'bullish' : ta.macd.histogram < 0 ? 'bearish' : 'neutral' },
+   171→   171→    ];
+   172→   172→  }
+   173→   173→
+   174→   174→  if (cat === 'gold' || cat === 'silver' || cat === 'gold_etf') {
+   175→   175→    return [
+   176→   176→      { id: 'rsi', label: 'RSI', getValue: (t) => t.rsi, signal: rsiSignal(ta.rsi) },
+   177→   177→      { id: 'macd', label: 'هیستوگرام MACD', getValue: (t) => t.macd.histogram, signal: ta.macd.histogram > 0 ? 'bullish' : ta.macd.histogram < 0 ? 'bearish' : 'neutral' },
+   178→   178→      { id: 'adx', label: 'ADX', getValue: (t) => t.adx, signal: ta.adx > 25 ? 'bullish' : 'neutral' },
+   179→   179→      { id: 'bb', label: 'باندهای بولینگر', getValue: (t) => { const range = t.bollingerBands.upper - t.bollingerBands.lower; return t.bollingerBands.middle > 0 ? (range / t.bollingerBands.middle) * 100 : 50; }, signal: 'neutral' },
+   180→   180→    ];
+   181→   181→  }
+   182→   182→
+   183→   183→  if (cat === 'index' || cat === 'tse_index' || cat === 'world_index') {
+   184→   184→    return [
+   185→   185→      { id: 'adx', label: 'ADX', getValue: (t) => t.adx, signal: ta.adx > 25 ? 'bullish' : 'neutral' },
+   186→   186→      { id: 'macd', label: 'هیستوگرام MACD', getValue: (t) => t.macd.histogram, signal: ta.macd.histogram > 0 ? 'bullish' : ta.macd.histogram < 0 ? 'bearish' : 'neutral' },
+   187→   187→      { id: 'rsi', label: 'RSI', getValue: (t) => t.rsi, signal: rsiSignal(ta.rsi) },
+   188→   188→      { id: 'trend', label: 'روند میان‌مدت', getValue: (t) => t.trend.medium.angle, signal: trendDirSignal(ta.trend.medium.direction) },
+   189→   189→    ];
+   190→   190→  }
+   191→   191→
+   192→   192→  // Default (TSE stocks)
+   193→   193→  return [
+   194→   194→    { id: 'rsi', label: 'RSI', getValue: (t) => t.rsi, signal: rsiSignal(ta.rsi) },
+   195→   195→    { id: 'macd', label: 'هیستوگرام MACD', getValue: (t) => t.macd.histogram, signal: ta.macd.histogram > 0 ? 'bullish' : ta.macd.histogram < 0 ? 'bearish' : 'neutral' },
+   196→   196→    { id: 'adx', label: 'ADX', getValue: (t) => t.adx, signal: ta.adx > 25 ? 'bullish' : 'neutral' },
+   197→   197→    { id: 'bb', label: 'باندهای بولینگر', getValue: (t) => { const range = t.bollingerBands.upper - t.bollingerBands.lower; return t.bollingerBands.middle > 0 ? (range / t.bollingerBands.middle) * 100 : 50; }, signal: 'neutral' },
+   198→   198→    { id: 'obv', label: 'OBV', getValue: (t) => Math.min(100, Math.max(0, 50 + (t.obv > 0 ? 25 : t.obv < 0 ? -25 : 0))), signal: 'neutral' },
+   199→   199→  ];
+   200→   200→}
+   201→   201→
+   202→   202→// ─── Trend Analysis ────────────────────────────────────────────────────────────
+   203→   203→
+   204→   204→interface TrendInfo {
+   205→   205→  label: string;
+   206→   206→  direction: 'rising' | 'falling' | 'stable';
+   207→   207→  signal: 'bullish' | 'bearish' | 'neutral';
+   208→   208→}
+   209→   209→
+   210→   210→function analyzeIndicatorTrends(ta: NonNullable<IndicatorsPanelProps['ta']>): TrendInfo[] {
+   211→   211→  const trends: TrendInfo[] = [];
+   212→   212→
+   213→   213→  trends.push({
+   214→   214→    label: 'RSI',
+   215→   215→    direction: ta.rsi > 60 ? 'rising' : ta.rsi < 40 ? 'falling' : 'stable',
+   216→   216→    signal: rsiSignal(ta.rsi),
+   217→   217→  });
+   218→   218→
+   219→   219→  trends.push({
+   220→   220→    label: 'استوکاستیک',
+   221→   221→    direction: ta.stochK > 60 ? 'rising' : ta.stochK < 40 ? 'falling' : 'stable',
+   222→   222→    signal: stochSignal(ta.stochK),
+   223→   223→  });
+   224→   224→
+   225→   225→  trends.push({
+   226→   226→    label: 'MACD',
+   227→   227→    direction: ta.macd.histogram > 0 ? 'rising' : ta.macd.histogram < 0 ? 'falling' : 'stable',
+   228→   228→    signal: macdSignal(ta.macd),
+   229→   229→  });
+   230→   230→
+   231→   231→  trends.push({
+   232→   232→    label: 'ADX',
+   233→   233→    direction: ta.adx > 25 ? 'rising' : ta.adx < 15 ? 'falling' : 'stable',
+   234→   234→    signal: adxSignal(ta.adx, ta.diPlus, ta.diMinus),
+   235→   235→  });
+   236→   236→
+   237→   237→  trends.push({
+   238→   238→    label: 'CCI',
+   239→   239→    direction: ta.cci > 100 ? 'rising' : ta.cci < -100 ? 'falling' : 'stable',
+   240→   240→    signal: ta.cci > 100 ? 'bearish' : ta.cci < -100 ? 'bullish' : 'neutral',
+   241→   241→  });
+   242→   242→
+   243→   243→  if (ta.hasVolume !== false) {
+   244→   244→    trends.push({
+   245→   245→      label: 'MFI',
+   246→   246→      direction: ta.mfi > 60 ? 'rising' : ta.mfi < 40 ? 'falling' : 'stable',
+   247→   247→      signal: mfiSignal(ta.mfi),
+   248→   248→    });
+   249→   249→  }
+   250→   250→
+   251→   251→  trends.push({
+   252→   252→    label: 'ویلیامز %R',
+   253→   253→    direction: ta.williamsR > -40 ? 'rising' : ta.williamsR < -60 ? 'falling' : 'stable',
+   254→   254→    signal: ta.williamsR > -20 ? 'bearish' : ta.williamsR < -80 ? 'bullish' : 'neutral',
+   255→   255→  });
+   256→   256→
+   257→   257→  const bbWidth = ta.bollingerBands.upper - ta.bollingerBands.lower;
+   258→   258→  trends.push({
+   259→   259→    label: 'بولینگر',
+   260→   260→    direction: bbWidth > ta.bollingerBands.middle * 0.04 ? 'rising' : bbWidth < ta.bollingerBands.middle * 0.02 ? 'falling' : 'stable',
+   261→   261→    signal: 'neutral',
+   262→   262→  });
+   263→   263→
+   264→   264→  return trends;
+   265→   265→}
+   266→   266→
+   267→   267→// ─── Trend Arrow ───────────────────────────────────────────────────────────────
+   268→   268→
+   269→   269→function TrendArrow({ direction, color }: { direction: TrendInfo['direction']; color: string }) {
+   270→   270→  if (direction === 'rising') {
+   271→   271→    return (
+   272→   272→      <svg width="12" height="12" viewBox="0 0 12 12" className="shrink-0">
+   273→   273→        <path d="M6 1 L11 9 L1 9 Z" fill={color} opacity={0.9} />
+   274→   274→      </svg>
+   275→   275→    );
+   276→   276→  }
+   277→   277→  if (direction === 'falling') {
+   278→   278→    return (
+   279→   279→      <svg width="12" height="12" viewBox="0 0 12 12" className="shrink-0">
+   280→   280→        <path d="M6 11 L1 3 L11 3 Z" fill={color} opacity={0.9} />
+   281→   281→      </svg>
+   282→   282→    );
+   283→   283→  }
+   284→   284→  return (
+   285→   285→    <svg width="12" height="12" viewBox="0 0 12 12" className="shrink-0">
+   286→   286→      <rect x="1" y="5" width="10" height="2" rx="1" fill={color} opacity={0.6} />
+   287→   287→    </svg>
+   288→   288→  );
+   289→   289→}
+   290→   290→
+   291→   291→// ─── Loading Skeleton ──────────────────────────────────────────────────────────
+   292→   292→
+   293→   293→function LoadingSkeleton() {
+   294→   294→  const { colors: C } = useTheme();
+   295→   295→  return (
+   296→   296→    <div className="rounded-2xl p-4 space-y-4" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+   297→   297→      {Array.from({ length: 6 }).map((_, i) => (
+   298→   298→        <div key={i} className="space-y-2">
+   299→   299→          <Skeleton className="h-4 w-28 bg-white/5" />
+   300→   300→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   301→   301→            {Array.from({ length: 3 }).map((_, j) => (
+   302→   302→              <Skeleton key={j} className="h-16 w-full bg-white/5 rounded-xl" />
+   303→   303→            ))}
+   304→   304→          </div>
+   305→   305→        </div>
+   306→   306→      ))}
+   307→   307→    </div>
+   308→   308→  );
+   309→   309→}
+   310→   310→
+   311→   311→// ─── Main Component ────────────────────────────────────────────────────────────
+   312→   312→
+   313→   313→export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals }: IndicatorsPanelProps) {
+   314→   314→  const { colors: C } = useTheme();
+   315→   315→
+   316→   316→  if (!ta) return <LoadingSkeleton />;
+   317→   317→
+   318→   318→  const maSignal = 'neutral' as const;
+   319→   319→  const keyIndicators = getKeyIndicators(ta, instrumentCategory);
+   320→   320→  const trendInfos = analyzeIndicatorTrends(ta);
+   321→   321→  const risingCount = trendInfos.filter((t) => t.direction === 'rising').length;
+   322→   322→  const fallingCount = trendInfos.filter((t) => t.direction === 'falling').length;
+   323→   323→  const totalIndicators = trendInfos.length;
+   324→   324→
+   325→   325→  const fmtKeyVal = (val: number): string => {
+   326→   326→    if (priceDecimals !== undefined && priceDecimals > 0) return formatPriceFa(val, priceDecimals);
+   327→   327→    return toPersianDigits(Math.round(val).toString());
+   328→   328→  };
+   329→   329→
+   330→   330→  // Price formatter: uses priceDecimals for all price-type values (SMA, EMA, SAR, BB, etc.)
+   331→   331→  const fmtPrice = (val: number): string => {
+   332→   332→    if (priceDecimals !== undefined && priceDecimals > 0) return formatPriceFa(val, priceDecimals);
+   333→   333→    return toFa(val);
+   334→   334→  };
+   335→   335→
+   336→   336→  return (
+   337→   337→    <div className="rounded-2xl p-4 space-y-1" dir="rtl" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+   338→   338→
+   339→   339→      {/* ═══ 1. خلاصه اندیکاتورها ═══ */}
+   340→   340→      <SectionHeader title="خلاصه اندیکاتورها" />
+   341→   341→      <div className="rounded-xl p-4 mb-2" style={{ background: hexToRgba(C.cardBorder, 0.08), border: `1px solid ${hexToRgba(C.cardBorder, 0.2)}` }}>
+   342→   342→        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 justify-items-center">
+   343→   343→          <SemicircleGauge label="RSI" value={ta.rsi} min={0} max={100} signal={rsiSignal(ta.rsi)} zones={{ bearishAbove: 70, bullishBelow: 30 }} size={110} />
+   344→   344→          <SemicircleGauge label="استوکاستیک %K" value={ta.stochK} min={0} max={100} signal={stochSignal(ta.stochK)} zones={{ bearishAbove: 80, bullishBelow: 20 }} size={110} />
+   345→   345→          <SemicircleGauge label="ADX" value={ta.adx} min={0} max={60} signal={adxSignal(ta.adx, ta.diPlus, ta.diMinus)} size={110} />
+   346→   346→          <SemicircleGauge label="CCI" value={ta.cci} min={-200} max={200} signal={ta.cci > 100 ? 'bearish' : ta.cci < -100 ? 'bullish' : 'neutral'} zones={{ bearishAbove: 100, bullishBelow: -100 }} size={110} />
+   347→   347→          <SemicircleGauge label="MFI" value={ta.mfi} min={0} max={100} signal={mfiSignal(ta.mfi)} zones={{ bearishAbove: 80, bullishBelow: 20 }} size={110} />
+   348→   348→          <SemicircleGauge label="ویلیامز %R" value={ta.williamsR} min={-100} max={0} signal={ta.williamsR > -20 ? 'bearish' : ta.williamsR < -80 ? 'bullish' : 'neutral'} zones={{ bearishAbove: -20, bullishBelow: -80 }} size={110} />
+   349→   349→        </div>
+   350→   350→
+   351→   351→        {/* Compact overall signal with bull/bear bar */}
+   352→   352→        <div className="flex items-center justify-center gap-3 mt-3">
+   353→   353→          <span
+   354→   354→            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+   355→   355→            style={
+   356→   356→              ta.overallSignal === 'bullish'
+   357→   357→                ? { background: hexToRgba(C.bullColor, 0.1), border: `1px solid ${hexToRgba(C.bullColor, 0.25)}`, color: C.bullColor }
+   358→   358→                : ta.overallSignal === 'bearish'
+   359→   359→                  ? { background: hexToRgba(C.bearColor, 0.1), border: `1px solid ${hexToRgba(C.bearColor, 0.25)}`, color: C.bearColor }
+   360→   360→                  : { background: hexToRgba(C.neutralColor, 0.1), border: `1px solid ${hexToRgba(C.neutralColor, 0.25)}`, color: C.neutralColor }
+   361→   361→            }
+   362→   362→          >
+   363→   363→            <SignalDot signal={ta.overallSignal} />
+   364→   364→            {ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
+   365→   365→          </span>
+   366→   366→          <div className="w-28 h-2.5 rounded-full overflow-hidden flex" style={{ background: C.cardBorder }}>
+   367→   367→            <div className="h-full rounded-r-full transition-all duration-500" style={{ width: `${ta.bullScore}%`, background: hexToRgba(C.bullColor, 0.6) }} />
+   368→   368→            <div className="h-full rounded-l-full transition-all duration-500" style={{ width: `${ta.bearScore}%`, background: hexToRgba(C.bearColor, 0.6) }} />
+   369→   369→          </div>
+   370→   370→        </div>
+   371→   371→      </div>
+   372→   372→
+   373→   373→      {/* ═══ 2. مهمترین اندیکاتورها ═══ */}
+   374→   374→      <SectionHeader title="مهمترین اندیکاتورها" />
+   375→   375→      <div className="rounded-xl p-4 mb-2" style={{ background: hexToRgba(C.primary, 0.04), border: `1px solid ${hexToRgba(C.primary, 0.12)}` }}>
+   376→   376→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+   377→   377→          {keyIndicators.map((ki) => {
+   378→   378→            const val = ki.getValue(ta);
+   379→   379→            const signalColor = ki.signal === 'bullish' ? C.bullColor : ki.signal === 'bearish' ? C.bearColor : C.neutralColor;
+   380→   380→            return (
+   381→   381→              <div key={ki.id} className="rounded-xl p-3 flex flex-col items-center gap-2" style={{ background: hexToRgba(signalColor, 0.06), border: `1px solid ${hexToRgba(signalColor, 0.15)}` }}>
+   382→   382→                <span className="text-[11px] font-medium" style={{ color: C.cardSubFg }}>{ki.label}</span>
+   383→   383→                <span className="text-lg font-bold tabular-nums" style={{ color: signalColor }} dir="ltr">{fmtKeyVal(val)}</span>
+   384→   384→                <SignalDot signal={ki.signal} />
+   385→   385→              </div>
+   386→   386→            );
+   387→   387→          })}
+   388→   388→        </div>
+   389→   389→      </div>
+   390→   390→
+   391→   391→      {/* ═══ 3. تحلیل روند اندیکاتورها ═══ */}
+   392→   392→      <SectionHeader title="تحلیل روند اندیکاتورها" />
+   393→   393→      <div className="rounded-xl p-4 mb-2" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+   394→   394→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
+   395→   395→          {trendInfos.map((ti, i) => {
+   396→   396→            const dirColor = ti.direction === 'rising' ? C.bullColor : ti.direction === 'falling' ? C.bearColor : C.cardSubFg;
+   397→   397→            const dirLabel = ti.direction === 'rising' ? 'در حال افزایش' : ti.direction === 'falling' ? 'در حال کاهش' : 'پایدار';
+   398→   398→            return (
+   399→   399→              <div key={i} className="rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: hexToRgba(dirColor, 0.06), border: `1px solid ${hexToRgba(dirColor, 0.12)}` }}>
+   400→   400→                <TrendArrow direction={ti.direction} color={dirColor} />
+   401→   401→                <div className="flex flex-col min-w-0">
+   402→   402→                  <span className="text-[11px] font-medium truncate" style={{ color: C.cardFg }}>{ti.label}</span>
+   403→   403→                  <span className="text-[9px]" style={{ color: dirColor }}>{dirLabel}</span>
+   404→   404→                </div>
+   405→   405→              </div>
+   406→   406→            );
+   407→   407→          })}
+   408→   408→        </div>
+   409→   409→        <div className="rounded-lg px-3 py-2 flex items-center justify-center gap-4 text-[11px]" style={{ background: hexToRgba(C.cardBorder, 0.3) }}>
+   410→   410→          <span style={{ color: C.bullColor }}>{toPersianDigits(risingCount.toString())} از {toPersianDigits(totalIndicators.toString())} اندیکاتور صعودی</span>
+   411→   411→          <span style={{ color: C.cardBorder }}>|</span>
+   412→   412→          <span style={{ color: C.bearColor }}>{toPersianDigits(fallingCount.toString())} نزولی</span>
+   413→   413→        </div>
+   414→   414→      </div>
+   415→   415→
+   416→   416→      {/* ═══ 4. میانگین‌های متحرک ═══ */}
+   417→   417→      <SectionHeader title="میانگین‌های متحرک" />
+   418→   418→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   419→   419→        <IndicatorCard label="SMA ۵" value={fmtPrice(ta.sma.sma5 ?? 0)} signal={maSignal} />
+   420→   420→        <IndicatorCard label="SMA ۱۰" value={fmtPrice(ta.sma.sma10 ?? 0)} signal={maSignal} />
+   421→   421→        <IndicatorCard label="SMA ۲۱" value={fmtPrice(ta.sma.sma21 ?? 0)} signal={maSignal} />
+   422→   422→        <IndicatorCard label="SMA ۵۰" value={fmtPrice(ta.sma.sma50 ?? 0)} signal={maSignal} />
+   423→   423→        <IndicatorCard label="SMA ۱۰۰" value={fmtPrice(ta.sma.sma100 ?? 0)} signal={maSignal} />
+   424→   424→        <IndicatorCard label="SMA ۲۰۰" value={fmtPrice(ta.sma.sma200 ?? 0)} signal={maSignal} />
+   425→   425→        <IndicatorCard label="EMA ۹" value={fmtPrice(ta.ema.ema9 ?? 0)} signal={maSignal} />
+   426→   426→        <IndicatorCard label="EMA ۲۱" value={fmtPrice(ta.ema.ema21 ?? 0)} signal={maSignal} />
+   427→   427→        <IndicatorCard label="EMA ۵۰" value={fmtPrice(ta.ema.ema50 ?? 0)} signal={maSignal} />
+   428→   428→        <IndicatorCard label="EMA ۱۰۰" value={fmtPrice(ta.ema.ema100 ?? 0)} signal={maSignal} />
+   429→   429→        <IndicatorCard label="EMA ۲۰۰" value={fmtPrice(ta.ema.ema200 ?? 0)} signal={maSignal} />
+   430→   430→      </div>
+   431→   431→
+   432→   432→      {/* ═══ 5. جزئیات تکمیلی ═══ */}
+   433→   433→      <SectionHeader title="جزئیات تکمیلی" />
+   434→   434→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   435→   435→        <IndicatorCard label="MACD Line" value={toFa(ta.macd.line)} signal={macdSignal(ta.macd)} />
+   436→   436→        <IndicatorCard label="MACD Signal" value={toFa(ta.macd.signal)} signal={macdSignal(ta.macd)} />
+   437→   437→        <IndicatorCard label="Stochastic %D" value={toFa(ta.stochD)} signal={stochSignal(ta.stochD)} />
+   438→   438→        <IndicatorCard label="DI+" value={toFa(ta.diPlus)} signal={adxSignal(ta.adx, ta.diPlus, ta.diMinus)} />
+   439→   439→        <IndicatorCard label="DI-" value={toFa(ta.diMinus)} signal={adxSignal(ta.adx, ta.diPlus, ta.diMinus)} />
+   440→   440→        <IndicatorCard label="Parabolic SAR" value={fmtPrice(ta.sar)} signal={maSignal} />
+   441→   441→      </div>
+   442→   442→
+   443→   443→      {/* ═══ 6. نوسان‌پذیری ═══ */}
+   444→   444→      <SectionHeader title="نوسان‌پذیری" />
+   445→   445→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   446→   446→        <IndicatorCard label="ATR" value={toFa(ta.atr)} signal="neutral" />
+   447→   447→        <IndicatorCard label="باندهای بولینگر (بالا)" value={fmtPrice(ta.bollingerBands.upper)} signal="neutral" />
+   448→   448→        <IndicatorCard label="باندهای بولینگر (میانی)" value={fmtPrice(ta.bollingerBands.middle)} signal="neutral" />
+   449→   449→        <IndicatorCard label="باندهای بولینگر (پایین)" value={fmtPrice(ta.bollingerBands.lower)} signal="neutral" />
+   450→   450→      </div>
+   451→   451→
+   452→   452→      {/* ═══ 7. حجم ═══ */}
+   453→   453→      {ta.hasVolume !== false && (
+   454→   454→        <>
+   455→   455→          <SectionHeader title="حجم" />
+   456→   456→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   457→   457→            <IndicatorCard label="OBV" value={toFa(ta.obv)} signal="neutral" />
+   458→   458→            <IndicatorCard label="VWAP" value={fmtPrice(ta.vwap ?? 0)} signal="neutral" />
+   459→   459→          </div>
+   460→   460→        </>
+   461→   461→      )}
+   462→   462→
+   463→   463→      {/* ═══ 8. ابر ایچیموکو ═══ */}
+   464→   464→      <SectionHeader title="ابر ایچیموکو" />
+   465→   465→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   466→   466→        <IndicatorCard label="تنکان‌سن (۹)" value={fmtPrice(ta.ichimoku?.tenkan ?? 0)} signal={maSignal} />
+   467→   467→        <IndicatorCard label="کیجون‌سن (۲۶)" value={fmtPrice(ta.ichimoku?.kijun ?? 0)} signal={maSignal} />
+   468→   468→        <IndicatorCard label="سنکو اسپن A" value={fmtPrice(ta.ichimoku?.senkouA ?? 0)} signal={maSignal} />
+   469→   469→        <IndicatorCard label="سنکو اسپن B" value={fmtPrice(ta.ichimoku?.senkouB ?? 0)} signal={maSignal} />
+   470→   470→        <IndicatorCard label="چیکو اسپن" value={fmtPrice(ta.ichimoku?.chikou ?? 0)} signal={maSignal} />
+   471→   471→      </div>
+   472→   472→
+   473→   473→      {/* ═══ 9. حمایت و مقاومت هوشمند ═══ */}
+   474→   474→      <SectionHeader title="حمایت و مقاومت هوشمند" />
+   475→   475→      <div className="space-y-3">
+   476→   476→        {/* Resistances */}
+   477→   477→        <div>
+   478→   478→          <span className="text-[11px] mb-1.5 font-medium block" style={{ color: C.bearColor }}>مقاومت‌ها</span>
+   479→   479→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   480→   480→            {(ta.resistanceStrengths ?? []).slice(0, 6).map((r, i) => {
+   481→   481→              const gs = gradeStyle(r.grade, C.cardSubFg);
+   482→   482→              const faMethods = String(r.methods?.length ?? 0).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+   483→   483→              return (
+   484→   484→                <div key={i} className="rounded-xl p-3" style={{ background: hexToRgba(C.bearColor, 0.06), border: `1px solid ${hexToRgba(C.bearColor, 0.15)}` }}>
+   485→   485→                  <div className="flex items-center justify-between mb-0.5">
+   486→   486→                    <span className="text-[11px] font-medium" style={{ color: C.bearColor }}>{r.isTarget ? '★ ' : ''}R{toFa(i + 1)}</span>
+   487→   487→                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={gs}>{r.grade}</span>
+   488→   488→                  </div>
+   489→   489→                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{fmtPrice(r.price)}</p>
+   490→   490→                  <div className="flex items-center justify-center gap-2 mt-1">
+   491→   491→                    {r.fibLabel && <span className="text-[10px]" style={{ color: hexToRgba(C.bearColor, 0.5) }}>فیبو {r.fibLabel}</span>}
+   492→   492→                    <span className="text-[10px]" style={{ color: hexToRgba(C.bearColor, 0.5) }}>({faMethods} روش)</span>
+   493→   493→                  </div>
+   494→   494→                  <div className="flex items-center justify-center gap-1.5 mt-1">
+   495→   495→                    <div className="h-1.5 w-12 rounded-full overflow-hidden" style={{ background: hexToRgba(C.bearColor, 0.15) }}>
+   496→   496→                      <div className="h-full rounded-full transition-all" style={{ width: `${(r.strength / 10) * 100}%`, background: hexToRgba(C.bearColor, 0.6) }} />
+   497→   497→                    </div>
+   498→   498→                    <span className="text-[10px] tabular-nums" style={{ color: C.bearColor }}>{toPersianDigits(String(r.strength))}/۱۰</span>
+   499→   499→                  </div>
+   500→   500→                </div>
+   501→   501→              );
+   502→   502→            })}
+   503→   503→          </div>
+   504→   504→        </div>
+   505→   505→
+   506→   506→        {/* Supports */}
+   507→   507→        <div>
+   508→   508→          <span className="text-[11px] mb-1.5 font-medium block" style={{ color: C.bullColor }}>حمایت‌ها</span>
+   509→   509→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   510→   510→            {(ta.supportStrengths ?? []).slice(0, 6).map((s, i) => {
+   511→   511→              const gs = gradeStyle(s.grade, C.cardSubFg);
+   512→   512→              const faMethods = String(s.methods?.length ?? 0).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+   513→   513→              return (
+   514→   514→                <div key={i} className="rounded-xl p-3" style={{ background: hexToRgba(C.bullColor, 0.06), border: `1px solid ${hexToRgba(C.bullColor, 0.15)}` }}>
+   515→   515→                  <div className="flex items-center justify-between mb-0.5">
+   516→   516→                    <span className="text-[11px] font-medium" style={{ color: C.bullColor }}>{s.isTarget ? '★ ' : ''}S{toFa(i + 1)}</span>
+   517→   517→                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={gs}>{s.grade}</span>
+   518→   518→                  </div>
+   519→   519→                  <p className="text-sm font-medium tabular-nums text-center" style={{ color: C.cardFg }} dir="ltr">{fmtPrice(s.price)}</p>
+   520→   520→                  <div className="flex items-center justify-center gap-2 mt-1">
+   521→   521→                    {s.fibLabel && <span className="text-[10px]" style={{ color: hexToRgba(C.bullColor, 0.5) }}>فیبو {s.fibLabel}</span>}
+   522→   522→                    <span className="text-[10px]" style={{ color: hexToRgba(C.bullColor, 0.5) }}>({faMethods} روش)</span>
+   523→   523→                  </div>
+   524→   524→                  <div className="flex items-center justify-center gap-1.5 mt-1">
+   525→   525→                    <div className="h-1.5 w-12 rounded-full overflow-hidden" style={{ background: hexToRgba(C.bullColor, 0.15) }}>
+   526→   526→                      <div className="h-full rounded-full transition-all" style={{ width: `${(s.strength / 10) * 100}%`, background: hexToRgba(C.bullColor, 0.6) }} />
+   527→   527→                    </div>
+   528→   528→                    <span className="text-[10px] tabular-nums" style={{ color: C.bullColor }}>{toPersianDigits(String(s.strength))}/۱۰</span>
+   529→   529→                  </div>
+   530→   530→                </div>
+   531→   531→              );
+   532→   532→            })}
+   533→   533→          </div>
+   534→   534→        </div>
+   535→   535→      </div>
+   536→   536→
+   537→   537→      {/* ═══ 10. خطوط روند ═══ */}
+   538→   538→      <SectionHeader title="خطوط روند" />
+   539→   539→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   540→   540→        {(['short', 'medium', 'long'] as const).map((period) => {
+   541→   541→          const t = ta.trend[period];
+   542→   542→          const labels: Record<string, string> = { short: 'کوتاه‌مدت', medium: 'میان‌مدت', long: 'بلندمدت' };
+   543→   543→          const arrow = t.direction === 'up' ? '↑' : t.direction === 'down' ? '↓' : '→';
+   544→   544→          const arrowColor = t.direction === 'up' ? C.bullColor : t.direction === 'down' ? C.bearColor : C.cardSubFg;
+   545→   545→          return (
+   546→   546→            <div key={period} className="rounded-xl p-3 flex items-center justify-between gap-2" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+   547→   547→              <div className="flex flex-col gap-0.5 min-w-0">
+   548→   548→                <span className="text-[11px]" style={{ color: C.cardSubFg }}>{labels[period]}</span>
+   549→   549→                <div className="flex items-center gap-2 text-sm">
+   550→   550→                  <span className="text-lg font-bold" style={{ color: arrowColor }}>{arrow}</span>
+   551→   551→                  <span className="tabular-nums" style={{ color: C.cardFg }} dir="ltr">{toFa(t.angle)}°</span>
+   552→   552→                </div>
+   553→   553→                <span className="text-[11px] tabular-nums" style={{ color: C.cardSubFg }} dir="ltr">R²: {toPersianDigits((t.r2 * 100).toFixed(1))}٪</span>
+   554→   554→              </div>
+   555→   555→              <SignalDot signal={trendDirSignal(t.direction)} />
+   556→   556→            </div>
+   557→   557→          );
+   558→   558→        })}
+   559→   559→      </div>
+   560→   560→
+   561→   561→      {/* ═══ 11. امتیاز کلی ═══ */}
+   562→   562→      <SectionHeader title="امتیاز کلی" />
+   563→   563→      <div className="rounded-xl p-4 space-y-3" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+   564→   564→        <div className="relative h-6 w-full rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
+   565→   565→          <div className="absolute top-0 right-0 h-full rounded-r-full transition-all duration-500" style={{ width: `${ta.bullScore}%`, background: hexToRgba(C.bullColor, 0.5) }} />
+   566→   566→          <div className="absolute top-0 left-0 h-full rounded-l-full transition-all duration-500" style={{ width: `${ta.bearScore}%`, background: hexToRgba(C.bearColor, 0.5) }} />
+   567→   567→          <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px] font-medium">
+   568→   568→            <span style={{ color: C.bullColor }}>خرید {toFa(ta.bullScore)}٪</span>
+   569→   569→            <span style={{ color: C.bearColor }}>فروش {toFa(ta.bearScore)}٪</span>
+   570→   570→          </div>
+   571→   571→        </div>
+   572→   572→      </div>
+   573→   573→
+   574→   574→    </div>
+   575→   575→  );
+   576→   576→}
+   577→   577→
