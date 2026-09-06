@@ -316,3 +316,33 @@ Stage Summary:
 - Meaningless badges replaced with informative summary
 - Instrument dedup and data fetching fixed with Persian normalization
 - AI analysis more resilient with auto-retry and better error handling
+---
+Task ID: 1
+Agent: main
+Task: Fix gold ETF (صندوق طلا) data source - change from TGJU to TSE
+
+Work Log:
+- Explored project structure to understand data fetching architecture
+- Identified that gold ETFs (ime_fund_*) were incorrectly sourced from TGJU instead of TSE
+- Found 18 gold ETFs on TSE (BrsApi) with correct live data: عیار, طلا, ناب, درنا, etc.
+- Added `GOLD_ETF_KEYWORDS`, `GOLD_ETF_SYMBOLS`, and `isGoldEtf()` to tse-api.ts
+- Updated `fetchAllInstruments()` in tse-api.ts to separate gold ETFs from regular ETFs
+- Updated `/api/instruments` route to include `goldEtfs` in response
+- Removed `gold_etf` from TGJU categorization in tgju-api.ts (no longer categorizes ime_fund_* as gold_etf)
+- Updated `/api/tgju-instruments` route to return empty goldEtfs array
+- Updated `/api/tgju-analysis` route to remove gold_etf from iranianCategories
+- Updated symbol-search.tsx: moved gold_etf from "بازار ایران" (TGJU) to "بورس تهران" (TSE)
+- Removed gold_etf from TGJU_CATEGORIES in both symbol-search.tsx and page.tsx
+- Updated page.tsx so gold_etf items route through TSE analysis (not TGJU)
+- Updated format-price.ts to handle gold_etf as TSE category
+- Updated tgju-api.ts TGJU_CATEGORY_INFO to remove gold_etf entry
+- Verified with API test: /api/instruments returns 18 goldEtfs from TSE
+- Verified with Agent Browser: صندوق طلا category shows TSE-sourced gold ETFs
+- Verified analysis page loads correctly for عیار (صندوق طلای عیار مفید) with TSE data
+
+Stage Summary:
+- Gold ETFs (صندوق طلا) now use TSE (BrsApi) as data source instead of TGJU
+- 18 TSE-listed gold ETFs identified: عیار, طلا, ناب, درنا, جام طلا, همیان, نگین فارس, گلدیس, زرین, زر, زرفام, زریران, زرگر, زروان, لیان, بزرگ, آوا, تخت گاز
+- Category moved from "بازار ایران" (TGJU) to "بورس تهران" (TSE) in search UI
+- Data source badge now shows "بورس" instead of "TGJU" for gold ETFs
+- No browser errors, analysis page loads correctly with full TA

@@ -46,7 +46,8 @@ export async function GET() {
     const currencies = instruments.filter((i) => i.category === 'currency').map(toItem);
     const gold = instruments.filter((i) => i.category === 'gold').map(toItem);
     const silver = instruments.filter((i) => i.category === 'silver').map(toItem);
-    const goldEtfs = instruments.filter((i) => i.category === 'gold_etf').map(toItem);
+    // goldEtfs now come from TSE (instruments API), not TGJU
+    const goldEtfs: ReturnType<typeof toItem>[] = [];
     const crypto = instruments.filter((i) => i.category === 'crypto').map(toItem);
     const worldIndices = instruments.filter((i) => i.category === 'world_index').map(toItem);
     const foreignStocks = instruments.filter((i) => i.category === 'foreign_stock').map(toItem);

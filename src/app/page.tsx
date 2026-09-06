@@ -57,8 +57,9 @@ function signalStyle(signal: 'bullish' | 'bearish' | 'neutral' | undefined, c: R
 }
 
 // All TGJU-based categories that use the tgju.org chart API
+// NOTE: gold_etf removed — gold ETFs are TSE-listed instruments and use TSE data
 const TGJU_CATEGORIES = new Set([
-  'currency', 'gold', 'silver', 'gold_etf',
+  'currency', 'gold', 'silver',
   'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity',
 ]);
 

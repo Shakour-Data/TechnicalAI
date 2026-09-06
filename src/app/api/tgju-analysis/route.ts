@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     // This ensures the displayed price and AI analysis use real-time data, not stale historical close
     let livePrice = lastCandle.close;
     let liveTitle = instrument?.title || '';
-    const iranianCategories = new Set(['currency', 'gold', 'silver', 'gold_etf']);
+    const iranianCategories = new Set(['currency', 'gold', 'silver']);
     if (iranianCategories.has(category)) {
       try {
         const instruments = await fetchTgjuInstruments();

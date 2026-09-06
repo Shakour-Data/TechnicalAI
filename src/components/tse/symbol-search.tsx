@@ -58,6 +58,7 @@ interface InstrumentsData {
   indices: InstrumentItem[];
   stocks: InstrumentItem[];
   etfs: InstrumentItem[];
+  goldEtfs: InstrumentItem[];
   bonds: InstrumentItem[];
   futures: InstrumentItem[];
   salaf: InstrumentItem[];
@@ -119,6 +120,7 @@ const CATEGORY_GROUPS = [
       { key: 'indices' as const,    label: 'شاخص‌ها',       icon: BarChart3 },
       { key: 'stocks' as const,     label: 'سهام بورس',     icon: Building2 },
       { key: 'etf' as const,        label: 'صندوق‌ها',      icon: Landmark },
+      { key: 'gold_etf' as const,   label: 'صندوق طلا',     icon: Coins },
       { key: 'bond' as const,       label: 'اوراق بدهی',    icon: FileText },
       { key: 'derivative' as const, label: 'مشتقه',         icon: ArrowUpDown },
     ],
@@ -128,7 +130,6 @@ const CATEGORY_GROUPS = [
     items: [
       { key: 'currency' as const,  label: 'ارز (ریال)',     icon: CircleDollarSign },
       { key: 'gold' as const,      label: 'طلا و نقره',    icon: Coins },
-      { key: 'gold_etf' as const,  label: 'صندوق طلا',     icon: Coins },
     ],
   },
   {
@@ -160,12 +161,12 @@ const CATEGORIES = [
 type CategoryKey = 'all' | (typeof CATEGORIES)[number]['key'];
 
 const TGJU_CATEGORY_ITEMS = new Set<string>([
-  'currency', 'gold', 'silver', 'gold_etf',
+  'currency', 'gold', 'silver',
   'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity',
 ]);
 
 const TGJU_CATEGORIES = new Set<CategoryKey>([
-  'currency', 'gold', 'gold_etf',
+  'currency', 'gold',
   'crypto', 'world_index', 'forex', 'energy', 'metal', 'commodity',
 ]);
 
@@ -411,7 +412,7 @@ export default function SymbolSearch({
     return counts;
   }, [open, yahooReady]);
 
-  const EMPTY_TSE_DATA: InstrumentsData = { indices: [], stocks: [], etfs: [], bonds: [], futures: [], salaf: [], mortgage: [], industries: [] };
+  const EMPTY_TSE_DATA: InstrumentsData = { indices: [], stocks: [], etfs: [], goldEtfs: [], bonds: [], futures: [], salaf: [], mortgage: [], industries: [] };
 
   /* ── Data fetching ── */
   const fetchData = React.useCallback(async (): Promise<InstrumentsData> => {
@@ -500,7 +501,6 @@ export default function SymbolSearch({
       switch (cat) {
         case 'currency': items = tgju?.currencies || []; break;
         case 'gold': items = [...(tgju?.gold || []), ...(tgju?.silver || [])]; break;
-        case 'gold_etf': items = tgju?.goldEtfs || []; break;
         case 'crypto': items = deduplicateMergedItems(tgju?.crypto || [], yahoo?.yahooCrypto || []); break;
         case 'world_index': items = deduplicateMergedItems([...(tgju?.worldIndices || []), ...(tgju?.foreignStocks || [])], yahoo?.yahooIndices || []); break;
         case 'forex': items = deduplicateMergedItems(tgju?.forex || [], yahoo?.yahooForex || []); break;
@@ -517,6 +517,7 @@ export default function SymbolSearch({
       case 'indices': return data.indices;
       case 'stocks': return activeIndustry ? data.stocks.filter((s) => s.cs === activeIndustry) : data.stocks;
       case 'etf': return data.etfs;
+      case 'gold_etf': return data.goldEtfs || [];
       case 'bond': return [...data.bonds, ...data.mortgage];
       case 'derivative': return [...data.futures, ...data.salaf];
       case 'all':
@@ -531,11 +532,11 @@ export default function SymbolSearch({
         const metalItems = deduplicateMergedItems(tgju?.metals || [], yahoo?.yahooMetals || []);
         const commodityItems = deduplicateMergedItems(tgju?.commodities || [], yahoo?.yahooCommodities || []);
         return [
-          ...data.indices, ...data.stocks, ...data.etfs,
+          ...data.indices, ...data.stocks, ...data.etfs, ...(data.goldEtfs || []),
           ...(tgju?.currencies || []),
           ...forexItems,
           ...cryptoItems,
-          ...(tgju?.gold || []), ...(tgju?.silver || []), ...(tgju?.goldEtfs || []),
+          ...(tgju?.gold || []), ...(tgju?.silver || []),
           ...worldIndexItems,
           ...energyItems,
           ...metalItems,
@@ -616,7 +617,7 @@ export default function SymbolSearch({
       const tgju = tgjuCacheRef.current;
       const yahoo = yahooCacheRef.current;
       const all = [
-        ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))), ...data.stocks, ...data.etfs,
+        ...(data.indices.map((i) => ({ ...i, tval: i.index || 0 }))), ...data.stocks, ...data.etfs, ...(data.goldEtfs || []),
         ...(tgju?.currencies || []), ...(tgju?.crypto?.slice(0, 5) || []), ...(tgju?.gold?.slice(0, 3) || []),
         ...(yahoo?.yahooStocks?.slice(0, 8) || []), ...(yahoo?.yahooIndices?.slice(0, 5) || []),
       ];

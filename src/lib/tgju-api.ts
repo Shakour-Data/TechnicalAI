@@ -633,8 +633,9 @@ export async function fetchTgjuInstruments(): Promise<TgjuInstrument[]> {
           const high = parsePersianNum(item.high_price);
 
           let category: TgjuCategoryType = 'gold';
-          if (item.key.startsWith('ime_fund_')) category = 'gold_etf';
-          else if (item.key.startsWith('silver_')) category = 'silver';
+          // NOTE: ime_fund_* (gold ETFs) are TSE-listed instruments and must use TSE data.
+          // We no longer categorize them as 'gold_etf' from TGJU — they come from TSE instead.
+          if (item.key.startsWith('silver_')) category = 'silver';
 
           instruments.push({
             title: item.title,
@@ -691,7 +692,7 @@ export async function fetchTgjuInstruments(): Promise<TgjuInstrument[]> {
  */
 async function backgroundFetchCurrencyGoldChange(instruments: TgjuInstrument[]) {
   const currencyGoldItems = instruments.filter(
-    (i) => i.category === 'currency' || i.category === 'gold' || i.category === 'silver' || i.category === 'gold_etf'
+    (i) => i.category === 'currency' || i.category === 'gold' || i.category === 'silver'
   );
 
   // Limit to first 10 to avoid rate-limiting (most important: USD, EUR, gold coin, etc.)
@@ -1227,7 +1228,7 @@ export const TGJU_CATEGORY_INFO: Record<string, { label: string; color: string; 
   currency:      { label: 'ارزها', color: 'bg-teal-500/15 text-teal-400', badge: 'ارز' },
   gold:          { label: 'طلا و سکه', color: 'bg-yellow-500/15 text-yellow-400', badge: 'طلا' },
   silver:        { label: 'نقره', color: 'bg-gray-400/15 text-gray-300', badge: 'نقره' },
-  gold_etf:      { label: 'صندوق طلای بورس', color: 'bg-amber-500/15 text-amber-400', badge: 'صندوق طلا' },
+  // gold_etf moved to TSE — no longer a TGJU category
   crypto:        { label: 'ارزهای دیجیتال', color: 'bg-orange-500/15 text-orange-400', badge: 'کریپتو' },
   foreign_stock: { label: 'سهام خارجی', color: 'bg-sky-500/15 text-sky-400', badge: 'سهام خارجی' },
   world_index:   { label: 'شاخص بورس جهانی', color: 'bg-blue-500/15 text-blue-400', badge: 'شاخص جهانی' },

@@ -79,6 +79,28 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 export const ETF_CATEGORY = 'صندوق سرمایه‌گذاری قابل معامله';
 
+/**
+ * Gold ETF identification — keywords in symbol name (l18) or company name (l30)
+ * that indicate the ETF is gold-related (صندوق طلا).
+ * These instruments are TSE-listed and must use TSE data, NOT TGJU.
+ */
+export const GOLD_ETF_KEYWORDS = ['طلا', 'سکه', 'عیار', 'گوار', 'معدنی'];
+export const GOLD_ETF_SYMBOLS = new Set([
+  // Known gold ETF symbols from TSE
+  'عیار', 'طلا', 'ناب', 'درنا', 'جام طلا', 'همیان', 'نگین فارس', 'گلدیس',
+  'زرین', 'زر', 'زرفام', 'زریران', 'زرگر', 'زروان', 'لیان', 'بزرگ',
+]);
+
+/**
+ * Check if a TSE ETF symbol is a gold-related ETF.
+ * Uses both exact symbol matching and keyword matching in name.
+ */
+export function isGoldEtf(l18: string, l30: string): boolean {
+  if (GOLD_ETF_SYMBOLS.has(l18)) return true;
+  const combined = (l18 + ' ' + l30).toLowerCase();
+  return GOLD_ETF_KEYWORDS.some(kw => combined.includes(kw));
+}
+
 export interface CandleData {
   date: string;
   time?: string;
@@ -236,6 +258,7 @@ export async function fetchAllInstruments(): Promise<{
   indices: TseIndex[];
   stocks: TseSymbol[];
   etfs: TseSymbol[];
+  goldEtfs: TseSymbol[];
   bonds: TseSymbol[];
   futures: TseSymbol[];
   salaf: TseSymbol[];
@@ -245,7 +268,11 @@ export async function fetchAllInstruments(): Promise<{
   // Fetch type 1 (stocks + ETFs)
   const type1 = await fetchAllSymbols(INSTRUMENT_TYPES.STOCK);
   const stocks = type1.filter((s) => s.cs !== ETF_CATEGORY);
-  const etfs = type1.filter((s) => s.cs === ETF_CATEGORY);
+  const allEtfs = type1.filter((s) => s.cs === ETF_CATEGORY);
+
+  // Separate gold ETFs from regular ETFs (gold ETFs use TSE data, not TGJU)
+  const goldEtfs = allEtfs.filter((s) => isGoldEtf(s.l18, s.l30));
+  const etfs = allEtfs.filter((s) => !isGoldEtf(s.l18, s.l30));
 
   // Get unique industry names from stocks
   const industrySet = new Set<string>();
@@ -261,7 +288,7 @@ export async function fetchAllInstruments(): Promise<{
     fetchIndices().catch(() => [] as TseIndex[]),
   ]);
 
-  return { indices, stocks, etfs, bonds, futures, salaf, mortgage, industries };
+  return { indices, stocks, etfs, goldEtfs, bonds, futures, salaf, mortgage, industries };
 }
 
 export async function fetchSymbolData(symbol: string): Promise<Record<string, unknown>> {

@@ -14,7 +14,7 @@ export type DataSource = 'tse' | 'tgju' | 'yahoo';
  *
  * Logic:
  * - TSE: always 0 (prices are integers in ریال)
- * - TGJU toman-based categories (currency, gold, silver, gold_etf): 0
+ * - TGJU toman-based categories (currency, gold, silver): 0
  * - TGJU/Yahoo USD-based categories (forex, energy, metal, world_index, foreign_stock, commodity):
  *   Uses price magnitude to determine natural precision.
  * - Yahoo stocks/crypto/ETFs: uses price magnitude.
@@ -26,9 +26,10 @@ export function detectDecimals(price: number, category: string, source: DataSour
   if (source === 'tse') return 0;
 
   // TGJU toman-based categories are always integers
+  // Note: gold_etf is now TSE, not TGJU
   if (
     source === 'tgju' &&
-    (category === 'currency' || category === 'gold' || category === 'silver' || category === 'gold_etf')
+    (category === 'currency' || category === 'gold' || category === 'silver')
   ) {
     return 0;
   }
@@ -99,8 +100,8 @@ export function getCurrencyUnit(
   if (source === 'tse') return 'ریال';
 
   // TGJU Iranian categories — all prices from TGJU API are in Rials (ریال)
-  // Keys like price_dollar_rl explicitly have _rl suffix; gold/silver/gold_etf are always Rials per gram
-  if (category === 'currency' || category === 'gold' || category === 'silver' || category === 'gold_etf') return 'ریال';
+  // Note: gold_etf is now a TSE category, not TGJU
+  if (category === 'currency' || category === 'gold' || category === 'silver') return 'ریال';
   if (category === 'crypto') return 'تتر';
 
   // Everything else (forex, energy, metal, foreign_stock, commodity)
@@ -113,7 +114,7 @@ export function getCurrencyUnit(
 export function detectSource(item: { yahooSymbol?: string; tgjuKey?: string; category?: string }): DataSource {
   if (item.yahooSymbol) return 'yahoo';
   if (item.tgjuKey) return 'tgju';
-  const TGJU_CATS = new Set(['currency', 'gold', 'silver', 'gold_etf', 'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity']);
+  const TGJU_CATS = new Set(['currency', 'gold', 'silver', 'crypto', 'world_index', 'foreign_stock', 'forex', 'energy', 'metal', 'commodity']);
   if (item.category && TGJU_CATS.has(item.category)) return 'tgju';
   return 'tse';
 }

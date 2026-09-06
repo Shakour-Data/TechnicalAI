@@ -133,6 +133,7 @@ export async function GET() {
 
     const stocks = data.stocks.map((s) => toItem(s, 'stock'));
     const etfs = data.etfs.map((s) => toItem(s, 'etf'));
+    const goldEtfs = data.goldEtfs.map((s) => toItem(s, 'gold_etf'));
     const bonds = data.bonds.map((s) => toItem(s, 'bond'));
     const futures = data.futures.map((s) => toItem(s, 'future'));
     const salaf = data.salaf.map((s) => toItem(s, 'salaf'));
@@ -334,6 +335,7 @@ export async function GET() {
       indices,
       stocks,
       etfs,
+      goldEtfs,
       bonds,
       futures,
       salaf,
