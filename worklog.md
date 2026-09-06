@@ -374,3 +374,24 @@ Stage Summary:
 - دکمه "تحلیل جدید" به UI اضافه شد
 - نشانگر سن کش به UI اضافه شد
 - تشخیص hallucination قیمت کار می‌کند و از کش داده نادرست جلوگیری می‌شود
+
+---
+Task ID: 1
+Agent: main
+Task: Compare 4 spec documents vs codebase, find discrepancies, implement missing features
+
+Work Log:
+- Read all 4 uploaded spec documents (TechnicalAnalysisDssGraph.txt, CumProb, CumProbTrend, MSL)
+- Deep-analyzed ta-engine.ts, decision-graph.ts, probability-trend.ts, ml-engine.ts
+- Found and fixed CRITICAL BUG: sr.SC1 → sr.R1 (undefined → NaN corrupting s_sr feature vector)
+- Fixed dead code parameter: SC1 → R1 in calculateScenarioProbabilities (was referencing undefined R1)
+- Added cumulativeProbability field to ScenarioResult interface per CumProb spec
+- Implemented staircase cumulative probability computation (per spec §4) in scenario output
+- Added bullishCumulative, neutralCumulative, bearishCumulative to TAResult per spec
+- Added bullishWeighted, bearishWeighted (severity-weighted cumulative) to TAResult per spec
+- Verified 30-day historical probability trend (computeHistoricalProbabilities) already implements no-lookahead-bias per CumProbTrend spec §5
+
+Stage Summary:
+- Fixed 2 critical bugs (sr.SC1 NaN, R1 undefined reference)
+- Added 6 new fields to output (cumulativeProbability per scenario, group cumulatives, severity-weighted)
+- Spec comparison report completed with all discrepancies documented

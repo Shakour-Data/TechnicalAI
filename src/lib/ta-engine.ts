@@ -25,6 +25,10 @@ export interface ScenarioResult {
   name: string;
   nameEn: string;
   probability: number;
+  /** Cumulative probability within same group (bullish/bearish/neutral).
+   *  Sum of individual probabilities from most-severe to this scenario in same category.
+   *  Per spec: CumProb = P(this) + P(all more-severe scenarios in same group) */
+  cumulativeProbability: number;
   targetMin: number;
   targetMax: number;
   description: string;
@@ -115,6 +119,13 @@ export interface TAResult {
     SC8: ScenarioResult;
     SC9: ScenarioResult;
   };
+  // ── Group Cumulative Probabilities (per spec: sum of individual probs within group) ──
+  bullishCumulative: number;   // P(SC6)+P(SC7)+P(SC8)+P(SC9)
+  neutralCumulative: number;   // P(SC5)
+  bearishCumulative: number;   // P(SC1)+P(SC2)+P(SC3)+P(SC4)
+  // ── Severity-Weighted Cumulative (per spec: P_Scenario × Severity_Factor) ──
+  bullishWeighted: number;     // Σ P(bull_i) × severity_i  [SC9=1.0, SC8=0.8, SC7=0.6, SC6=0.3]
+  bearishWeighted: number;    // Σ P(bear_i) × severity_i  [SC1=1.0, SC2=0.8, SC3=0.6, SC4=0.3]
   // Summary
   bullScore: number;
   bearScore: number;
@@ -1894,7 +1905,8 @@ function computeFeaturesAtBar(data: OHLCV[], barIdx: number): Record<string, num
     (Math.max(0, Math.min(1, (trendResult.angle + 45) / 90)) * 0.3);
 
   // s_sr — Support/Resistance proximity
-  const dR1 = (sr.SC1 - price) / (price > eps ? price : 1);
+  // simplifiedSR() returns { R1, S1 } — use sr.R1 (not sr.SC1 which is undefined → NaN)
+  const dR1 = (sr.R1 - price) / (price > eps ? price : 1);
   const dS1 = (price - sr.S1) / (price > eps ? price : 1);
   const s_sr = clamp(0.5 - dR1 * 1.5 + dS1 * 1.0, 0, 1);
 
@@ -2297,7 +2309,7 @@ function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1
 function calculateScenarioProbabilities(
   bullConsensus: number,
   price: number,
-  SC1: number,
+  R1: number,
   S1: number,
   MA100: number,
   rsi: number,
@@ -2306,7 +2318,7 @@ function calculateScenarioProbabilities(
   mlModel: AdaptiveWeightModel
 ): { SC1: number; SC2: number; SC3: number; SC4: number; SC5: number; SC6: number; SC7: number; SC8: number; SC9: number; factors: { momentum: number; volatility: number; trend: number } } {
   // Distance metrics to key levels (spec uses exp(-3 * ...))
-  const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;
+  const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;  // R1 = resistance level 1 (parameter renamed from SC1)
   const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
 
   const overboughtRisk = (rsi > 70 || (mfi > 80 && mfi !== 50) || stochK > 80) ? 1 : 0;
@@ -2389,7 +2401,7 @@ function calculateScenarioProbabilities(
 export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   if (!data || data.length < 2) {
     const empty = () => 0;
-    const emptyScenario = (): ScenarioResult => ({ name: '', nameEn: '', probability: 20, targetMin: 0, targetMax: 0, description: '' });
+    const emptyScenario = (): ScenarioResult => ({ name: '', nameEn: '', probability: 20, cumulativeProbability: 0, targetMin: 0, targetMax: 0, description: '' });
     return {
       sma: {}, ema: {}, rsi: 50, mfi: 50, cci: 0, stochK: 50, stochD: 50,
       williamsR: -50, macd: { line: 0, signal: 0, histogram: 0 },
@@ -2409,6 +2421,8 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
         long: { direction: 'flat', slope: 0, angle: 0, r2: 0 },
       },
       scenarios: { SC1: emptyScenario(), SC2: emptyScenario(), SC3: emptyScenario(), SC4: emptyScenario(), SC5: emptyScenario(), SC6: emptyScenario(), SC7: emptyScenario(), SC8: emptyScenario(), SC9: emptyScenario() },
+      bullishCumulative: 0, neutralCumulative: 0, bearishCumulative: 0,
+      bullishWeighted: 0, bearishWeighted: 0,
       bullScore: 0.5, bearScore: 0.5, overallSignal: 'neutral',
       bullConsensus: 0.5, isMLTrained: false, mlAccuracy: 0.5, mlWeights: null,
       edgeWeights: { up: 0.3, down: 0.3, pullback: 0.25, risk: 0.15 },
@@ -2655,11 +2669,27 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   const bearTargets = buildBearishTargets(price, atr, supports);
   const rangeTarget = buildRangeTarget(price, atr, supports[0], resistances[0]);
 
+  // ── Cumulative Probability (per spec: staircase within group, most-severe → least) ──
+  // Current mapping: SC1–SC4 = Bearish (SC1=most severe), SC5=Neutral, SC6–SC9 = Bullish (SC9=most severe)
+  // Bearish cumulative: from SC1 (shock_down) → SC4 (weak_bear)
+  const cumSC1 = pSC1;                                          // Bearish: most severe
+  const cumSC2 = pSC1 + pSC2;
+  const cumSC3 = pSC1 + pSC2 + pSC3;
+  const cumSC4 = pSC1 + pSC2 + pSC3 + pSC4;                    // Bearish: least severe (group total)
+  // Neutral cumulative
+  const cumSC5 = pSC5;
+  // Bullish cumulative: from SC9 (shock_up) → SC6 (weak_bull)
+  const cumSC9 = pSC9;                                          // Bullish: most severe
+  const cumSC8 = pSC9 + pSC8;
+  const cumSC7 = pSC9 + pSC8 + pSC7;
+  const cumSC6 = pSC9 + pSC8 + pSC7 + pSC6;                    // Bullish: least severe (group total)
+
   const scenarios = {
     SC1: {
       name: 'شوک نزولی',
       nameEn: 'Bearish Shock',
       probability: pSC1,
+      cumulativeProbability: cumSC1,
       targetMin: bearTargets[3].min,
       targetMax: bearTargets[3].max,
       description: `شوک نزولی با هدف ${fmt(bearTargets[3].min)} تا ${fmt(bearTargets[3].max)} ${unit}.`,
@@ -2668,6 +2698,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'نزولی شتاب‌دار',
       nameEn: 'Accelerating Bearish',
       probability: pSC2,
+      cumulativeProbability: cumSC2,
       targetMin: bearTargets[2].min,
       targetMax: bearTargets[2].max,
       description: `شتاب نزولی با هدف ${fmt(bearTargets[2].min)} تا ${fmt(bearTargets[2].max)} ${unit}.`,
@@ -2676,6 +2707,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'نزولی قوی',
       nameEn: 'Strong Bearish',
       probability: pSC3,
+      cumulativeProbability: cumSC3,
       targetMin: bearTargets[1].min,
       targetMax: bearTargets[1].max,
       description: `نزول قوی تا ${fmt(bearTargets[1].min)} تا ${fmt(bearTargets[1].max)} ${unit}.`,
@@ -2684,6 +2716,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'نزولی خفیف',
       nameEn: 'Weak Bearish',
       probability: pSC4,
+      cumulativeProbability: cumSC4,
       targetMin: bearTargets[0].min,
       targetMax: bearTargets[0].max,
       description: `نزول خفیف تا ${fmt(bearTargets[0].min)} تا ${fmt(bearTargets[0].max)} ${unit}.`,
@@ -2692,6 +2725,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'رنج',
       nameEn: 'Range-bound',
       probability: pSC5,
+      cumulativeProbability: cumSC5,
       targetMin: rangeTarget.min,
       targetMax: rangeTarget.max,
       description: `نوسان کم در محدوده ${fmt(rangeTarget.min)} تا ${fmt(rangeTarget.max)} ${unit}.`,
@@ -2700,6 +2734,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'صعودی خفیف',
       nameEn: 'Weak Bullish',
       probability: pSC6,
+      cumulativeProbability: cumSC6,
       targetMin: bullTargets[0].min,
       targetMax: bullTargets[0].max,
       description: `حرکت صعودی خفیف با شکست مقاومت اول تا محدوده ${fmt(bullTargets[0].min)} تا ${fmt(bullTargets[0].max)} ${unit}.`,
@@ -2708,6 +2743,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'صعودی قوی',
       nameEn: 'Strong Bullish',
       probability: pSC7,
+      cumulativeProbability: cumSC7,
       targetMin: bullTargets[1].min,
       targetMax: bullTargets[1].max,
       description: `صعود قوی با عبور از مقاومت‌ها تا هدف ${fmt(bullTargets[1].min)} تا ${fmt(bullTargets[1].max)} ${unit}.`,
@@ -2716,6 +2752,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'صعودی شتاب‌دار',
       nameEn: 'Accelerating Bullish',
       probability: pSC8,
+      cumulativeProbability: cumSC8,
       targetMin: bullTargets[2].min,
       targetMax: bullTargets[2].max,
       description: `شتاب صعودی با هدف ${fmt(bullTargets[2].min)} تا ${fmt(bullTargets[2].max)} ${unit}.`,
@@ -2724,6 +2761,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       name: 'شوک صعودی',
       nameEn: 'Bullish Shock',
       probability: pSC9,
+      cumulativeProbability: cumSC9,
       targetMin: bullTargets[3].min,
       targetMax: bullTargets[3].max,
       description: `شوک صعودی با هدف ${fmt(bullTargets[3].min)} تا ${fmt(bullTargets[3].max)} ${unit}.`,
@@ -2760,6 +2798,13 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
     priceTargets,
     trend,
     scenarios,
+    // ── Group Cumulative Probabilities (per spec) ──
+    bullishCumulative: cumSC6,    // = P(SC6)+P(SC7)+P(SC8)+P(SC9)
+    neutralCumulative: cumSC5,    // = P(SC5)
+    bearishCumulative: cumSC4,    // = P(SC1)+P(SC2)+P(SC3)+P(SC4)
+    // ── Severity-Weighted Cumulative (per spec: severity factors 1.0, 0.8, 0.6, 0.3) ──
+    bullishWeighted: (pSC9 * 1.0 + pSC8 * 0.8 + pSC7 * 0.6 + pSC6 * 0.3) / 100,
+    bearishWeighted: (pSC1 * 1.0 + pSC2 * 0.8 + pSC3 * 0.6 + pSC4 * 0.3) / 100,
     bullScore,
     bearScore,
     overallSignal,
