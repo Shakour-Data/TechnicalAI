@@ -370,22 +370,22 @@ function generateAnalysisText(ctx: AnalysisContext) {
   const diSignal = diPlus > diMinus
     ? `DI+ (${toFa(diPlus)}) بالاتر از DI- (${toFa(diMinus)}) — فشار خرید غالب`
     : `DI- (${toFa(diMinus)}) بالاتر از DI+ (${toFa(diPlus)}) — فشار فروش غالب`;
-  // Trend angle description: handle zero/very-small angle edge case
-  // "صعودی با زاویه ۰ درجه" is meaningless; classify qualitatively instead
+  // Trend angle description: classify angle qualitatively
+  // New scale: 1% daily rise ≈ 45°, 0.5% ≈ 27°, 0.2% ≈ 11°, 0.05% ≈ 3°
   const absAngle = Math.abs(trendAngle);
-  const angleDesc = absAngle < 1
+  const angleDesc = absAngle < 3
     ? 'تقریباً صفر'
-    : absAngle < 5 ? 'ملایم'
-    : absAngle < 15 ? 'متوسط'
-    : absAngle < 30 ? 'تند'
+    : absAngle < 11 ? 'ملایم'
+    : absAngle < 27 ? 'متوسط'
+    : absAngle < 45 ? 'تند'
     : 'بسیار تند';
   const r2Str = toPersianDigits((trendR2 * 100).toFixed(1));
   const trendText = trendDirection === 'up'
-    ? absAngle < 1
+    ? absAngle < 3
       ? `صعودی با شیب بسیار ملایم و ضریب تعیین R²=${r2Str}٪`
       : `صعودی با زاویه ${toFa(absAngle)} درجه (شیب ${angleDesc}) و ضریب تعیین R²=${r2Str}٪`
     : trendDirection === 'down'
-    ? absAngle < 1
+    ? absAngle < 3
       ? `نزولی با شیب بسیار ملایم و ضریب تعیین R²=${r2Str}٪`
       : `نزولی با زاویه ${toFa(absAngle)} درجه (شیب ${angleDesc}) و ضریب تعیین R²=${r2Str}٪`
     : 'خنثی و بدون جهت مشخص';
@@ -689,15 +689,15 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const rsiSignal = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
 
   // ── Trend text ─────────────────────────────────────────────────
-  // Handle zero/very-small angle edge case: "صعودی با زاویه ۰ درجه" is meaningless
+  // New angle scale: 1% daily rise ≈ 45°, so < 3° means nearly flat
   const _absAngle = Math.abs(trendAngle);
   const _r2Str = toPersianDigits((trendR2 * 100).toFixed(1));
   const trendText = trendDirection === 'up'
-    ? _absAngle < 1
+    ? _absAngle < 3
       ? `صعودی با شیب بسیار ملایم و ضریب تعیین R²=${_r2Str}٪`
       : `صعودی با زاویه ${toFa(_absAngle)} درجه و ضریب تعیین R²=${_r2Str}٪`
     : trendDirection === 'down'
-    ? _absAngle < 1
+    ? _absAngle < 3
       ? `نزولی با شیب بسیار ملایم و ضریب تعیین R²=${_r2Str}٪`
       : `نزولی با زاویه ${toFa(_absAngle)} درجه و ضریب تعیین R²=${_r2Str}٪`
     : 'خنثی و بدون جهت مشخص';

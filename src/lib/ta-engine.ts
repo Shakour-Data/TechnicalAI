@@ -1704,7 +1704,11 @@ function calcTrend(closes: number[], period: number): TrendResult {
   const slice = closes.slice(-Math.min(period, closes.length));
   const { slope, r2 } = linearRegression(slice);
   const avgPrice = slice.reduce((a, b) => a + b, 0) / slice.length;
-  const angle = avgPrice === 0 ? 0 : Math.atan(slope / avgPrice) * (180 / Math.PI);
+  // Convert slope/avgPrice to percentage before atan so that:
+  //   1% daily rise → atan(1) = 45°, 0.5% → ~26.6°, 2% → ~63.4°
+  // Without the ×100 factor, atan(slope/avgPrice) always yields near-0° for
+  // large prices (e.g. index at 6.7M with 1% daily change → 0.57°).
+  const angle = avgPrice === 0 ? 0 : Math.atan((slope / avgPrice) * 100) * (180 / Math.PI);
   const priceThreshold = avgPrice * 0.001; // 0.1%
   const direction = slope > priceThreshold ? 'up' : slope < -priceThreshold ? 'down' : 'flat';
   return { direction, slope, angle, r2: Math.max(0, Math.min(1, r2)) };

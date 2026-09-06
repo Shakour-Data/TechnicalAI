@@ -235,7 +235,9 @@ export function extractVDSSFeatures(data: OHLCV[], endIdx: number, hasVolume: bo
       ssTot += (trendSlice[i] - meanY) ** 2;
     }
     r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-    angle = meanY > 0 ? Math.atan(slope / meanY) * (180 / Math.PI) : 0;
+    // Convert slope/meanY to percentage before atan (same fix as ta-engine.ts)
+    // so that 1% daily rise → 45°, not ~0.57°
+    angle = meanY > 0 ? Math.atan((slope / meanY) * 100) * (180 / Math.PI) : 0;
   }
   const tStr = r2 * Math.abs(angle) / 45;
   const direction = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
