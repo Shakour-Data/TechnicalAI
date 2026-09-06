@@ -1,0 +1,1285 @@
+     1→#!/usr/bin/env python3
+     2→"""
+     3→ML Service — VDES Technical Analysis System
+     4→Pure Python (standard library only) HTTP server on port 3040.
+     5→
+     6→Endpoints:
+     7→  POST /predict     — Multi-step price prediction (ensemble of 3 models)
+     8→  POST /weights     — Bayesian dynamic indicator weights
+     9→  POST /regime      — Market regime detection (5 regimes)
+    10→  POST /divergence  — Price-indicator divergence detection
+    11→"""
+    12→
+    13→import json
+    14→import math
+    15→import statistics
+    16→from http.server import HTTPServer, BaseHTTPRequestHandler
+    17→from urllib.parse import urlparse
+    18→
+    19→PORT = 3040
+    20→
+    21→# ─────────────────────────────────────────────────────────────────────────────
+    22→# Pure-Python math / stats helpers
+    23→# ─────────────────────────────────────────────────────────────────────────────
+    24→
+    25→
+    26→def _mean(seq):
+    27→    """Arithmetic mean of a non-empty list."""
+    28→    return sum(seq) / len(seq)
+    29→
+    30→
+    31→def _stdev(seq):
+    32→    """Population standard deviation."""
+    33→    m = _mean(seq)
+    34→    return math.sqrt(sum((x - m) ** 2 for x in seq) / len(seq))
+    35→
+    36→
+    37→def _dot(a, b):
+    38→    return sum(x * y for x, y in zip(a, b))
+    39→
+    40→
+    41→def _vec_sub(a, b):
+    42→    return [x - y for x, y in zip(a, b)]
+    43→
+    44→
+    45→def _vec_add(a, b):
+    46→    return [x + y for x, y in zip(a, b)]
+    47→
+    48→
+    49→def _scalar_mul(s, v):
+    50→    return [s * x for x in v]
+    51→
+    52→
+    53→def _transpose(mat):
+    54→    return list(map(list, zip(*mat)))
+    55→
+    56→
+    57→def _mat_mul(A, B):
+    58→    """Matrix multiply A (m×n) × B (n×p)."""
+    59→    BT = _transpose(B)
+    60→    return [[sum(a * b for a, b in zip(row_a, col_b)) for col_b in BT] for row_a in A]
+    61→
+    62→
+    63→def _identity(n):
+    64→    return [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+    65→
+    66→
+    67→def _mat_add_scalar(M, s):
+    68→    return [[cell + s for cell in row] for row in M]
+    69→
+    70→
+    71→def _invert_2x2(M):
+    72→    """Invert a 2×2 matrix."""
+    73→    a, b = M[0]
+    74→    c, d = M[1]
+    75→    det = a * d - b * c
+    76→    if abs(det) < 1e-12:
+    77→        return None
+    78→    return [[d / det, -b / det], [-c / det, a / det]]
+    79→
+    80→
+    81→def _invert_matrix(M):
+    82→    """Invert a small matrix using Gauss-Jordan elimination.
+    83→    Falls back to 2×2 shortcut when possible.
+    84→    """
+    85→    n = len(M)
+    86→    if n == 2:
+    87→        r = _invert_2x2(M)
+    88→        if r is not None:
+    89→            return r
+    90→    # Augment with identity
+    91→    aug = [row[:] + _identity(n)[i] for i, row in enumerate(M)]
+    92→    for col in range(n):
+    93→        # Partial pivoting
+    94→        max_row = max(range(col, n), key=lambda r: abs(aug[r][col]))
+    95→        aug[col], aug[max_row] = aug[max_row], aug[col]
+    96→        pivot = aug[col][col]
+    97→        if abs(pivot) < 1e-12:
+    98→            # Singular — return identity as fallback
+    99→            return _identity(n)
+   100→        for j in range(2 * n):
+   101→            aug[col][j] /= pivot
+   102→        for row in range(n):
+   103→            if row != col:
+   104→                factor = aug[row][col]
+   105→                for j in range(2 * n):
+   106→                    aug[row][j] -= factor * aug[col][j]
+   107→    return [row[n:] for row in aug]
+   108→
+   109→
+   110→# ─────────────────────────────────────────────────────────────────────────────
+   111→# Technical indicator helpers (pure Python)
+   112→# ─────────────────────────────────────────────────────────────────────────────
+   113→
+   114→
+   115→def sma(values, period):
+   116→    """Simple moving average."""
+   117→    if len(values) < period:
+   118→        return None
+   119→    return _mean(values[-period:])
+   120→
+   121→
+   122→def ema(values, period):
+   123→    """Exponential moving average."""
+   124→    if len(values) < period:
+   125→        return None
+   126→    k = 2.0 / (period + 1)
+   127→    e = _mean(values[:period])
+   128→    for v in values[period:]:
+   129→        e = v * k + e * (1 - k)
+   130→    return e
+   131→
+   132→
+   133→def rsi(prices, period=14):
+   134→    """Relative Strength Index."""
+   135→    if len(prices) < period + 1:
+   136→        return 50.0
+   137→    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
+   138→    gains = [max(d, 0) for d in deltas]
+   139→    losses = [max(-d, 0) for d in deltas]
+   140→    avg_gain = _mean(gains[-period:])
+   141→    avg_loss = _mean(losses[-period:])
+   142→    if avg_loss == 0:
+   143→        return 100.0
+   144→    rs = avg_gain / avg_loss
+   145→    return 100.0 - 100.0 / (1.0 + rs)
+   146→
+   147→
+   148→def adx(prices, period=14):
+   149→    """Average Directional Index (simplified)."""
+   150→    if len(prices) < 2 * period + 1:
+   151→        return 25.0  # neutral
+   152→    # Compute +DM, -DM, TR
+   153→    plus_dm_list = []
+   154→    minus_dm_list = []
+   155→    tr_list = []
+   156→    for i in range(1, len(prices)):
+   157→        high = max(prices[i], prices[i - 1])  # proxy when no OHLC
+   158→        low = min(prices[i], prices[i - 1])
+   159→        prev_high = max(prices[i - 1], prices[max(0, i - 2)]) if i >= 2 else prices[i - 1]
+   160→        prev_low = min(prices[i - 1], prices[max(0, i - 2)]) if i >= 2 else prices[i - 1]
+   161→        up_move = high - prev_high
+   162→        down_move = prev_low - low
+   163→        plus_dm = max(up_move, 0) if up_move > down_move and up_move > 0 else 0
+   164→        minus_dm = max(down_move, 0) if down_move > up_move and down_move > 0 else 0
+   165→        tr = max(high - low, abs(high - prices[i - 1]), abs(low - prices[i - 1]))
+   166→        plus_dm_list.append(plus_dm)
+   167→        minus_dm_list.append(minus_dm)
+   168→        tr_list.append(tr)
+   169→    if len(tr_list) < period:
+   170→        return 25.0
+   171→    # Smooth with Wilder's method
+   172→    atr = _mean(tr_list[-period:])
+   173→    plus_smooth = _mean(plus_dm_list[-period:])
+   174→    minus_smooth = _mean(minus_dm_list[-period:])
+   175→    if atr == 0:
+   176→        return 25.0
+   177→    plus_di = 100 * plus_smooth / atr
+   178→    minus_di = 100 * minus_smooth / atr
+   179→    di_sum = plus_di + minus_di
+   180→    if di_sum == 0:
+   181→        return 0.0
+   182→    dx = 100 * abs(plus_di - minus_di) / di_sum
+   183→    return dx  # simplified single-period ADX
+   184→
+   185→
+   186→def macd(prices, fast=12, slow=26, signal=9):
+   187→    """MACD histogram value."""
+   188→    if len(prices) < slow + signal:
+   189→        return 0.0
+   190→    ema_fast = ema(prices, fast)
+   191→    ema_slow = ema(prices, slow)
+   192→    if ema_fast is None or ema_slow is None:
+   193→        return 0.0
+   194→    macd_line = ema_fast - ema_slow
+   195→    # Approximate signal line
+   196→    diffs = []
+   197→    k = 2.0 / (slow + 1)
+   198→    ef = _mean(prices[:fast])
+   199→    es = _mean(prices[:slow])
+   200→    for v in prices[slow:]:
+   201→        ef = v * (2 / (fast + 1)) + ef * (1 - 2 / (fast + 1))
+   202→        es = v * k + es * (1 - k)
+   203→        diffs.append(ef - es)
+   204→    if len(diffs) < signal:
+   205→        return macd_line
+   206→    sig = ema(diffs, signal)
+   207→    if sig is None:
+   208→        return macd_line
+   209→    return macd_line - sig
+   210→
+   211→
+   212→def rolling_std(values, period):
+   213→    """Rolling standard deviation over last `period` values."""
+   214→    if len(values) < period:
+   215→        return 0.0
+   216→    window = values[-period:]
+   217→    return _stdev(window)
+   218→
+   219→
+   220→def rolling_max(values, period):
+   221→    if len(values) < period:
+   222→        return max(values) if values else 0
+   223→    return max(values[-period:])
+   224→
+   225→
+   226→def rolling_min(values, period):
+   227→    if len(values) < period:
+   228→        return min(values) if values else 0
+   229→    return min(values[-period:])
+   230→
+   231→
+   232→# ─────────────────────────────────────────────────────────────────────────────
+   233→# Feature Engineering
+   234→# ─────────────────────────────────────────────────────────────────────────────
+   235→
+   236→
+   237→def compute_returns(prices):
+   238→    """Simple returns."""
+   239→    return [(prices[i] - prices[i - 1]) / prices[i - 1] if prices[i - 1] != 0 else 0
+   240→            for i in range(1, len(prices))]
+   241→
+   242→
+   243→def compute_log_returns(prices):
+   244→    """Log returns."""
+   245→    return [math.log(prices[i] / prices[i - 1]) if prices[i - 1] > 0 and prices[i] > 0 else 0
+   246→            for i in range(1, len(prices))]
+   247→
+   248→
+   249→def build_features(prices, volume=None):
+   250→    """Build feature vector from price series.
+   251→    Returns list of feature values.
+   252→    """
+   253→    if len(prices) < 5:
+   254→        return []
+   255→
+   256→    feats = []
+   257→    n = len(prices)
+   258→
+   259→    # --- Lag features (normalized) ---
+   260→    for lag in [1, 2, 3, 5, 10]:
+   261→        if n > lag and prices[-lag - 1] != 0:
+   262→            feats.append(prices[-1] / prices[-lag - 1] - 1)
+   263→        else:
+   264→            feats.append(0.0)
+   265→
+   266→    # --- Returns ---
+   267→    rets = compute_returns(prices)
+   268→    if rets:
+   269→        feats.append(rets[-1])  # 1-day return
+   270→    else:
+   271→        feats.append(0.0)
+   272→    if len(rets) >= 5:
+   273→        feats.append(_mean(rets[-5:]))  # 5-day mean return
+   274→    else:
+   275→        feats.append(_mean(rets) if rets else 0.0)
+   276→
+   277→    # --- Volatility ---
+   278→    if len(rets) >= 5:
+   279→        feats.append(_stdev(rets[-5:]))  # 5-day vol
+   280→    else:
+   281→        feats.append(0.0)
+   282→    if len(rets) >= 10:
+   283→        feats.append(_stdev(rets[-10:]))  # 10-day vol
+   284→    else:
+   285→        feats.append(_stdev(rets) if rets else 0.0)
+   286→
+   287→    # --- MA ratios ---
+   288→    for period in [5, 10, 20]:
+   289→        m = sma(prices, period)
+   290→        if m and m != 0:
+   291→            feats.append(prices[-1] / m - 1)
+   292→        else:
+   293→            feats.append(0.0)
+   294→
+   295→    # --- EMA ratios ---
+   296→    for period in [12, 26]:
+   297→        e = ema(prices, period)
+   298→        if e and e != 0:
+   299→            feats.append(prices[-1] / e - 1)
+   300→        else:
+   301→            feats.append(0.0)
+   302→
+   303→    # --- RSI ---
+   304→    feats.append(rsi(prices) / 100.0)
+   305→
+   306→    # --- ADX ---
+   307→    feats.append(adx(prices) / 100.0)
+   308→
+   309→    # --- MACD histogram (normalized) ---
+   310→    mh = macd(prices)
+   311→    if prices[-1] != 0:
+   312→        feats.append(mh / prices[-1])
+   313→    else:
+   314→        feats.append(0.0)
+   315→
+   316→    # --- Bollinger position ---
+   317→    for period in [20]:
+   318→        if len(prices) >= period:
+   319→            m = sma(prices, period)
+   320→            s = rolling_std(prices, period)
+   321→            if s and s != 0:
+   322→                feats.append((prices[-1] - m) / (2 * s))
+   323→            else:
+   324→                feats.append(0.0)
+   325→        else:
+   326→            feats.append(0.0)
+   327→
+   328→    # --- Volume features ---
+   329→    if volume and len(volume) >= 5:
+   330→        vol_rets = [(volume[i] - volume[i - 1]) / volume[i - 1]
+   331→                     if volume[i - 1] != 0 else 0
+   332→                     for i in range(1, len(volume))]
+   333→        feats.append(_mean(vol_rets[-5:]) if len(vol_rets) >= 5 else _mean(vol_rets) if vol_rets else 0.0)
+   334→        feats.append(_stdev(vol_rets[-5:]) if len(vol_rets) >= 5 else 0.0)
+   335→        # Price-volume correlation proxy
+   336→        if len(rets) >= 5 and len(vol_rets) >= 5:
+   337→            r = rets[-5:]
+   338→            v = vol_rets[-5:]
+   339→            rm = _mean(r)
+   340→            vm = _mean(v)
+   341→            num = sum((ri - rm) * (vi - vm) for ri, vi in zip(r, v))
+   342→            den = _stdev(r) * _stdev(v) * 5
+   343→            feats.append(num / den if den != 0 else 0.0)
+   344→        else:
+   345→            feats.append(0.0)
+   346→    else:
+   347→        feats.extend([0.0, 0.0, 0.0])
+   348→
+   349→    # --- Momentum ---
+   350→    if n >= 5:
+   351→        feats.append((prices[-1] / prices[-5] - 1))
+   352→    else:
+   353→        feats.append(0.0)
+   354→    if n >= 10:
+   355→        feats.append((prices[-1] / prices[-10] - 1))
+   356→    else:
+   357→        feats.append(0.0)
+   358→
+   359→    return feats
+   360→
+   361→
+   362→def build_target(prices, step=1):
+   363→    """Target: return at step ahead."""
+   364→    if len(prices) <= step:
+   365→        return 0.0
+   366→    return (prices[-step - 1] / prices[-1] - 1) if prices[-1] != 0 else 0.0
+   367→
+   368→
+   369→def build_dataset(prices, volume=None, max_lag=30):
+   370→    """Build X, y dataset from rolling windows."""
+   371→    X = []
+   372→    y = []
+   373→    min_len = 30  # minimum data needed
+   374→    if len(prices) < min_len:
+   375→        return X, y
+   376→    for i in range(min_len, len(prices) - 1):
+   377→        window_prices = prices[:i]
+   378→        window_vol = volume[:i] if volume else None
+   379→        feats = build_features(window_prices, window_vol)
+   380→        if not feats:
+   381→            continue
+   382→        X.append(feats)
+   383→        y.append(prices[i] / prices[i - 1] - 1 if prices[i - 1] != 0 else 0.0)
+   384→    return X, y
+   385→
+   386→
+   387→# ─────────────────────────────────────────────────────────────────────────────
+   388→# Model 1: Ridge Regression (from scratch)
+   389→# ─────────────────────────────────────────────────────────────────────────────
+   390→
+   391→
+   392→class RidgeRegression:
+   393→    """Ridge regression: w = (X^T X + λI)^{-1} X^T y"""
+   394→
+   395→    def __init__(self, alpha=1.0):
+   396→        self.alpha = alpha
+   397→        self.weights = None
+   398→        self.bias = 0.0
+   399→        self.fitted = False
+   400→
+   401→    def fit(self, X, y):
+   402→        if len(X) < 3 or len(X[0]) < 1:
+   403→            self.fitted = False
+   404→            return self
+   405→        n = len(X)
+   406→        p = len(X[0])
+   407→        # Center y
+   408→        y_mean = _mean(y)
+   409→        y_c = [yi - y_mean for yi in y]
+   410→        # Center X
+   411→        x_means = [_mean([X[j][i] for j in range(n)]) for i in range(p)]
+   412→        X_c = [[X[j][i] - x_means[i] for i in range(p)] for j in range(n)]
+   413→        # X^T X
+   414→        XT = _transpose(X_c)
+   415→        XTX = _mat_mul(XT, X_c)
+   416→        # Regularize
+   417→        reg = _identity(p)
+   418→        XTX_reg = [[XTX[i][j] + (self.alpha if i == j else 0) for j in range(p)] for i in range(p)]
+   419→        XTX_inv = _invert_matrix(XTX_reg)
+   420→        # X^T y
+   421→        XTy = [sum(XT[i][j] * y_c[j] for j in range(n)) for i in range(p)]
+   422→        # w = XTX_inv @ XTy
+   423→        self.weights = [sum(XTX_inv[i][j] * XTy[j] for j in range(p)) for i in range(p)]
+   424→        self.bias = y_mean - sum(self.weights[i] * x_means[i] for i in range(p))
+   425→        self.fitted = True
+   426→        return self
+   427→
+   428→    def predict(self, X):
+   429→        if not self.fitted or not self.weights:
+   430→            return [0.0] * len(X)
+   431→        return [sum(self.weights[j] * row[j] for j in range(len(row))) + self.bias for row in X]
+   432→
+   433→    def predict_single(self, x):
+   434→        if not self.fitted or not self.weights:
+   435→            return 0.0
+   436→        return sum(self.weights[j] * x[j] for j in range(len(x))) + self.bias
+   437→
+   438→
+   439→# ─────────────────────────────────────────────────────────────────────────────
+   440→# Model 2: Weighted Moving Average Ensemble
+   441→# ─────────────────────────────────────────────────────────────────────────────
+   442→
+   443→
+   444→def wma_predict(prices, steps=5):
+   445→    """Predict using weighted moving average of recent returns."""
+   446→    if len(prices) < 3:
+   447→        return [0.0] * steps
+   448→
+   449→    rets = compute_returns(prices)
+   450→    if not rets:
+   451→        return [0.0] * steps
+   452→
+   453→    # Use exponential weights for recent returns
+   454→    n_rets = min(len(rets), 20)
+   455→    recent_rets = rets[-n_rets:]
+   456→    weights = [math.exp(-0.1 * (n_rets - 1 - i)) for i in range(n_rets)]
+   457→    w_sum = sum(weights)
+   458→    weights = [w / w_sum for w in weights]
+   459→    expected_return = sum(w * r for w, r in zip(weights, recent_rets))
+   460→
+   461→    # Volatility for decay
+   462→    if len(recent_rets) >= 5:
+   463→        vol = _stdev(recent_rets[-5:])
+   464→    else:
+   465→        vol = _stdev(recent_rets)
+   466→
+   467→    predictions = []
+   468→    last_price = prices[-1]
+   469→    for step in range(steps):
+   470→        # Decay the expected return for longer horizons
+   471→        decay = math.exp(-0.05 * step)
+   472→        ret = expected_return * decay
+   473→        last_price = last_price * (1 + ret)
+   474→        predictions.append(last_price)
+   475→
+   476→    return predictions
+   477→
+   478→
+   479→# ─────────────────────────────────────────────────────────────────────────────
+   480→# Model 3: Mean-Reversion Model
+   481→# ─────────────────────────────────────────────────────────────────────────────
+   482→
+   483→
+   484→def mean_reversion_predict(prices, steps=5):
+   485→    """Predict based on mean-reversion tendency."""
+   486→    if len(prices) < 10:
+   487→        return [0.0] * steps
+   488→
+   489→    # Compute multiple lookback means
+   490→    lookbacks = [10, 20, 50]
+   491→    means = []
+   492→    for lb in lookbacks:
+   493→        if len(prices) >= lb:
+   494→            means.append(sma(prices, lb))
+   495→        else:
+   496→            means.append(sma(prices, len(prices)))
+   497→
+   498→    # Weight longer lookbacks more (they're more stable)
+   499→    weights = [0.2, 0.3, 0.5][:len(means)]
+   500→    w_sum = sum(weights)
+   501→    weights = [w / w_sum for w in weights]
+   502→    target_mean = sum(w * m for w, m in zip(weights, means) if m is not None)
+   503→
+   504→    if target_mean is None or target_mean == 0:
+   505→        return [prices[-1]] * steps
+   506→
+   507→    # Speed of reversion: how far from mean / recent volatility
+   508→    deviation = (prices[-1] - target_mean) / target_mean
+   509→    rets = compute_returns(prices)
+   510→    vol = _stdev(rets[-10:]) if len(rets) >= 10 else (_stdev(rets) if rets else 0.01)
+   511→    if vol == 0:
+   512→        vol = 0.01
+   513→
+   514→    # Half-life estimation (simplified Ornstein-Uhlenbeck)
+   515→    reversion_speed = 0.1  # base reversion per step
+   516→    reversion_strength = -reversion_speed * deviation
+   517→
+   518→    predictions = []
+   519→    last_price = prices[-1]
+   520→    for step in range(steps):
+   521→        # Reversion decays as we approach mean
+   522→        current_dev = (last_price - target_mean) / target_mean
+   523→        adj_return = -reversion_speed * current_dev * 0.5
+   524→        last_price = last_price * (1 + adj_return)
+   525→        predictions.append(last_price)
+   526→
+   527→    return predictions
+   528→
+   529→
+   530→# ─────────────────────────────────────────────────────────────────────────────
+   531→# Ensemble Prediction
+   532→# ─────────────────────────────────────────────────────────────────────────────
+   533→
+   534→
+   535→def ensemble_predict(prices, volume=None, steps=5):
+   536→    """Combine three models with adaptive weights."""
+   537→    if len(prices) < 10:
+   538→        # Not enough data — return simple extrapolation
+   539→        last = prices[-1]
+   540→        ret = (prices[-1] / prices[-2] - 1) if len(prices) >= 2 and prices[-2] != 0 else 0
+   541→        # Use recent returns for a rough confidence interval
+   542→        rets_short = compute_returns(prices)
+   543→        vol_short = _stdev(rets_short) if len(rets_short) >= 2 else 0.02
+   544→        predictions = []
+   545→        conf_intervals = []
+   546→        for i in range(steps):
+   547→            p = last * (1 + ret * (i + 1) * 0.3)
+   548→            predictions.append(p)
+   549→            width = p * vol_short * math.sqrt(i + 1) * 1.96
+   550→            conf_intervals.append([p - width, p + width])
+   551→        return {
+   552→            "predictions": [round(p, 6) for p in predictions],
+   553→            "confidence": 0.1,
+   554→            "conf_intervals": [[round(lo, 6), round(hi, 6)] for lo, hi in conf_intervals],
+   555→            "predicted_return_5d": ret * 1.5,
+   556→        }
+   557→
+   558→    steps = max(1, min(steps, 30))
+   559→
+   560→    # --- Build dataset & fit Ridge ---
+   561→    X, y = build_dataset(prices, volume)
+   562→    ridge_preds = None
+   563→    ridge_score = 0.0
+   564→    residuals = []
+   565→
+   566→    if len(X) >= 10:
+   567→        # Use last 30% for validation
+   568→        split = int(len(X) * 0.7)
+   569→        X_train, X_val = X[:split], X[split:]
+   570→        y_train, y_val = y[:split], y[split:]
+   571→
+   572→        model = RidgeRegression(alpha=0.5)
+   573→        model.fit(X_train, y_train)
+   574→
+   575→        if model.fitted and X_val:
+   576→            val_preds = model.predict(X_val)
+   577→            # R² score
+   578→            ym = _mean(y_val)
+   579→            ss_res = sum((yp - yt) ** 2 for yp, yt in zip(val_preds, y_val))
+   580→            ss_tot = sum((yt - ym) ** 2 for yt in y_val)
+   581→            ridge_score = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+   582→            ridge_score = max(0.0, min(1.0, ridge_score))
+   583→            residuals = [yp - yt for yp, yt in zip(val_preds, y_val)]
+   584→
+   585→        # Multi-step prediction
+   586→        ridge_preds = []
+   587→        last_price = prices[-1]
+   588→        for step in range(steps):
+   589→            feats = build_features(prices, volume)
+   590→            if feats and model.fitted:
+   591→                pred_return = model.predict_single(feats)
+   592→                pred_return = max(-0.05, min(0.05, pred_return))  # clamp
+   593→            else:
+   594→                rets = compute_returns(prices)
+   595→                pred_return = _mean(rets[-5:]) if len(rets) >= 5 else (_mean(rets) if rets else 0)
+   596→
+   597→            last_price = last_price * (1 + pred_return)
+   598→            ridge_preds.append(last_price)
+   599→            # Append prediction to prices for next step's features
+   600→            prices = prices + [last_price]
+   601→            if volume:
+   602→                avg_vol = _mean(volume[-5:]) if len(volume) >= 5 else _mean(volume)
+   603→                volume = volume + [avg_vol]
+   604→
+   605→        prices = prices[:-(steps)]  # restore original
+   606→        if volume:
+   607→            volume = volume[:-(steps)]
+   608→    else:
+   609→        ridge_preds = [prices[-1]] * steps
+   610→        ridge_score = 0.0
+   611→
+   612→    # --- WMA predictions ---
+   613→    wma_preds = wma_predict(prices, steps)
+   614→
+   615→    # --- Mean-reversion predictions ---
+   616→    mr_preds = mean_reversion_predict(prices, steps)
+   617→
+   618→    # --- Compute model weights based on recent performance ---
+   619→    # Validate WMA and MR on recent data
+   620→    wma_score = 0.0
+   621→    mr_score = 0.0
+   622→
+   623→    if len(prices) >= 15:
+   624→        actual_next = prices[-5:] if len(prices) >= 20 else prices[-(len(prices) - 15):]
+   625→        wma_test = wma_predict(prices[-20:-5] if len(prices) >= 20 else prices[:-5], len(actual_next))
+   626→        mr_test = mean_reversion_predict(prices[-20:-5] if len(prices) >= 20 else prices[:-5], len(actual_next))
+   627→
+   628→        for pred_list, score_ref in [(wma_test, 'wma'), (mr_test, 'mr')]:
+   629→            if len(pred_list) == len(actual_next) and actual_next:
+   630→                ss_res = sum((p - a) ** 2 for p, a in zip(pred_list, actual_next))
+   631→                ss_tot = sum((a - _mean(actual_next)) ** 2 for a in actual_next)
+   632→                sc = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+   633→                sc = max(0.0, min(1.0, sc))
+   634→                if score_ref == 'wma':
+   635→                    wma_score = sc
+   636→                else:
+   637→                    mr_score = sc
+   638→
+   639→    # Adaptive ensemble weights
+   640→    scores = [ridge_score + 0.05, wma_score + 0.05, mr_score + 0.05]  # floor at 0.05
+   641→    total_score = sum(scores)
+   642→    w = [s / total_score for s in scores]
+   643→
+   644→    # If ridge has very little data, favor simpler models
+   645→    if len(X) < 10:
+   646→        w = [0.1, 0.45, 0.45]
+   647→
+   648→    # --- Combine predictions ---
+   649→    final_preds = []
+   650→    for i in range(steps):
+   651→        p = w[0] * ridge_preds[i] + w[1] * wma_preds[i] + w[2] * mr_preds[i]
+   652→        final_preds.append(p)
+   653→
+   654→    # --- Confidence & intervals ---
+   655→    if residuals:
+   656→        resid_std = _stdev(residuals)
+   657→    else:
+   658→        rets = compute_returns(prices)
+   659→        resid_std = _stdev(rets[-10:]) if len(rets) >= 10 else (_stdev(rets) if rets else 0.01)
+   660→
+   661→    confidence = max(0.1, min(0.95, ridge_score * 0.6 + wma_score * 0.2 + mr_score * 0.2 + 0.1))
+   662→
+   663→    conf_intervals = []
+   664→    for i, p in enumerate(final_preds):
+   665→        # Widen intervals for longer horizons
+   666→        width = resid_std * p * (1 + 0.15 * i) * 1.96
+   667→        conf_intervals.append([p - width, p + width])
+   668→
+   669→    # 5-day predicted return
+   670→    if len(final_preds) >= 5:
+   671→        predicted_return_5d = final_preds[4] / final_preds[0] - 1 if final_preds[0] != 0 else 0
+   672→    elif final_preds:
+   673→        predicted_return_5d = final_preds[-1] / prices[-1] - 1 if prices[-1] != 0 else 0
+   674→    else:
+   675→        predicted_return_5d = 0.0
+   676→
+   677→    return {
+   678→        "predictions": [round(p, 6) for p in final_preds],
+   679→        "confidence": round(confidence, 4),
+   680→        "conf_intervals": [[round(lo, 6), round(hi, 6)] for lo, hi in conf_intervals],
+   681→        "predicted_return_5d": round(predicted_return_5d, 6),
+   682→    }
+   683→
+   684→
+   685→# ─────────────────────────────────────────────────────────────────────────────
+   686→# Endpoint 2: Bayesian Weights
+   687→# ─────────────────────────────────────────────────────────────────────────────
+   688→
+   689→
+   690→def compute_bayesian_weights(features, regime="sideways", has_volume=True):
+   691→    """
+   692→    Compute Bayesian weights for technical indicators.
+   693→    W_i = P(Success|Tool_i) * Prior_i / sum(P(Success|Tool_j) * Prior_j)
+   694→    """
+   695→    # Default priors
+   696→    priors = {
+   697→        "trend": 0.28,
+   698→        "oscillator": 0.25,
+   699→        "volume": 0.15,
+   700→        "volatility": 0.10,
+   701→        "leading": 0.12,
+   702→        "patterns": 0.10,
+   703→    }
+   704→
+   705→    # Redistribute volume prior if no volume data
+   706→    if not has_volume:
+   707→        vol_prior = priors["volume"]
+   708→        del priors["volume"]
+   709→        total_other = sum(priors.values())
+   710→        for k in priors:
+   711→            priors[k] += vol_prior * (priors[k] / total_other)
+   712→
+   713→    # Likelihood P(Success|Tool_i) based on regime and feature values
+   714→    likelihoods = {}
+   715→
+   716→    # Trend indicators: more useful in trending markets
+   717→    trend_indicators = ["sma_20", "ema_12", "ema_26", "macd_signal", "adx"]
+   718→    oscillator_indicators = ["rsi", "stoch_k", "stoch_d", "williams_r", "cci"]
+   719→    volume_indicators = ["obv", "vwap", "vol_sma", "vol_ratio"]
+   720→    volatility_indicators = ["atr", "bb_width", "bb_position", "keltner_width"]
+   721→    leading_indicators = ["ichimoku", "pivot", "fibonacci", "donchian"]
+   722→    pattern_indicators = ["candle_patterns", "harmonic", "chart_patterns", "support_resistance"]
+   723→
+   724→    # Count available features per category
+   725→    def count_matching(keys):
+   726→        return sum(1 for k in keys if k in features and features[k] is not None)
+   727→
+   728→    trend_count = count_matching(trend_indicators)
+   729→    osc_count = count_matching(oscillator_indicators)
+   730→    vol_count = count_matching(volume_indicators) if has_volume else 0
+   731→    var_count = count_matching(volatility_indicators)
+   732→    lead_count = count_matching(leading_indicators)
+   733→    pat_count = count_matching(pattern_indicators)
+   734→
+   735→    # Adjust likelihoods based on regime
+   736→    regime_boost = {
+   737→        "strong_bull": {"trend": 1.3, "oscillator": 0.8, "volatility": 0.7, "leading": 1.1, "patterns": 0.9},
+   738→        "weak_bull": {"trend": 1.1, "oscillator": 1.0, "volatility": 0.9, "leading": 1.0, "patterns": 1.0},
+   739→        "sideways": {"trend": 0.7, "oscillator": 1.2, "volatility": 1.2, "leading": 0.9, "patterns": 1.1},
+   740→        "weak_bear": {"trend": 1.0, "oscillator": 1.1, "volatility": 1.0, "leading": 1.0, "patterns": 1.0},
+   741→        "strong_bear": {"trend": 1.3, "oscillator": 0.8, "volatility": 0.7, "leading": 1.1, "patterns": 0.9},
+   742→    }
+   743→
+   744→    boost = regime_boost.get(regime, regime_boost["sideways"])
+   745→
+   746→    # Feature availability boost (more features = higher confidence)
+   747→    def feature_boost(count):
+   748→        if count == 0:
+   749→            return 0.3
+   750→        elif count == 1:
+   751→            return 0.7
+   752→        elif count == 2:
+   753→            return 0.9
+   754→        else:
+   755→            return 1.0
+   756→
+   757→    # Base likelihood for each category
+   758→    base_likelihood = {
+   759→        "trend": 0.6,
+   760→        "oscillator": 0.6,
+   761→        "volatility": 0.55,
+   762→        "leading": 0.5,
+   763→        "patterns": 0.5,
+   764→    }
+   765→
+   766→    if has_volume:
+   767→        base_likelihood["volume"] = 0.55
+   768→
+   769→    # Compute final likelihoods
+   770→    for cat in base_likelihood:
+   771→        count = {
+   772→            "trend": trend_count,
+   773→            "oscillator": osc_count,
+   774→            "volume": vol_count,
+   775→            "volatility": var_count,
+   776→            "leading": lead_count,
+   777→            "patterns": pat_count,
+   778→        }.get(cat, 0)
+   779→
+   780→        fb = feature_boost(count)
+   781→        rb = boost.get(cat, 1.0)
+   782→        likelihoods[cat] = base_likelihood[cat] * fb * rb
+   783→
+   784→    # Extra: boost based on extreme feature values
+   785→    # e.g., extreme RSI means oscillators are more informative
+   786→    rsi_val = features.get("rsi")
+   787→    if rsi_val is not None:
+   788→        if rsi_val > 70 or rsi_val < 30:
+   789→            likelihoods["oscillator"] *= 1.2
+   790→
+   791→    macd_val = features.get("macd_hist")
+   792→    if macd_val is not None and abs(macd_val) > 0:
+   793→        likelihoods["trend"] *= 1.1
+   794→
+   795→    adx_val = features.get("adx")
+   796→    if adx_val is not None and adx_val > 25:
+   797→        likelihoods["trend"] *= 1.15
+   798→
+   799→    # Compute posterior weights: W_i = P(Success|i) * Prior_i / Z
+   800→    posterior = {}
+   801→    Z = 0.0
+   802→    for cat in priors:
+   803→        posterior[cat] = likelihoods.get(cat, 0.5) * priors[cat]
+   804→        Z += posterior[cat]
+   805→
+   806→    if Z > 0:
+   807→        for cat in posterior:
+   808→            posterior[cat] /= Z
+   809→
+   810→    # Build per-indicator weights
+   811→    weights = {}
+   812→    all_indicators = {
+   813→        "trend": trend_indicators,
+   814→        "oscillator": oscillator_indicators,
+   815→        "volume": volume_indicators,
+   816→        "volatility": volatility_indicators,
+   817→        "leading": leading_indicators,
+   818→        "patterns": pattern_indicators,
+   819→    }
+   820→
+   821→    for cat, indicators in all_indicators.items():
+   822→        cat_weight = posterior.get(cat, 0.0)
+   823→        present = [ind for ind in indicators if ind in features and features[ind] is not None]
+   824→        if present:
+   825→            per_ind = cat_weight / len(present)
+   826→            for ind in present:
+   827→                weights[ind] = round(per_ind, 4)
+   828→        elif cat in priors:
+   829→            # No features in this category — distribute to others later
+   830→            pass
+   831→
+   832→    # Normalize so sum = 1
+   833→    total = sum(weights.values())
+   834→    if total > 0:
+   835→        weights = {k: round(v / total, 4) for k, v in weights.items()}
+   836→    else:
+   837→        # Fallback: equal weights
+   838→        n_keys = len(features)
+   839→        if n_keys > 0:
+   840→            w = 1.0 / n_keys
+   841→            weights = {k: round(w, 4) for k in features if features[k] is not None}
+   842→
+   843→    return {
+   844→        "weights": weights,
+   845→        "prior_trend": round(priors.get("trend", 0), 4),
+   846→        "prior_oscillator": round(priors.get("oscillator", 0), 4),
+   847→        "prior_volume": round(priors.get("volume", 0), 4) if has_volume else 0,
+   848→        "prior_volatility": round(priors.get("volatility", 0), 4),
+   849→        "prior_leading": round(priors.get("leading", 0), 4),
+   850→        "prior_patterns": round(priors.get("patterns", 0), 4),
+   851→    }
+   852→
+   853→
+   854→# ─────────────────────────────────────────────────────────────────────────────
+   855→# Endpoint 3: Regime Detection
+   856→# ─────────────────────────────────────────────────────────────────────────────
+   857→
+   858→
+   859→def detect_regime(prices):
+   860→    """Detect market regime from price series.
+   861→    Returns one of: strong_bull, weak_bull, sideways, weak_bear, strong_bear
+   862→    """
+   863→    if len(prices) < 10:
+   864→        return {"regime": "sideways", "probabilities": {
+   865→            "strong_bull": 0.1, "weak_bull": 0.2, "sideways": 0.4,
+   866→            "weak_bear": 0.2, "strong_bear": 0.1,
+   867→        }}
+   868→
+   869→    # --- ADX-based trend strength ---
+   870→    adx_val = adx(prices)
+   871→    trend_strength = adx_val / 100.0  # 0-1
+   872→
+   873→    # --- Returns-based direction ---
+   874→    rets = compute_returns(prices)
+   875→    if not rets:
+   876→        return {"regime": "sideways", "probabilities": {
+   877→            "strong_bull": 0.1, "weak_bull": 0.2, "sideways": 0.4,
+   878→            "weak_bear": 0.2, "strong_bear": 0.1,
+   879→        }}
+   880→
+   881→    # Multi-period returns
+   882→    ret_5 = sum(rets[-5:]) if len(rets) >= 5 else sum(rets)
+   883→    ret_10 = sum(rets[-10:]) if len(rets) >= 10 else sum(rets)
+   884→    ret_20 = sum(rets[-20:]) if len(rets) >= 20 else ret_10
+   885→
+   886→    # Average positive vs negative returns
+   887→    pos_rets = [r for r in rets if r > 0]
+   888→    neg_rets = [r for r in rets if r < 0]
+   889→    pos_ratio = len(pos_rets) / len(rets) if rets else 0.5
+   890→
+   891→    # Direction score: positive = bullish, negative = bearish
+   892→    direction_score = 0.0
+   893→    # Recent 5-day return (most important)
+   894→    direction_score += ret_5 * 3.0
+   895→    # 10-day return
+   896→    direction_score += ret_10 * 1.5
+   897→    # 20-day return
+   898→    direction_score += ret_20 * 1.0
+   899→    # Positive ratio
+   900→    direction_score += (pos_ratio - 0.5) * 0.3
+   901→    # RSI contribution
+   902→    rsi_val = rsi(prices)
+   903→    direction_score += (rsi_val - 50) / 100.0 * 0.5
+   904→
+   905→    # --- Volatility-based ---
+   906→    if len(rets) >= 10:
+   907→        vol = _stdev(rets[-10:])
+   908→    else:
+   909→        vol = _stdev(rets)
+   910→
+   911→    # High volatility regime scoring
+   912→    vol_score = min(1.0, vol * 10)  # normalize
+   913→
+   914→    # --- Classify into 5 regimes ---
+   915→    # Thresholds
+   916→    strong_trend_threshold = 0.4  # ADX equivalent
+   917→    moderate_trend_threshold = 0.2
+   918→
+   919→    # Regime probabilities (softmax-like)
+   920→    regimes = ["strong_bull", "weak_bull", "sideways", "weak_bear", "strong_bear"]
+   921→    scores = {}
+   922→
+   923→    # Strong bull: high trend + positive direction + high vol
+   924→    scores["strong_bull"] = (
+   925→        max(0, trend_strength - moderate_trend_threshold) * 2.0 +
+   926→        max(0, direction_score) * 1.5 +
+   927→        vol_score * 0.3
+   928→    )
+   929→
+   930→    # Weak bull: moderate trend + positive direction + low vol
+   931→    scores["weak_bull"] = (
+   932→        max(0, trend_strength - moderate_trend_threshold * 0.5) * 1.0 +
+   933→        max(0, direction_score) * 1.0 +
+   934→        (1 - vol_score) * 0.3
+   935→    )
+   936→
+   937→    # Sideways: low trend + low direction
+   938→    scores["sideways"] = (
+   939→        (1 - trend_strength) * 1.5 +
+   940→        (1 - min(1, abs(direction_score) * 3)) * 1.0 +
+   941→        (1 - vol_score) * 0.2
+   942→    )
+   943→
+   944→    # Weak bear: moderate trend + negative direction + low vol
+   945→    scores["weak_bear"] = (
+   946→        max(0, trend_strength - moderate_trend_threshold * 0.5) * 1.0 +
+   947→        max(0, -direction_score) * 1.0 +
+   948→        (1 - vol_score) * 0.3
+   949→    )
+   950→
+   951→    # Strong bear: high trend + negative direction + high vol
+   952→    scores["strong_bear"] = (
+   953→        max(0, trend_strength - moderate_trend_threshold) * 2.0 +
+   954→        max(0, -direction_score) * 1.5 +
+   955→        vol_score * 0.3
+   956→    )
+   957→
+   958→    # Softmax to get probabilities
+   959→    max_score = max(scores.values())
+   960→    exp_scores = {r: math.exp(s - max_score) for r, s in scores.items()}
+   961→    total = sum(exp_scores.values())
+   962→    probs = {r: round(exp_scores[r] / total, 4) for r in regimes}
+   963→
+   964→    # Determine dominant regime
+   965→    best_regime = max(regimes, key=lambda r: probs[r])
+   966→
+   967→    return {
+   968→        "regime": best_regime,
+   969→        "probabilities": probs,
+   970→    }
+   971→
+   972→
+   973→# ─────────────────────────────────────────────────────────────────────────────
+   974→# Endpoint 4: Divergence Detection
+   975→# ─────────────────────────────────────────────────────────────────────────────
+   976→
+   977→
+   978→def detect_divergence(prices, indicator_values, indicator_name="rsi"):
+   979→    """Detect bullish/bearish divergence between price and an indicator."""
+   980→    min_len = 10
+   981→    if len(prices) < min_len or len(indicator_values) < min_len:
+   982→        return {"type": "none", "strength": 0.0, "start_idx": -1}
+   983→
+   984→    # Align lengths
+   985→    n = min(len(prices), len(indicator_values))
+   986→    p = prices[-n:]
+   987→    ind = indicator_values[-n:]
+   988→
+   989→    # Find recent swing highs and lows in price
+   990→    lookback = min(n, 30)
+   991→    window_p = p[-lookback:]
+   992→    window_ind = ind[-lookback:]
+   993→
+   994→    # Find local maxima and minima (at least 3 bars apart)
+   995→    def find_extrema(values, min_distance=3):
+   996→        highs = []
+   997→        lows = []
+   998→        for i in range(1, len(values) - 1):
+   999→            is_high = True
+  1000→            is_low = True
+  1001→            for j in range(max(0, i - min_distance), min(len(values), i + min_distance + 1)):
+  1002→                if values[j] > values[i]:
+  1003→                    is_high = False
+  1004→                if values[j] < values[i]:
+  1005→                    is_low = False
+  1006→            if is_high and (not highs or i - highs[-1][0] >= min_distance):
+  1007→                highs.append((i, values[i]))
+  1008→            if is_low and (not lows or i - lows[-1][0] >= min_distance):
+  1009→                lows.append((i, values[i]))
+  1010→        return highs, lows
+  1011→
+  1012→    p_highs, p_lows = find_extrema(window_p)
+  1013→    i_highs, i_lows = find_extrema(window_ind)
+  1014→
+  1015→    # --- Check bearish divergence (price higher high, indicator lower high) ---
+  1016→    bearish_strength = 0.0
+  1017→    bearish_start = -1
+  1018→
+  1019→    if len(p_highs) >= 2 and len(i_highs) >= 2:
+  1020→        # Match the last two highs
+  1021→        ph_last = p_highs[-1]
+  1022→        ph_prev = p_highs[-2]
+  1023→        ih_last = i_highs[-1]
+  1024→        ih_prev = i_highs[-2]
+  1025→
+  1026→        # Price makes higher high, indicator makes lower high
+  1027→        if ph_last[1] > ph_prev[1] and ih_last[1] < ih_prev[1]:
+  1028→            price_diff = (ph_last[1] - ph_prev[1]) / ph_prev[1] if ph_prev[1] != 0 else 0
+  1029→            ind_diff = (ih_prev[1] - ih_last[1]) / ih_prev[1] if ih_prev[1] != 0 else 0
+  1030→            bearish_strength = min(1.0, (price_diff + ind_diff) * 10)
+  1031→            bearish_start = ph_prev[0]
+  1032→
+  1033→    # --- Check bullish divergence (price lower low, indicator higher low) ---
+  1034→    bullish_strength = 0.0
+  1035→    bullish_start = -1
+  1036→
+  1037→    if len(p_lows) >= 2 and len(i_lows) >= 2:
+  1038→        pl_last = p_lows[-1]
+  1039→        pl_prev = p_lows[-2]
+  1040→        il_last = i_lows[-1]
+  1041→        il_prev = i_lows[-2]
+  1042→
+  1043→        # Price makes lower low, indicator makes higher low
+  1044→        if pl_last[1] < pl_prev[1] and il_last[1] > il_prev[1]:
+  1045→            price_diff = (pl_prev[1] - pl_last[1]) / pl_prev[1] if pl_prev[1] != 0 else 0
+  1046→            ind_diff = (il_last[1] - il_prev[1]) / il_prev[1] if il_prev[1] != 0 else 0
+  1047→            bullish_strength = min(1.0, (price_diff + ind_diff) * 10)
+  1048→            bullish_start = pl_prev[0]
+  1049→
+  1050→    # Also check for simpler slope-based divergence
+  1051→    if bearish_strength == 0 and bullish_strength == 0 and len(window_p) >= 10:
+  1052→        # Compare slopes of price and indicator over the window
+  1053→        p_slope = (window_p[-1] - window_p[-10]) / window_p[-10] if window_p[-10] != 0 else 0
+  1054→        i_slope = (window_ind[-1] - window_ind[-10]) / abs(window_ind[-10]) if window_ind[-10] != 0 else 0
+  1055→
+  1056→        # Normalize indicator slope
+  1057→        ind_range = max(window_ind) - min(window_ind)
+  1058→        if ind_range > 0:
+  1059→            i_slope_norm = (window_ind[-1] - window_ind[-10]) / ind_range
+  1060→        else:
+  1061→            i_slope_norm = 0
+  1062→
+  1063→        p_range = max(window_p) - min(window_p)
+  1064→        if p_range > 0:
+  1065→            p_slope_norm = (window_p[-1] - window_p[-10]) / p_range
+  1066→        else:
+  1067→            p_slope_norm = 0
+  1068→
+  1069→        # Divergence: opposite slopes
+  1070→        if p_slope_norm > 0.1 and i_slope_norm < -0.1:
+  1071→            bearish_strength = min(1.0, abs(p_slope_norm) + abs(i_slope_norm))
+  1072→            bearish_start = len(window_p) - 10
+  1073→        elif p_slope_norm < -0.1 and i_slope_norm > 0.1:
+  1074→            bullish_strength = min(1.0, abs(p_slope_norm) + abs(i_slope_norm))
+  1075→            bullish_start = len(window_p) - 10
+  1076→
+  1077→    # Determine result
+  1078→    min_strength_threshold = 0.15
+  1079→    if bullish_strength > bearish_strength and bullish_strength >= min_strength_threshold:
+  1080→        return {
+  1081→            "type": "bullish",
+  1082→            "strength": round(bullish_strength, 4),
+  1083→            "start_idx": bullish_start,
+  1084→        }
+  1085→    elif bearish_strength > bullish_strength and bearish_strength >= min_strength_threshold:
+  1086→        return {
+  1087→            "type": "bearish",
+  1088→            "strength": round(bearish_strength, 4),
+  1089→            "start_idx": bearish_start,
+  1090→        }
+  1091→    else:
+  1092→        return {
+  1093→            "type": "none",
+  1094→            "strength": 0.0,
+  1095→            "start_idx": -1,
+  1096→        }
+  1097→
+  1098→
+  1099→# ─────────────────────────────────────────────────────────────────────────────
+  1100→# HTTP Server
+  1101→# ─────────────────────────────────────────────────────────────────────────────
+  1102→
+  1103→
+  1104→class MLHandler(BaseHTTPRequestHandler):
+  1105→    """HTTP request handler for ML service."""
+  1106→
+  1107→    def _send_cors_headers(self):
+  1108→        self.send_header("Access-Control-Allow-Origin", "*")
+  1109→        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+  1110→        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+  1111→        self.send_header("Content-Type", "application/json")
+  1112→
+  1113→    def _send_json(self, data, status=200):
+  1114→        body = json.dumps(data).encode("utf-8")
+  1115→        self.send_response(status)
+  1116→        self._send_cors_headers()
+  1117→        self.send_header("Content-Length", str(len(body)))
+  1118→        self.end_headers()
+  1119→        self.wfile.write(body)
+  1120→
+  1121→    def _send_error(self, msg, status=400):
+  1122→        self._send_json({"error": msg}, status)
+  1123→
+  1124→    def _read_body(self):
+  1125→        length = int(self.headers.get("Content-Length", 0))
+  1126→        if length == 0:
+  1127→            return None
+  1128→        raw = self.rfile.read(length)
+  1129→        try:
+  1130→            return json.loads(raw)
+  1131→        except (json.JSONDecodeError, UnicodeDecodeError):
+  1132→            return None
+  1133→
+  1134→    def do_OPTIONS(self):
+  1135→        self.send_response(204)
+  1136→        self._send_cors_headers()
+  1137→        self.send_header("Content-Length", "0")
+  1138→        self.end_headers()
+  1139→
+  1140→    def do_GET(self):
+  1141→        path = urlparse(self.path).path
+  1142→        if path == "/health":
+  1143→            self._send_json({"status": "ok", "service": "ml-service", "port": PORT})
+  1144→        else:
+  1145→            self._send_error("Not found", 404)
+  1146→
+  1147→    def do_POST(self):
+  1148→        path = urlparse(self.path).path
+  1149→        body = self._read_body()
+  1150→
+  1151→        if body is None:
+  1152→            self._send_error("Invalid JSON body")
+  1153→            return
+  1154→
+  1155→        try:
+  1156→            if path == "/predict":
+  1157→                self._handle_predict(body)
+  1158→            elif path == "/weights":
+  1159→                self._handle_weights(body)
+  1160→            elif path == "/regime":
+  1161→                self._handle_regime(body)
+  1162→            elif path == "/divergence":
+  1163→                self._handle_divergence(body)
+  1164→            else:
+  1165→                self._send_error(f"Unknown endpoint: {path}", 404)
+  1166→        except Exception as e:
+  1167→            self._send_error(f"Internal error: {str(e)}", 500)
+  1168→
+  1169→    # ---- Endpoint handlers ----
+  1170→
+  1171→    def _handle_predict(self, body):
+  1172→        prices = body.get("prices")
+  1173→        volume = body.get("volume")
+  1174→        steps = body.get("steps", 5)
+  1175→
+  1176→        if not isinstance(prices, list) or len(prices) < 2:
+  1177→            self._send_error("'prices' must be an array with at least 2 numbers")
+  1178→            return
+  1179→        if not all(isinstance(p, (int, float)) for p in prices):
+  1180→            self._send_error("All price values must be numbers")
+  1181→            return
+  1182→        if any(p <= 0 for p in prices):
+  1183→            self._send_error("All prices must be positive")
+  1184→            return
+  1185→        if volume is not None:
+  1186→            if not isinstance(volume, list) or len(volume) < 2:
+  1187→                self._send_error("'volume' must be an array with at least 2 numbers or null")
+  1188→                return
+  1189→            if not all(isinstance(v, (int, float)) for v in volume):
+  1190→                self._send_error("All volume values must be numbers")
+  1191→                return
+  1192→        if not isinstance(steps, int) or steps < 1 or steps > 30:
+  1193→            self._send_error("'steps' must be an integer between 1 and 30")
+  1194→            return
+  1195→
+  1196→        result = ensemble_predict(list(prices), list(volume) if volume else None, steps)
+  1197→        self._send_json(result)
+  1198→
+  1199→    def _handle_weights(self, body):
+  1200→        features = body.get("features")
+  1201→        regime = body.get("regime", "sideways")
+  1202→        has_volume = body.get("has_volume", True)
+  1203→
+  1204→        if not isinstance(features, dict):
+  1205→            self._send_error("'features' must be an object")
+  1206→            return
+  1207→        if not isinstance(regime, str):
+  1208→            self._send_error("'regime' must be a string")
+  1209→            return
+  1210→        if not isinstance(has_volume, bool):
+  1211→            self._send_error("'has_volume' must be a boolean")
+  1212→            return
+  1213→
+  1214→        # Validate feature values are numbers
+  1215→        for k, v in features.items():
+  1216→            if v is not None and not isinstance(v, (int, float)):
+  1217→                self._send_error(f"Feature '{k}' must be a number or null")
+  1218→                return
+  1219→
+  1220→        result = compute_bayesian_weights(features, regime, has_volume)
+  1221→        self._send_json(result)
+  1222→
+  1223→    def _handle_regime(self, body):
+  1224→        prices = body.get("prices")
+  1225→
+  1226→        if not isinstance(prices, list) or len(prices) < 5:
+  1227→            self._send_error("'prices' must be an array with at least 5 numbers")
+  1228→            return
+  1229→        if not all(isinstance(p, (int, float)) for p in prices):
+  1230→            self._send_error("All price values must be numbers")
+  1231→            return
+  1232→        if any(p <= 0 for p in prices):
+  1233→            self._send_error("All prices must be positive")
+  1234→            return
+  1235→
+  1236→        result = detect_regime(list(prices))
+  1237→        self._send_json(result)
+  1238→
+  1239→    def _handle_divergence(self, body):
+  1240→        prices = body.get("prices")
+  1241→        indicator_values = body.get("indicator_values")
+  1242→        indicator_name = body.get("indicator_name", "rsi")
+  1243→
+  1244→        if not isinstance(prices, list) or len(prices) < 5:
+  1245→            self._send_error("'prices' must be an array with at least 5 numbers")
+  1246→            return
+  1247→        if not isinstance(indicator_values, list) or len(indicator_values) < 5:
+  1248→            self._send_error("'indicator_values' must be an array with at least 5 numbers")
+  1249→            return
+  1250→        if not all(isinstance(p, (int, float)) for p in prices):
+  1251→            self._send_error("All price values must be numbers")
+  1252→            return
+  1253→        if not all(isinstance(v, (int, float)) for v in indicator_values):
+  1254→            self._send_error("All indicator_values must be numbers")
+  1255→            return
+  1256→
+  1257→        result = detect_divergence(
+  1258→            list(prices), list(indicator_values), indicator_name
+  1259→        )
+  1260→        self._send_json(result)
+  1261→
+  1262→    def log_message(self, format, *args):
+  1263→        """Suppress default logging for cleaner output."""
+  1264→        pass
+  1265→
+  1266→
+  1267→# ─────────────────────────────────────────────────────────────────────────────
+  1268→# Main
+  1269→# ─────────────────────────────────────────────────────────────────────────────
+  1270→
+  1271→
+  1272→def main():
+  1273→    server = HTTPServer(("0.0.0.0", PORT), MLHandler)
+  1274→    print(f"ML Service running on http://0.0.0.0:{PORT}", flush=True)
+  1275→    print(f"Endpoints: POST /predict, POST /weights, POST /regime, POST /divergence", flush=True)
+  1276→    try:
+  1277→        server.serve_forever()
+  1278→    except KeyboardInterrupt:
+  1279→        print("\nShutting down ML Service.", flush=True)
+  1280→        server.server_close()
+  1281→
+  1282→
+  1283→if __name__ == "__main__":
+  1284→    main()
+  1285→
