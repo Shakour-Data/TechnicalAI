@@ -5,12 +5,22 @@
 
 // ─── Types & Constants ─────────────────────────────────────────────────────────
 
+/**
+ * Open-High-Low-Close-Volume data for a single candle.
+ * The fundamental input type for all technical indicator calculations.
+ */
 export interface OHLCV {
+  /** Date string (YYYY-MM-DD or YYYY/MM/DD) */
   date: string;
+  /** Opening price */
   open: number;
+  /** Highest price */
   high: number;
+  /** Lowest price */
   low: number;
+  /** Closing price */
   close: number;
+  /** Trading volume (0 if unavailable) */
   volume: number;
 }
 
@@ -27,6 +37,12 @@ export const VOLUME_DEPENDENT_INDICATORS: ReadonlySet<string> = new Set([
   'vwma20',
 ]);
 
+/**
+ * All computed technical indicators for a single trading day.
+ * Contains 60+ indicator values organized by category:
+ * OHLCV data, Moving Averages, Ichimoku Cloud, Heiken Ashi,
+ * Oscillators, Volatility, and Volume indicators.
+ */
 export interface DailyIndicators {
   // ── OHLCV Data ──
   date: string;
@@ -35,7 +51,7 @@ export interface DailyIndicators {
   low: number;
   close: number;
   volume: number;
-  /** True when all candles have volume > 0 */
+  /** True when all candles in the dataset have volume > 0 */
   hasVolume: boolean;
 
   // ── Trend: Moving Averages (13) ──
@@ -899,6 +915,31 @@ function vwapArray(highs: number[], lows: number[], closes: number[], volumes: n
 // MAIN: Compute all indicators per day
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Compute 60+ technical indicators for each candle in the OHLCV array.
+ *
+ * This is the main entry point for the indicator calculator. It computes all
+ * indicators in a single pass and returns an array of DailyIndicators objects,
+ * one per candle, with all indicator values pre-calculated.
+ *
+ * **Indicator categories (60+ total):**
+ * - **Moving Averages (13):** SMA(10,21,50,100,200), EMA(9,12,26), VWMA(20), WMA(20), HMA(20), TMA(20), LMA(20)
+ * - **Ichimoku Cloud (4):** Tenkan-sen, Kijun-sen, Senkou Span A, Senkou Span B
+ * - **Heiken Ashi (4):** HA-Open, HA-High, HA-Low, HA-Close
+ * - **Oscillators (20):** RSI(14), Stochastic(14,3), StochRSI(14,14,3), Williams %R(14),
+ *   Momentum(10), ROC(12), TRIX(9), CCI(20), MFI(14), MACD(12,26,9),
+ *   ADX(14), DMI+/DMI-, SAR, Awesome Oscillator, Fisher Transform
+ * - **Volatility (12):** ATR(14), Bollinger Bands(20,2), Keltner Channels(20,2),
+ *   Envelope(20,2.5), Historical Volatility(20), StdDev(20)
+ * - **Volume (7):** OBV, VPT, VOSC(12,26), Chaikin AD, Force Index(13), VAP(20), VWAP
+ *
+ * **Volume-aware:** When all candles have volume > 0, `hasVolume` is true and
+ * volume-dependent indicators (MFI, OBV, VPT, VOSC, Chaikin AD, Force Index, VAP, VWAP, VWMA)
+ * are computed. Otherwise they are set to 0.
+ *
+ * @param candles - Array of OHLCV data in chronological order (oldest first)
+ * @returns Array of DailyIndicators, one per candle, with all 60+ indicator values
+ */
 export function computeDailyIndicators(candles: OHLCV[]): DailyIndicators[] {
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);

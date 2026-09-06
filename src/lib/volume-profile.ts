@@ -13,6 +13,12 @@ import type { OHLCV } from './ta-engine';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * A single price bin in the volume profile histogram.
+ *
+ * Each bin represents an equal-width slice of the overall price range,
+ * with accumulated volume from all OHLCV bars that fall within it.
+ */
 export interface VolumeBin {
   /** Lower bound of this price bin */
   priceLow: number;
@@ -28,6 +34,12 @@ export interface VolumeBin {
   cumulativePercent: number;
 }
 
+/**
+ * Result of the approximate volume profile computation.
+ *
+ * Contains the full histogram of price bins plus key derived metrics:
+ * POC (Point of Control), Value Area, and VWAP.
+ */
 export interface VolumeProfileResult {
   /** All bins sorted by price (ascending) */
   bins: VolumeBin[];
@@ -42,6 +54,13 @@ export interface VolumeProfileResult {
   totalVolume: number;
 }
 
+/**
+ * Result of counting how many times price touches a support/resistance level.
+ *
+ * A "touch" occurs when a bar's High or Low falls within a tolerance band
+ * of the specified level. Each touch is recorded with its date, type,
+ * exact price, and distance from the level.
+ */
 export interface TouchCountResult {
   /** Number of times High or Low touched within tolerance of the level */
   touchCount: number;
@@ -69,6 +88,35 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 //      with tails extending to high and low
 //   3. Compute POC, Value Area, and VWAP from the resulting histogram
 
+/**
+ * Build an approximate volume profile from OHLCV data.
+ *
+ * Distributes each bar's volume across N equal-width price bins using
+ * a body/wick weighting scheme:
+ * - 70% of the bar's volume is allocated to bins spanned by the body
+ *   (the range between open and close).
+ * - 30% is allocated to bins spanned by the wicks (high–body and body–low).
+ *
+ * From the resulting histogram, derives:
+ * - **POC** (Point of Control): the price bin with the highest volume.
+ * - **Value Area**: the price range containing 70% of total volume,
+ *   expanded outward from the POC bin by always adding the heavier
+ *   adjacent bin until the 70% threshold is reached.
+ * - **VWAP**: volume-weighted average price using typical price
+ *   (high + low + close) / 3.
+ *
+ * @param data    - Array of OHLCV bars to process.
+ * @param numBins - Number of equal-width price bins to divide the range into.
+ *                  Defaults to 100. Must be ≥ 1.
+ * @returns A {@link VolumeProfileResult} containing the histogram bins,
+ *          POC, Value Area high/low, VWAP, and total volume.
+ *
+ * @example
+ * ```ts
+ * const result = approximateVolumeProfile(ohlcvData, 100);
+ * console.log(`POC: ${result.poc}, VA: ${result.valueAreaLow}–${result.valueAreaHigh}`);
+ * ```
+ */
 export function approximateVolumeProfile(
   data: OHLCV[],
   numBins: number = 100,
@@ -218,6 +266,32 @@ export function approximateVolumeProfile(
 // Counts how many times price (High or Low) touches a given S/R level
 // within a tolerance band. No Level-2 data needed — only OHLCV.
 
+/**
+ * Count how many times price touches a support/resistance level.
+ *
+ * A "touch" is registered when a bar's **High** or **Low** falls within
+ * a tolerance band of the given level. The tolerance band is calculated
+ * as `level × (tolerancePercent / 100)`. If both High and Low of the
+ * same bar are within tolerance, only the closer one is counted to
+ * avoid double-counting.
+ *
+ * Also computes the total volume at touch points and the ratio of
+ * average touch-volume to overall average volume (useful for gauging
+ * whether touches occurred on high- or low-volume bars).
+ *
+ * @param level           - The support/resistance price level to test.
+ * @param data            - Array of OHLCV bars to scan for touches.
+ * @param tolerancePercent - Tolerance as a percentage of the level price.
+ *                          Defaults to 0.2 (i.e. ±0.2% of the level).
+ * @returns A {@link TouchCountResult} with the touch count, per-touch
+ *          details, volume metrics, and days since the most recent touch.
+ *
+ * @example
+ * ```ts
+ * const touches = countTouch(150.00, ohlcvData, 0.3);
+ * console.log(`${touches.touchCount} touches, last was ${touches.daysSinceLastTouch} days ago`);
+ * ```
+ */
 export function countTouch(
   level: number,
   data: OHLCV[],
@@ -274,6 +348,26 @@ export function countTouch(
 // Get the volume profile value at a specific price level.
 // Uses bilinear interpolation between adjacent bins.
 
+/**
+ * Get the volume profile concentration at a specific price level.
+ *
+ * Looks up the bin that contains the given price and returns its
+ * `volumePercent` (fraction of total volume in that bin). If the price
+ * falls outside the profile range, the nearest edge bin's value is
+ * returned.
+ *
+ * @param profile - A previously computed {@link VolumeProfileResult}.
+ * @param price   - The price level to query.
+ * @returns The volume fraction (0–1) at the given price, or 0 if the
+ *          profile has no bins.
+ *
+ * @example
+ * ```ts
+ * const profile = approximateVolumeProfile(ohlcvData);
+ * const volFrac = volumeAtLevel(profile, 152.50);
+ * console.log(`Volume concentration at 152.50: ${(volFrac * 100).toFixed(2)}%`);
+ * ```
+ */
 export function volumeAtLevel(
   profile: VolumeProfileResult,
   price: number,
@@ -300,6 +394,17 @@ export function volumeAtLevel(
 //   - Distance from current price (closer = more relevant)
 //   - Freshness of last touch
 
+/**
+ * Result of the enhanced support/resistance strength calculation.
+ *
+ * Combines four sub-scores into a single composite strength value (0–1):
+ * - **touchScore**: how many times the level was touched (normalized).
+ * - **volumeScore**: volume profile concentration at the level.
+ * - **distanceScore**: proximity to current price (closer = stronger).
+ * - **freshness**: recency of the most recent touch.
+ *
+ * Also includes the raw touch details and a human-readable description.
+ */
 export interface EnhancedSRStrengthResult {
   /** Overall strength 0-1 */
   strength: number;
@@ -317,6 +422,38 @@ export interface EnhancedSRStrengthResult {
   description: string;
 }
 
+/**
+ * Calculate the enhanced strength of a support/resistance level.
+ *
+ * Produces a composite score in [0, 1] by combining four sub-scores:
+ *
+ * | Sub-score       | Weight | Description |
+ * |-----------------|--------|-------------|
+ * | `touchScore`    | 0.35   | Touch count normalized by `lookback / 5` (expected max touches). |
+ * | `volumeScore`   | 0.25   | Volume profile concentration at the level relative to the peak bin. |
+ * | `distanceScore` | 0.20   | Exponential decay: `exp(-distancePercent × 20)`, where distance is `%` from `currentPrice`. |
+ * | `freshness`     | 0.20   | Linear decay: `1 − daysSinceLastTouch / lookback`. |
+ *
+ * The final `strength` is the weighted sum, clamped to [0, 1].
+ *
+ * @param level           - The support/resistance price level to evaluate.
+ * @param data            - Full array of OHLCV bars (only the last `lookback` bars are used).
+ * @param currentPrice    - The current market price, used to compute the distance penalty.
+ * @param volumeProfile   - A pre-computed {@link VolumeProfileResult} for the data.
+ * @param lookback        - Number of recent bars to consider for touch counting.
+ *                          Defaults to 50.
+ * @param tolerancePercent - Tolerance as a percentage of the level for touch detection.
+ *                          Defaults to 0.2 (±0.2%).
+ * @returns An {@link EnhancedSRStrengthResult} with the overall strength,
+ *          all four sub-scores, detailed touch info, and a description string.
+ *
+ * @example
+ * ```ts
+ * const profile = approximateVolumeProfile(ohlcvData);
+ * const strength = calculateEnhancedSRStrength(150.00, ohlcvData, 148.50, profile);
+ * console.log(`S/R strength: ${(strength.strength * 100).toFixed(1)}%`);
+ * ```
+ */
 export function calculateEnhancedSRStrength(
   level: number,
   data: OHLCV[],

@@ -1,10 +1,68 @@
+/**
+ * @module API /api/analysis
+ * @description Main technical analysis endpoint. Returns candlestick data, symbol info,
+ *   full technical analysis (via ta-engine), and a probability trend forecast for a given
+ *   TSE (Tehran Stock Exchange) symbol or TSETMC index.
+ *
+ * Two data-source paths are supported:
+ *   1. **Index path** — when `indexInsCode` query param is provided, candle data is
+ *      fetched from the TSETMC index history API (`fetchTsetmcIndexHistory`).
+ *   2. **TSE instrument path** (default) — when only `symbol` is provided, candle data
+ *      is fetched from the BrsApi candlestick endpoint (`fetchCandlestick`).
+ *
+ * Both paths convert raw candles to {@link OHLCV} format, run them through
+ * `analyze()` from `@/lib/ta-engine`, compute historical probability snapshots via
+ * `computeHistoricalProbabilities()`, and build a probability trend via
+ * `buildTrendFromDailySnapshots()` from `@/lib/probability-trend`.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCandlestick, fetchSymbolData, fetchTsetmcIndexHistory, type CandleData } from '@/lib/tse-api';
 import type { OHLCV } from '@/lib/ta-engine';
 import { detectDecimals, getCurrencyUnit } from '@/lib/format-price';
 
+/** Force dynamic rendering — never cache at the Next.js edge. */
 export const dynamic = 'force-dynamic';
 
+/**
+ * GET /api/analysis — Retrieve full technical analysis for a TSE symbol or index.
+ *
+ * @description
+ * Processing steps:
+ *   1. Parse `symbol` (required) and `indexInsCode` (optional) from query string.
+ *   2. **Index path** (indexInsCode present):
+ *      a. Fetch historical candles from TSETMC via `fetchTsetmcIndexHistory`.
+ *      b. Map to OHLCV, run `analyze(ohlcv, 'واحد')`.
+ *      c. Compute `probabilityTrend` from 30-day historical snapshots.
+ *      d. Derive `info` from last/previous candle (price, change, volume, etc.).
+ *   3. **TSE instrument path** (no indexInsCode):
+ *      a. Fetch candles from BrsApi via `fetchCandlestick(symbol, 3)` and symbol
+ *         metadata via `fetchSymbolData(symbol)` in parallel.
+ *      b. Reverse candles (BrsApi returns newest-first), map to OHLCV.
+ *      c. Run `analyze(ohlcv, 'ریال')`.
+ *      d. Compute `probabilityTrend` from 30-day historical snapshots.
+ *      e. Merge `info` from symbol metadata with candle-derived fallback values.
+ *   4. Return JSON with `symbol`, `candles`, `info`, `ta`, and `probabilityTrend`.
+ *
+ * @param  req - Next.js incoming request (query params parsed from `req.nextUrl`).
+ *
+ * @query  symbol        - (required) TSE symbol string, e.g. "فولاد" or an index name.
+ * @query  indexInsCode  - (optional) TSETMC instrument code; when present the index
+ *                         data-source path is used instead of BrsApi.
+ *
+ * @returns JSON response:
+ *   - **200** `{ symbol, candles, info, ta, probabilityTrend }`
+ *     - `candles` — array of candle objects (order depends on data source).
+ *     - `info` — symbol metadata object (name, lastPrice, change, volume, eps, pe, …)
+ *               or `null` for index path with no data.
+ *     - `ta` — full technical analysis result from `analyze()`.
+ *     - `probabilityTrend` — trend forecast object from `buildTrendFromDailySnapshots()`
+ *               or `undefined` on computation failure.
+ *   - **400** `{ error: "symbol is required" }`
+ *   - **404** `{ error: "No candle data found" }` or Persian not-found message.
+ *   - **502** `{ error: "…" }` — generic upstream error (Persian message).
+ *   - **503** `{ error: "سرور داده در دسترس نیست…" }` — TSE data timeout.
+ */
 export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol');
   if (!symbol) return NextResponse.json({ error: 'symbol is required' }, { status: 400 });
@@ -18,7 +76,13 @@ export async function GET(req: NextRequest) {
     const probTrend = await import('@/lib/probability-trend');
     const { buildTrendFromDailySnapshots } = probTrend;
 
-    // If indexInsCode is provided, fetch from TSETMC instead of BrsApi
+    /*
+     * ── Index path (indexInsCode provided) ─────────────────────────────
+     * Fetches candle data from TSETMC index history, converts to OHLCV,
+     * runs ta-engine analyze() with currency unit 'واحد' (unit), computes
+     * probabilityTrend from 30-day historical snapshots, and derives
+     * info fields from the last two candles.
+     */
     if (indexInsCode) {
       const tsetmcCandles = await fetchTsetmcIndexHistory(indexInsCode);
 
@@ -34,8 +98,11 @@ export async function GET(req: NextRequest) {
           volume: Number(c.volume) || 0,
         }));
 
+        // Run full technical analysis via ta-engine (indicators, signals, scenarios, S/R)
         const ta = analyze(ohlcv, 'واحد');
 
+        // Compute probability trend from 30-day rolling historical snapshots.
+        // Falls back to undefined if snapshot count ≤ 1 or on computation error.
         let probabilityTrend;
         try {
           const dailySnapshots = computeHistoricalProbabilities(ohlcv, 30);
@@ -90,6 +157,13 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    /*
+     * ── TSE instrument path (default) ────────────────────────────────
+     * Fetches candles from BrsApi and symbol metadata in parallel.
+     * Reverses candles (BrsApi returns newest-first), maps to OHLCV,
+     * runs ta-engine analyze() with currency unit 'ریال' (Rial), computes
+     * probabilityTrend, and merges symbol info with candle fallbacks.
+     */
     // Regular instrument: use BrsApi
     const [candles, symbolInfo] = await Promise.all([
       fetchCandlestick(symbol, 3),
@@ -111,8 +185,11 @@ export async function GET(req: NextRequest) {
       volume: Number(c.volume) || 0,
     }));
 
+    // Run full technical analysis via ta-engine (indicators, signals, scenarios, S/R)
     const ta = analyze(ohlcv, 'ریال');
 
+    // Compute probability trend from 30-day rolling historical snapshots.
+    // Falls back to undefined if snapshot count ≤ 1 or on computation error.
     let probabilityTrend;
     try {
       const dailySnapshots = computeHistoricalProbabilities(ohlcv, 30);
@@ -167,6 +244,7 @@ export async function GET(req: NextRequest) {
       probabilityTrend,
     });
   } catch (err) {
+    // Error classification: timeout → 503, not-found → 404, everything else → 502
     const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
     console.error(`[analysis] Error for symbol=${symbol}:`, msg);
     const isTimeout = msg.includes('Timeout') || msg.includes('timeout') || msg.includes('زمان') || msg.includes('اتصال');

@@ -1,11 +1,78 @@
-// =============================================================================
-// Decision Graph Probability Engine — Technical Analysis System
-// =============================================================================
-// This module replaces the old 12-node graph and heuristic probability system.
-// The decision graph IS the primary probability engine — all 9 scenario
-// probabilities (SC1–SC9) are derived from aggregating path probabilities through
-// this directed acyclic graph (DAG).
-// =============================================================================
+/**
+ * @module decision-graph
+ *
+ * Decision Graph Probability Engine — Technical Analysis System
+ * =============================================================================
+ *
+ * This module is the **primary probability engine** for the technical analysis system.
+ * All 9 scenario probabilities (SC1–SC9) are derived by aggregating path
+ * probabilities through a **directed acyclic graph (DAG)**.
+ *
+ * ## DAG Structure Overview
+ *
+ * The graph contains **34 nodes** across 5 layers and **55+ edges**:
+ *
+ * | Layer | Description                          | Nodes                         |
+ * |-------|--------------------------------------|-------------------------------|
+ * | 0     | Root decision point                  | `ROOT`                        |
+ * | 1     | Three main strategy branches         | `N_TREND`, `N_BREAK`, `N_REVERSAL` |
+ * | 2     | Directional sub-branches (9 nodes)  | Bull/Bear/Flat per branch     |
+ * | 3     | Assessment/event nodes (19 nodes)   | Momentum, volume, divergence… |
+ * | 4     | Terminal scenario nodes (9 nodes)    | `SC1`–`SC9`                   |
+ *
+ * ## Three Strategy Branches
+ *
+ * 1. **Trend Following** (`branch: 'trend'`) — Driven by ADX trend strength,
+ *    bull consensus, and momentum indicators. Sub-branches: Bullish, Bearish, Flat.
+ *
+ * 2. **Breakout** (`branch: 'breakout'`) — Driven by support/resistance proximity,
+ *    volume confirmation, and price distance to S/R levels. Sub-branches:
+ *    Bullish Breakout, Bearish Breakout, No Breakout.
+ *
+ * 3. **Reversal** (`branch: 'reversal'`) — Driven by oscillator extremes,
+ *    divergence proxies, and overbought/oversold conditions. Sub-branches:
+ *    Bullish Reversal, Bearish Reversal, No Reversal.
+ *
+ * ## Scenario Terminal Nodes (SC1–SC9)
+ *
+ * Ordered from most bearish to most bullish:
+ * - **SC1** — Bearish Shock (sudden severe drop)
+ * - **SC2** — Accelerating Bearish (strong downtrend momentum)
+ * - **SC3** — Strong Bearish (sustained downtrend)
+ * - **SC4** — Weak Bearish (mild downtrend, possible reversal)
+ * - **SC5** — Range-bound (no clear direction)
+ * - **SC6** — Weak Bullish (mild uptrend, correction risk)
+ * - **SC7** — Strong Bullish (sustained uptrend)
+ * - **SC8** — Accelerating Bullish (strong uptrend momentum)
+ * - **SC9** — Bullish Shock (sudden severe rally)
+ *
+ * ## The IRON LAW: `enforceSumTo100()`
+ *
+ * All 9 scenario probabilities are converted to **integers that sum to EXACTLY 100**
+ * using the **Largest Remainder Method (LRM)** with iterative bound enforcement.
+ * This guarantees `sum(SC1..SC9) === 100` and `2 ≤ SCi ≤ 35` for all i.
+ * **Never bypass this function** when producing integer scenario percentages.
+ *
+ * @example
+ * ```ts
+ * import { buildDecisionGraph } from './decision-graph';
+ *
+ * const result = buildDecisionGraph({
+ *   price: 65000, bullConsensus: 0.65, rsi: 58, mfi: 55, cci: 80,
+ *   stochK: 62, stochD: 58, adx: 28, diPlus: 22, diMinus: 14,
+ *   macdHist: 150, atr: 1200, bbUpper: 67000, bbMiddle: 65000, bbLower: 63000,
+ *   sar: 64500, ichimokuTenkan: 65200, ichimokuKijun: 64800,
+ *   ichimokuSenkouA: 64600, ichimokuSenkouB: 64400,
+ *   maAlignment: 0.7, momentum: 12, awesomeOsc: 5, fisherTransform: 0.8,
+ *   confidenceIndex: 0.6, strengthIndex: 0.55, hasVolume: true,
+ *   distToR1: 0.02, distToS1: 0.03, srAvgStrength: 0.5,
+ *   mlMomentum: 0.7, mlVolatility: 0.4, mlTrend: 0.65,
+ * });
+ *
+ * // result.scenarioProbabilities = { SC1: 3, SC2: 5, ..., SC9: 8 }
+ * // Sum is guaranteed to be exactly 100
+ * ```
+ */
 
 import {
   calculateProbabilityTrend as calcTrendFromProbs,
@@ -14,14 +81,40 @@ import {
 
 // === Helper Functions =========================================================
 
+/**
+ * Returns `v` if it is a finite number, otherwise returns `fallback`.
+ * Guards against `NaN`, `Infinity`, `-Infinity`, and non-number values
+ * (e.g. `undefined` from missing API fields).
+ *
+ * @param v        - The value to validate
+ * @param fallback - Default returned when `v` is not a finite number (default: `0`)
+ * @returns `v` if finite, otherwise `fallback`
+ */
 function safeNum(v: number, fallback: number = 0): number {
   return (typeof v === 'number' && isFinite(v)) ? v : fallback;
 }
 
+/**
+ * Clamps a value to the range `[min, max]`, after first sanitizing it with
+ * `safeNum` (fallback is the midpoint of the range).
+ *
+ * @param v   - Value to clamp
+ * @param min - Lower bound (inclusive)
+ * @param max - Upper bound (inclusive)
+ * @returns `v` clamped to `[min, max]`
+ */
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, safeNum(v, (min + max) / 2)));
 }
 
+/**
+ * Normalizes an array of numbers so they sum to exactly `1.0`.
+ * Each element is first sanitized via `safeNum`. If the total sum is
+ * zero or negative, returns a uniform distribution (`1/n` each).
+ *
+ * @param arr - Array of raw (possibly unsafe) weights
+ * @returns New array of the same length summing to 1.0
+ */
 function normalize(arr: number[]): number[] {
   const safe = arr.map(v => safeNum(v, 0));
   const sum = safe.reduce((a, b) => a + b, 0);
@@ -29,6 +122,14 @@ function normalize(arr: number[]): number[] {
   return safe.map((v) => v / sum);
 }
 
+/**
+ * Logistic sigmoid function: `1 / (1 + e^(-x))`.
+ * Values beyond `|x| > 500` are clamped to `0` or `1` to avoid `Infinity`.
+ * Input is sanitized via `safeNum` before computation.
+ *
+ * @param x - Input value (raw signal)
+ * @returns Value in `(0, 1)` — probability-like squashing of `x`
+ */
 function sigmoid(x: number): number {
   const sx = safeNum(x, 0);
   if (Math.abs(sx) > 500) return sx > 0 ? 1 : 0; // prevent Infinity
@@ -37,11 +138,40 @@ function sigmoid(x: number): number {
 
 /**
  * IRON LAW: Round proportional floats to integers that sum to EXACTLY 100,
- * with each value constrained to [minVal, maxVal].
+ * with each value constrained to `[minVal, maxVal]`.
  *
- * Algorithm: Largest Remainder Method (LRM) + iterative bound enforcement.
- * This function GUARANTEES sum(result) === 100 and minVal <= result[i] <= maxVal
- * for all i, as long as n*minVal <= 100 <= n*maxVal.
+ * This is the **single source of truth** for converting raw scenario probability
+ * fractions into display-ready integer percentages. Bypassing this function
+ * when producing scenario percentages is a critical error.
+ *
+ * ## Algorithm: Largest Remainder Method (LRM) + Iterative Bound Enforcement
+ *
+ * 1. **Normalize** — Scale `rawFloats` so they sum to exactly 100.
+ * 2. **LRM round** — Floor each value, then distribute the deficit (remainder)
+ *    to the entries with the largest fractional parts. This minimizes total
+ *    rounding error and is provably fair (used in parliamentary seat allocation).
+ * 3. **Iterative bound enforcement** — While any value violates `[minVal, maxVal]`,
+ *    transfer 1 from the worst violator to a suitable partner. Each transfer
+ *    strictly reduces total violation magnitude, guaranteeing convergence.
+ * 4. **Final safety net** — If the sum drifted from 100 (should not happen
+ *    under normal conditions), adjust the entry with the most room.
+ *
+ * ## Guarantees
+ *
+ * - `sum(result) === 100` — **always**, regardless of input
+ * - `minVal <= result[i] <= maxVal` for all `i`, as long as
+ *   `n * minVal <= 100 <= n * maxVal`
+ *
+ * @param rawFloats - Array of non-negative floats (proportional weights)
+ * @param minVal    - Minimum allowed value per entry (e.g. `2` ensures no scenario is zero)
+ * @param maxVal    - Maximum allowed value per entry (e.g. `35` prevents one scenario from dominating)
+ * @returns Integer array of same length, summing to exactly 100, each within `[minVal, maxVal]`
+ *
+ * @example
+ * ```ts
+ * enforceSumTo100([33.3, 33.3, 33.4], 2, 35);  // → [33, 33, 34]
+ * enforceSumTo100([60, 20, 10, 5, 3, 1, 0.5, 0.3, 0.2], 2, 35);  // → [35, 20, 10, 5, 3, 2, 2, 2, 2]
+ * ```
  *
  * ⚠️  NEVER bypass this function when producing integer scenario percentages.
  */
@@ -138,21 +268,58 @@ function enforceSumTo100(
 
 // === Exported Interfaces ======================================================
 
+/**
+ * Represents a single node in the decision DAG.
+ *
+ * Nodes are categorized into three types:
+ * - `'decision'` — Internal branching points (ROOT, strategy branches, sub-branches)
+ * - `'event'`    — Assessment/condition nodes (momentum level, volume confirmation, divergence)
+ * - `'terminal'` — Final scenario outcomes (SC1–SC9)
+ *
+ * Each node carries bilingual titles (Persian + English), a hex color,
+ * and an optional branch assignment for the three strategy branches.
+ */
 export interface GraphNode {
+  /** Unique node identifier (e.g. 'ROOT', 'N_TREND', 'N_T_B_MOM_HIGH', 'SC1') */
   id: string;
+  /** Persian (Farsi) display title */
   title: string;
+  /** English display title */
   titleEn: string;
+  /** Node type: decision (branch), event (assessment), or terminal (scenario outcome) */
   type: 'decision' | 'event' | 'terminal';
+  /** Persian description text */
   desc: string;
+  /** Hex color code for visual rendering */
   color: string;
+  /** Which of the three strategy branches this node belongs to (undefined for ROOT and terminals) */
   branch?: 'trend' | 'breakout' | 'reversal';
+  /** Whether this is a terminal scenario node (SC1–SC9) */
   isTerminal?: boolean;
 }
 
+/**
+ * Represents a directed edge in the decision DAG.
+ *
+ * Each edge connects a parent node (`from`) to a child node (`to`) with an
+ * associated probability weight (computed at runtime). The `type` field
+ * determines edge styling and semantic meaning:
+ * - `'up'`              — Bullish/upward movement
+ * - `'down'`            — Bearish/downward movement
+ * - `'pullback'`        — Neutral/pullback/range behavior
+ * - `'risk'`            — Risk condition (overbought, oversold, weak volume)
+ * - `'branch-trend'`    — ROOT → Trend Following branch
+ * - `'branch-breakout'` — ROOT → Breakout branch
+ * - `'branch-reversal'` — ROOT → Reversal branch
+ */
 export interface GraphEdge {
+  /** Source node ID */
   from: string;
+  /** Target node ID */
   to: string;
+  /** Persian display label for the edge */
   label: string;
+  /** Semantic type controlling visual style and interpretation */
   type:
     | 'up'
     | 'down'
@@ -163,6 +330,47 @@ export interface GraphEdge {
     | 'branch-reversal';
 }
 
+/**
+ * Raw market/indicator data fed into the decision graph engine.
+ *
+ * All numeric fields are sanitized internally by `buildDecisionGraph` via
+ * `safeNum` and `clamp`, so callers do not need to pre-validate.
+ * Fields marked `[0,1]` are clamped to that range internally.
+ *
+ * @property price              - Current asset price (used as denominator for ATR ratios)
+ * @property bullConsensus      - Market bull/bear consensus `[0,1]` (0=all bearish, 1=all bullish)
+ * @property rsi                - Relative Strength Index `[0,100]`
+ * @property mfi                - Money Flow Index `[0,100]`
+ * @property cci                - Commodity Channel Index (unbounded, typically ±200)
+ * @property stochK             - Stochastic %K `[0,100]`
+ * @property stochD             - Stochastic %D `[0,100]`
+ * @property adx                - Average Directional Index `[0,100]` (trend strength)
+ * @property diPlus             - +DI directional indicator `[0,100]`
+ * @property diMinus            - -DI directional indicator `[0,100]`
+ * @property macdHist           - MACD histogram (unbounded)
+ * @property atr                - Average True Range (absolute price units)
+ * @property bbUpper            - Bollinger Band upper
+ * @property bbMiddle           - Bollinger Band middle (SMA)
+ * @property bbLower            - Bollinger Band lower
+ * @property sar                - Parabolic SAR
+ * @property ichimokuTenkan     - Ichimoku Tenkan-sen
+ * @property ichimokuKijun      - Ichimoku Kijun-sen
+ * @property ichimokuSenkouA    - Ichimoku Senkou Span A
+ * @property ichimokuSenkouB    - Ichimoku Senkou Span B
+ * @property maAlignment        - Moving average alignment score `[0,1]`
+ * @property momentum           - Raw momentum value (unbounded)
+ * @property awesomeOsc         - Awesome Oscillator value
+ * @property fisherTransform    - Fisher Transform `[-5,5]`
+ * @property confidenceIndex    - ML/aggregate confidence `[0,1]`
+ * @property strengthIndex      - ML/aggregate strength `[0,1]`
+ * @property hasVolume          - Whether volume data is available (affects breakout confirmation)
+ * @property distToR1           - Normalized distance to resistance R1
+ * @property distToS1           - Normalized distance to support S1
+ * @property srAvgStrength      - Average support/resistance level strength `[0,1]`
+ * @property mlMomentum         - ML momentum signal `[0,1]`
+ * @property mlVolatility       - ML volatility signal `[0,1]`
+ * @property mlTrend            - ML trend signal `[0,1]`
+ */
 export interface GraphInput {
   price: number;
   bullConsensus: number;
@@ -199,14 +407,30 @@ export interface GraphInput {
   mlTrend: number;
 }
 
+/**
+ * Complete output of the decision graph engine — contains the full DAG structure,
+ * all computed probabilities, and derived analytics.
+ *
+ * This is the return type of {@link buildDecisionGraph} and serves as the
+ * primary data object for rendering the decision graph UI and driving
+ * downstream analysis.
+ */
 export interface GraphData {
+  /** All 34 nodes in the DAG (ROOT + 3 branches + 9 sub-branches + 19 events + 9 terminals) */
   nodes: GraphNode[];
+  /** All 55+ directed edges connecting nodes across layers */
   edges: GraphEdge[];
+  /** RTL-layout pixel positions for each node (`{ right, top }`) */
   nodePositions: Record<string, { right: number; top: number }>;
+  /** Computed probability for each edge, keyed by edge index */
   edgeProbabilities: Record<number, number>;
+  /** Display-ready probability strings for each node (e.g. '65%') */
   nodeValues: Record<string, string>;
+  /** Probability mass allocated to each of the three strategy branches (sums to 1.0) */
   branchProbabilities: { trend: number; breakout: number; reversal: number };
+  /** Final integer percentages for SC1–SC9, summing to EXACTLY 100 (via enforceSumTo100) */
   scenarioProbabilities: Record<string, number>;
+  /** Per-scenario breakdown of which branch contributed what percentage */
   pathContributions: Record<
     string,
     { trend: number; breakout: number; reversal: number }
@@ -217,18 +441,43 @@ export interface GraphData {
 
 // === Internal Types ===========================================================
 
+/**
+ * Pre-computed context derived from {@link GraphInput}, shared across all
+ * node probability computations to avoid redundant calculations.
+ *
+ * All derived values are normalized to `[0, 1]`.
+ *
+ * @property adxNorm          - ADX normalized to `[0,1]` (ADX/60, measures trend strength)
+ * @property srProximity      - How close price is to nearest S/R level `[0,1]`
+ * @property oscillatorExtreme - Composite of RSI and CCI extremity `[0,1]`
+ * @property divergenceProxy   - oscillatorExtreme × (1 - adxNorm): high when oscillators are extreme in a weak trend
+ * @property overboughtRisk    - Composite overbought signal from RSI/MFI/StochK `[0,1]`
+ * @property oversoldBounce    - Composite oversold signal from RSI/MFI/StochK `[0,1]`
+ */
 interface ProbContext {
+  /** Sanitized input data */
   input: GraphInput;
+  /** ADX normalized to [0,1] via ADX/60 — measures trend strength */
   adxNorm: number;
+  /** Proximity to nearest support/resistance level, [0,1] */
   srProximity: number;
+  /** Composite oscillator extremity (RSI + CCI), [0,1] */
   oscillatorExtreme: number;
+  /** Divergence proxy: oscillatorExtreme × (1 − adxNorm), [0,1] */
   divergenceProxy: number;
+  /** Overbought risk from RSI/MFI/StochK, [0,1] */
   overboughtRisk: number;
+  /** Oversold bounce potential from RSI/MFI/StochK, [0,1] */
   oversoldBounce: number;
 }
 
 // === Color Constants ==========================================================
 
+/**
+ * Hex colors for the 9 terminal scenario nodes.
+ * SC1–SC4 use warm reds/oranges (bearish), SC5 uses amber (neutral),
+ * SC6–SC9 use cool teals/cyans (bullish).
+ */
 const TERMINAL_COLORS: Record<string, string> = {
   SC1: '#b91c1c',
   SC2: '#dc2626',
@@ -241,6 +490,12 @@ const TERMINAL_COLORS: Record<string, string> = {
   SC9: '#0891b2',
 };
 
+/**
+ * Hex colors for the three strategy branches.
+ * - `trend`    — Cyan/teal
+ * - `breakout` — Amber/gold
+ * - `reversal` — Purple/violet
+ */
 const BRANCH_COLORS: Record<string, string> = {
   trend: '#3ad5db',
   breakout: '#ffb11b',
@@ -249,6 +504,24 @@ const BRANCH_COLORS: Record<string, string> = {
 
 // === Static Node Definitions ==================================================
 
+/**
+ * Creates the 34 static nodes of the decision DAG.
+ *
+ * The node hierarchy spans 5 layers:
+ *
+ * | Layer | Count | IDs                                                    |
+ * |-------|-------|--------------------------------------------------------|
+ * | 0     | 1     | `ROOT`                                                |
+ * | 1     | 3     | `N_TREND`, `N_BREAK`, `N_REVERSAL`                    |
+ * | 2     | 9     | 3 sub-branches per branch (bull/bear/flat, up/down/none, bull/bear/none) |
+ * | 3     | 19    | Assessment event nodes (momentum, volume, volatility, divergence, candle, S/R) |
+ * | 4     | 9     | Terminal scenarios `SC1`–`SC9`                        |
+ *
+ * All nodes carry bilingual titles (Persian `title` + English `titleEn`),
+ * a `desc` in Persian, a hex `color`, and optionally a `branch` assignment.
+ *
+ * @returns Array of 34 {@link GraphNode} objects
+ */
 function createNodes(): GraphNode[] {
   return [
     // ── Layer 0: ROOT ──────────────────────────────────────────────────────
@@ -650,6 +923,22 @@ function createNodes(): GraphNode[] {
 
 // === Static Edge Definitions ==================================================
 
+/**
+ * Creates the 55+ directed edges of the decision DAG.
+ *
+ * Edge structure mirrors the node hierarchy:
+ * - **ROOT → Layer 1**: 3 edges branching into Trend/Breakout/Reversal
+ * - **Layer 1 → Layer 2**: 3 edges per branch (directional sub-branches)
+ * - **Layer 2 → Layer 3**: 2–3 edges per sub-branch (assessment events)
+ * - **Layer 3 → Layer 4**: 2–3 edges per assessment (terminal scenarios)
+ *
+ * Each edge has a Persian `label` and a semantic `type` that determines
+ * visual styling. The **order of edges from each parent node is critical**
+ * — it must match the probability array returned by
+ * {@link computeNodeProbabilities}.
+ *
+ * @returns Array of {@link GraphEdge} objects
+ */
 function createEdges(): GraphEdge[] {
   return [
     // ── ROOT → Main Branches ───────────────────────────────────────────────
@@ -1059,6 +1348,21 @@ function createEdges(): GraphEdge[] {
 
 // === Static Node Positions (RTL Layout) =======================================
 
+/**
+ * Computes pixel positions for all 34 nodes in a right-to-left (RTL) layout.
+ *
+ * Layout design:
+ * - **Layer 0** (rightmost, `right: 30`): ROOT node
+ * - **Layer 1** (`right: 200`): Three main branch nodes
+ * - **Layer 2** (`right: 390`): Nine sub-branch nodes
+ * - **Layer 3** (`right: 570`): Nineteen assessment/event nodes
+ * - **Layer 4** (leftmost, `right: 1050`): Nine terminal SC1–SC9 nodes
+ *
+ * Node sizes: Event=56px, Branch=74px, Terminal=84px height.
+ * Within-group gap: 4px. Between-group gap: 14px.
+ *
+ * @returns Record mapping node ID to `{ right, top }` pixel coordinates
+ */
 function createPositions(): Record<string, { right: number; top: number }> {
   const p: Record<string, { right: number; top: number }> = {};
   // DESIGN_H is now 1200. Event nodes: 56px, Branch nodes: 74px, Terminal: 84px
@@ -1122,6 +1426,27 @@ function createPositions(): Record<string, { right: number; top: number }> {
 
 // === Probability Context Builder ==============================================
 
+/**
+ * Derives the shared probability context from sanitized {@link GraphInput}.
+ *
+ * Pre-computes six normalized indicators `[0,1]` that are reused across
+ * multiple node probability calculations:
+ *
+ * - **adxNorm** — ADX/60 clamped to [0,1]. Values > 0.5 indicate strong trend.
+ * - **srProximity** — 1 − min(distToR1, distToS1) × 10. Near 1 when price is
+ *   close to a support/resistance level.
+ * - **oscillatorExtreme** — Average of |RSI−50|/50 and |CCI|/200. High when
+ *   oscillators are at extremes.
+ * - **divergenceProxy** — oscillatorExtreme × (1 − adxNorm). High when oscillators
+ *   are extreme in a weak-trend environment (classic divergence setup).
+ * - **overboughtRisk** — Weighted blend of (RSI−60)/30 × 0.3, (MFI−70)/30 × 0.2,
+ *   (StochK−75)/25 × 0.2. Measures overbought exhaustion risk.
+ * - **oversoldBounce** — Mirror of overboughtRisk: (30−RSI)/30 × 0.3,
+ *   (20−MFI)/20 × 0.2, (20−StochK)/20 × 0.2. Measures oversold bounce potential.
+ *
+ * @param input - Sanitized {@link GraphInput} (all fields finite, bounded)
+ * @returns Complete {@link ProbContext} with all derived indicators
+ */
 function buildContext(input: GraphInput): ProbContext {
   const adxNorm = clamp(input.adx / 60, 0, 1);
   const srProximity = clamp(
@@ -1164,6 +1489,51 @@ function buildContext(input: GraphInput): ProbContext {
 // outgoing edges. The order MUST match the order of edges in createEdges().
 // =============================================================================
 
+/**
+ * Computes the probability distribution over outgoing edges for a given node.
+ *
+ * This is the **core probability logic** of the DAG. Each non-terminal node
+ * has a `case` in the switch statement that returns a normalized array of
+ * probabilities — one per outgoing edge, **in the same order as the edges
+ * defined in {@link createEdges}**.
+ *
+ * ### Probability derivation strategy
+ *
+ * - **ROOT**: Weights based on `adxNorm` (trend), `srProximity` (breakout),
+ *   and `divergenceProxy` (reversal). Strong trends → more trend weight;
+ *   near S/R → more breakout weight; extreme oscillators in weak trend →
+ *   more reversal weight.
+ *
+ * - **N_TREND**: Splits by `bullConsensus` and ADX. High ADX amplifies
+ *   directional bias; low ADX increases the "flat" probability.
+ *
+ * - **N_T_BULL / N_T_BEAR**: Momentum magnitude determines high/moderate split;
+ *   `overboughtRisk` / `oversoldBounce` compete as the third outcome.
+ *
+ * - **N_T_B_MOM_HIGH** → SC8, SC9, SC7: All bullish, weighted by
+ *   `confidenceIndex` and `strengthIndex`.
+ *
+ * - **N_T_B_OVERBOUGHT** → SC4, SC1, SC9: Correction (SC4) most likely,
+ *   with a small chance of last-gasp surge (SC9).
+ *
+ * - **N_BREAK**: Splits by `bullConsensus` and `srProximity`. Near S/R
+ *   with bullish consensus → bullish breakout; far from S/R → no breakout.
+ *
+ * - **N_B_UP / N_B_DOWN**: Volume confirmation (`hasVolume` + MFI) splits
+ *   confirmed vs. weak volume. Confirmed → all-directional terminals;
+ *   weak → fake breakout risk with SC5.
+ *
+ * - **N_REVERSAL**: Splits by `overboughtRisk` and `oversoldBounce`.
+ *   When neither is strong, `noneRev` gets high probability.
+ *
+ * - **N_R_BULL / N_R_BEAR**: Splits by CCI (divergence), Fisher Transform
+ *   (candle), and `srAvgStrength` (S/R bounce).
+ *
+ * @param nodeId      - The node to compute probabilities for
+ * @param ctx         - Pre-computed {@link ProbContext} with derived indicators
+ * @param _numChildren - Number of outgoing edges (unused, for documentation only)
+ * @returns Normalized probability array matching the order of edges from this node
+ */
 function computeNodeProbabilities(
   nodeId: string,
   ctx: ProbContext,
@@ -1494,6 +1864,36 @@ function computeNodeProbabilities(
 // Recursive DFS from ROOT, accumulating path probabilities at terminal nodes.
 // =============================================================================
 
+/**
+ * Recursively traverses the DAG from a given node, accumulating path
+ * probabilities at terminal nodes (SC1–SC9).
+ *
+ * ### Algorithm
+ *
+ * 1. Add `pathProb` to the node's accumulator (`nodeAccum`).
+ * 2. Compute outgoing edge probabilities via {@link computeNodeProbabilities}.
+ * 3. For each child edge:
+ *    a. Store the edge probability in `edgeProbabilities`.
+ *    b. Determine the branch context (trend/breakout/reversal) if at ROOT.
+ *    c. If the child is a terminal (SC*), accumulate `childPathProb` into
+ *       `scenarios` and `contributions` (per-branch breakdown).
+ *    d. Recurse into the child node.
+ *
+ * Because the graph is a DAG (no cycles), recursion terminates at the
+ * terminal layer. Multiple paths can reach the same terminal, so
+ * probabilities are **summed** across all contributing paths.
+ *
+ * @param nodeId           - Current node being visited
+ * @param pathProb         - Probability of reaching this node from ROOT (product of all edge probs)
+ * @param currentBranch    - Which strategy branch we're under (null at ROOT)
+ * @param ctx              - Pre-computed probability context
+ * @param adj              - Adjacency map: nodeId → array of edge indices
+ * @param edges            - All edges in the graph
+ * @param edgeProbabilities - Mutable: stores computed probability per edge index
+ * @param nodeAccum        - Mutable: accumulates total path probability at each node
+ * @param scenarios        - Mutable: accumulates total probability at each SC terminal
+ * @param contributions    - Mutable: per-branch probability contribution to each SC terminal
+ */
 function traverseGraph(
   nodeId: string,
   pathProb: number,
@@ -1572,6 +1972,80 @@ function traverseGraph(
 
 // === Main Export: buildDecisionGraph ===========================================
 
+/**
+ * Builds the complete decision graph and computes all scenario probabilities.
+ *
+ * This is the **primary exported function** of the module. It takes raw market
+ * indicator data, sanitizes all inputs, constructs the static DAG structure,
+ * traverses it to compute path probabilities, and produces the final
+ * integer scenario percentages via the IRON LAW ({@link enforceSumTo100}).
+ *
+ * ## Processing Pipeline
+ *
+ * 1. **Input sanitization** — Replace `NaN`/`Infinity`/`undefined` with safe
+ *    defaults. Clamp bounded fields to their valid ranges (e.g. RSI to [0,100]).
+ *
+ * 2. **Static graph construction** — Build nodes ({@link createNodes}),
+ *    edges ({@link createEdges}), and layout positions ({@link createPositions}).
+ *
+ * 3. **Adjacency map** — Index edges by source node for efficient traversal.
+ *
+ * 4. **Probability context** — Pre-compute shared indicators ({@link buildContext}).
+ *
+ * 5. **Graph traversal** — Recursive DFS from ROOT ({@link traverseGraph}),
+ *    accumulating path probabilities at each terminal SC1–SC9.
+ *
+ * 6. **IRON LAW enforcement** — Convert raw fractions to integers summing to
+ *    exactly 100 via {@link enforceSumTo100} with bounds `[2, 35]`.
+ *    Each scenario gets at least 2% and at most 35%.
+ *
+ * 7. **Branch probabilities** — Extract ROOT's outgoing edge probabilities
+ *    as the three branch weights (trend/breakout/reversal).
+ *
+ * 8. **Node display values** — Path probability as percentage string per node.
+ *
+ * 9. **Path contributions** — Per-scenario breakdown of which branch
+ *    contributed what percentage (trend/breakout/reversal).
+ *
+ * 10. **Probability trend** — 30-day trend computed from scenario probabilities.
+ *
+ * ## Invariants
+ *
+ * - `sum(scenarioProbabilities[SC1..SC9]) === 100` — **guaranteed** by IRON LAW
+ * - `2 <= scenarioProbabilities[SCi] <= 35` for all i
+ * - `branchProbabilities.trend + .breakout + .reversal === 1.0`
+ * - `sum(pathContributions[SCi]) === 100` for each scenario
+ *
+ * @param input - Raw market/indicator data (all fields are auto-sanitized)
+ * @returns Complete {@link GraphData} with DAG structure, probabilities, and trend
+ *
+ * @example
+ * ```ts
+ * const graph = buildDecisionGraph({
+ *   price: 65000,
+ *   bullConsensus: 0.65,
+ *   rsi: 58, mfi: 55, cci: 80,
+ *   stochK: 62, stochD: 58,
+ *   adx: 28, diPlus: 22, diMinus: 14,
+ *   macdHist: 150, atr: 1200,
+ *   bbUpper: 67000, bbMiddle: 65000, bbLower: 63000,
+ *   sar: 64500,
+ *   ichimokuTenkan: 65200, ichimokuKijun: 64800,
+ *   ichimokuSenkouA: 64600, ichimokuSenkouB: 64400,
+ *   maAlignment: 0.7, momentum: 12,
+ *   awesomeOsc: 5, fisherTransform: 0.8,
+ *   confidenceIndex: 0.6, strengthIndex: 0.55,
+ *   hasVolume: true,
+ *   distToR1: 0.02, distToS1: 0.03, srAvgStrength: 0.5,
+ *   mlMomentum: 0.7, mlVolatility: 0.4, mlTrend: 0.65,
+ * });
+ *
+ * // Verify IRON LAW
+ * const sum = Object.values(graph.scenarioProbabilities)
+ *   .reduce((a, b) => a + b, 0);
+ * console.assert(sum === 100, `Sum is ${sum}, expected 100`);
+ * ```
+ */
 export function buildDecisionGraph(input: GraphInput): GraphData {
   // 0. Sanitize all numeric inputs — replace NaN/Infinity/undefined with safe defaults
   const price = safeNum(input.price, 1000);

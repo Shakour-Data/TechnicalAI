@@ -1,0 +1,1209 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+     4→     4→import {
+     5→     5→  createChart,
+     6→     6→  CandlestickSeries,
+     7→     7→  LineSeries,
+     8→     8→  HistogramSeries,
+     9→     9→  ColorType,
+    10→    10→  CrosshairMode,
+    11→    11→  type IChartApi,
+    12→    12→  type Time,
+    13→    13→} from 'lightweight-charts';
+    14→    14→import {
+    15→    15→  MousePointer2,
+    16→    16→  Minus,
+    17→    17→  ArrowLeftRight,
+    18→    18→  MoveVertical,
+    19→    19→  Layers,
+    20→    20→  RectangleHorizontal,
+    21→    21→  Type,
+    22→    22→  Pencil,
+    23→    23→  Ruler,
+    24→    24→  ArrowUpRight,
+    25→    25→  Trash2,
+    26→    26→  X,
+    27→    27→  Circle,
+    28→    28→  Waypoints,
+    29→    29→  MessageSquare,
+    30→    30→  TrendingUp,
+    31→    31→  GitBranch,
+    32→    32→  ArrowRight,
+    33→    33→  Spline,
+    34→    34→} from 'lucide-react';
+    35→    35→import { formatJalaliString, candleDateToJalali, isGregorianDate, toPersianDigits } from '@/lib/jalali';
+    36→    36→import { useTheme } from '@/lib/theme-store';
+    37→    37→
+    38→    38→/* ----------------------------- TYPES ----- */
+    39→    39→
+    40→    40→interface DrawingPoint {
+    41→    41→  time: number;
+    42→    42→  price: number;
+    43→    43→}
+    44→    44→
+    45→    45→interface Drawing {
+    46→    46→  id: string;
+    47→    47→  type: string;
+    48→    48→  points: DrawingPoint[];
+    49→    49→  color: string;
+    50→    50→  lineWidth: number;
+    51→    51→  text?: string;
+    52→    52→  completed: boolean;
+    53→    53→}
+    54→    54→
+    55→    55→interface LevelStrength {
+    56→    56→  price: number;
+    57→    57→  strength: number;
+    58→    58→  isTarget: boolean;
+    59→    59→  score: number;
+    60→    60→  grade: string;
+    61→    61→  overlapCount: number;
+    62→    62→  methods: string[];
+    63→    63→  fibRatio?: string;
+    64→    64→  fibLabel?: string;
+    65→    65→}
+    66→    66→
+    67→    67→interface CandlestickChartProps {
+    68→    68→  data: Array<{
+    69→    69→    date: string;
+    70→    70→    open: number;
+    71→    71→    high: number;
+    72→    72→    low: number;
+    73→    73→    close: number;
+    74→    74→    volume: number;
+    75→    75→  }>;
+    76→    76→  ta: {
+    77→    77→    sma: Record<string, number>;
+    78→    78→    ema: Record<string, number>;
+    79→    79→    bollingerBands: { upper: number; middle: number; lower: number };
+    80→    80→    resistances: number[];
+    81→    81→    supports: number[];
+    82→    82→    supportStrengths: LevelStrength[];
+    83→    83→    resistanceStrengths: LevelStrength[];
+    84→    84→    sar: number;
+    85→    85→    smaArray?: Record<string, number[]>;
+    86→    86→    emaArray?: Record<string, number[]>;
+    87→    87→    ichimokuArrays?: { tenkan: number[]; kijun: number[]; senkouA: number[]; senkouB: number[] };
+    88→    88→    vwapArray?: number[];
+    89→    89→  } | null;
+    90→    90→  height?: number;
+    91→    91→  priceDecimals?: number;
+    92→    92→}
+    93→    93→
+    94→    94→/* ----------------------------- CONSTANTS -- */
+    95→    95→
+    96→    96→const BULL = '#22c55e';   // Candle up — vivid green
+    97→    97→const BEAR = '#ef4444';   // Candle down — vivid red
+    98→    98→const SUPPORT_COLOR = '#2563eb';  // Support lines — blue
+    99→    99→const RESIST_COLOR = '#ea580c'; // Resistance lines — orange
+   100→   100→
+   101→   101→
+   102→   102→const PALETTE = ['#22c55e', '#ef4444', '#d97706', '#0891b2', '#7c3aed', '#374151'];
+   103→   103→
+   104→   104→const SMA_CFG = [
+   105→   105→  { key: 'sma9', color: '#8b5cf6', title: 'SMA 9' },
+   106→   106→  { key: 'sma21', color: '#06b6d4', title: 'SMA 21' },
+   107→   107→  { key: 'sma50', color: '#d946ef', title: 'SMA 50' },
+   108→   108→  { key: 'sma100', color: '#a855f7', title: 'SMA 100' },
+   109→   109→  { key: 'sma200', color: '#ec4899', title: 'SMA 200' },
+   110→   110→];
+   111→   111→
+   112→   112→const EMA_CFG = [
+   113→   113→  { key: 'ema9', color: '#8b5cf6', title: 'EMA 9', dash: [2, 2] as [number, number] },
+   114→   114→  { key: 'ema21', color: '#06b6d4', title: 'EMA 21', dash: [2, 2] as [number, number] },
+   115→   115→  { key: 'ema50', color: '#d946ef', title: 'EMA 50', dash: [2, 2] as [number, number] },
+   116→   116→  { key: 'ema200', color: '#ec4899', title: 'EMA 200', dash: [2, 2] as [number, number] },
+   117→   117→];
+   118→   118→
+   119→   119→const FIB_LEVELS = [
+   120→   120→  { pct: 0, label: '0%' },
+   121→   121→  { pct: 0.236, label: '23.6%' },
+   122→   122→  { pct: 0.382, label: '38.2%' },
+   123→   123→  { pct: 0.5, label: '50%' },
+   124→   124→  { pct: 0.618, label: '61.8%' },
+   125→   125→  { pct: 0.786, label: '78.6%' },
+   126→   126→  { pct: 1, label: '100%' },
+   127→   127→];
+   128→   128→
+   129→   129→const FIB_EXT_LEVELS = [
+   130→   130→  { pct: 0, label: '0%' },
+   131→   131→  { pct: 0.382, label: '38.2%' },
+   132→   132→  { pct: 0.5, label: '50%' },
+   133→   133→  { pct: 0.618, label: '61.8%' },
+   134→   134→  { pct: 0.786, label: '78.6%' },
+   135→   135→  { pct: 1, label: '100%' },
+   136→   136→  { pct: 1.272, label: '127.2%' },
+   137→   137→  { pct: 1.618, label: '161.8%' },
+   138→   138→  { pct: 2.0, label: '200%' },
+   139→   139→  { pct: 2.618, label: '261.8%' },
+   140→   140→];
+   141→   141→
+   142→   142→type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'ray' | 'fibonacci' | 'fibext' | 'rectangle' | 'ellipse' | 'path' | 'text' | 'callout' | 'brush' | 'measure' | 'arrow' | 'pitchfork' | 'channel' | 'regression';
+   143→   143→
+   144→   144→// — S/R strength-based line styling (solid only, thickness = strength) ————
+   145→   145→function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0; color: string } {
+   146→   146→  if (isTarget) {
+   147→   147→    return { lineWidth: 4, lineStyle: 0, color: '' };
+   148→   148→  }
+   149→   149→  if (strength >= 9) return { lineWidth: 5, lineStyle: 0, color: '' };
+   150→   150→  if (strength >= 7) return { lineWidth: 4, lineStyle: 0, color: '' };
+   151→   151→  if (strength >= 5) return { lineWidth: 3, lineStyle: 0, color: '' };
+   152→   152→  if (strength >= 3) return { lineWidth: 2, lineStyle: 0, color: '' };
+   153→   153→  return { lineWidth: 1, lineStyle: 0, color: '' };
+   154→   154→}
+   155→   155→
+   156→   156→interface ToolDef {
+   157→   157→  id: ToolType;
+   158→   158→  label: string;
+   159→   159→  icon: React.ReactNode;
+   160→   160→}
+   161→   161→
+   162→   162→const TOOLS: ToolDef[] = [
+   163→   163→  { id: 'cursor', label: 'مؤشر', icon: <MousePointer2 className="w-3.5 h-3.5" /> },
+   164→   164→  { id: 'trendline', label: 'خط روند', icon: <Minus className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+   165→   165→  { id: 'hline', label: 'خط افقی', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+   166→   166→  { id: 'vline', label: 'خط عمودی', icon: <MoveVertical className="w-3.5 h-3.5" /> },
+   167→   167→  { id: 'ray', label: 'پرتو', icon: <ArrowRight className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+   168→   168→  { id: 'fibonacci', label: 'فیبوناچی بازگشتی', icon: <Layers className="w-3.5 h-3.5" /> },
+   169→   169→  { id: 'fibext', label: 'فیبوناچی گشایش', icon: <GitBranch className="w-3.5 h-3.5" /> },
+   170→   170→  { id: 'rectangle', label: 'مستطیل', icon: <RectangleHorizontal className="w-3.5 h-3.5" /> },
+   171→   171→  { id: 'ellipse', label: 'بیضی', icon: <Circle className="w-3.5 h-3.5" /> },
+   172→   172→  { id: 'path', label: 'مسیر', icon: <Spline className="w-3.5 h-3.5" /> },
+   173→   173→  { id: 'text', label: 'متن', icon: <Type className="w-3.5 h-3.5" /> },
+   174→   174→  { id: 'callout', label: 'یادداشت', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+   175→   175→  { id: 'brush', label: 'قلم', icon: <Pencil className="w-3.5 h-3.5" /> },
+   176→   176→  { id: 'measure', label: 'اندازه‌گیری', icon: <Ruler className="w-3.5 h-3.5" /> },
+   177→   177→  { id: 'arrow', label: 'پیکان', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
+   178→   178→  { id: 'pitchfork', label: 'چنگال اندروز', icon: <Waypoints className="w-3.5 h-3.5" /> },
+   179→   179→  { id: 'channel', label: 'کانال موازی', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+   180→   180→  { id: 'regression', label: 'خط رگرسیون', icon: <TrendingUp className="w-3.5 h-3.5" style={{ transform: 'scaleX(-1)' }} /> },
+   181→   181→];
+   182→   182→
+   183→   183→/* ----------------------------- SKELETON ---- */
+   184→   184→
+   185→   185→export function CandlestickChartSkeleton() {
+   186→   186→  const { colors: C } = useTheme();
+   187→   187→  return (
+   188→   188→    <div className="w-full">
+   189→   189→      <div className="h-10 rounded-t-lg" style={{ background: C.cardBg, borderBottom: `1px solid ${C.cardBorder}` }} />
+   190→   190→      <div className="w-full rounded-b-lg" style={{ height: 520, background: C.cardBg, opacity: 0.5 }} />
+   191→   191→    </div>
+   192→   192→  );
+   193→   193→}
+   194→   194→
+   195→   195→/* ----------------------------- COMPONENT --- */
+   196→   196→
+   197→   197→export default function CandlestickChart({ data, ta, height = 520, priceDecimals = 0 }: CandlestickChartProps) {
+   198→   198→  const { colors: C, isDark } = useTheme();
+   199→   199→  const chartContainerRef = useRef<HTMLDivElement>(null);
+   200→   200→  const svgRef = useRef<SVGSVGElement>(null);
+   201→   201→  const chartRef = useRef<IChartApi | null>(null);
+   202→   202→  const csRef = useRef<any>(null);
+   203→   203→  const subscriberRef = useRef<{ dispose: () => void } | null>(null);
+   204→   204→  const crosshairSubRef = useRef<{ dispose: () => void } | null>(null);
+   205→   205→
+   206→   206→  // Crosshair legend state
+   207→   207→  const [hoverInfo, setHoverInfo] = useState<{ date: string; o: number; h: number; l: number; c: number; v: number; chg: number } | null>(null);
+   208→   208→
+   209→   209→  // Build Jalali date strings for all candles (memoized)
+   210→   210→  const jalaliDates = useMemo(() => {
+   211→   211→    return data.map((d) =>
+   212→   212→      isGregorianDate(d.date) ? candleDateToJalali(d.date, 'full') : formatJalaliString(d.date, 'full')
+   213→   213→    );
+   214→   214→  }, [data]);
+   215→   215→
+   216→   216→  const [drawings, setDrawings] = useState<Drawing[]>([]);
+   217→   217→  const [activeTool, setActiveTool] = useState<ToolType>('cursor');
+   218→   218→  const [activeColor, setActiveColor] = useState(PALETTE[0]);
+   219→   219→  const [isDrawing, setIsDrawing] = useState(false);
+   220→   220→  const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
+   221→   221→  const [textInput, setTextInput] = useState<{ x: number; y: number; drawingId: string } | null>(null);
+   222→   222→  const [textValue, setTextValue] = useState('');
+   223→   223→  const [renderKey, setRenderKey] = useState(0);
+   224→   224→  const [chartSize, setChartSize] = useState({ w: 0, h: 0 });
+   225→   225→
+   226→   226→  /* - Helper: coordinate conversion -------------- */
+   227→   227→  const getChartPoint = useCallback((clientX: number, clientY: number): DrawingPoint | null => {
+   228→   228→    const chart = chartRef.current;
+   229→   229→    const container = chartContainerRef.current;
+   230→   230→    if (!chart || !container) return null;
+   231→   231→    const rect = container.getBoundingClientRect();
+   232→   232→    const x = clientX - rect.left;
+   233→   233→    const y = clientY - rect.top;
+   234→   234→    const price = csRef.current?.coordinateToPrice(y) ?? null;
+   235→   235→    const time = chart.timeScale().coordinateToTime(x);
+   236→   236→    if (price === null || time === null) return null;
+   237→   237→    return { time: time as number, price };
+   238→   238→  }, []);
+   239→   239→
+   240→   240→  /* - SVG Rendering --------------------- */
+   241→   241→  const renderDrawings = useCallback(() => {
+   242→   242→    const chart = chartRef.current;
+   243→   243→    const svg = svgRef.current;
+   244→   244→    const container = chartContainerRef.current;
+   245→   245→    if (!chart || !svg || !container || drawings.length === 0) {
+   246→   246→      if (svg) svg.innerHTML = '';
+   247→   247→      return;
+   248→   248→    }
+   249→   249→
+   250→   250→    const rect = container.getBoundingClientRect();
+   251→   251→    const w = rect.width;
+   252→   252→    const h = rect.height;
+   253→   253→    if (w === 0 || h === 0) return;
+   254→   254→
+   255→   255→    let html = '';
+   256→   256→
+   257→   257→    // Defs for arrow markers
+   258→   258→    html += `<defs>`;
+   259→   259→    PALETTE.forEach((c) => {
+   260→   260→      html += `<marker id="arrow-${c.replace('#','')}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="${c}" /></marker>`;
+   261→   261→    });
+   262→   262→    html += `</defs>`;
+   263→   263→
+   264→   264→    const allDrawings = [...drawings];
+   265→   265→    if (currentDrawing) allDrawings.push(currentDrawing);
+   266→   266→
+   267→   267→    for (const d of allDrawings) {
+   268→   268→      if (!d.completed && d.points.length === 0) continue;
+   269→   269→      const col = d.color;
+   270→   270→      const lw = d.lineWidth;
+   271→   271→
+   272→   272→      switch (d.type) {
+   273→   273→        case 'trendline': {
+   274→   274→          if (d.points.length < 1) break;
+   275→   275→          const p0 = d.points[0];
+   276→   276→          const p1 = d.points.length > 1 ? d.points[d.points.length - 1] : p0;
+   277→   277→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   278→   278→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   279→   279→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   280→   280→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   281→   281→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   282→   282→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" />`;
+   283→   283→          break;
+   284→   284→        }
+   285→   285→        case 'hline': {
+   286→   286→          if (d.points.length < 1) break;
+   287→   287→          const p = d.points[0];
+   288→   288→          const y = csRef.current?.priceToCoordinate(p.price);
+   289→   289→          if (y == null) break;
+   290→   290→          html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   291→   291→          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(priceDecimals))}</text>`;
+   292→   292→          break;
+   293→   293→        }
+   294→   294→        case 'vline': {
+   295→   295→          if (d.points.length < 1) break;
+   296→   296→          const p = d.points[0];
+   297→   297→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   298→   298→          if (x == null) break;
+   299→   299→          html += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   300→   300→          break;
+   301→   301→        }
+   302→   302→        case 'fibonacci': {
+   303→   303→          if (d.points.length < 2) break;
+   304→   304→          const p0 = d.points[0];
+   305→   305→          const p1 = d.points[1];
+   306→   306→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   307→   307→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   308→   308→          if (x0 == null || x1 == null) break;
+   309→   309→          const priceHigh = Math.max(p0.price, p1.price);
+   310→   310→          const priceLow = Math.min(p0.price, p1.price);
+   311→   311→          const priceRange = priceHigh - priceLow;
+   312→   312→          if (priceRange === 0) break;
+   313→   313→
+   314→   314→          const yTop = csRef.current?.priceToCoordinate(priceHigh);
+   315→   315→          const yBottom = csRef.current?.priceToCoordinate(priceLow);
+   316→   316→          if (yTop == null || yBottom == null) break;
+   317→   317→          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBottom - yTop}" fill="${col}" opacity="0.04" />`;
+   318→   318→
+   319→   319→          for (const level of FIB_LEVELS) {
+   320→   320→            const price = priceHigh - level.pct * priceRange;
+   321→   321→            const y = csRef.current?.priceToCoordinate(price);
+   322→   322→            if (y == null) continue;
+   323→   323→            html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
+   324→   324→            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
+   325→   325→            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(priceDecimals))}</text>`;
+   326→   326→          }
+   327→   327→          break;
+   328→   328→        }
+   329→   329→        case 'rectangle': {
+   330→   330→          if (d.points.length < 2) break;
+   331→   331→          const p0 = d.points[0];
+   332→   332→          const p1 = d.points[d.points.length - 1];
+   333→   333→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   334→   334→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   335→   335→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   336→   336→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   337→   337→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   338→   338→          const rx = Math.min(x0, x1);
+   339→   339→          const ry = Math.min(y0, y1);
+   340→   340→          const rw = Math.abs(x1 - x0);
+   341→   341→          const rh = Math.abs(y1 - y0);
+   342→   342→          html += `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${col}" fill-opacity="0.08" stroke="${col}" stroke-width="${lw}" rx="2" />`;
+   343→   343→          break;
+   344→   344→        }
+   345→   345→        case 'text': {
+   346→   346→          if (d.points.length < 1 || !d.text) break;
+   347→   347→          const p = d.points[0];
+   348→   348→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   349→   349→          const y = csRef.current?.priceToCoordinate(p.price);
+   350→   350→          if (x == null || y == null) break;
+   351→   351→          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
+   352→   352→          html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
+   353→   353→          break;
+   354→   354→        }
+   355→   355→        case 'brush': {
+   356→   356→          if (d.points.length < 2) break;
+   357→   357→          let pts = '';
+   358→   358→          let valid = true;
+   359→   359→          for (const p of d.points) {
+   360→   360→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   361→   361→            const y = csRef.current?.priceToCoordinate(p.price);
+   362→   362→            if (x == null || y == null) { valid = false; break; }
+   363→   363→            pts += `${x},${y} `;
+   364→   364→          }
+   365→   365→          if (!valid || pts.length === 0) break;
+   366→   366→          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+   367→   367→          break;
+   368→   368→        }
+   369→   369→        case 'measure': {
+   370→   370→          if (d.points.length < 2) break;
+   371→   371→          const p0 = d.points[0];
+   372→   372→          const p1 = d.points[d.points.length - 1];
+   373→   373→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   374→   374→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   375→   375→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   376→   376→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   377→   377→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   378→   378→
+   379→   379→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   380→   380→          const diff = p1.price - p0.price;
+   381→   381→          const pctChg = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+   382→   382→          const bars = Math.abs(Math.round(p1.time - p0.time));
+   383→   383→          const midX = (x0 + x1) / 2;
+   384→   384→          const midY = (y0 + y1) / 2;
+   385→   385→          const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(priceDecimals))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
+   386→   386→          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
+   387→   387→          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
+   388→   388→          break;
+   389→   389→        }
+   390→   390→        case 'arrow': {
+   391→   391→          if (d.points.length < 2) break;
+   392→   392→          const p0 = d.points[0];
+   393→   393→          const p1 = d.points[d.points.length - 1];
+   394→   394→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   395→   395→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   396→   396→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   397→   397→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   398→   398→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   399→   399→          const markerId = `arrow-${col.replace('#','')}`;
+   400→   400→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
+   401→   401→          break;
+   402→   402→        }
+   403→   403→        case 'ray': {
+   404→   404→          if (d.points.length < 2) break;
+   405→   405→          const p0 = d.points[0];
+   406→   406→          const p1 = d.points[d.points.length - 1];
+   407→   407→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   408→   408→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   409→   409→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   410→   410→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   411→   411→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   412→   412→          // Extend the line from p1 to the edge of the chart
+   413→   413→          const dx = x1 - x0;
+   414→   414→          const dy = y1 - y0;
+   415→   415→          const extendFactor = 10;
+   416→   416→          const xEnd = x1 + dx * extendFactor;
+   417→   417→          const yEnd = y1 + dy * extendFactor;
+   418→   418→          html += `<line x1="${x0}" y1="${y0}" x2="${xEnd}" y2="${yEnd}" stroke="${col}" stroke-width="${lw}" />`;
+   419→   419→          break;
+   420→   420→        }
+   421→   421→        case 'fibext': {
+   422→   422→          if (d.points.length < 2) break;
+   423→   423→          const p0 = d.points[0];
+   424→   424→          const p1 = d.points[1];
+   425→   425→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   426→   426→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   427→   427→          if (x0 == null || x1 == null) break;
+   428→   428→          const priceHigh = Math.max(p0.price, p1.price);
+   429→   429→          const priceLow = Math.min(p0.price, p1.price);
+   430→   430→          const priceRange = priceHigh - priceLow;
+   431→   431→          if (priceRange === 0) break;
+   432→   432→          const yTop = csRef.current?.priceToCoordinate(priceHigh);
+   433→   433→          const yBot = csRef.current?.priceToCoordinate(priceLow);
+   434→   434→          if (yTop == null || yBot == null) break;
+   435→   435→          // Extension base rect (0-100%)
+   436→   436→          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBot - yTop}" fill="${col}" opacity="0.04" />`;
+   437→   437→          // Extension zone (100%+)
+   438→   438→          const extY = csRef.current?.priceToCoordinate(priceHigh - 2.618 * priceRange);
+   439→   439→          if (extY != null) {
+   440→   440→            html += `<rect x="${Math.max(x0,x1)}" y="${yBot}" width="${Math.abs(x1-x0) * 2}" height="${extY - yBot}" fill="${col}" opacity="0.02" />`;
+   441→   441→          }
+   442→   442→          for (const level of FIB_EXT_LEVELS) {
+   443→   443→            const price = priceHigh - level.pct * priceRange;
+   444→   444→            const y = csRef.current?.priceToCoordinate(price);
+   445→   445→            if (y == null) continue;
+   446→   446→            const isExt = level.pct > 1;
+   447→   447→            const xStart = isExt ? Math.max(x0, x1) : Math.min(x0, x1) - 10;
+   448→   448→            const xEnd = isExt ? Math.max(x0, x1) + Math.abs(x1 - x0) * 1.5 : Math.max(x0, x1) + 10;
+   449→   449→            html += `<line x1="${xStart}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="${col}" stroke-width="1" opacity="${isExt ? '0.4' : '0.6'}" ${isExt ? 'stroke-dasharray="4,3"' : ''} />`;
+   450→   450→            html += `<rect x="${xEnd + 2}" y="${y - 8}" width="64" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
+   451→   451→            html += `<text x="${xEnd + 4}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(priceDecimals))}</text>`;
+   452→   452→          }
+   453→   453→          break;
+   454→   454→        }
+   455→   455→        case 'ellipse': {
+   456→   456→          if (d.points.length < 2) break;
+   457→   457→          const p0 = d.points[0];
+   458→   458→          const p1 = d.points[d.points.length - 1];
+   459→   459→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   460→   460→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   461→   461→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   462→   462→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   463→   463→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   464→   464→          const cx = (x0 + x1) / 2;
+   465→   465→          const cy = (y0 + y1) / 2;
+   466→   466→          const rx = Math.abs(x1 - x0) / 2;
+   467→   467→          const ry = Math.abs(y1 - y0) / 2;
+   468→   468→          html += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${col}" fill-opacity="0.06" stroke="${col}" stroke-width="${lw}" />`;
+   469→   469→          break;
+   470→   470→        }
+   471→   471→        case 'path': {
+   472→   472→          if (d.points.length < 2) break;
+   473→   473→          let pts = '';
+   474→   474→          let valid = true;
+   475→   475→          for (const p of d.points) {
+   476→   476→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   477→   477→            const y = csRef.current?.priceToCoordinate(p.price);
+   478→   478→            if (x == null || y == null) { valid = false; break; }
+   479→   479→            pts += `${x},${y} `;
+   480→   480→          }
+   481→   481→          if (!valid || pts.length === 0) break;
+   482→   482→          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+   483→   483→          // Draw dots at each vertex
+   484→   484→          for (const p of d.points) {
+   485→   485→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   486→   486→            const y = csRef.current?.priceToCoordinate(p.price);
+   487→   487→            if (x == null || y == null) continue;
+   488→   488→            html += `<circle cx="${x}" cy="${y}" r="3" fill="${col}" />`;
+   489→   489→          }
+   490→   490→          break;
+   491→   491→        }
+   492→   492→        case 'callout': {
+   493→   493→          if (d.points.length < 1 || !d.text) break;
+   494→   494→          const p = d.points[0];
+   495→   495→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   496→   496→          const y = csRef.current?.priceToCoordinate(p.price);
+   497→   497→          if (x == null || y == null) break;
+   498→   498→          const boxW = Math.max(d.text.length * 8 + 20, 60);
+   499→   499→          const boxH = 28;
+   500→   500→          const boxX = x + 8;
+   501→   501→          const boxY = y - boxH - 8;
+   502→   502→          // Arrow from box to point
+   503→   503→          html += `<line x1="${boxX}" y1="${boxY + boxH}" x2="${x}" y2="${y}" stroke="${col}" stroke-width="1" />`;
+   504→   504→          html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="${C.cardBg}" stroke="${col}" stroke-width="1" rx="4" />`;
+   505→   505→          html += `<text x="${boxX + 6}" y="${boxY + boxH / 2 + 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
+   506→   506→          break;
+   507→   507→        }
+   508→   508→        case 'pitchfork': {
+   509→   509→          if (d.points.length < 3) break;
+   510→   510→          const p0 = d.points[0]; // start of median
+   511→   511→          const p1 = d.points[1]; // end of median
+   512→   512→          const p2 = d.points[2]; // fork point
+   513→   513→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   514→   514→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   515→   515→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   516→   516→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   517→   517→          const x2 = chart.timeScale().timeToCoordinate(p2.time as Time);
+   518→   518→          const y2 = csRef.current?.priceToCoordinate(p2.price);
+   519→   519→          if (x0 == null || y0 == null || x1 == null || y1 == null || x2 == null || y2 == null) break;
+   520→   520→          // Median line (p0 -> p1 extended)
+   521→   521→          const dx = x1 - x0;
+   522→   522→          const dy = y1 - y0;
+   523→   523→          html += `<line x1="${x0}" y1="${y0}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5}" stroke="${col}" stroke-width="${lw}" />`;
+   524→   524→          // Upper parallel: offset = (p2 - median_line) distance
+   525→   525→          const medianSlope = dx !== 0 ? dy / dx : 0;
+   526→   526→          const medianYatX2 = y0 + medianSlope * (x2 - x0);
+   527→   527→          const offset = y2 - medianYatX2;
+   528→   528→          html += `<line x1="${x0}" y1="${y0 + offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 + offset}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   529→   529→          // Lower parallel: mirror the offset
+   530→   530→          html += `<line x1="${x0}" y1="${y0 - offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 - offset}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   531→   531→          break;
+   532→   532→        }
+   533→   533→        case 'channel': {
+   534→   534→          if (d.points.length < 3) break;
+   535→   535→          const p0 = d.points[0];
+   536→   536→          const p1 = d.points[1];
+   537→   537→          const p2 = d.points[2];
+   538→   538→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   539→   539→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   540→   540→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   541→   541→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   542→   542→          const x2 = chart.timeScale().timeToCoordinate(p2.time as Time);
+   543→   543→          const y2 = csRef.current?.priceToCoordinate(p2.price);
+   544→   544→          if (x0 == null || y0 == null || x1 == null || y1 == null || x2 == null || y2 == null) break;
+   545→   545→          // Line 1: p0 -> p1 (base)
+   546→   546→          const dx = x1 - x0;
+   547→   547→          const dy = y1 - y0;
+   548→   548→          html += `<line x1="${x0}" y1="${y0}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5}" stroke="${col}" stroke-width="${lw}" />`;
+   549→   549→          // Parallel through p2
+   550→   550→          const slope = dx !== 0 ? dy / dx : 0;
+   551→   551→          const lineYatX2 = y0 + slope * (x2 - x0);
+   552→   552→          const offset = y2 - lineYatX2;
+   553→   553→          html += `<line x1="${x0}" y1="${y0 + offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 + offset}" stroke="${col}" stroke-width="${lw}" />`;
+   554→   554→          // Fill the channel
+   555→   555→          const extX = x1 + dx * 5;
+   556→   556→          const extY1 = y1 + dy * 5;
+   557→   557→          const extY2 = y1 + dy * 5 + offset;
+   558→   558→          html += `<polygon points="${x0},${y0} ${extX},${extY1} ${extX},${extY2} ${x0},${y0 + offset}" fill="${col}" fill-opacity="0.05" />`;
+   559→   559→          break;
+   560→   560→        }
+   561→   561→        case 'regression': {
+   562→   562→          if (d.points.length < 2) break;
+   563→   563→          const p0 = d.points[0];
+   564→   564→          const p1 = d.points[d.points.length - 1];
+   565→   565→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   566→   566→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   567→   567→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   568→   568→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   569→   569→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   570→   570→          // Draw a straight line from p0 to p1 (linear regression line)
+   571→   571→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   572→   572→          // Show the price change
+   573→   573→          const diff = p1.price - p0.price;
+   574→   574→          const pct = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+   575→   575→          const midX = (x0 + x1) / 2;
+   576→   576→          const midY = (y0 + y1) / 2 - 14;
+   577→   577→          const label = `رگرسیون: ${diff >= 0 ? '+' : ''}${toPersianDigits(pct.toFixed(1))}%`;
+   578→   578→          html += `<rect x="${midX - 50}" y="${midY - 10}" width="100" height="18" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
+   579→   579→          html += `<text x="${midX - 46}" y="${midY + 3}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
+   580→   580→          break;
+   581→   581→        }
+   582→   582→      }
+   583→   583→    }
+   584→   584→
+   585→   585→    svg.innerHTML = html;
+   586→   586→  }, [drawings, currentDrawing, priceDecimals]);
+   587→   587→
+   588→   588→  // OHLC change color helper
+   589→   589→  const chgColor = useCallback((o: number, c: number) => c >= o ? BULL : BEAR, []);
+   590→   590→
+   591→   591→  /* - Chart Build ---------------------- */
+   592→   592→  const build = useCallback(() => {
+   593→   593→    const chartEl = chartContainerRef.current;
+   594→   594→    if (!chartEl || data.length === 0) return;
+   595→   595→
+   596→   596→    if (chartRef.current) {
+   597→   597→      chartRef.current.remove();
+   598→   598→      chartRef.current = null;
+   599→   599→    }
+   600→   600→
+   601→   601→    // — Build Jalali time map — detect Gregorian vs Jalali dates —
+   602→   602→    const jalaliMap = new Map<number, string>();
+   603→   603→    data.forEach((d, i) => {
+   604→   604→      jalaliMap.set(i, isGregorianDate(d.date) ? candleDateToJalali(d.date, 'compact') : formatJalaliString(d.date, 'compact'));
+   605→   605→    });
+   606→   606→
+   607→   607→    // — Persian numeral price formatter —
+   608→   608→    const persianPriceFormatter = (price: number) => {
+   609→   609→      return toPersianDigits(price.toLocaleString('en', { maximumFractionDigits: priceDecimals }));
+   610→   610→    };
+   611→   611→
+   612→   612→    const chart = createChart(chartEl, {
+   613→   613→      layout: { background: { type: ColorType.Solid, color: C.chartBg }, textColor: C.chartText, fontSize: 11 },
+   614→   614→      grid: { vertLines: { color: C.chartGrid }, horzLines: { color: C.chartGrid } },
+   615→   615→      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: C.chartCrosshair, labelBackgroundColor: C.chartBg }, horzLine: { color: C.chartCrosshair, labelBackgroundColor: C.chartBg } },
+   616→   616→      rightPriceScale: {
+   617→   617→        borderColor: C.cardBorder,
+   618→   618→        scaleMargins: { top: 0.05, bottom: 0.3 },
+   619→   619→      },
+   620→   620→      timeScale: {
+   621→   621→        borderColor: C.cardBorder,
+   622→   622→        rightOffset: 5,
+   623→   623→        barSpacing: 6,
+   624→   624→        tickMarkFormatter: (time: Time) => {
+   625→   625→          const idx = time as number;
+   626→   626→          return jalaliMap.get(idx) || String(idx);
+   627→   627→        },
+   628→   628→      },
+   629→   629→      localization: {
+   630→   630→        priceFormatter: persianPriceFormatter,
+   631→   631→      },
+   632→   632→      width: chartEl.clientWidth,
+   633→   633→      height,
+   634→   634→    });
+   635→   635→    chartRef.current = chart;
+   636→   636→
+   637→   637→    // Crosshair move handler — show Shamsi date + OHLC legend
+   638→   638→    crosshairSubRef.current?.dispose();
+   639→   639→    crosshairSubRef.current = chart.subscribeCrosshairMove((param) => {
+   640→   640→      if (!param.time || param.time === undefined) {
+   641→   641→        setHoverInfo(null);
+   642→   642→        return;
+   643→   643→      }
+   644→   644→      const idx = param.time as number;
+   645→   645→      const candle = data[idx];
+   646→   646→      if (!candle) {
+   647→   647→        setHoverInfo(null);
+   648→   648→        return;
+   649→   649→      }
+   650→   650→      const prevCandle = idx > 0 ? data[idx - 1] : candle;
+   651→   651→      const chg = prevCandle.close > 0 ? ((candle.close - prevCandle.close) / prevCandle.close) * 100 : 0;
+   652→   652→      setHoverInfo({
+   653→   653→        date: jalaliDates[idx] || candle.date,
+   654→   654→        o: candle.open,
+   655→   655→        h: candle.high,
+   656→   656→        l: candle.low,
+   657→   657→        c: candle.close,
+   658→   658→        v: candle.volume,
+   659→   659→        chg,
+   660→   660→      });
+   661→   661→    }) as unknown as { dispose: () => void };
+   662→   662→
+   663→   663→    // Numeric time index
+   664→   664→    const candles = data.map((d, i) => ({
+   665→   665→      time: i as Time,
+   666→   666→      open: d.open,
+   667→   667→      high: d.high,
+   668→   668→      low: d.low,
+   669→   669→      close: d.close,
+   670→   670→    }));
+   671→   671→
+   672→   672→    const cs = chart.addSeries(CandlestickSeries, {
+   673→   673→      upColor: BULL,
+   674→   674→      downColor: BEAR,
+   675→   675→      borderUpColor: BULL,
+   676→   676→      borderDownColor: BEAR,
+   677→   677→      wickUpColor: BULL,
+   678→   678→      wickDownColor: BEAR,
+   679→   679→    });
+   680→   680→    cs.setData(candles);
+   681→   681→    csRef.current = cs;
+   682→   682→
+   683→   683→    // Volume
+   684→   684→    const persianVolFormatter = (v: number) => {
+   685→   685→      if (v >= 1e9) return toPersianDigits((v / 1e9).toFixed(1)) + 'B';
+   686→   686→      if (v >= 1e6) return toPersianDigits((v / 1e6).toFixed(1)) + 'M';
+   687→   687→      if (v >= 1e3) return toPersianDigits((v / 1e3).toFixed(1)) + 'K';
+   688→   688→      return toPersianDigits(String(Math.round(v)));
+   689→   689→    };
+   690→   690→    const vol = chart.addSeries(HistogramSeries, {
+   691→   691→      priceFormat: { type: 'custom', formatter: persianVolFormatter },
+   692→   692→      priceScaleId: 'vol',
+   693→   693→    });
+   694→   694→    vol.setData(
+   695→   695→      data.map((d, i) => ({
+   696→   696→        time: i as Time,
+   697→   697→        value: d.volume,
+   698→   698→        color: d.close >= d.open ? BULL : BEAR,
+   699→   699→      }))
+   700→   700→    );
+   701→   701→    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+   702→   702→
+   703→   703→    // TA overlays
+   704→   704→    if (ta) {
+   705→   705→      // ── SMA Lines ──
+   706→   706→      for (const cfg of SMA_CFG) {
+   707→   707→        const v = ta.sma[cfg.key];
+   708→   708→        if (v && v > 0)
+   709→   709→          cs.createPriceLine({
+   710→   710→            price: v,
+   711→   711→            color: cfg.color,
+   712→   712→            lineWidth: 1,
+   713→   713→            lineStyle: 0,
+   714→   714→            axisLabelVisible: true,
+   715→   715→            title: cfg.title,
+   716→   716→          });
+   717→   717→      }
+   718→   718→
+   719→   719→      // ── Bollinger Bands ──
+   720→   720→      const bb = ta.bollingerBands;
+   721→   721→      if (bb) {
+   722→   722→        if (bb.upper > 0) cs.createPriceLine({ price: bb.upper, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Upper' });
+   723→   723→        if (bb.middle > 0) cs.createPriceLine({ price: bb.middle, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Mid' });
+   724→   724→        if (bb.lower > 0) cs.createPriceLine({ price: bb.lower, color: 'rgba(124,58,237,0.6)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BB Lower' });
+   725→   725→      }
+   726→   726→
+   727→   727→      // ── SAR ──
+   728→   728→      if (ta.sar > 0)
+   729→   729→        cs.createPriceLine({ price: ta.sar, color: 'rgba(217,119,6,0.7)', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SAR' });
+   730→   730→
+   731→   731→      // ── EMA Lines ──
+   732→   732→      for (const cfg of EMA_CFG) {
+   733→   733→        const v = ta.ema[cfg.key];
+   734→   734→        if (v && v > 0)
+   735→   735→          cs.createPriceLine({
+   736→   736→            price: v,
+   737→   737→            color: cfg.color,
+   738→   738→            lineWidth: 1,
+   739→   739→            lineStyle: 2, // dashed
+   740→   740→            axisLabelVisible: true,
+   741→   741→            title: cfg.title,
+   742→   742→          });
+   743→   743→      }
+   744→   744→
+   745→   745→      // ── Ichimoku Cloud ──
+   746→   746→      if (ta.ichimokuArrays) {
+   747→   747→        const { tenkan, kijun, senkouA, senkouB } = ta.ichimokuArrays;
+   748→   748→        // Senkou A line
+   749→   749→        const senkouALine = chart.addSeries(LineSeries, {
+   750→   750→          color: 'rgba(16,185,129,0.7)',
+   751→   751→          lineWidth: 1,
+   752→   752→          priceLineVisible: false,
+   753→   753→          lastValueVisible: false,
+   754→   754→          title: 'Senkou A',
+   755→   755→        });
+   756→   756→        senkouALine.setData(
+   757→   757→          senkouA.map((v, i) => ({ time: i as Time, value: v })).filter(d => d.value > 0)
+   758→   758→        );
+   759→   759→        // Senkou B line
+   760→   760→        const senkouBLine = chart.addSeries(LineSeries, {
+   761→   761→          color: 'rgba(239,68,68,0.7)',
+   762→   762→          lineWidth: 1,
+   763→   763→          priceLineVisible: false,
+   764→   764→          lastValueVisible: false,
+   765→   765→          title: 'Senkou B',
+   766→   766→        });
+   767→   767→        senkouBLine.setData(
+   768→   768→          senkouB.map((v, i) => ({ time: i as Time, value: v })).filter(d => d.value > 0)
+   769→   769→        );
+   770→   770→      }
+   771→   771→
+   772→   772→      // ── VWAP Line ──
+   773→   773→      if (ta.vwapArray && ta.vwapArray.some(v => v > 0)) {
+   774→   774→        const vwapLine = chart.addSeries(LineSeries, {
+   775→   775→          color: 'rgba(234,179,8,0.8)',
+   776→   776→          lineWidth: 2,
+   777→   777→          priceLineVisible: false,
+   778→   778→          lastValueVisible: false,
+   779→   779→          title: 'VWAP',
+   780→   780→        });
+   781→   781→        vwapLine.setData(
+   782→   782→          ta.vwapArray.map((v, i) => ({ time: i as Time, value: v })).filter(d => d.value > 0)
+   783→   783→        );
+   784→   784→      }
+   785→   785→
+   786→   786→      // ── S/R Levels ──
+   787→   787→      const resistanceStrengths = ta.resistanceStrengths || [];
+   788→   788→      const supportStrengths = ta.supportStrengths || [];
+   789→   789→
+   790→   790→      resistanceStrengths.slice(0, 6).forEach((r, i) => {
+   791→   791→        if (r.price <= 0) return;
+   792→   792→        const style = srLineStyle(r.strength, r.isTarget);
+   793→   793→        const toFa = (n: number) => String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+   794→   794→        const methodCount = toFa(r.methods?.length ?? 0);
+   795→   795→        const fibTag = r.fibLabel ? ` فیبو ${r.fibLabel}` : '';
+   796→   796→        const title = r.isTarget
+   797→   797→          ? `★ R${toFa(i + 1)} [${r.grade}]`
+   798→   798→          : `R${toFa(i + 1)} [${r.grade}] (${methodCount} method)${fibTag}`;
+   799→   799→        cs.createPriceLine({
+   800→   800→          price: r.price,
+   801→   801→          color: r.isTarget ? '#c2410c' : RESIST_COLOR,
+   802→   802→          lineWidth: style.lineWidth as 1|2|3|4,
+   803→   803→          lineStyle: style.lineStyle,
+   804→   804→          axisLabelVisible: true,
+   805→   805→          title,
+   806→   806→        });
+   807→   807→      });
+   808→   808→
+   809→   809→      supportStrengths.slice(0, 6).forEach((s, i) => {
+   810→   810→        if (s.price <= 0) return;
+   811→   811→        const style = srLineStyle(s.strength, s.isTarget);
+   812→   812→        const toFa = (n: number) => String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+   813→   813→        const methodCount = toFa(s.methods?.length ?? 0);
+   814→   814→        const fibTag = s.fibLabel ? ` فیبو ${s.fibLabel}` : '';
+   815→   815→        const title = s.isTarget
+   816→   816→          ? `★ S${toFa(i + 1)} [${s.grade}]`
+   817→   817→          : `S${toFa(i + 1)} [${s.grade}] (${methodCount} method)${fibTag}`;
+   818→   818→        cs.createPriceLine({
+   819→   819→          price: s.price,
+   820→   820→          color: s.isTarget ? '#1d4ed8' : SUPPORT_COLOR,
+   821→   821→          lineWidth: style.lineWidth as 1|2|3|4,
+   822→   822→          lineStyle: style.lineStyle,
+   823→   823→          axisLabelVisible: true,
+   824→   824→          title,
+   825→   825→        });
+   826→   826→      });
+   827→   827→    }
+   828→   828→
+   829→   829→    chart.timeScale().fitContent();
+   830→   830→
+   831→   831→    // Subscribe to visible range changes to re-render SVG
+   832→   832→    requestAnimationFrame(() => {
+   833→   833→      if (chartRef.current) {
+   834→   834→        const sub = chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
+   835→   835→          setRenderKey((k) => k + 1);
+   836→   836→        });
+   837→   837→        subscriberRef.current = sub as unknown as { dispose: () => void };
+   838→   838→      }
+   839→   839→    });
+   840→   840→
+   841→   841→    // Set initial chart size (deferred to avoid React batching issue)
+   842→   842→    requestAnimationFrame(() => {
+   843→   843→      if (chartContainerRef.current) {
+   844→   844→        setChartSize({ w: chartContainerRef.current.clientWidth, h: height });
+   845→   845→      }
+   846→   846→    });
+   847→   847→  }, [data, ta, height, jalaliDates, isDark]);
+   848→   848→
+   849→   849→  /* - Re-render SVG when renderKey changes --------- */
+   850→   850→  useEffect(() => {
+   851→   851→    renderDrawings();
+   852→   852→  }, [renderKey, renderDrawings]);
+   853→   853→
+   854→   854→  /* - Init chart ----------------------- */
+   855→   855→  useEffect(() => {
+   856→   856→    const el = chartContainerRef.current;
+   857→   857→    if (!el) return;
+   858→   858→    let ro: ResizeObserver | null = null;
+   859→   859→    try {
+   860→   860→      ro = new ResizeObserver((entries) => {
+   861→   861→        for (const e of entries) {
+   862→   862→          const { width: w, height: h } = e.contentRect;
+   863→   863→          if (w > 0 && h > 0) {
+   864→   864→            try { chartRef.current?.applyOptions({ width: w, height: h }); } catch {}
+   865→   865→            try { setChartSize({ w, h }); } catch {}
+   866→   866→          }
+   867→   867→        }
+   868→   868→      });
+   869→   869→      ro.observe(el);
+   870→   870→    } catch {}
+   871→   871→    build();
+   872→   872→    return () => {
+   873→   873→      try { ro?.disconnect(); } catch {}
+   874→   874→      subscriberRef.current?.dispose();
+   875→   875→      subscriberRef.current = null;
+   876→   876→      crosshairSubRef.current?.dispose();
+   877→   877→      crosshairSubRef.current = null;
+   878→   878→      if (chartRef.current) {
+   879→   879→        chartRef.current.remove();
+   880→   880→        chartRef.current = null;
+   881→   881→      }
+   882→   882→    };
+   883→   883→  }, [build]);
+   884→   884→
+   885→   885→  /* - Mouse event handlers ----------------- */
+   886→   886→  const handleMouseDown = useCallback(
+   887→   887→    (e: React.MouseEvent) => {
+   888→   888→      if (activeTool === 'cursor') return;
+   889→   889→      if (textInput) return;
+   890→   890→
+   891→   891→      const point = getChartPoint(e.clientX, e.clientY);
+   892→   892→      if (!point) return;
+   893→   893→
+   894→   894→      if (activeTool === 'hline') {
+   895→   895→        const drawing: Drawing = {
+   896→   896→          id: Date.now().toString(),
+   897→   897→          type: 'hline',
+   898→   898→          points: [point],
+   899→   899→          color: activeColor,
+   900→   900→          lineWidth: 1,
+   901→   901→          completed: true,
+   902→   902→        };
+   903→   903→        setDrawings((prev) => [...prev, drawing]);
+   904→   904→        setIsDrawing(false);
+   905→   905→        return;
+   906→   906→      }
+   907→   907→
+   908→   908→      if (activeTool === 'text') {
+   909→   909→        const chart = chartRef.current;
+   910→   910→        const container = chartContainerRef.current;
+   911→   911→        if (!chart || !container) return;
+   912→   912→        const rect = container.getBoundingClientRect();
+   913→   913→        const x = e.clientX - rect.left;
+   914→   914→        const y = e.clientY - rect.top;
+   915→   915→
+   916→   916→        const tempDrawing: Drawing = {
+   917→   917→          id: Date.now().toString(),
+   918→   918→          type: 'text',
+   919→   919→          points: [point],
+   920→   920→          color: activeColor,
+   921→   921→          lineWidth: 1,
+   922→   922→          text: '',
+   923→   923→          completed: false,
+   924→   924→        };
+   925→   925→        setCurrentDrawing(tempDrawing);
+   926→   926→        setTextInput({ x, y, drawingId: tempDrawing.id });
+   927→   927→        setTextValue('');
+   928→   928→        setIsDrawing(true);
+   929→   929→        return;
+   930→   930→      }
+   931→   931→
+   932→   932→      if (activeTool === 'callout') {
+   933→   933→        const chart = chartRef.current;
+   934→   934→        const container = chartContainerRef.current;
+   935→   935→        if (!chart || !container) return;
+   936→   936→        const rect = container.getBoundingClientRect();
+   937→   937→        const x = e.clientX - rect.left;
+   938→   938→        const y = e.clientY - rect.top;
+   939→   939→
+   940→   940→        const tempDrawing: Drawing = {
+   941→   941→          id: Date.now().toString(),
+   942→   942→          type: 'callout',
+   943→   943→          points: [point],
+   944→   944→          color: activeColor,
+   945→   945→          lineWidth: 1,
+   946→   946→          text: '',
+   947→   947→          completed: false,
+   948→   948→        };
+   949→   949→        setCurrentDrawing(tempDrawing);
+   950→   950→        setTextInput({ x, y, drawingId: tempDrawing.id });
+   951→   951→        setTextValue('');
+   952→   952→        setIsDrawing(true);
+   953→   953→        return;
+   954→   954→      }
+   955→   955→
+   956→   956→      const drawing: Drawing = {
+   957→   957→        id: Date.now().toString(),
+   958→   958→        type: activeTool,
+   959→   959→        points: [point],
+   960→   960→        color: activeColor,
+   961→   961→        lineWidth: activeTool === 'brush' ? 2 : 1,
+   962→   962→        completed: false,
+   963→   963→      };
+   964→   964→      setCurrentDrawing(drawing);
+   965→   965→      setIsDrawing(true);
+   966→   966→    },
+   967→   967→    [activeTool, activeColor, getChartPoint, textInput]
+   968→   968→  );
+   969→   969→
+   970→   970→  const handleMouseMove = useCallback(
+   971→   971→    (e: React.MouseEvent) => {
+   972→   972→      if (!isDrawing || !currentDrawing) return;
+   973→   973→
+   974→   974→      const point = getChartPoint(e.clientX, e.clientY);
+   975→   975→      if (!point) return;
+   976→   976→
+   977→   977→      if (currentDrawing.type === 'brush' || currentDrawing.type === 'path') {
+   978→   978→        setCurrentDrawing({
+   979→   979→          ...currentDrawing,
+   980→   980→          points: [...currentDrawing.points, point],
+   981→   981→        });
+   982→   982→      } else if (currentDrawing.type !== 'text' && currentDrawing.type !== 'hline' && currentDrawing.type !== 'callout') {
+   983→   983→        if (currentDrawing.type === 'pitchfork' || currentDrawing.type === 'channel') {
+   984→   984→          // 3-point tools: accumulate points
+   985→   985→          const pts = [...currentDrawing.points, point];
+   986→   986→          if (pts.length > 3) {
+   987→   987→            pts[pts.length - 1] = point;
+   988→   988→          }
+   989→   989→          setCurrentDrawing({
+   990→   990→            ...currentDrawing,
+   991→   991→            points: pts,
+   992→   992→          });
+   993→   993→        } else {
+   994→   994→          setCurrentDrawing({
+   995→   995→            ...currentDrawing,
+   996→   996→            points: [currentDrawing.points[0], point],
+   997→   997→          });
+   998→   998→        }
+   999→   999→      }
+  1000→  1000→    },
+  1001→  1001→    [isDrawing, currentDrawing, getChartPoint]
+  1002→  1002→  );
+  1003→  1003→
+  1004→  1004→  const handleMouseUp = useCallback(() => {
+  1005→  1005→    if (!isDrawing || !currentDrawing) return;
+  1006→  1006→
+  1007→  1007→    if (currentDrawing.type === 'text') return;
+  1008→  1008→
+  1009→  1009→    const completed: Drawing = {
+  1010→  1010→      ...currentDrawing,
+  1011→  1011→      completed: true,
+  1012→  1012→    };
+  1013→  1013→
+  1014→  1014→    const needs3Points = currentDrawing.type === 'pitchfork' || currentDrawing.type === 'channel';
+  1015→  1015→    const minPoints = currentDrawing.type === 'hline' ? 1 : needs3Points ? 3 : 2;
+  1016→  1016→    if (needs3Points && completed.points.length < 3) {
+  1017→  1017→      // Don't finalize yet, keep collecting points
+  1018→  1018→      setCurrentDrawing(completed);
+  1019→  1019→      return;
+  1020→  1020→    }
+  1021→  1021→    if (completed.points.length >= minPoints) {
+  1022→  1022→      setDrawings((prev) => [...prev, completed]);
+  1023→  1023→    }
+  1024→  1024→
+  1025→  1025→    setCurrentDrawing(null);
+  1026→  1026→    setIsDrawing(false);
+  1027→  1027→  }, [isDrawing, currentDrawing]);
+  1028→  1028→
+  1029→  1029→  /* - Text input submit ------------------- */
+  1030→  1030→  const handleTextSubmit = useCallback(() => {
+  1031→  1031→    if (!textInput || !textValue.trim() || !currentDrawing) {
+  1032→  1032→      setTextInput(null);
+  1033→  1033→      setCurrentDrawing(null);
+  1034→  1034→      setIsDrawing(false);
+  1035→  1035→      return;
+  1036→  1036→    }
+  1037→  1037→
+  1038→  1038→    const completed: Drawing = {
+  1039→  1039→      ...currentDrawing,
+  1040→  1040→      text: textValue.trim(),
+  1041→  1041→      completed: true,
+  1042→  1042→    };
+  1043→  1043→    setDrawings((prev) => [...prev, completed]);
+  1044→  1044→    setTextInput(null);
+  1045→  1045→    setTextValue('');
+  1046→  1046→    setCurrentDrawing(null);
+  1047→  1047→    setIsDrawing(false);
+  1048→  1048→  }, [textInput, textValue, currentDrawing]);
+  1049→  1049→
+  1050→  1050→  const handleTextCancel = useCallback(() => {
+  1051→  1051→    setTextInput(null);
+  1052→  1052→    setTextValue('');
+  1053→  1053→    setCurrentDrawing(null);
+  1054→  1054→    setIsDrawing(false);
+  1055→  1055→  }, []);
+  1056→  1056→
+  1057→  1057→  /* - Delete / Clear -------------------- */
+  1058→  1058→  const handleDeleteLast = useCallback(() => {
+  1059→  1059→    setDrawings((prev) => prev.slice(0, -1));
+  1060→  1060→  }, []);
+  1061→  1061→
+  1062→  1062→  const handleClearAll = useCallback(() => {
+  1063→  1063→    setDrawings([]);
+  1064→  1064→  }, []);
+  1065→  1065→
+  1066→  1066→  /* - Render ------------------------- */
+  1067→  1067→  const fmt = (n: number) => toPersianDigits(n.toLocaleString('en', { maximumFractionDigits: priceDecimals }));
+  1068→  1068→
+  1069→  1069→  return (
+  1070→  1070→    <div className="w-full">
+  1071→  1071→      {/* - CROSSHAIR LEGEND (Shamsi date + OHLC) ---------- */}
+  1072→  1072→      {hoverInfo && (
+  1073→  1073→        <div className="flex items-center gap-3 px-3 py-1.5 rounded-t-lg text-[11px]" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif', background: C.cardBg, borderBottom: `1px solid ${C.cardBorder}` }}>
+  1074→  1074→          <span style={{ color: C.chartText, fontWeight: 500 }}>{hoverInfo.date}</span>
+  1075→  1075→          <div style={{ width: 1, height: 14, background: C.cardBorder }} />
+  1076→  1076→          <span style={{ color: C.chartText }}>باز: <span style={{ fontWeight: 700, color: chgColor(hoverInfo.o, hoverInfo.c) === BULL ? C.bullColor : C.bearColor }}>{fmt(hoverInfo.o)}</span></span>
+  1077→  1077→          <span style={{ color: C.chartText }}>بالا: <span style={{ fontWeight: 700, color: C.bullColor }}>{fmt(hoverInfo.h)}</span></span>
+  1078→  1078→          <span style={{ color: C.chartText }}>پایین: <span style={{ fontWeight: 700, color: C.bearColor }}>{fmt(hoverInfo.l)}</span></span>
+  1079→  1079→          <span style={{ color: C.chartText }}>بسته: <span style={{ fontWeight: 700, color: chgColor(hoverInfo.o, hoverInfo.c) === BULL ? C.bullColor : C.bearColor }}>{fmt(hoverInfo.c)}</span></span>
+  1080→  1080→          {hoverInfo.v > 0 && (
+  1081→  1081→            <span style={{ color: C.chartText }}>حجم: <span style={{ fontWeight: 700, color: C.cardFg }}>{toPersianDigits((hoverInfo.v / 1e6).toFixed(1))}M</span></span>
+  1082→  1082→          )}
+  1083→  1083→          <span style={{ fontWeight: 700, color: hoverInfo.chg >= 0 ? C.bullColor : C.bearColor }}>
+  1084→  1084→            {hoverInfo.chg >= 0 ? '▲' : '▼'} {toPersianDigits(Math.abs(hoverInfo.chg).toFixed(2))}٪
+  1085→  1085→          </span>
+  1086→  1086→        </div>
+  1087→  1087→      )}
+  1088→  1088→      {/* - TOOLBAR --------------------- */}
+  1089→  1089→      <div
+  1090→  1090→        className={`flex items-center gap-1 px-2 py-1.5 overflow-x-auto flex-nowrap border ${hoverInfo ? 'border-t-0 rounded-b-lg' : 'rounded-t-lg border-b-0'}`}
+  1091→  1091→        style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+  1092→  1092→      >
+  1093→  1093→        {TOOLS.map((tool) => (
+  1094→  1094→          <button
+  1095→  1095→            key={tool.id}
+  1096→  1096→            onClick={() => {
+  1097→  1097→              setActiveTool(tool.id);
+  1098→  1098→              if (isDrawing) {
+  1099→  1099→                setIsDrawing(false);
+  1100→  1100→                setCurrentDrawing(null);
+  1101→  1101→                setTextInput(null);
+  1102→  1102→              }
+  1103→  1103→            }}
+  1104→  1104→            title={tool.label}
+  1105→  1105→            className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all cursor-pointer ${
+  1106→  1106→              activeTool === tool.id
+  1107→  1107→                ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
+  1108→  1108→                : ''
+  1109→  1109→            }`}
+  1110→  1110→            style={activeTool !== tool.id ? { color: C.cardSubFg } : undefined}
+  1111→  1111→          >
+  1112→  1112→            {tool.icon}
+  1113→  1113→          </button>
+  1114→  1114→        ))}
+  1115→  1115→
+  1116→  1116→        <div className="w-px h-6 mx-1 shrink-0" style={{ background: C.cardBorder }} />
+  1117→  1117→
+  1118→  1118→        {PALETTE.map((c) => (
+  1119→  1119→          <button
+  1120→  1120→            key={c}
+  1121→  1121→            onClick={() => setActiveColor(c)}
+  1122→  1122→            title={c}
+  1123→  1123→            className={`shrink-0 w-6 h-6 rounded-full border-2 transition-all cursor-pointer ${
+  1124→  1124→              activeColor === c ? 'scale-110' : 'border-transparent hover:scale-105'
+  1125→  1125→            }`}
+  1126→  1126→            style={{ backgroundColor: c, borderColor: activeColor === c ? C.cardFg : undefined }}
+  1127→  1127→          />
+  1128→  1128→        ))}
+  1129→  1129→
+  1130→  1130→        <div className="w-px h-6 mx-1 shrink-0" style={{ background: C.cardBorder }} />
+  1131→  1131→
+  1132→  1132→        <button
+  1133→  1133→          onClick={handleDeleteLast}
+  1134→  1134→          title="حذف آخر"
+  1135→  1135→          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md hover:bg-[rgba(255,117,138,0.1)] hover:text-[#ff758a] transition-all cursor-pointer"
+  1136→  1136→          style={{ color: C.cardSubFg }}
+  1137→  1137→        >
+  1138→  1138→          <Trash2 className="w-3.5 h-3.5" />
+  1139→  1139→        </button>
+  1140→  1140→
+  1141→  1141→        <button
+  1142→  1142→          onClick={handleClearAll}
+  1143→  1143→          title="پاک کردن همه"
+  1144→  1144→          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md hover:bg-[rgba(255,117,138,0.1)] hover:text-[#ff758a] transition-all cursor-pointer"
+  1145→  1145→          style={{ color: C.cardSubFg }}
+  1146→  1146→        >
+  1147→  1147→          <X className="w-3.5 h-3.5" />
+  1148→  1148→        </button>
+  1149→  1149→
+  1150→  1150→        <div className="mr-auto shrink-0 text-xs font-medium" style={{ color: C.cardSubFg }} dir="rtl">
+  1151→  1151→          {TOOLS.find((t) => t.id === activeTool)?.label}
+  1152→  1152→        </div>
+  1153→  1153→      </div>
+  1154→  1154→
+  1155→  1155→      <div
+  1156→  1156→        className="relative rounded-b-lg overflow-hidden"
+  1157→  1157→        style={{ height, border: `1px solid ${C.cardBorder}` }}
+  1158→  1158→      >
+  1159→  1159→        <div
+  1160→  1160→          ref={chartContainerRef}
+  1161→  1161→          className="w-full h-full"
+  1162→  1162→          data-chart
+  1163→  1163→        />
+  1164→  1164→
+  1165→  1165→        <svg
+  1166→  1166→          ref={svgRef}
+  1167→  1167→          className="absolute top-0 left-0"
+  1168→  1168→          style={{
+  1169→  1169→            width: chartSize.w || '100%',
+  1170→  1170→            height: chartSize.h || '100%',
+  1171→  1171→            pointerEvents: activeTool !== 'cursor' ? 'auto' : 'none',
+  1172→  1172→            zIndex: 10,
+  1173→  1173→          }}
+  1174→  1174→          onMouseDown={handleMouseDown}
+  1175→  1175→          onMouseMove={handleMouseMove}
+  1176→  1176→          onMouseUp={handleMouseUp}
+  1177→  1177→          onMouseLeave={handleMouseUp}
+  1178→  1178→        />
+  1179→  1179→
+  1180→  1180→        {textInput && (
+  1181→  1181→          <div
+  1182→  1182→            className="absolute z-20"
+  1183→  1183→            style={{
+  1184→  1184→              left: textInput.x,
+  1185→  1185→              top: textInput.y - 8,
+  1186→  1186→            }}
+  1187→  1187→          >
+  1188→  1188→            <input
+  1189→  1189→              type="text"
+  1190→  1190→              value={textValue}
+  1191→  1191→              onChange={(e) => setTextValue(e.target.value)}
+  1192→  1192→              onKeyDown={(e) => {
+  1193→  1193→                if (e.key === 'Enter') handleTextSubmit();
+  1194→  1194→                if (e.key === 'Escape') handleTextCancel();
+  1195→  1195→              }}
+  1196→  1196→              placeholder="متن..."
+  1197→  1197→              autoFocus
+  1198→  1198→              dir="rtl"
+  1199→  1199→              className="border rounded px-2 py-1 text-sm outline-none focus:border-amber-500 w-32"
+  1200→  1200→              style={{ background: C.cardBg, borderColor: C.inputBorder, color: C.cardFg }}
+  1201→  1201→              onBlur={handleTextSubmit}
+  1202→  1202→            />
+  1203→  1203→          </div>
+  1204→  1204→        )}
+  1205→  1205→      </div>
+  1206→  1206→    </div>
+  1207→  1207→  );
+  1208→  1208→}
+  1209→  1209→

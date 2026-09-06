@@ -9,25 +9,45 @@ import type { OHLCV } from './ta-engine';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/** Direction classification for a candlestick pattern */
 export type PatternDirection = 'bullish' | 'bearish' | 'neutral';
+/** Reliability classification for a candlestick pattern */
 export type PatternReliability = 'strong' | 'moderate' | 'weak';
 
+/**
+ * A detected candlestick pattern with bilingual metadata.
+ */
 export interface CandlestickPattern {
+  /** Persian pattern name (e.g. 'دوجی', 'چکش', 'پوشای صعودی') */
   name: string;
+  /** English pattern name (e.g. 'Doji', 'Hammer', 'Bullish Engulfing') */
   nameEn: string;
+  /** Pattern direction: bullish, bearish, or neutral */
   direction: PatternDirection;
+  /** Reliability classification */
   reliability: PatternReliability;
-  reliabilityScore: number; // 0-1
+  /** Numeric reliability score from 0 to 1 */
+  reliabilityScore: number;
+  /** Persian description of the pattern and its implications */
   description: string;
+  /** English description of the pattern and its implications */
   descriptionEn: string;
-  index: number; // position in data array
+  /** Position index in the data array where the pattern was detected */
+  index: number;
 }
 
+/**
+ * Result of scanning OHLCV data for candlestick patterns.
+ */
 export interface PatternScanResult {
+  /** Top 5 most reliable patterns detected (sorted by reliabilityScore desc) */
   patterns: CandlestickPattern[];
+  /** Overall dominant direction based on weighted pattern scores */
   dominantDirection: PatternDirection;
+  /** Dominant direction score (0-1, ratio of dominant direction weight to total) */
   dominantScore: number;
-  summary: string; // Persian summary for narrative
+  /** Persian narrative summary of detected patterns and their implications */
+  summary: string;
 }
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
@@ -82,7 +102,15 @@ function avgRange(data: OHLCV[], endIdx: number, n: number): number {
 
 // ─── Pattern Detection Functions ─────────────────────────────────────────────
 
-/** 1. Doji — Open ≈ Close, significant shadows */
+/**
+ * 1. Doji — Open ≈ Close with significant shadows.
+ * Body must be < 10% of the full range. At least one shadow must be ≥ 60% of range.
+ * Long-legged variant detected when range > 1.5× average range.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the candle to check
+ * @returns CandlestickPattern if doji detected, null otherwise
+ */
 function detectDoji(data: OHLCV[], i: number): CandlestickPattern | null {
   const c = data[i];
   const range = fullRange(c);
@@ -114,7 +142,15 @@ function detectDoji(data: OHLCV[], i: number): CandlestickPattern | null {
   };
 }
 
-/** 2. Hammer — Small body at top, long lower shadow (bullish reversal at bottom) */
+/**
+ * 2. Hammer — Small body at top, long lower shadow (bullish reversal at bottom of downtrend).
+ * Lower shadow ≥ 2× body, upper shadow < 10% of range, body in upper 40% of range.
+ * Reliability boosted to 'strong' when appearing after a downtrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the candle to check
+ * @returns CandlestickPattern if hammer detected, null otherwise
+ */
 function detectHammer(data: OHLCV[], i: number): CandlestickPattern | null {
   const c = data[i];
   const body = bodySize(c);
@@ -151,7 +187,15 @@ function detectHammer(data: OHLCV[], i: number): CandlestickPattern | null {
   };
 }
 
-/** 3. Inverted Hammer / Shooting Star context-dependent */
+/**
+ * 3. Inverted Hammer — Small body at bottom, long upper shadow (bullish reversal in downtrend).
+ * Upper shadow ≥ 2× body, lower shadow < 10% of range.
+ * Only returns a pattern when appearing in a downtrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the candle to check
+ * @returns CandlestickPattern if inverted hammer detected in downtrend, null otherwise
+ */
 function detectInvertedHammer(data: OHLCV[], i: number): CandlestickPattern | null {
   const c = data[i];
   const body = bodySize(c);
@@ -184,7 +228,15 @@ function detectInvertedHammer(data: OHLCV[], i: number): CandlestickPattern | nu
   return null;
 }
 
-/** 4. Bullish Engulfing */
+/**
+ * 4. Bullish Engulfing — Current bullish candle completely engulfs previous bearish candle.
+ * Current body must be ≥ 1.2× previous body size.
+ * Reliability boosted to 'strong' when appearing after a downtrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the current candle
+ * @returns CandlestickPattern if bullish engulfing detected, null otherwise
+ */
 function detectBullishEngulfing(data: OHLCV[], i: number): CandlestickPattern | null {
   if (i < 1) return null;
   const prev = data[i - 1];
@@ -219,7 +271,15 @@ function detectBullishEngulfing(data: OHLCV[], i: number): CandlestickPattern | 
   };
 }
 
-/** 5. Bearish Engulfing */
+/**
+ * 5. Bearish Engulfing — Current bearish candle completely engulfs previous bullish candle.
+ * Current body must be ≥ 1.2× previous body size.
+ * Reliability boosted to 'strong' when appearing after an uptrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the current candle
+ * @returns CandlestickPattern if bearish engulfing detected, null otherwise
+ */
 function detectBearishEngulfing(data: OHLCV[], i: number): CandlestickPattern | null {
   if (i < 1) return null;
   const prev = data[i - 1];
@@ -250,7 +310,15 @@ function detectBearishEngulfing(data: OHLCV[], i: number): CandlestickPattern | 
   };
 }
 
-/** 6. Morning Star — 3-candle bullish reversal */
+/**
+ * 6. Morning Star — 3-candle bullish reversal pattern.
+ * First: large bearish body. Second: small star body (doji-like). Third: large bullish body
+ * closing above midpoint of first candle. All bodies compared to 10-candle average.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the third candle (the bullish one)
+ * @returns CandlestickPattern if morning star detected, null otherwise
+ */
 function detectMorningStar(data: OHLCV[], i: number): CandlestickPattern | null {
   if (i < 2) return null;
   const c1 = data[i - 2]; // first candle (bearish, large)
@@ -287,7 +355,15 @@ function detectMorningStar(data: OHLCV[], i: number): CandlestickPattern | null 
   };
 }
 
-/** 7. Evening Star — 3-candle bearish reversal */
+/**
+ * 7. Evening Star — 3-candle bearish reversal pattern.
+ * First: large bullish body. Second: small star body (doji-like). Third: large bearish body
+ * closing below midpoint of first candle.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the third candle (the bearish one)
+ * @returns CandlestickPattern if evening star detected, null otherwise
+ */
 function detectEveningStar(data: OHLCV[], i: number): CandlestickPattern | null {
   if (i < 2) return null;
   const c1 = data[i - 2];
@@ -321,7 +397,15 @@ function detectEveningStar(data: OHLCV[], i: number): CandlestickPattern | null 
   };
 }
 
-/** 8. Shooting Star — at top of uptrend */
+/**
+ * 8. Shooting Star — Long upper shadow, small body at bottom (bearish reversal at top of uptrend).
+ * Upper shadow ≥ 2× body, lower shadow < 15% of range.
+ * Only valid when appearing in an uptrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the candle to check
+ * @returns CandlestickPattern if shooting star detected in uptrend, null otherwise
+ */
 function detectShootingStar(data: OHLCV[], i: number): CandlestickPattern | null {
   const c = data[i];
   const body = bodySize(c);
@@ -350,7 +434,15 @@ function detectShootingStar(data: OHLCV[], i: number): CandlestickPattern | null
   };
 }
 
-/** 9. Bullish Harami */
+/**
+ * 9. Bullish Harami — Small bullish body inside previous large bearish body.
+ * Current body must be < 60% of previous body size.
+ * Reliability boosted to 'moderate' when appearing in a downtrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the current candle
+ * @returns CandlestickPattern if bullish harami detected, null otherwise
+ */
 function detectBullishHarami(data: OHLCV[], i: number): CandlestickPattern | null {
   if (i < 1) return null;
   const prev = data[i - 1];
@@ -384,7 +476,15 @@ function detectBullishHarami(data: OHLCV[], i: number): CandlestickPattern | nul
   };
 }
 
-/** 10. Bearish Harami */
+/**
+ * 10. Bearish Harami — Small bearish body inside previous large bullish body.
+ * Current body must be < 60% of previous body size.
+ * Reliability boosted to 'moderate' when appearing in an uptrend.
+ *
+ * @param data - OHLCV array
+ * @param i - Index of the current candle
+ * @returns CandlestickPattern if bearish harami detected, null otherwise
+ */
 function detectBearishHarami(data: OHLCV[], i: number): CandlestickPattern | null {
   if (i < 1) return null;
   const prev = data[i - 1];
@@ -496,6 +596,10 @@ export function scanCandlestickPatterns(
 
 /**
  * Quick check for the most recent candle pattern only.
+ * Returns the highest-reliability pattern detected on the last candle.
+ *
+ * @param data - OHLCV data array (chronological, oldest first)
+ * @returns The most reliable CandlestickPattern on the latest candle, or null
  */
 export function detectLatestPattern(data: OHLCV[]): CandlestickPattern | null {
   if (data.length < 3) return null;
@@ -571,7 +675,12 @@ export interface AIPatternResult {
 
 /**
  * Build a prompt for LLM-based harmonic/Elliott pattern detection.
- * This prompt should be sent to ZAI LLM for analysis.
+ * Provides 50 most recent OHLCV candles, swing points, and key levels
+ * for the LLM to analyze harmonic patterns (gartley, butterfly, bat, crab, shark)
+ * and Elliott wave positioning.
+ *
+ * @param req - Request with OHLCV data, current price, and symbol name
+ * @returns Persian-language prompt string for LLM analysis
  */
 export function buildAIPatternPrompt(req: AIPatternRequest): string {
   const last50 = req.ohlcv.slice(-50);

@@ -1,0 +1,452 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React from 'react';
+     4→     4→import {
+     5→     5→  BarChart3, TrendingUp, BrainCircuit, Shield, Zap, Globe, Coins, Building2, Bitcoin, Gem, Fuel, Package, ChevronLeft, CheckCircle2, ArrowLeft, Cpu, Search, FileText, GitBranch, Activity, Layers, Database, Clock, Lock, Gauge, Sparkles, MousePointerClick, Lightbulb, CandlestickChart, Network, Scale, Flame, Workflow, Server, Code2, ArrowUpDown, Target, BarChart2, LineChart, RefreshCw, Eye,
+     6→     6→} from 'lucide-react';
+     7→     7→import { cn } from '@/lib/utils';
+     8→     8→
+     9→     9→interface HomepageProps {
+    10→    10→  onSelectCategory: (category: string) => void;
+    11→    11→}
+    12→    12→
+    13→    13→const SIDEBAR_SECTIONS = [
+    14→    14→  { id: 'features', label: 'ویژگی‌ها', icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50' },
+    15→    15→  { id: 'ml-engine', label: 'موتور ML و AI', icon: BrainCircuit, color: 'text-violet-600', bg: 'bg-violet-50' },
+    16→    16→  { id: 'tools', label: 'ابزارها', icon: Cpu, color: 'text-teal-600', bg: 'bg-teal-50' },
+    17→    17→  { id: 'markets', label: 'بازارها', icon: Globe, color: 'text-sky-600', bg: 'bg-sky-50' },
+    18→    18→  { id: 'architecture', label: 'معماری سیستم', icon: Code2, color: 'text-orange-600', bg: 'bg-orange-50' },
+    19→    19→  { id: 'how-it-works', label: 'نحوه استفاده', icon: MousePointerClick, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    20→    20→] as const;
+    21→    21→
+    22→    22→type SectionId = (typeof SIDEBAR_SECTIONS)[number]['id'];
+    23→    23→
+    24→    24→const STATS = [
+    25→    25→  { value: '۸,۰۰۰+', label: 'ابزار مالی', icon: Layers },
+    26→    26→  { value: '۵۰', label: 'شاخص بورس (۱۰+۴۰)', icon: BarChart2 },
+    27→    27→  { value: '۱۶+', label: 'اندیکاتور تکنیکال', icon: Activity },
+    28→    28→  { value: '۱,۵۰۰', label: 'ترکیب روایتی AI', icon: BrainCircuit },
+    29→    29→  { value: '۹', label: 'سناریوی احتمالی', icon: GitBranch },
+    30→    30→  { value: '۱۷', label: 'دسته‌بندی بازار', icon: Globe },
+    31→    31→];
+    32→    32→
+    33→    33→const FEATURES = [
+    34→    34→  { icon: Activity, title: 'موتور تحلیل تکنیکال بومی', desc: 'موتور TypeScript با ۱۶+ اندیکاتور: SMA, EMA, RSI, MFI, CCI, Stochastic, Williams %R, MACD, ADX, DI+/DI-, SAR, ATR, Bollinger Bands, OBV. تحلیل روند در ۳ بازه کوتاه/متوسط/بلندمدت با R-squared.', color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-200/60' },
+    35→    35→  { icon: BrainCircuit, title: 'موتور روایتی ML (V12)', desc: '۱۰ مکتب تحلیل × ۱۰ سبک روایتی × ۱۵ لحن = ۱,۵۰۰ ترکیب قطعی. انتخاب بر اساس وضعیت واقعی بازار (RSI, ADX, MACD, روند, Bollinger Position).', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200/60' },
+    36→    36→  { icon: GitBranch, title: 'گراف تصمیم VDSS (۹ سناریو)', desc: 'توپولوژی ۳-شاخه با ۲۱ گره و ۳۶ یال. مسیرهای تا ۲۰۰ احتمالی با DFS. برچسب‌گذاری پویا بر اساس سیگنال بازار (صعودی/نزولی/خنثی).', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200/60' },
+    37→    37→  { icon: CandlestickChart, title: 'تشخیص الگوی کندل‌استیک', desc: '۱۰ الگوی اصلی: Doji, Hammer, Inverted Hammer, Bullish/Bearish Engulfing, Morning/Evening Star, Shooting Star, Bullish/Bearish Harami. امتیازبندی بافت‌محور.', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200/60' },
+    38→    38→  { icon: Scale, title: 'وزن‌دهی بیزی داینامیک', desc: 'Beta-Binomial conjugate updating برای ۱۲ اندیکاتور. نرمال‌سازی Softmax با Temperature. تنظیم احتمال سناریوها بر اساس شواهد تاریخی.', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200/60' },
+    39→    39→  { icon: Target, title: 'پیش‌بینی ۳۰ جلسه با ML', desc: 'XGBoost + sklearn Ensemble. ۵ نوع مدل: جهت، رگرسیون، Volatility. ۵۰+ فیچر مهندسی‌شده. پیش‌بینی تکراری ۵-جلسه‌ای. TimeSeriesSplit(5).', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200/60' },
+    40→    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+    41→    41→  { icon: Network, title: 'حمایت و مقاومت ML', desc: 'رگرسیون لجستیک با ۱۶ فیچر و TimeSeriesSplit. امتیاز ۱-۱۰ با ۵ معیار: تعداد تماس، حجم، همپوشانی، تازگی، فاصله. درجه‌بندی و اهداف قیمتی.', color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-200/60' },
+    42→    42→  { icon: Shield, title: 'داده‌های واقعی و لحظه‌ای', desc: 'TSETMC (تعدیل‌شده) + finpy-tse CDN (۵۰ شاخص) + TGJU (۱۱ دسته) + BrsApi (لحظه‌ای). رهگیری نرخ محدود با صفحه‌خوان اشتراکی z-ai.', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200/60' },
+    43→    43→];
+    44→    44→
+    45→    45→const ML_MODELS = [
+    46→    46→  { name: 'XGBoost جهت', nameEn: 'XGBClassifier', desc: 'پیش‌بینی جهت حرکت (صعودی/نزولی)', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+    47→    47→  { name: 'XGBoost رگرسیون', nameEn: 'XGBRegressor', desc: 'پیش‌بینی قیمت هدف', color: 'text-teal-700 bg-teal-50 border-teal-200' },
+    48→    48→  { name: 'Ensemble جهت', nameEn: 'GradientBoostingClassifier', desc: 'طبقه‌بندی جهت با مجموعه مدل‌ها', color: 'text-amber-700 bg-amber-50 border-amber-200' },
+    49→    49→  { name: 'Ensemble رگرسیون', nameEn: 'GradientBoostingRegressor', desc: 'رگرسیون قیمت با مجموعه مدل‌ها', color: 'text-orange-700 bg-orange-50 border-orange-200' },
+    50→    50→  { name: 'مدل نوسان‌پذیری', nameEn: 'RandomForestRegressor', desc: 'پیش‌بینی ATR و دامنه قیمتی', color: 'text-rose-700 bg-rose-50 border-rose-200' },
+    51→    51→];
+    52→    52→
+    53→    53→const ML_FEATURES = [
+    54→    54→  'بازده قیمت (1/2/3/5/10 جلسه)',
+    55→    55→  'آمار غلتنده (میانگین/انحراف معیار/Skewness/Kurtosis)',
+    56→    56→  'RSI, MACD, Stochastic, CCI',
+    57→    57→  'ATR, ADX, Bollinger Position',
+    58→    58→  'OBV و فیچرهای حجمی',
+    59→    59→  'الگوهای قیمتی (Higher High/Lower Low)',
+    60→    60→  'شتاب (Momentum) در ۵ بازه',
+    61→    61→  'Lag Features (5/10/20 جلسه قبل)',
+    62→    62→];
+    63→    63→
+    64→    64→const SCHOOLS_LIST = [
+    65→    65→  'تحلیل روند', 'الگوهای کلاسیک', 'نوسان‌نماها', 'موج‌شماری',
+    66→    66→  'تحلیل حجمی', 'اقتصادسنجی مالی', 'تحلیل روانشناسی', 'تحلیل نوسان‌پذیری',
+    67→    67→  'تحلیل‌گر الگو', 'الگوریتمی-کمی',
+    68→    68→];
+    69→    69→
+    70→    70→const STEPS = [
+    71→    71→  { step: '۱', icon: Search, title: 'جستجوی نماد', desc: 'نام نماد، ارز، کریپتو یا شاخص را وارد کنید. ۸,۰۰۰+ ابزار مالی در ۱۷ دسته‌بندی.', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
+    72→    72→  { step: '۲', icon: Workflow, title: 'پردازش و تحلیل', desc: 'دریافت داده‌های تاریخی + محاسبه ۱۶+ اندیکاتور + تشخیص ۱۰ الگوی کندل + وزن‌دهی بیزی + پیش‌بینی ML + تحلیل AI.', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
+    73→    73→  { step: '۳', icon: Eye, title: 'تصمیم‌گیری آگاهانه', desc: 'تحلیل روایتی V12 (۸۰۰-۱۸۰۰ کلمه)، گراف تصمیم ۹ سناریویی، نمودار TradingView و پنل اندیکاتورها.', color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-200' },
+    74→    74→];
+    75→    75→
+    76→    76→const MARKETS = [
+    77→    77→  { icon: Building2, title: 'بورس تهران', desc: 'سهام، صندوق، اوراق بدهی و مشتقه', count: '۸,۰۰۰+', color: 'bg-gray-100 text-gray-600', onClick: 'stocks' },
+    78→    78→  { icon: BarChart3, title: 'شاخص‌های بورس', desc: '۱۰ اصلی + ۴۰ صنعت (finpy-tse)', count: '۵۰', color: 'bg-rose-50 text-rose-600', onClick: 'indices' },
+    79→    79→  { icon: Coins, title: 'ارز و طلا', desc: 'دلار، یورو، سکه و طلا', count: '۲۰+', color: 'bg-teal-50 text-teal-600', onClick: 'currency' },
+    80→    80→  { icon: Bitcoin, title: 'ارزهای دیجیتال', desc: 'بیت‌کوین، اتریوم و آلت‌کوین‌ها', count: '۲۵+', color: 'bg-orange-50 text-orange-600', onClick: 'crypto' },
+    81→    81→  { icon: Globe, title: 'بورس جهانی', desc: 'داو جونز، نزدک، S&P 500 و...', count: '۳۷+', color: 'bg-sky-50 text-sky-600', onClick: 'world_index' },
+    82→    82→  { icon: Gem, title: 'فلزات جهانی', desc: 'طلا جهانی، نقره، مس و...', count: '۲۰+', color: 'bg-emerald-50 text-emerald-600', onClick: 'metal' },
+    83→    83→  { icon: Fuel, title: 'نفت و انرژی', desc: 'نفت برنت، WTI و گاز طبیعی', count: '۱۰+', color: 'bg-red-50 text-red-600', onClick: 'energy' },
+    84→    84→  { icon: Package, title: 'کالاهای جهانی', desc: 'گندم، ذرت، سویا، قهوه و...', count: '۱۱+', color: 'bg-lime-50 text-lime-700', onClick: 'commodity' },
+    85→    85→];
+    86→    86→
+    87→    87→const TOOLS = [
+    88→    88→  { label: 'اندیکاتورها', desc: 'SMA(21,50,100,200), EMA(12,26,50,100,200), RSI, MFI, CCI, Stochastic K/D, Williams %R, MACD, ADX, DI+/DI-, SAR, ATR, Bollinger Bands, OBV', color: 'text-teal-600' },
+    89→    89→  { label: 'گراف تصمیم VDSS', desc: '۹ سناریوی نهایی، ۲۱ گره (تصمیم/رویداد/پایانی)، ۳۶ یال، ۳ شاخه (روند/شکست/بازگشت)، ۲۰۰ مسیر احتمالی با DFS', color: 'text-amber-600' },
+    90→    90→  { label: 'تحلیل تصویری AI (V12)', desc: '۱۰ مکتب × ۱۰ سبک × ۱۵ لحن = ۱,۵۰۰ ترکیب. انتخاب قطعی بر اساس RSI, ADX, MACD, روند, Bollinger. خروجی ۸۰۰-۱۸۰۰ کلمه فارسی.', color: 'text-violet-600' },
+    91→    91→  { label: 'پیش‌بینی ML ۳۰ جلسه', desc: 'سرویس Python (port 3032). XGBoost + sklearn. ۵ مدل. ۵۰+ فیچر. TimeSeriesSplit(5). صادر ONNX. پیش‌بینی تکراری ۵-جلسه‌ای.', color: 'text-rose-600' },
+    92→    92→  { label: 'الگوی کندل‌استیک', desc: '۱۰ الگو: Doji, Hammer, Inverted Hammer, Engulfing صعودی/نزولی, Morning/Evening Star, Shooting Star, Harami صعودی/نزولی. بافت‌محور.', color: 'text-orange-600' },
+    93→    93→  { label: 'وزن‌دهی بیزی', desc: '۱۲ اندیکاتور با Beta-Binomial. Softmax نرمالیزه. تنظیم احتمال سناریو ±۱۵٪. به‌روزرسانی پس از هر پیش‌بینی.', color: 'text-emerald-600' },
+    94→    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+    95→    95→  { label: 'حمایت و مقاومت ML', desc: 'رگرسیون لجستیک ۱۶ فیچری. امتیاز ۱-۱۰ (تماس/حجم/همپوشانی/تازگی/فاصله). ۶ سطح هر طرف + اهداف قیمتی.', color: 'text-cyan-600' },
+    96→    96→  { label: 'نمودار TradingView', desc: 'نمودار حرفه‌ای TradingView v25 با ابزار رسم، اندیکاتور تعاملی و تاریخچه کامل.', color: 'text-sky-600' },
+    97→    97→];
+    98→    98→
+    99→    99→const ARCHITECTURE = [
+   100→   100→  { label: 'فرانت‌اند', desc: 'Next.js 16 + App Router + TypeScript 5 + Tailwind CSS 4 + shadcn/ui + Lucide Icons', color: 'text-sky-600' },
+   101→   101→  { label: 'API Routes', desc: '/api/analysis, /api/tgju-analysis, /api/index-analysis — یک موتور واحد', color: 'text-amber-600' },
+   102→   102→  { label: 'موتور تحلیل', desc: 'ta-engine.ts — محاسبه ۱۶+ اندیکاتور + ۹ سناریو + ML LogReg + S/R + V12 Scenario Engine', color: 'text-teal-600' },
+   103→   103→  { label: 'گراف تصمیم', desc: 'vdss-algorithms.ts — ۲۱ گره + ۳۶ یال + ۹ سناریو + DFS مسیریابی', color: 'text-orange-600' },
+   104→   104→  { label: 'کندل‌استیک', desc: 'candlestick-patterns.ts — ۱۰ الگو + امتیازبندی بافت‌محور + Swing Points', color: 'text-red-600' },
+   105→   105→  { label: 'ML Adaptive', desc: 'ml-engine.ts + ml-logistic.ts — رگرسیون لجستیک ۱۶ فیچری + TimeSeriesSplit', color: 'text-violet-600' },
+   106→   106→];
+   107→   107→
+   108→   108→export default function Homepage({ onSelectCategory }: HomepageProps) {
+   109→   109→  const [activeSection, setActiveSection] = React.useState<SectionId>('features');
+   110→   110→  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+   111→   111→
+   112→   112→  const scrollToSection = (id: SectionId) => {
+   113→   113→    setActiveSection(id);
+   114→   114→    const el = document.getElementById(`section-${id}`);
+   115→   115→    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+   116→   116→  };
+   117→   117→
+   118→   118→  return (
+   119→   119→    <div className="flex gap-4">
+   120→   120→      {/* Sidebar */}
+   121→   121→      {!sidebarCollapsed ? (
+   122→   122→        <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-[76px] self-start">
+   123→   123→          <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-3">
+   124→   124→            <div className="flex items-center justify-between mb-3">
+   125→   125→              <span className="text-xs font-bold text-gray-500 tracking-wide">دسترسی سریع</span>
+   126→   126→              <button onClick={() => setSidebarCollapsed(true)} className="p-1 rounded-md hover:bg-white text-gray-400 hover:text-gray-600 transition-colors border border-transparent hover:border-gray-200" title="بستن سایدبار">
+   127→   127→                <ChevronLeft className="w-4 h-4" />
+   128→   128→              </button>
+   129→   129→            </div>
+   130→   130→            <nav className="space-y-1">
+   131→   131→              {SIDEBAR_SECTIONS.map((item) => {
+   132→   132→                const Icon = item.icon;
+   133→   133→                const isActive = activeSection === item.id;
+   134→   134→                return (
+   135→   135→                  <button key={item.id} onClick={() => scrollToSection(item.id)} className={cn('w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200', isActive ? `${item.bg} border shadow-sm scale-[1.02] ${item.color}` : 'border border-transparent bg-gray-100/80 text-gray-500 hover:text-gray-800 hover:border-gray-200')}>
+   136→   136→                    <div className={cn('p-1 rounded-lg', isActive ? item.bg : 'bg-gray-100/80')}>
+   137→   137→                      <Icon className={cn('w-3.5 h-3.5', isActive ? item.color : 'text-gray-400')} />
+   138→   138→                    </div>
+   139→   139→                    <span className={isActive ? item.color : ''}>{item.label}</span>
+   140→   140→                  </button>
+   141→   141→                );
+   142→   142→              })}
+   143→   143→            </nav>
+   144→   144→            <div className="mt-4 pt-3 border-t border-gray-200/60 space-y-1.5">
+   145→   145→              <div className="flex items-center gap-1.5 text-[10px] text-gray-400"><RefreshCw className="w-3 h-3" /><span>بروزرسانی ۶۰ ثانیه‌ای</span></div>
+   146→   146→              <div className="flex items-center gap-1.5 text-[10px] text-gray-400"><Lock className="w-3 h-3" /><span>بدون نیاز به ثبت‌نام</span></div>
+   147→   147→              <div className="flex items-center gap-1.5 text-[10px] text-gray-400"><Server className="w-3 h-3" /><span>نسخه V12 — ML + کندل + بیزی</span></div>
+   148→   148→            </div>
+   149→   149→          </div>
+   150→   150→        </aside>
+   151→   151→      ) : (
+   152→   152→        <button onClick={() => setSidebarCollapsed(false)} className="hidden lg:flex self-start sticky top-[76px] p-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white text-gray-400 hover:text-gray-600 transition-colors mt-6 shadow-sm" title="نمایش منو">
+   153→   153→          <ChevronLeft className="w-4 h-4" />
+   154→   154→        </button>
+   155→   155→      )}
+   156→   156→
+   157→   157→      {/* Main Content */}
+   158→   158→      <div className="flex-1 min-w-0 space-y-8">
+   159→   159→        {/* Hero Section */}
+   160→   160→        <section className="relative overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+   161→   161→          <div className="relative bg-gradient-to-l from-amber-50/80 via-white to-teal-50/40">
+   162→   162→            <div className="grid lg:grid-cols-2 gap-0">
+   163→   163→              <div className="p-6 sm:p-8 lg:p-10 flex flex-col justify-center">
+   164→   164→                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-100/80 border border-emerald-200/60 text-emerald-700 text-xs font-bold w-fit mb-4">
+   165→   165→                  <Sparkles className="w-3.5 h-3.5" />
+   166→   166→                  نسخه ۱۲ — ML + کندل‌استیک + بیزی + هوش مصنوعی
+   167→   167→                </div>
+   168→   168→                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 leading-tight mb-4">
+   169→   169→                  تحلیل جامع <span className="text-amber-600">تکنیکال هوشمند</span> بازار ایران
+   170→   170→                </h2>
+   171→   171→                <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-4 max-w-lg">
+   172→   172→                  موتور تحلیل بومی TypeScript با ۱۶+ اندیکاتور، ۹ سناریوی احتمالی، ۱,۵۰۰ ترکیب روایتی AI، پیش‌بینی ۳۰ جلسه با XGBoost، تشخیص ۱۰ الگوی کندل‌استیک، و وزن‌دهی بیزی داینامیک.
+   173→   173→                </p>
+   174→   174→                <p className="text-gray-400 text-xs mb-6 max-w-lg">
+   175→   175→                  داده‌ها از TSETMC، finpy-tse، TGJU و BrsApi — ۸,۰۰۰+ ابزار مالی در ۱۷ دسته‌بندی
+   176→   176→                </p>
+   177→   177→                <div className="flex flex-wrap gap-3 mb-6">
+   178→   178→                  <button onClick={() => onSelectCategory('stocks')} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors shadow-sm">
+   179→   179→                    شروع تحلیل <ArrowLeft className="w-4 h-4" />
+   180→   180→                  </button>
+   181→   181→                  <button onClick={() => scrollToSection('features')} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-gray-200 hover:border-gray-300 text-gray-700 font-medium text-sm transition-colors">
+   182→   182→                    مشاهده مشخصات سیستم
+   183→   183→                  </button>
+   184→   184→                </div>
+   185→   185→                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+   186→   186→                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> رایگان</span>
+   187→   187→                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> بدون ثبت‌نام</span>
+   188→   188→                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> داده لحظه‌ای</span>
+   189→   189→                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> V7-V11 منسوخ</span>
+   190→   190→                </div>
+   191→   191→              </div>
+   192→   192→              <div className="hidden lg:block relative">
+   193→   193→                <div className="m-4 mt-6 rounded-xl border border-gray-300/60 shadow-xl overflow-hidden bg-white">
+   194→   194→                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-200">
+   195→   195→                    <div className="flex gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-400" /><div className="w-2.5 h-2.5 rounded-full bg-yellow-400" /><div className="w-2.5 h-2.5 rounded-full bg-green-400" /></div>
+   196→   196→                    <div className="flex-1 mx-2"><div className="bg-white rounded-md px-3 py-1 text-[10px] text-gray-400 border border-gray-200 text-center">تحلیل تکنیکال بازار — V12</div></div>
+   197→   197→                  </div>
+   198→   198→                  <img src="/images/hero-chart.png" alt="پیش‌نمایش صفحه تحلیل" className="w-full h-auto object-cover" />
+   199→   199→                </div>
+   200→   200→              </div>
+   201→   201→            </div>
+   202→   202→          </div>
+   203→   203→        </section>
+   204→   204→
+   205→   205→        {/* Statistics */}
+   206→   206→        <section className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+   207→   207→          {STATS.map((s) => {
+   208→   208→            const Icon = s.icon;
+   209→   209→            return (
+   210→   210→              <div key={s.label} className="text-center p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+   211→   211→                <Icon className="w-4 h-4 mx-auto text-amber-500 mb-1.5" />
+   212→   212→                <div className="text-base sm:text-lg font-extrabold text-gray-900">{s.value}</div>
+   213→   213→                <div className="text-[10px] text-gray-500 mt-0.5">{s.label}</div>
+   214→   214→              </div>
+   215→   215→            );
+   216→   216→          })}
+   217→   217→        </section>
+   218→   218→
+   219→   219→        {/* Features */}
+   220→   220→        <section id="section-features">
+   221→   221→          <div className="flex items-center gap-3 mb-4">
+   222→   222→            <div className="p-2 rounded-xl bg-amber-50 border border-amber-200/60"><Zap className="w-5 h-5 text-amber-600" /></div>
+   223→   223→            <div><h3 className="text-lg font-bold text-gray-900">ویژگی‌های کلیدی سیستم</h3><p className="text-xs text-gray-500">مشخصات فنی واقعی پیاده‌سازی‌شده در کد</p></div>
+   224→   224→          </div>
+   225→   225→          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   226→   226→            {FEATURES.map((f) => {
+   227→   227→              const Icon = f.icon;
+   228→   228→              return (
+   229→   229→                <div key={f.title} className={cn('group p-4 rounded-xl border bg-white transition-all hover:shadow-md', f.border)}>
+   230→   230→                  <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-3', f.bg)}><Icon className={cn('w-5 h-5', f.color)} /></div>
+   231→   231→                  <h4 className="font-bold text-sm text-gray-900 mb-1.5">{f.title}</h4>
+   232→   232→                  <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
+   233→   233→                </div>
+   234→   234→              );
+   235→   235→            })}
+   236→   236→          </div>
+   237→   237→        </section>
+   238→   238→
+   239→   239→        {/* ML Engine & AI Narrative */}
+   240→   240→        <section id="section-ml-engine">
+   241→   241→          <div className="flex items-center gap-3 mb-4">
+   242→   242→            <div className="p-2 rounded-xl bg-violet-50 border border-violet-200/60"><BrainCircuit className="w-5 h-5 text-violet-600" /></div>
+   243→   243→            <div><h3 className="text-lg font-bold text-gray-900">موتور ML و هوش مصنوعی</h3><p className="text-xs text-gray-500">XGBoost + sklearn + Beta-Binomial + ۱,۵۰۰ ترکیب روایتی</p></div>
+   244→   244→          </div>
+   245→   245→          <div className="grid sm:grid-cols-2 gap-4">
+   246→   246→            {/* ML Models */}
+   247→   247→            <div className="p-5 rounded-xl border border-gray-200 bg-white">
+   248→   248→              <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Server className="w-4 h-4 text-rose-500" />سرویس آموزش ML (Python)</h4>
+   249→   249→              <div className="space-y-2 mb-4">
+   250→   250→                {ML_MODELS.map((m) => (
+   251→   251→                  <div key={m.nameEn} className={cn('px-3 py-2.5 rounded-lg border', m.color)}>
+   252→   252→                    <div className="flex items-center justify-between">
+   253→   253→                      <span className="text-xs font-bold">{m.name}</span>
+   254→   254→                      <span className="text-[10px] opacity-60 font-mono">{m.nameEn}</span>
+   255→   255→                    </div>
+   256→   256→                    <div className="text-[10px] mt-0.5 opacity-70">{m.desc}</div>
+   257→   257→                  </div>
+   258→   258→                ))}
+   259→   259→              </div>
+   260→   260→              <div className="text-[10px] text-gray-400 space-y-1">
+   261→   261→                <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500" />صادر ONNX با onnxmltools/skl2onnx</div>
+   262→   262→                <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500" />TimeSeriesSplit(5) بدون تصادفی‌سازی</div>
+   263→   263→                <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500" />حداقل ۱۲۰ کندل برای آموزش</div>
+   264→   264→              </div>
+   265→   265→            </div>
+   266→   266→
+   267→   267→            {/* Feature Engineering */}
+   268→   268→            <div className="p-5 rounded-xl border border-gray-200 bg-white">
+   269→   269→              <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Cpu className="w-4 h-4 text-amber-500" />مهندسی ویژگی (۵۰+ فیچر)</h4>
+   270→   270→              <div className="space-y-1.5 mb-4">
+   271→   271→                {ML_FEATURES.map((f) => (
+   272→   272→                  <div key={f} className="flex items-start gap-2 text-xs text-gray-600">
+   273→   273→                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+   274→   274→                    <span>{f}</span>
+   275→   275→                  </div>
+   276→   276→                ))}
+   277→   277→              </div>
+   278→   278→              <div className="p-3 rounded-lg bg-amber-50/80 border border-amber-200/60">
+   279→   279→                <div className="text-[10px] text-amber-800">
+   280→   280→                  <strong>پیش‌بینی تکراری ۳۰ جلسه:</strong> هر بار ۵ جلسه پیش‌بینی شده، به داده اضافه می‌شود، فیچرها مجدداً استخراج شده و تکرار می‌شود (۶ بار تکرار).
+   281→   281→                </div>
+   282→   282→              </div>
+   283→   283→            </div>
+   284→   284→
+   285→   285→            {/* Narrative Engine */}
+   286→   286→            <div className="p-5 rounded-xl border border-gray-200 bg-white">
+   287→   287→              <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><LineChart className="w-4 h-4 text-violet-500" />موتور روایتی (۱,۵۰۰ ترکیب)</h4>
+   288→   288→              <p className="text-xs text-gray-500 mb-3">هر بار تحلیل، سیستم بر اساس وضعیت واقعی بازار دقیقاً یک ترکیب انتخاب می‌کند:</p>
+   289→   289→              <div className="space-y-2.5 mb-3">
+   290→   290→                <div className="flex items-center gap-2">
+   291→   291→                  <span className="px-2 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[10px] font-bold">۱۰ مکتب</span>
+   292→   292→                  <span className="text-xs text-gray-500">روند، کلاسیک، نوسان‌نما، موج‌شماری، حجمی، اقتصادسنجی، روانشناسی، نوسان‌پذیری، الگو، الگوریتمی</span>
+   293→   293→                </div>
+   294→   294→                <div className="flex items-center gap-2">
+   295→   295→                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[10px] font-bold">۱۰ سبک</span>
+   296→   296→                  <span className="text-xs text-gray-500">روندگرا، محافظه‌کار، اسکالپر، نوسان‌گیر، ریسک‌گریز، کات‌لاس، مخابره‌ای، روایی، تصمیم‌محور، تحلیلی</span>
+   297→   297→                </div>
+   298→   298→                <div className="flex items-center gap-2">
+   299→   299→                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold">۱۵ لحن</span>
+   300→   300→                  <span className="text-xs text-gray-500">رسمی، سریع، فلسفی، هشداری، داستانی، گام‌به‌گام، شکاک، خوش‌بین، ساده، کمی، مرموز، آموزشی، مقایسه‌ای، متعادل، قطعی، ملایم</span>
+   301→   301→                </div>
+   302→   302→              </div>
+   303→   303→              <div className="p-3 rounded-lg bg-violet-50/80 border border-violet-200/60">
+   304→   304→                <div className="text-[10px] text-violet-800">
+   305→   305→                  <strong>ورودی‌های انتخاب:</strong> RSI, ADX, Stochastic, MACD, DI+/DI-, OBV, CCI, MFI, ATR, BB Position, روند (جهت/R²), نزدیکی به S/R
+   306→   306→                </div>
+   307→   307→              </div>
+   308→   308→            </div>
+   309→   309→
+   310→   310→            {/* V12 New Features */}
+   311→   311→            <div className="p-5 rounded-xl border border-gray-200 bg-white">
+   312→   312→              <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Sparkles className="w-4 h-4 text-emerald-500" />قابلیت‌های جدید V12</h4>
+   313→   313→              <div className="space-y-2.5 text-xs text-gray-600">
+   314→   314→                <div className="p-2.5 rounded-lg bg-orange-50 border border-orange-200/60">
+   315→   315→                  <div className="font-bold text-orange-700 mb-0.5">۱۰ الگوی کندل‌استیک</div>
+   316→   316→                  <div className="text-[10px] text-gray-500">Doji, Hammer, Inverted Hammer, Engulfing, Morning/Evening Star, Shooting Star, Harami — امتیازبندی بافت‌محور (۵ کندل قبل)</div>
+   317→   317→                </div>
+   318→   318→                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200/60">
+   319→   319→                  <div className="font-bold text-emerald-700 mb-0.5">وزن‌دهی بیزی (Beta-Binomial)</div>
+   320→   320→                  <div className="text-[10px] text-gray-500">۱۲ اندیکاتور با Prior اولیه. Softmax نرمالیزه (T=2.0). تنظیم احتمال سناریو ±۱۵٪. به‌روزرسانی پس از هر پیش‌بینی.</div>
+   321→   321→                </div>
+   322→   322→                <div className="p-2.5 rounded-lg bg-fuchsia-50 border border-fuchsia-200/60">
+   323→   323→                  <div className="font-bold text-fuchsia-700 mb-0.5">هارمونیک و الیوت (AI)</div>
+   324→   324→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+   325→   325→                </div>
+   326→   326→              </div>
+   327→   327→            </div>
+   328→   328→          </div>
+   329→   329→        </section>
+   330→   330→
+   331→   331→        {/* Tools */}
+   332→   332→        <section id="section-tools">
+   333→   333→          <div className="flex items-center gap-3 mb-4">
+   334→   334→            <div className="p-2 rounded-xl bg-teal-50 border border-teal-200/60"><Cpu className="w-5 h-5 text-teal-600" /></div>
+   335→   335→            <div><h3 className="text-lg font-bold text-gray-900">ابزارهای تحلیلی (مشخصات واقعی)</h3><p className="text-xs text-gray-500">تعداد و جزئیات دقیق هر ابزار پیاده‌سازی‌شده</p></div>
+   336→   336→          </div>
+   337→   337→          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+   338→   338→            {TOOLS.map((t, i) => (
+   339→   339→              <div key={t.label} className={cn('flex items-start gap-4 px-5 py-4', i > 0 && 'border-t border-gray-100')}>
+   340→   340→                <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', t.color.replace('text-', 'bg-'))} />
+   341→   341→                <div className="flex-1 min-w-0">
+   342→   342→                  <h4 className={cn('font-bold text-sm mb-0.5', t.color)}>{t.label}</h4>
+   343→   343→                  <p className="text-xs text-gray-500 leading-relaxed">{t.desc}</p>
+   344→   344→                </div>
+   345→   345→              </div>
+   346→   346→            ))}
+   347→   347→          </div>
+   348→   348→        </section>
+   349→   349→
+   350→   350→        {/* Markets */}
+   351→   351→        <section id="section-markets">
+   352→   352→          <div className="flex items-center gap-3 mb-4">
+   353→   353→            <div className="p-2 rounded-xl bg-sky-50 border border-sky-200/60"><Globe className="w-5 h-5 text-sky-600" /></div>
+   354→   354→            <div><h3 className="text-lg font-bold text-gray-900">بازارهای پشتیبانی‌شده (۱۷ دسته‌بندی)</h3><p className="text-xs text-gray-500">دسترسی به تمام بازارهای ایران و جهان</p></div>
+   355→   355→          </div>
+   356→   356→          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+   357→   357→            {MARKETS.map((m) => {
+   358→   358→              const Icon = m.icon;
+   359→   359→              return (
+   360→   360→                <button key={m.title} onClick={() => onSelectCategory(m.onClick)} className={cn('group p-4 rounded-xl border bg-white text-right transition-all hover:shadow-md hover:scale-[1.02]', 'border-gray-200 hover:border-gray-300')}>
+   361→   361→                  <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center mb-2.5', m.color)}><Icon className="w-4.5 h-4.5" /></div>
+   362→   362→                  <div className="font-bold text-sm text-gray-900 mb-0.5">{m.title}</div>
+   363→   363→                  <div className="text-[11px] text-gray-500 mb-1.5">{m.desc}</div>
+   364→   364→                  <span className="text-[10px] font-bold text-gray-400">{m.count} ابزار مالی</span>
+   365→   365→                </button>
+   366→   366→              );
+   367→   367→            })}
+   368→   368→          </div>
+   369→   369→        </section>
+   370→   370→
+   371→   371→        {/* Architecture */}
+   372→   372→        <section id="section-architecture">
+   373→   373→          <div className="flex items-center gap-3 mb-4">
+   374→   374→            <div className="p-2 rounded-xl bg-orange-50 border border-orange-200/60"><Code2 className="w-5 h-5 text-orange-600" /></div>
+   375→   375→            <div><h3 className="text-lg font-bold text-gray-900">معماری سیستم (مشخصات واقعی کد)</h3><p className="text-xs text-gray-500">تعداد خطوط و اجزای هر ماژول</p></div>
+   376→   376→          </div>
+   377→   377→          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+   378→   378→            {ARCHITECTURE.map((a, i) => (
+   379→   379→              <div key={a.label} className={cn('flex items-start gap-4 px-5 py-4', i > 0 && 'border-t border-gray-100')}>
+   380→   380→                <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', a.color.replace('text-', 'bg-'))} />
+   381→   381→                <div className="flex-1 min-w-0">
+   382→   382→                  <h4 className={cn('font-bold text-sm mb-0.5', a.color)}>{a.label}</h4>
+   383→   383→                  <p className="text-xs text-gray-500 leading-relaxed">{a.desc}</p>
+   384→   384→                </div>
+   385→   385→              </div>
+   386→   386→            ))}
+   387→   387→          </div>
+   388→   388→          <div className="mt-4 grid sm:grid-cols-2 gap-4">
+   389→   389→            <div className="p-4 rounded-xl border border-gray-200 bg-white">
+   390→   390→              <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Database className="w-4 h-4 text-teal-500" />منابع داده</h4>
+   391→   391→              <ul className="space-y-2 text-xs text-gray-600">
+   392→   392→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">TSETMC</strong> — سهام (تعدیل‌شده)، ETF، اوراق بدهی، اوراق مشارکت، قراردادهای آتی، سلف، رهنی</span></li>
+   393→   393→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">finpy-tse / TSETMC CDN</strong> — ۵۰ شاخص (۱۰ اصلی + ۴۰ صنعت) با تاریخ شمسی از ۱۳۸۷</span></li>
+   394→   394→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">TGJU (tgju.org)</strong> — ۱۱ دسته: ارز، طلا، نقره، صندوق طلا، کریپتو، شاخص جهانی، سهام خارجی، فارکس، انرژی، فلزات، کالا</span></li>
+   395→   395→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">BrsApi</strong> — داده لحظه‌ای قیمت، تغییرات، حجم، ارزش معاملات، تعداد معاملات</span></li>
+   396→   396→              </ul>
+   397→   397→            </div>
+   398→   398→            <div className="p-4 rounded-xl border border-gray-200 bg-white">
+   399→   399→              <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Gauge className="w-4 h-4 text-violet-500" />معماری سیستم</h4>
+   400→   400→              <ul className="space-y-2 text-xs text-gray-600">
+   401→   401→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">موتور تحلیل یکپارچه</strong> — ta-engine.ts با Scenario Engine + ML Adaptive + S/R + ۱۶ اندیکاتور</span></li>
+   402→   402→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">API واحد</strong> — /api/analysis + /api/tgju-analysis + /api/index-analysis</span></li>
+   403→   403→                <li className="flex items-start gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" /><span><strong className="text-gray-800">Visual Decision System</strong> — VDES + VDSS Graph + ۹ سناریوی احتمالی</span></li>
+   404→   404→              </ul>
+   405→   405→            </div>
+   406→   406→          </div>
+   407→   407→        </section>
+   408→   408→
+   409→   409→        {/* How It Works */}
+   410→   410→        <section id="section-how-it-works">
+   411→   411→          <div className="flex items-center gap-3 mb-4">
+   412→   412→            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200/60"><MousePointerClick className="w-5 h-5 text-emerald-600" /></div>
+   413→   413→            <div><h3 className="text-lg font-bold text-gray-900">نحوه استفاده</h3><p className="text-xs text-gray-500">از جستجو تا تحلیل کامل</p></div>
+   414→   414→          </div>
+   415→   415→          <div className="grid sm:grid-cols-3 gap-4">
+   416→   416→            {STEPS.map((s) => {
+   417→   417→              const Icon = s.icon;
+   418→   418→              return (
+   419→   419→                <div key={s.step} className={cn('relative p-5 rounded-xl border bg-white', s.border)}>
+   420→   420→                  <div className="flex items-center gap-3 mb-3">
+   421→   421→                    <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black', s.bg, s.color)}>{s.step}</div>
+   422→   422→                    <div className={cn('p-1.5 rounded-lg', s.bg)}><Icon className={cn('w-4 h-4', s.color)} /></div>
+   423→   423→                  </div>
+   424→   424→                  <h4 className={cn('font-bold text-sm mb-2', s.color)}>{s.title}</h4>
+   425→   425→                  <p className="text-xs text-gray-500 leading-relaxed">{s.desc}</p>
+   426→   426→                </div>
+   427→   427→              );
+   428→   428→            })}
+   429→   429→          </div>
+   430→   430→        </section>
+   431→   431→
+   432→   432→        {/* Disclaimer */}
+   433→   433→        <section>
+   434→   434→          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/60">
+   435→   435→            <p className="text-xs text-amber-800 leading-relaxed"><strong>توجه:</strong> تمامی اطلاعات و تحلیل‌ها صرفاً جنبه تحلیلی دارند و به‌هیچ‌وجه توصیه سرمایه‌گذاری نیست. مسئولیت تصمیم‌ها بر عهده کاربر است.</p>
+   436→   436→          </div>
+   437→   437→        </section>
+   438→   438→
+   439→   439→        {/* Bottom */}
+   440→   440→        <section className="relative overflow-hidden rounded-2xl border border-gray-200">
+   441→   441→          <img src="/images/markets-illustration.png" alt="بازارهای مالی" className="w-full h-48 sm:h-64 object-cover object-top" />
+   442→   442→          <div className="absolute inset-0 bg-gradient-to-t from-white via-white/60 to-transparent" />
+   443→   443→          <div className="absolute bottom-0 left-0 right-0 p-6 text-center">
+   444→   444→            <p className="text-sm font-bold text-gray-800 mb-1">۸,۰۰۰+ ابزار مالی در ۱۷ دسته‌بندی — تحلیل هوشمند با V12</p>
+   445→   445→            <p className="text-xs text-gray-500">همین حالا نماد مورد نظر خود را جستجو کنید</p>
+   446→   446→          </div>
+   447→   447→        </section>
+   448→   448→      </div>
+   449→   449→    </div>
+   450→   450→  );
+   451→   451→}
+   452→   452→

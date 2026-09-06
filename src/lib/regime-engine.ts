@@ -12,34 +12,65 @@ import type { OHLCV } from './ta-engine';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * The five possible market regime states used throughout the regime detection engine.
+ *
+ * - `TRENDING_UP`  — Sustained upward move with strong ADX and bullish DI
+ * - `TRENDING_DOWN` — Sustained downward move with strong ADX and bearish DI
+ * - `RANGING`      — Low-volatility sideways market with weak ADX
+ * - `VOLATILE`     — High volatility with conflicting directional signals
+ * - `BREAKOUT`     — Volatility surge with decisive directional movement
+ */
 export type RegimeState = 'TRENDING_UP' | 'TRENDING_DOWN' | 'RANGING' | 'VOLATILE' | 'BREAKOUT';
 
+/**
+ * Result of the unified regime detection, combining outputs from all three
+ * detection methods (fuzzy rule-based, Markov chain, and weighted voting).
+ */
 export interface RegimeResult {
-  /** Primary regime classification */
+  /** Primary regime classification — the state with the highest combined score */
   regime: RegimeState;
-  /** Confidence 0-1 */
+  /** Confidence in the primary regime, expressed as a value between 0 and 1 */
   confidence: number;
-  /** Per-state fuzzy membership scores (sum ≈ 1) */
+  /** Per-state fuzzy membership scores from the rule-based detector (sum ≈ 1) */
   memberships: Record<RegimeState, number>;
-  /** Markov chain posterior probabilities */
+  /** Markov chain posterior probabilities after Bayes update (sum = 1) */
   markovPosteriors: Record<RegimeState, number>;
-  /** Weighted voting result */
+  /** Weighted voting result including the aggregate signal and per-indicator weights */
   voteResult: { signal: number; weights: Record<string, number> };
-  /** Human-readable description (Persian) */
+  /** Human-readable description of the primary regime (Persian) */
   description: string;
 }
 
+/**
+ * Input indicators required by the rule-based (fuzzy) regime detector
+ * and the trend-strength calculator.
+ *
+ * All indicator values should be pre-computed from the same OHLCV window
+ * (typically 50+ bars) before being passed in.
+ */
 export interface RuleBasedRegimeInput {
+  /** Average Directional Index — measures trend strength (0–100) */
   adx: number;
+  /** Positive Directional Indicator — measures bullish directional pressure */
   diPlus: number;
+  /** Negative Directional Indicator — measures bearish directional pressure */
   diMinus: number;
+  /** Relative Strength Index (0–100) */
   rsi: number;
+  /** Current price (typically the latest close) */
   price: number;
+  /** Upper Bollinger Band */
   bbUpper: number;
+  /** Lower Bollinger Band */
   bbLower: number;
+  /** Middle Bollinger Band (SMA20) */
   bbMiddle: number;
+  /** 20-period Exponential Moving Average */
   ema20: number;
+  /** 50-period Exponential Moving Average */
   ema50: number;
+  /** Average True Range — measures volatility */
   atr: number;
   /** Slope of EMA20 (price change per bar) */
   ema20Slope: number;
@@ -55,12 +86,49 @@ export interface RuleBasedRegimeInput {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-/** Triangular membership function: peaks at `center`, width `halfWidth` on each side */
+/**
+ * Triangular membership function — a fundamental fuzzy logic shape.
+ *
+ * Produces a value of 1 at the `center`, linearly decreasing to 0 at
+ * `center ± halfWidth`. The result is clamped to [0, 1].
+ *
+ * @param x - The input value to evaluate
+ * @param center - The peak (full membership = 1) position
+ * @param halfWidth - Distance from center to where membership reaches 0
+ * @returns Membership degree in [0, 1]
+ *
+ * @example
+ * ```ts
+ * trimf(25, 25, 15) // → 1.0  (at center)
+ * trimf(10, 25, 15) // → 0.0  (at center - halfWidth)
+ * trimf(40, 25, 15) // → 0.0  (at center + halfWidth)
+ * trimf(20, 25, 15) // → 0.33 (between center and edge)
+ * ```
+ */
 function trimf(x: number, center: number, halfWidth: number): number {
   return clamp01(1 - Math.abs(x - center) / halfWidth);
 }
 
-/** Trapezoidal membership function */
+/**
+ * Trapezoidal membership function — a fuzzy shape with a flat top.
+ *
+ * Returns 0 outside [a, d], ramps linearly from a→b and c→d,
+ * and returns 1 across the flat top [b, c].
+ *
+ * @param x - The input value to evaluate
+ * @param a - Left foot (membership = 0 for x ≤ a)
+ * @param b - Left shoulder (membership reaches 1 at b)
+ * @param c - Right shoulder (membership stays 1 until c)
+ * @param d - Right foot (membership = 0 for x ≥ d)
+ * @returns Membership degree in [0, 1]
+ *
+ * @example
+ * ```ts
+ * trapmf(10, 0, 0, 15, 25) // → 1.0  (on flat top [0, 15])
+ * trapmf(20, 0, 0, 15, 25) // → 0.5  (on ramp [15, 25])
+ * trapmf(30, 0, 0, 15, 25) // → 0.0  (past right foot)
+ * ```
+ */
 function trapmf(x: number, a: number, b: number, c: number, d: number): number {
   if (x <= a || x >= d) return 0;
   if (x >= b && x <= c) return 1;
@@ -69,8 +137,32 @@ function trapmf(x: number, a: number, b: number, c: number, d: number): number {
 }
 
 /**
- * Calculate fuzzy regime memberships from indicator values.
- * Returns a score 0-1 for each of the 5 regimes.
+ * Calculate fuzzy regime memberships from indicator values using rule-based
+ * fuzzy logic. This replaces the Graph Neural Network (GNN) classifier.
+ *
+ * The function applies fuzzy membership functions (triangular and trapezoidal)
+ * to each indicator, then combines them via fuzzy min/max rules to produce
+ * a membership score in [0, 1] for each of the 5 regime states.
+ *
+ * **Fuzzy rules implemented:**
+ * - **TRENDING_UP**: strong ADX ∧ bullish DI ∧ (steep up slope ∨ overbought RSI ∨ near upper BB)
+ * - **TRENDING_DOWN**: strong ADX ∧ bearish DI ∧ (steep down slope ∨ oversold RSI ∨ near lower BB)
+ * - **RANGING**: (weak ∨ moderate ADX) ∧ (flat slope ∨ neutral RSI) ∧ (low vol ∨ ¬strong ADX)
+ * - **VOLATILE**: high volatility ∧ (moderate ∨ strong ADX) ∧ conflicting DI
+ * - **BREAKOUT**: (moderate ∨ strong ADX) ∧ (high vol + |DI diff|) ∧ (bullish ∨ bearish DI)
+ *
+ * @param input - Pre-computed indicator values conforming to {@link RuleBasedRegimeInput}
+ * @returns A record mapping each {@link RegimeState} to its membership score (sum ≈ 1)
+ *
+ * @example
+ * ```ts
+ * const memberships = fuzzyRegimeDetector({
+ *   adx: 35, diPlus: 28, diMinus: 12, rsi: 65,
+ *   price: 105, bbUpper: 110, bbLower: 95, bbMiddle: 102.5,
+ *   ema20: 103, ema50: 100, atr: 3, ema20Slope: 0.5, avgPrice: 100
+ * });
+ * // memberships.TRENDING_UP ≈ 0.6, memberships.RANGING ≈ 0.1, ...
+ * ```
  */
 export function fuzzyRegimeDetector(input: RuleBasedRegimeInput): Record<RegimeState, number> {
   const { adx, diPlus, diMinus, rsi, price, bbUpper, bbLower, bbMiddle, ema20Slope, avgPrice, atr } = input;
@@ -164,8 +256,25 @@ export function fuzzyRegimeDetector(input: RuleBasedRegimeInput): Record<RegimeS
 }
 
 /**
- * Calculate trend strength using ADX, EMA slope, and BB position.
- * Replaces GNN-based trend strength with rule-based approach.
+ * Calculate trend strength using a rule-based combination of ADX, EMA slope,
+ * and Bollinger Band position. Replaces the GNN-based trend strength estimator.
+ *
+ * The final score is a weighted combination:
+ * - ADX score (0.4 weight): `clamp(adx / 50)`
+ * - Slope score (0.35 weight): `clamp(|EMA20 angle| / 45°)`
+ * - BB score (0.25 weight): how far price is from the BB middle band
+ *
+ * @param input - Pre-computed indicator values conforming to {@link RuleBasedRegimeInput}
+ * @returns Trend strength in [0, 1], where 0 = no trend, 1 = very strong trend
+ *
+ * @example
+ * ```ts
+ * const strength = calculateTrendStrengthRB({
+ *   adx: 40, ema20Slope: 1.2, avgPrice: 100,
+ *   price: 108, bbUpper: 110, bbLower: 95, ...otherInputs
+ * });
+ * // strength ≈ 0.75 (strong trend)
+ * ```
  */
 export function calculateTrendStrengthRB(input: RuleBasedRegimeInput): number {
   const { adx, ema20Slope, avgPrice, price, bbUpper, bbLower } = input;
@@ -192,21 +301,54 @@ export function calculateTrendStrengthRB(input: RuleBasedRegimeInput): number {
 // 5 states: TRENDING_UP, TRENDING_DOWN, RANGING, VOLATILE, BREAKOUT
 // Transition matrix updated dynamically based on ATR changes and breakout events.
 
+/**
+ * The five regime states in canonical order. Used as the index mapping for
+ * the 5×5 Markov transition matrix rows and columns.
+ *
+ * Index: 0=TRENDING_UP, 1=TRENDING_DOWN, 2=RANGING, 3=VOLATILE, 4=BREAKOUT
+ */
 const REGIME_STATES: RegimeState[] = ['TRENDING_UP', 'TRENDING_DOWN', 'RANGING', 'VOLATILE', 'BREAKOUT'];
 const STATE_INDEX: Record<RegimeState, number> = {
   TRENDING_UP: 0, TRENDING_DOWN: 1, RANGING: 2, VOLATILE: 3, BREAKOUT: 4,
 };
 
+/**
+ * A simple 5-state Markov chain for regime transition modeling.
+ * Replaces the Hidden Markov Model (HMM) with a fully observable chain
+ * whose transition matrix is updated dynamically based on market conditions.
+ *
+ * The five states correspond to {@link RegimeState}:
+ * `[TRENDING_UP, TRENDING_DOWN, RANGING, VOLATILE, BREAKOUT]`
+ */
 export interface MarkovChain {
-  /** 5×5 transition matrix. T[i][j] = P(state_j | state_i) */
+  /** 5×5 transition matrix. T[i][j] = P(state_j | state_i). Each row sums to 1. */
   transitionMatrix: number[][];
-  /** Current state probabilities (posterior) */
+  /** Current state probabilities (posterior after Bayes update). Sums to 1. */
   currentState: number[];
-  /** Last known state */
+  /** Last known state — the state with the highest posterior probability */
   lastState: RegimeState;
 }
 
-/** Create a default Markov chain with sensible priors */
+/**
+ * Create a default Markov chain with sensible prior transition probabilities.
+ *
+ * The initial transition matrix encodes domain knowledge:
+ * - Strong self-transitions for trending states (0.65)
+ * - Moderate self-transition for RANGING (0.50)
+ * - Lower self-transition for VOLATILE (0.45) — volatile markets transition quickly
+ * - BREAKOUT has low persistence (0.25) — breakouts are transient
+ * - State probabilities start uniform (0.2 each)
+ * - Last state defaults to `RANGING`
+ *
+ * @returns A new {@link MarkovChain} with default priors
+ *
+ * @example
+ * ```ts
+ * const chain = createMarkovChain();
+ * // chain.transitionMatrix[0] = [0.65, 0.05, 0.15, 0.05, 0.10]
+ * // chain.currentState = [0.2, 0.2, 0.2, 0.2, 0.2]
+ * ```
+ */
 export function createMarkovChain(): MarkovChain {
   // Prior transition matrix: strong self-transitions, reasonable cross-transitions
   const T: number[][] = [
@@ -226,9 +368,29 @@ export function createMarkovChain(): MarkovChain {
 }
 
 /**
- * Update the transition matrix based on recent market conditions.
- * Higher ATR → more transitions to VOLATILE/BREAKOUT.
- * Breakout detected → boost BREAKOUT transition probabilities.
+ * Update the Markov chain's transition matrix based on recent market conditions.
+ *
+ * Three adjustment rules are applied:
+ * 1. **Volatility surge** (ATR ratio > 1.2): Boosts transitions to VOLATILE and BREAKOUT
+ * 2. **Breakout detected** (|price change| > 3% AND ADX > 25): Boosts transition from
+ *    the current state to BREAKOUT
+ * 3. **Declining ATR** (ratio < 0.9): Boosts self-transitions (market stabilizing)
+ *
+ * After adjustments, each row is re-normalized to sum to 1, with a floor of 0.01
+ * to prevent zero probabilities.
+ *
+ * @param chain - The Markov chain to update (mutated in place)
+ * @param atr - Current Average True Range
+ * @param prevAtr - Previous Average True Range (for ratio calculation)
+ * @param price - Current price
+ * @param prevPrice - Previous price (for breakout detection)
+ * @param adx - Current ADX value (used for breakout confirmation)
+ *
+ * @example
+ * ```ts
+ * updateRegimeTransition(chain, 5.2, 3.8, 105, 102, 30);
+ * // ATR ratio = 1.37 → volatility surge, boost VOLATILE/BREAKOUT transitions
+ * ```
  */
 export function updateRegimeTransition(
   chain: MarkovChain,
@@ -288,8 +450,28 @@ export function updateRegimeTransition(
 }
 
 /**
- * Propagate the Markov chain: compute posterior = prior × transitionMatrix
- * Then incorporate the fuzzy memberships as observation likelihood (Bayes update).
+ * Propagate the Markov chain forward one step using the transition matrix,
+ * then apply a Bayes update with fuzzy memberships as observation likelihood.
+ *
+ * **Step 1 — Prediction:** `predicted = prior × T` (matrix-vector multiplication)
+ *
+ * **Step 2 — Bayes update:** `posterior ∝ predicted × likelihood`
+ * where `likelihood[i] = memberships[REGIME_STATES[i]]`. The fuzzy memberships
+ * serve as the observation model P(observation | state).
+ *
+ * After computation, the chain's `currentState` and `lastState` are updated
+ * in place.
+ *
+ * @param chain - The Markov chain to propagate (mutated in place)
+ * @param memberships - Fuzzy membership scores from {@link fuzzyRegimeDetector},
+ *   used as observation likelihoods
+ * @returns Posterior probabilities for each regime state after the update (sum = 1)
+ *
+ * @example
+ * ```ts
+ * const posteriors = propagateMarkov(chain, fuzzyMemberships);
+ * // posteriors.TRENDING_UP ≈ 0.55, posteriors.RANGING ≈ 0.2, ...
+ * ```
  */
 export function propagateMarkov(
   chain: MarkovChain,
@@ -333,7 +515,18 @@ export function propagateMarkov(
 }
 
 /**
- * Get current Markov regime (highest posterior probability state).
+ * Get the current most likely regime from the Markov chain by selecting
+ * the state with the highest posterior probability.
+ *
+ * @param chain - The Markov chain to query
+ * @returns An object containing the most likely `regime` state and its
+ *   `confidence` (posterior probability)
+ *
+ * @example
+ * ```ts
+ * const { regime, confidence } = getMarkovRegime(chain);
+ * // regime = 'TRENDING_UP', confidence = 0.62
+ * ```
  */
 export function getMarkovRegime(chain: MarkovChain): { regime: RegimeState; confidence: number } {
   const maxIdx = chain.currentState.indexOf(Math.max(...chain.currentState));
@@ -349,19 +542,38 @@ export function getMarkovRegime(chain: MarkovChain): { regime: RegimeState; conf
 // Each indicator votes -1 (bearish), 0 (neutral), +1 (bullish).
 // Weights adapt based on recent prediction accuracy.
 
+/**
+ * A single indicator's vote in the weighted voting ensemble.
+ */
 export interface IndicatorVote {
+  /** Indicator name (e.g., 'macd', 'rsi', 'adx', 'bb') */
   name: string;
-  signal: number;  // -1, 0, or +1
+  /** Signal strength: -1 (bearish), 0 (neutral), or +1 (bullish). Some indicators use fractional values like ±0.5. */
+  signal: number;
+  /** Current weight for this indicator (from {@link VotingWeights}) */
   weight: number;
 }
 
+/**
+ * Adaptive weights for each of the 7 indicator signals in the voting ensemble.
+ *
+ * Weights are initialized to 1.0 and then adapted via {@link decayWeightsFromError}
+ * based on prediction accuracy. They are clamped to [0.1, 2.0].
+ */
 export interface VotingWeights {
+  /** Weight for MACD histogram signal */
   macd: number;
+  /** Weight for Stochastic %K/%D signal */
   stochastic: number;
+  /** Weight for RSI overbought/oversold signal */
   rsi: number;
+  /** Weight for On-Balance Volume signal */
   obv: number;
+  /** Weight for Money Flow Index signal */
   mfi: number;
+  /** Weight for ADX/DI directional signal */
   adx: number;
+  /** Weight for Bollinger Band position signal */
   bb: number;
 }
 
@@ -376,7 +588,33 @@ const DEFAULT_VOTING_WEIGHTS: VotingWeights = {
 };
 
 /**
- * Generate signal (-1, 0, +1) for each indicator based on current values.
+ * Generate discrete signals (-1, 0, +1) for each of the 7 technical indicators
+ * based on their current values. Replaces the Transformer classifier's feature
+ * extraction step.
+ *
+ * **Signal generation rules for each indicator:**
+ * - **MACD**: +1 if histogram > 0 AND line > signal; -1 if histogram < 0 AND line < signal; else 0
+ * - **Stochastic**: -1 if %K > 80 (overbought); +1 if %K < 20 (oversold); else sign of (K − D)
+ * - **RSI**: -1 if > 70; +1 if < 30; +1 if > 55; -1 if < 45; else 0
+ * - **OBV**: +1 if rising; -1 if falling; else 0
+ * - **MFI**: -1 if > 80; +1 if < 20; +1 if > 55; -1 if < 45; else 0
+ * - **ADX/DI**: If ADX > 20, sign of (DI+ − DI-); else 0 (no trend)
+ * - **BB**: Position-based: -1 near upper, +1 near lower, fractional in between
+ *
+ * @param input - An object containing current values for all 7 indicators
+ * @returns Array of 7 {@link IndicatorVote} objects with name, signal, and default weight
+ *
+ * @example
+ * ```ts
+ * const votes = indicatorSignals({
+ *   macdLine: 1.5, macdSignal: 1.0, macdHist: 0.5,
+ *   stochK: 45, stochD: 50, rsi: 55,
+ *   obv: 1000, obvPrev: 950, mfi: 60,
+ *   adx: 30, diPlus: 25, diMinus: 15,
+ *   price: 105, bbUpper: 110, bbMiddle: 102, bbLower: 94
+ * });
+ * // votes[0] = { name: 'macd', signal: 1, weight: 1.0 }
+ * ```
  */
 export function indicatorSignals(input: {
   macdLine: number;
@@ -449,8 +687,27 @@ export function indicatorSignals(input: {
 }
 
 /**
- * Adaptive weighted voting: combine indicator signals with adaptive weights.
- * Weights are reduced for indicators that made wrong predictions recently.
+ * Combine indicator signals using adaptive weighted voting.
+ *
+ * The aggregate signal is computed as:
+ * ```
+ * signal = clamp01(Σ(vote.signal × weight) / Σ(|vote.signal| × weight)) × sign(Σ)
+ * ```
+ *
+ * Neutral votes (signal = 0) contribute zero effective weight. The result
+ * is normalized to [-1, +1].
+ *
+ * @param votes - Array of indicator votes from {@link indicatorSignals}
+ * @param weights - Current adaptive weights from {@link VotingWeights}
+ * @returns An object with the aggregate `signal` in [-1, +1] and the
+ *   `weights` actually used for each indicator
+ *
+ * @example
+ * ```ts
+ * const result = adaptiveWeightedVote(votes, weights);
+ * // result.signal = 0.35 (mildly bullish)
+ * // result.weights = { macd: 1.0, rsi: 1.2, ... }
+ * ```
  */
 export function adaptiveWeightedVote(
   votes: IndicatorVote[],
@@ -475,8 +732,31 @@ export function adaptiveWeightedVote(
 }
 
 /**
- * Decay weights of indicators that made wrong predictions.
- * Error rate 0.05 per wrong prediction, clamped to [0.1, 2.0].
+ * Decay (penalize) or reward the weight of a single indicator based on whether
+ * its recent prediction was correct.
+ *
+ * - **Wrong prediction**: weight is multiplied by `(1 − decayRate)`, floored at 0.1
+ * - **Correct prediction**: weight is multiplied by `(1 + decayRate × 0.5)`, capped at 2.0
+ *
+ * The default decay rate is 0.05 (5% per wrong prediction), giving a gradual
+ * adaptation that prevents wild weight swings.
+ *
+ * @param weights - Current voting weights
+ * @param indicatorName - Name of the indicator to adjust (must match a key in {@link VotingWeights})
+ * @param wasCorrect - Whether the indicator's prediction was correct
+ * @param decayRate - Decay/reward rate per prediction event (default: 0.05)
+ * @returns A new {@link VotingWeights} object with the adjusted weight (immutable — original is not mutated)
+ *
+ * @example
+ * ```ts
+ * // Penalize RSI for a wrong prediction
+ * let weights = decayWeightsFromError(weights, 'rsi', false);
+ * // weights.rsi = 0.95  (was 1.0, multiplied by 0.95)
+ *
+ * // Reward MACD for a correct prediction
+ * weights = decayWeightsFromError(weights, 'macd', true);
+ * // weights.macd = 1.025  (was 1.0, multiplied by 1.025)
+ * ```
  */
 export function decayWeightsFromError(
   weights: VotingWeights,
@@ -507,17 +787,58 @@ export function decayWeightsFromError(
 let globalMarkovChain: MarkovChain | null = null;
 let globalVotingWeights: VotingWeights = { ...DEFAULT_VOTING_WEIGHTS };
 
+/**
+ * Reset the regime engine's global state, including the Markov chain
+ * and adaptive voting weights.
+ *
+ * Call this when starting a new analysis session or when switching
+ * to a completely different symbol/timeframe.
+ */
 export function resetRegimeEngine(): void {
   globalMarkovChain = null;
   globalVotingWeights = { ...DEFAULT_VOTING_WEIGHTS };
 }
 
 /**
- * Main entry point: detect current market regime using all three methods.
+ * Main entry point for regime detection. Combines all three methods —
+ * fuzzy rule-based, Markov chain, and adaptive weighted voting — into
+ * a single unified regime classification.
  *
- * @param data - OHLCV data (at least 50 bars recommended)
- * @param indicators - pre-computed indicator values from ta-engine
- * @returns RegimeResult with all component outputs
+ * **Combination formula:**
+ * ```
+ * combined[state] = 0.5 × markovPosterior[state]
+ *                 + 0.3 × fuzzyMembership[state]
+ *                 + 0.2 × voteDirectionBias
+ * ```
+ *
+ * The vote direction bias is distributed as:
+ * - Positive vote → added to TRENDING_UP
+ * - Negative vote → added to TRENDING_DOWN
+ * - Neutral vote → added to RANGING
+ *
+ * The combined scores are then normalized to sum to 1, and the state
+ * with the highest score becomes the primary regime.
+ *
+ * @param data - Array of OHLCV candles (at least 50 bars recommended for
+ *   reliable indicator computation). Used to compute EMA slope and previous ATR.
+ * @param indicators - Pre-computed indicator values from ta-engine. Must include
+ *   ADX, DI±, RSI, MFI, MACD, Stochastic, OBV, ATR, Bollinger Bands, EMAs, and price.
+ * @returns A {@link RegimeResult} containing the primary regime, confidence,
+ *   per-component outputs, and a Persian description
+ *
+ * @example
+ * ```ts
+ * const result = detectRegime(ohlcvData, {
+ *   adx: 32, diPlus: 26, diMinus: 14, rsi: 62, mfi: 58,
+ *   macdLine: 1.5, macdSignal: 1.0, macdHist: 0.5,
+ *   stochK: 55, stochD: 48, obv: 12000, atr: 4.5,
+ *   bbUpper: 112, bbMiddle: 105, bbLower: 98,
+ *   ema20: 104, ema50: 101, price: 106
+ * });
+ * // result.regime = 'TRENDING_UP'
+ * // result.confidence = 0.58
+ * // result.description = 'روند صعودی'
+ * ```
  */
 export function detectRegime(
   data: OHLCV[],
@@ -662,7 +983,28 @@ export function detectRegime(
 }
 
 /**
- * Map RegimeState to MSL v4 RegimeType for compatibility.
+ * Map the engine's {@link RegimeState} to the MSL v4 `RegimeType` enum
+ * for backward compatibility with the legacy MSL pipeline.
+ *
+ * **Mapping rules:**
+ * - `TRENDING_UP` → `'Strong Bull'` if confidence > 0.5, else `'Weak Bull'`
+ * - `TRENDING_DOWN` → `'Strong Bear'` if confidence > 0.5, else `'Weak Bear'`
+ * - `RANGING` → `'Range'`
+ * - `VOLATILE` → `'Range'` (volatile is treated as range-like)
+ * - `BREAKOUT` → `'Strong Bull'` if confidence > 0.5, else `'Weak Bull'`
+ *   (breakout defaults to bullish bias)
+ *
+ * @param regime - The regime state from the detection engine
+ * @param confidence - Confidence score in [0, 1], used to determine strong vs. weak classification
+ * @returns One of the 5 MSL v4 RegimeType values: `'Strong Bull' | 'Weak Bull' | 'Strong Bear' | 'Weak Bear' | 'Range'`
+ *
+ * @example
+ * ```ts
+ * toMSLRegime('TRENDING_UP', 0.7)  // → 'Strong Bull'
+ * toMSLRegime('TRENDING_UP', 0.3)  // → 'Weak Bull'
+ * toMSLRegime('RANGING', 0.5)      // → 'Range'
+ * toMSLRegime('VOLATILE', 0.8)     // → 'Range'
+ * ```
  */
 export function toMSLRegime(regime: RegimeState, confidence: number): 'Strong Bull' | 'Weak Bull' | 'Strong Bear' | 'Weak Bear' | 'Range' {
   switch (regime) {
@@ -675,14 +1017,25 @@ export function toMSLRegime(regime: RegimeState, confidence: number): 'Strong Bu
 }
 
 /**
- * Get or create the global voting weights (for adaptive updates).
+ * Get a copy of the current global voting weights.
+ *
+ * Useful for inspecting the adaptive weight state or for serializing
+ * the engine's configuration.
+ *
+ * @returns A shallow copy of the current {@link VotingWeights}
  */
 export function getVotingWeights(): VotingWeights {
   return { ...globalVotingWeights };
 }
 
 /**
- * Update global voting weights (called after feedback).
+ * Update the global voting weights (typically called after receiving
+ * feedback on prediction accuracy).
+ *
+ * Weights should be adjusted using {@link decayWeightsFromError} before
+ * being set here, or set directly from a serialized configuration.
+ *
+ * @param weights - The new voting weights to apply (a shallow copy is stored)
  */
 export function setVotingWeights(weights: VotingWeights): void {
   globalVotingWeights = { ...weights };

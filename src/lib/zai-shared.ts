@@ -1,11 +1,27 @@
 /**
  * Z-AI SDK rate-limited executor
  *
- * Two separate channels:
- * 1. Shared queue (page_reader, etc.) — rate-limited, sequential
- * 2. Dedicated AI channel (chat.completions) — independent, patient, persistent
+ * ══════════════════════════════════════════════════════════════════════════
+ * ARCHITECTURAL NOTE — Two Separate Channels
+ * ══════════════════════════════════════════════════════════════════════════
  *
- * This prevents page_reader 429s from blocking AI text generation.
+ * AI text generation must **NEVER** be blocked by page_reader rate limits.
+ * To guarantee this, there are two completely independent channels:
+ *
+ * 1. **Shared queue** (Channel 1) — for `page_reader` and other utility calls.
+ *    Sequential, rate-limited, with a global cooldown that applies only to
+ *    this channel.  See {@link rateLimitedZaiCall}, {@link rateLimitedPageReader},
+ *    {@link batchPageReader}, and {@link rateLimitedChatCompletion}.
+ *
+ * 2. **Dedicated AI channel** (Channel 2) — for `chat.completions`.
+ *    Has its own independent retry logic, min-interval, global cooldown,
+ *    concurrent-call serialization, and exponential backoff.
+ *    It does **not** use the shared queue.
+ *    See {@link dedicatedAIChatCompletion}.
+ *
+ * This separation ensures that page_reader 429s cannot stall AI text
+ * generation, which is the most important user-facing feature.
+ * ══════════════════════════════════════════════════════════════════════════
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -16,6 +32,17 @@ type ZaiType = Awaited<ReturnType<typeof import('z-ai-web-dev-sdk').default.crea
 let zaiInstance: ZaiType | null = null;
 let zaiInitPromise: Promise<ZaiType> | null = null;
 
+/**
+ * Get the lazy-initialized Z-AI SDK singleton instance.
+ *
+ * Uses a dynamic `import('z-ai-web-dev-sdk')` so the heavy SDK is only
+ * loaded when first needed.  Concurrent callers during initialization
+ * will all await the same promise rather than creating duplicate
+ * instances.  On init failure the promise is cleared so the next call
+ * will retry.
+ *
+ * @returns The initialized Z-AI SDK instance.
+ */
 export async function getZai(): Promise<ZaiType> {
   if (zaiInstance) return zaiInstance;
   if (!zaiInitPromise) {
@@ -57,10 +84,35 @@ interface QueueItem<T = unknown> {
 
 const unifiedQueue: QueueItem[] = [];
 
+/**
+ * Get the remaining cooldown time (in milliseconds) for the **shared queue**
+ * channel (Channel 1).
+ *
+ * The cooldown is set when a 429 is received on the shared queue or when
+ * {@link recordExternal429} is called.  While a cooldown is active, the
+ * shared queue pauses processing until it expires.
+ *
+ * @returns Remaining cooldown in milliseconds.  Returns `0` if no cooldown is active.
+ */
 export function getCooldownRemainingMs(): number {
   return Math.max(0, sharedCooldownUntil - Date.now());
 }
 
+/**
+ * Record an external 429 event and set a cooldown on the **shared queue**
+ * channel (Channel 1).
+ *
+ * Call this when a 429 is detected outside the shared queue's own retry
+ * logic (e.g. from a higher-level caller) so that subsequent shared-queue
+ * calls know to wait.
+ *
+ * Cooldown rules:
+ * - Adds **60 s** to any existing remaining cooldown.
+ * - Minimum cooldown is **120 s**.
+ * - Maximum cooldown is capped at **600 s** (10 min).
+ *
+ * This does **not** affect the dedicated AI channel (Channel 2).
+ */
 export function recordExternal429() {
   const currentCooldown = Math.max(sharedCooldownUntil - Date.now(), 0);
   const newCooldown = Math.max(currentCooldown + 60_000, 120_000);
@@ -119,7 +171,36 @@ async function processQueue() {
   sharedProcessing = false;
 }
 
-// --- Public: shared queue call ---
+/**
+ * Execute an operation through the **shared queue** (Channel 1) with
+ * rate limiting, retry on 429, and timeout enforcement.
+ *
+ * Calls are serialized (one at a time) with a minimum interval of 2 s
+ * between them.  If a 429 is received, an exponential backoff cooldown
+ * is applied and the operation is re-queued for retry (up to
+ * `maxRetries`).  On success the cooldown is cleared.
+ *
+ * If the current cooldown exceeds `maxQueueWaitMs`, the call is
+ * rejected immediately with a `ZAI_RATE_LIMITED` error so callers
+ * can surface a "try later" message without waiting.
+ *
+ * @template T - The return type of the operation.
+ * @param operation - Async function that receives the Z-AI SDK instance
+ *   and returns a result of type `T`.
+ * @param options - Configuration for this call.
+ * @param options.timeoutMs - Total timeout in ms for this call (including
+ *   queue wait time).  Defaults to **120 000** (2 min).
+ * @param options.maxRetries - Number of 429 retries before giving up.
+ *   Defaults to **2**.
+ * @param options.name - Descriptive name used in log messages.
+ *   Defaults to `'zai-call'`.
+ * @param options.maxQueueWaitMs - If the current cooldown exceeds this
+ *   value, the call is rejected immediately.  Defaults to **30 000** (30 s).
+ * @returns A promise that resolves with the operation's result.
+ * @throws {Error} `ZAI_RATE_LIMITED` if cooldown > `maxQueueWaitMs`.
+ * @throws {Error} Timeout error if the call exceeds `timeoutMs`.
+ * @throws {Error} Rate-limit error after exhausting `maxRetries`.
+ */
 export async function rateLimitedZaiCall<T>(
   operation: (zai: ZaiType) => Promise<T>,
   options: {
@@ -164,7 +245,20 @@ export async function rateLimitedZaiCall<T>(
   });
 }
 
-// --- Convenience: page_reader ---
+/**
+ * Fetch a web page's HTML using the Z-AI `page_reader` function through
+ * the **shared queue** (Channel 1).
+ *
+ * This is a convenience wrapper around {@link rateLimitedZaiCall} that
+ * invokes `zai.functions.invoke('page_reader', { url })` and validates
+ * the response contains usable HTML.
+ *
+ * @param url - The URL of the page to read.
+ * @param timeoutMs - Total timeout in ms for this call.  Defaults to **60 000** (1 min).
+ * @returns The HTML content of the page as a string.
+ * @throws {Error} If the response is empty or shorter than 5 characters.
+ * @throws {Error} Propagates any shared-queue timeout or rate-limit errors.
+ */
 export async function rateLimitedPageReader(url: string, timeoutMs = 60_000): Promise<string> {
   return rateLimitedZaiCall<string>(
     async (zai) => {
@@ -177,6 +271,25 @@ export async function rateLimitedPageReader(url: string, timeoutMs = 60_000): Pr
   );
 }
 
+/**
+ * Read multiple web pages sequentially through the **shared queue**
+ * (Channel 1).
+ *
+ * Pages are fetched one at a time via {@link rateLimitedPageReader}.
+ * Failures for individual pages are swallowed — the corresponding result
+ * entry is `null` rather than throwing and aborting the batch.
+ *
+ * @param urls - Array of URLs to read.
+ * @param options - Configuration for the batch.
+ * @param options.timeoutMs - Per-page timeout in ms.  Passed through to
+ *   each {@link rateLimitedPageReader} call.
+ * @param options.onProgress - Optional callback invoked after each page
+ *   completes (whether success or failure).  Receives `(done, total)`
+ *   where `done` is the number of pages processed so far and `total`
+ *   is the total number of URLs.
+ * @returns An array of the same length as `urls`.  Each element is
+ *   `{ url, html }` on success, or `null` if that page failed.
+ */
 export async function batchPageReader(
   urls: string[],
   options: { timeoutMs?: number; onProgress?: (done: number, total: number) => void } = {}
@@ -207,6 +320,49 @@ const AI_MIN_INTERVAL_MS = 5_000; // 5s between AI calls
 let aiInProgress = false; // Prevent concurrent AI calls
 let aiGlobalCooldownUntil = 0; // Global cooldown: if AI is rate-limited, don't retry for a while
 
+/**
+ * Execute a chat completion on the **dedicated AI channel** (Channel 2),
+ * completely bypassing the shared queue.
+ *
+ * This is the primary function for AI text generation.  It is designed to
+ * be patient and persistent so that AI output is never blocked by
+ * `page_reader` rate limits.
+ *
+ * ### Behavior details
+ *
+ * - **Independent retry logic** — does not share the shared queue's
+ *   cooldown or retry state.
+ * - **5 s minimum interval** — enforces at least 5 seconds between
+ *   consecutive AI calls (`AI_MIN_INTERVAL_MS`).
+ * - **Global cooldown** — on receiving a 429, sets a **3-minute** global
+ *   cooldown (`aiGlobalCooldownUntil`).  Subsequent calls during the
+ *   cooldown fail fast with a descriptive error.  The cooldown is
+ *   cleared on the next successful call.
+ * - **Concurrent call serialization** — only one AI call runs at a time
+ *   (`aiInProgress`).  If a concurrent call is already running, the
+ *   caller waits up to 10 s for it to finish before proceeding anyway.
+ * - **Exponential backoff** — on 429, retries with backoff of
+ *   `10 s × 1.4^(attempt-1)` (i.e. ~10 s, ~14 s, ~20 s, …).
+ * - **Transient error retries** — errors containing keywords like
+ *   `'network'`, `'ECONNREFUSED'`, `'fetch'`, etc. are retried up to
+ *   2 times with a 5 s delay.
+ * - **Total timeout** — defaults to **200 s**.  All retries and waits
+ *   must complete within this deadline (with a 30 s buffer reserved
+ *   for the final API call).
+ *
+ * @param messages - Chat messages in `{ role, content }` format, passed
+ *   directly to `zai.chat.completions.create`.
+ * @param options - Configuration for this call.
+ * @param options.timeoutMs - Total timeout in ms including all retries
+ *   and waits.  Defaults to **200 000** (200 s).
+ * @param options.maxRetries - Maximum number of 429 retries.
+ *   Defaults to **5**.
+ * @returns The trimmed text content of the first completion choice.
+ * @throws {Error} If the global AI cooldown is active.
+ * @throws {Error} If the deadline is exceeded (total timeout).
+ * @throws {Error} If the AI response is empty or shorter than 10 characters.
+ * @throws {Error} If a non-transient, non-429 error is received.
+ */
 export async function dedicatedAIChatCompletion(
   messages: { role: string; content: string }[],
   options: {
@@ -323,6 +479,26 @@ export async function dedicatedAIChatCompletion(
 // Legacy: rate-limited chat completion (uses shared queue)
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * **LEGACY** chat completion that routes through the **shared queue**
+ * (Channel 1).
+ *
+ * Prefer {@link dedicatedAIChatCompletion} for production AI text
+ * generation, as it bypasses the shared queue and cannot be blocked by
+ * `page_reader` rate limits.  This function remains for backward
+ * compatibility but is subject to the shared queue's cooldown and
+ * serialization, meaning a `page_reader` 429 will delay AI output.
+ *
+ * @param messages - Chat messages in `{ role, content }` format.
+ * @param options - Configuration for this call.
+ * @param options.timeoutMs - Total timeout in ms.  Defaults to **120 000** (2 min).
+ * @param options.maxRetries - Number of 429 retries.  Defaults to **2**.
+ * @param options.maxQueueWaitMs - If cooldown exceeds this, the call is
+ *   rejected immediately.  Defaults to **30 000** (30 s).
+ * @returns The trimmed text content of the first completion choice.
+ * @throws {Error} Propagates any shared-queue timeout or rate-limit errors.
+ * @throws {Error} If the AI response is empty or shorter than 10 characters.
+ */
 export async function rateLimitedChatCompletion(
   messages: { role: string; content: string }[],
   options: {

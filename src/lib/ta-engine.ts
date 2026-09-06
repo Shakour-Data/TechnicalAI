@@ -13,6 +13,17 @@ import {
 import { buildDecisionGraph, type GraphData } from './decision-graph';
 import { detectRegime, type RegimeResult, type RegimeState } from './regime-engine';
 
+/**
+ * Core candlestick (OHLCV) data point used as input to all TA calculations.
+ * Represents a single trading period (daily, hourly, etc.).
+ *
+ * @property date  - ISO date string (e.g. '2025-01-15')
+ * @property open  - Opening price of the period
+ * @property high  - Highest price reached during the period
+ * @property low   - Lowest price reached during the period
+ * @property close - Closing price of the period
+ * @property volume - Trading volume (0 if unavailable; `analyze()` will skip volume-dependent indicators)
+ */
 export interface OHLCV {
   date: string;
   open: number;
@@ -22,6 +33,24 @@ export interface OHLCV {
   volume: number;
 }
 
+/**
+ * A single VDss scenario outcome with probability, price targets, and description.
+ *
+ * Nine scenarios (SC1–SC9) cover the full probability space (sum = 100%):
+ * - SC1–SC4: Bearish (SC1 = Bearish Shock, SC4 = Weak Bearish)
+ * - SC5:      Neutral / Range-bound
+ * - SC6–SC9: Bullish (SC6 = Weak Bullish, SC9 = Bullish Shock)
+ *
+ * @property name                - Persian display name (e.g. 'شوک نزولی')
+ * @property nameEn              - English display name (e.g. 'Bearish Shock')
+ * @property probability          - Individual probability 0–100 (all 9 scenarios sum to 100)
+ * @property cumulativeProbability - Cumulative probability within same group (bullish/bearish/neutral).
+ *   Sum of individual probabilities from most-severe to this scenario in same category.
+ *   Per spec: CumProb = P(this) + P(all more-severe scenarios in same group)
+ * @property targetMin            - Lower bound of the ATR-based price target range
+ * @property targetMax            - Upper bound of the ATR-based price target range
+ * @property description          - Localized description with formatted price targets and currency unit
+ */
 export interface ScenarioResult {
   name: string;
   nameEn: string;
@@ -54,6 +83,32 @@ export interface LevelStrength {
   fibLabel: string;       // Persian label e.g. 'فیبو ۳۸.۲٪' — keep for backward compat
 }
 
+/**
+ * Complete technical analysis result returned by {@link analyze}.
+ *
+ * Contains every indicator, overlay, support/resistance level, trend measurement,
+ * 9-scenario VDss probability engine output, ML metadata, decision graph data,
+ * 24 extended indicators, and regime detection result.
+ *
+ * @property sma               - Simple Moving Averages keyed by period (sma5, sma21, sma50, …)
+ * @property ema               - Exponential Moving Averages keyed by period (ema9, ema12, ema26, …)
+ * @property rsi               - Relative Strength Index (14-period, 0–100)
+ * @property mfi               - Money Flow Index (14-period, 0–100; 50 if no volume)
+ * @property cci               - Commodity Channel Index (20-period)
+ * @property stochK            - Stochastic %K (14,3,3)
+ * @property stochD            - Stochastic %D (14,3,3)
+ * @property macd              - MACD(12,26,9) with line, signal, and histogram
+ * @property adx               - Average Directional Index (14-period)
+ * @property diPlus            - +DI (14-period)
+ * @property diMinus           - −DI (14-period)
+ * @property bollingerBands    - Bollinger Bands(20,2) with upper/middle/lower
+ * @property atr               - Average True Range (14-period)
+ * @property scenarios         - 9 VDss scenarios (SC1–SC9), probabilities sum to 100
+ * @property overallSignal     - 'bullish' | 'bearish' | 'neutral' — derived from bullConsensus thresholds
+ * @property bullConsensus     - ML-weighted consensus score 0–1 (>0.58 → bullish, <0.42 → bearish)
+ * @property regimeResult      - Regime detection output (trending/ranging/volatile), or null if <20 bars
+ * @property decisionGraph     - Full 35+ node decision graph data, or null
+ */
 export interface TAResult {
   // Moving Averages
   sma: Record<string, number>;
@@ -178,14 +233,27 @@ export interface TAResult {
   regimeResult: RegimeResult | null;
 }
 
-// ─── Helper: SMA ──────────────────────────────────────────────────────────────
+/**
+ * Simple Moving Average — the mean of the last `period` closing prices.
+ *
+ * @param closes - Array of closing prices (oldest → newest)
+ * @param period - Lookback window length
+ * @returns The SMA value, or 0 if insufficient data
+ */
 function sma(closes: number[], period: number): number {
   if (closes.length < period) return 0;
   const slice = closes.slice(-period);
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
-// ─── Helper: EMA ──────────────────────────────────────────────────────────────
+/**
+ * Exponential Moving Average using the standard smoothing factor k = 2/(period+1).
+ * Seeded with an SMA of the first `period` values, then iterated forward.
+ *
+ * @param closes - Array of closing prices (oldest → newest)
+ * @param period - EMA period (controls responsiveness; lower = more reactive)
+ * @returns The EMA value, or 0 if insufficient data
+ */
 function emaCalc(closes: number[], period: number): number {
   if (closes.length < period) return 0;
   const k = 2 / (period + 1);
@@ -196,7 +264,15 @@ function emaCalc(closes: number[], period: number): number {
   return emaVal;
 }
 
-// ─── Helper: RSI(14) ──────────────────────────────────────────────────────────
+/**
+ * Relative Strength Index (Wilder's smoothed RSI).
+ * Measures the magnitude of recent gains vs. losses on a 0–100 scale.
+ * Values >70 suggest overbought; <30 suggest oversold.
+ *
+ * @param closes  - Array of closing prices (oldest → newest)
+ * @param period  - RSI period (default 14)
+ * @returns RSI value 0–100, or 50 (neutral) if insufficient data
+ */
 function calcRSI(closes: number[], period: number = 14): number {
   if (closes.length < period + 1) return 50;
   let avgGain = 0;
@@ -250,7 +326,17 @@ function calcCCI(data: OHLCV[], period: number = 20): number {
   return (tps[tps.length - 1] - meanTP) / (0.015 * meanDev);
 }
 
-// ─── Helper: Stochastic(14,3,3) ───────────────────────────────────────────────
+/**
+ * Stochastic Oscillator (%K and %D).
+ * Compares the closing price to the high-low range over `kPeriod` bars,
+ * then smooths %K by `smoothK` and computes %D as an SMA of smoothed %K.
+ *
+ * @param data    - OHLCV array (oldest → newest)
+ * @param kPeriod - Lookback for raw %K (default 14)
+ * @param smoothK - Smoothing period for %K (default 3)
+ * @param smoothD - Smoothing period for %D (default 3)
+ * @returns Object `{ k, d }` each 0–100; defaults to `{ k: 50, d: 50 }` if insufficient data
+ */
 function calcStochastic(data: OHLCV[], kPeriod: number = 14, smoothK: number = 3, smoothD: number = 3): { k: number; d: number } {
   if (data.length < kPeriod) return { k: 50, d: 50 };
   const rawKs: number[] = [];
@@ -290,7 +376,18 @@ function calcWilliamsR(data: OHLCV[], period: number = 14): number {
   return ((highest - data[data.length - 1].close) / range) * -100;
 }
 
-// ─── Helper: MACD(12,26,9) ────────────────────────────────────────────────────
+/**
+ * Moving Average Convergence/Divergence (MACD).
+ * MACD Line = EMA(fast) − EMA(slow); Signal = EMA(sig) of MACD Line;
+ * Histogram = MACD Line − Signal.
+ * Crossovers of line/signal indicate momentum shifts.
+ *
+ * @param closes - Array of closing prices (oldest → newest)
+ * @param fast   - Fast EMA period (default 12)
+ * @param slow   - Slow EMA period (default 26)
+ * @param sig    - Signal line EMA period (default 9)
+ * @returns `{ line, signal, histogram }`; zeros if insufficient data
+ */
 function calcMACD(closes: number[], fast: number = 12, slow: number = 26, sig: number = 9): { line: number; signal: number; histogram: number } {
   if (closes.length < slow + sig) return { line: 0, signal: 0, histogram: 0 };
   const emaFast = emaCalc(closes, fast);
@@ -336,7 +433,15 @@ function calcATR(data: OHLCV[], period: number = 14): number {
   return atrVal;
 }
 
-// ─── Helper: ADX(14) + DI+/DI- ────────────────────────────────────────────────
+/**
+ * Average Directional Index with +DI and −DI.
+ * ADX measures trend strength (0–100); >25 indicates a trending market.
+ * +DI > −DI suggests bullish directional pressure; vice versa for bearish.
+ *
+ * @param data   - OHLCV array (oldest → newest)
+ * @param period - ADX/DI period (default 14)
+ * @returns `{ adx, diPlus, diMinus }`; zeros if insufficient data
+ */
 function calcADX(data: OHLCV[], period: number = 14): { adx: number; diPlus: number; diMinus: number } {
   if (data.length < period + 1) return { adx: 0, diPlus: 0, diMinus: 0 };
   const plusDMs: number[] = [];
@@ -420,7 +525,17 @@ function calcSAR(data: OHLCV[], step: number = 0.02, max: number = 0.2): number 
   return sar;
 }
 
-// ─── Helper: Bollinger Bands(20,2) ────────────────────────────────────────────
+/**
+ * Bollinger Bands.
+ * Middle = SMA(period); Upper/Lower = Middle ± stdDev × σ.
+ * Price touching upper band suggests overbought; lower band suggests oversold.
+ * Band width (upper − lower) indicates volatility.
+ *
+ * @param closes  - Array of closing prices (oldest → newest)
+ * @param period  - SMA period for the middle band (default 20)
+ * @param stdDev  - Number of standard deviations for the bands (default 2)
+ * @returns `{ upper, middle, lower }`; collapses to last close if insufficient data
+ */
 function calcBollingerBands(closes: number[], period: number = 20, stdDev: number = 2): { upper: number; middle: number; lower: number } {
   if (closes.length < period) {
     const c = closes[closes.length - 1] ?? 0;
@@ -585,7 +700,17 @@ function emaArrayCalc(closes: number[], period: number): number[] {
   return result;
 }
 
-// ─── Helper: Linear Regression ────────────────────────────────────────────────
+/**
+ * Ordinary Least Squares (OLS) linear regression on a time-series.
+ * Fits y = slope·x + intercept where x = 0, 1, 2, … (bar index).
+ *
+ * @param values - Sequential data points (oldest → newest)
+ * @returns `{ slope, intercept, r2 }` where:
+ *   - slope:      rate of change per bar
+ *   - intercept:  y-value at x=0
+ *   - r2:         coefficient of determination (0–1), measures fit quality;
+ *                 1 = perfect linear fit, 0 = no linear relationship
+ */
 function linearRegression(values: number[]): { slope: number; intercept: number; r2: number } {
   const n = values.length;
   if (n < 2) return { slope: 0, intercept: values[0] ?? 0, r2: 0 };
@@ -1496,6 +1621,31 @@ function calcHV(closes: number[], period: number = 20): number {
 }
 
 // ─── Support / Resistance (7-Method ML-Based System) ─────────────────────
+/**
+ * Multi-method Support & Resistance detection and scoring engine.
+ *
+ * Pipeline:
+ *   1. **Generate** raw levels from 7 independent methods:
+ *      - Swing High/Low (price action with lookbacks 3, 5, 7)
+ *      - Fibonacci Retracements & Extensions
+ *      - Pivot Points (Classic, Camarilla, Woodie)
+ *      - Psychological Round Numbers
+ *      - Bollinger Band touches
+ *      - Volume Profile nodes
+ *      - Ichimoku Cloud levels
+ *   2. **Merge** nearby levels within 1% tolerance (confluence detection)
+ *   3. **Train** ML weights on historical touch/volume/overlap data
+ *   4. **Score** each level using 5 features: touches, volume ratio, overlap count,
+ *      freshness, distance from current price
+ *   5. **Round** to psychological price levels
+ *   6. **Separate** into supports (below price) and resistances (above price)
+ *   7. **Filter** with 5–10% gap rules and select up to 6 of each type
+ *   8. **Assign** grades (Very Strong / Strong / Moderate / Weak) from ML score
+ *
+ * @param data         - OHLCV array (oldest → newest)
+ * @param currentPrice - The current closing price, used as the support/resistance boundary
+ * @returns Up to 6 supports, 6 resistances (as raw prices), plus scored {@link LevelStrength} arrays
+ */
 function calcSupportResistance(data: OHLCV[], currentPrice: number): {
   resistances: number[];
   supports: number[];
@@ -1714,6 +1864,29 @@ function calcSupportResistance(data: OHLCV[], currentPrice: number): {
 
 
 // ─── Trend Analysis ───────────────────────────────────────────────────────────
+/**
+ * Detect the price trend direction and angle over the last `period` bars.
+ *
+ * Uses OLS linear regression to compute the slope, then converts it to an
+ * angle in degrees via:
+ *
+ *   angle = atan( (slope / avgPrice) × 100 ) × (180 / π)
+ *
+ * The ×100 scaling factor is critical: it converts `slope/avgPrice` from a
+ * raw decimal (e.g. 0.01 for a 1% daily rise) into a percentage (1.0), so that
+ * `atan` receives values in a human-readable range. Without this factor, large
+ * absolute prices (e.g. an index at 6.7M with 1% daily change) would yield
+ * `atan(0.01) ≈ 0.57°` instead of the expected `atan(1) = 45°`.
+ *
+ * Direction is determined by comparing slope to a 0.1% of avgPrice threshold:
+ *   - slope >  +0.1% × avgPrice → 'up'
+ *   - slope <  −0.1% × avgPrice → 'down'
+ *   - otherwise               → 'flat'
+ *
+ * @param closes - Array of closing prices (oldest → newest)
+ * @param period - Number of recent bars to regress (e.g. 21=short, 50=medium, 100=long)
+ * @returns {@link TrendResult} with direction, slope, angle, and clamped r²
+ */
 function calcTrend(closes: number[], period: number): TrendResult {
   const slice = closes.slice(-Math.min(period, closes.length));
   const { slope, r2 } = linearRegression(slice);
@@ -2401,6 +2574,47 @@ function calculateScenarioProbabilities(
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ANALYSIS FUNCTION
 // ═══════════════════════════════════════════════════════════════════════════════
+/**
+ * Main technical analysis entry point — the TSE 7-Layer VDss Algorithm.
+ *
+ * Processes an OHLCV time-series through the full analysis pipeline and returns
+ * a comprehensive {@link TAResult} with all indicators, scenarios, and ML metadata.
+ *
+ * ## Algorithm Flow
+ *
+ * 1. **Calculate all indicators** — SMA, EMA, RSI, MFI, CCI, Stochastic, MACD,
+ *    ADX/DI±, Parabolic SAR, ATR, Bollinger Bands, OBV, Ichimoku Cloud, VWAP,
+ *    plus 24 extended indicators (WMA, HMA, TMA, Heiken-Ashi, Fisher Transform, etc.)
+ *
+ * 2. **Detect trend** via {@link calcTrend} — OLS regression on 3 horizons
+ *    (short=21, medium=50, long=100 bars) with angle normalization
+ *
+ * 3. **Find S/R levels** from 7 sources via {@link calcSupportResistance}:
+ *    Swing High/Low, Fibonacci, Pivots, Psychological, Bollinger, Volume Profile, Ichimoku
+ *
+ * 4. **Score S/R** with the sr-analyzer — ML-trained weights on 5 features
+ *    (touches, volume, overlap, freshness, distance); grade assigned from score
+ *
+ * 5. **Calculate scenarios (7-Layer VDss Probability Engine)**:
+ *    - Layer 1+2: Compute 14 normalized features at current bar
+ *    - Layer 3:   Train AdaptiveWeightModel (70 epochs, 10-fold) on historical data;
+ *                compute bullConsensus via weighted feature sum, blended with ML prediction
+ *    - Layer 4-6: Build 35+ node Decision Graph (trend→momentum→vol→S/R→pattern→ML branches)
+ *                to derive SC1–SC9 scenario probabilities (sum = 100)
+ *    - Layer 7:   Adaptive online update with most recent 5-bar return label
+ *
+ * 6. **Detect regime** via `regime-engine.detectRegime()` — rule-based + Markov chain
+ *    + weighted voting to classify market as trending / ranging / volatile
+ *
+ * 7. **Determine overall signal** — 'bullish' if bullConsensus > 0.58,
+ *    'bearish' if < 0.42, otherwise 'neutral'
+ *
+ * @param data         - Array of {@link OHLCV} candles, oldest first. Minimum 2 bars required;
+ *                       fewer returns a neutral/empty result.
+ * @param currencyUnit - Optional currency label for scenario descriptions (default 'ریال').
+ *                       Used in Persian-language output strings only.
+ * @returns Complete {@link TAResult} with all computed indicators and VDss scenarios
+ */
 export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
   if (!data || data.length < 2) {
     const empty = () => 0;
@@ -2876,12 +3090,31 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
 // Per CumProbTrend.txt §5: each day t uses only data up to end of day t.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * A single day's scenario probability snapshot for historical trend visualization.
+ *
+ * @property date     - ISO date string of the snapshot day
+ * @property dayIndex - Relative index: 0 = today, −1 = yesterday, −2 = two days ago, etc.
+ * @property probs    - Record of SC1–SC9 probabilities (as decimals summing to ~1.0)
+ */
 export interface DailyProbSnapshot {
   date: string;
   dayIndex: number; // 0=today, -1=yesterday, ...
   probs: Record<string, number>; // SC1-SC9, sum=100
 }
 
+/**
+ * Compute 30-day historical probability snapshots by re-running the decision graph
+ * at each past bar. Each day t uses only data up to end of day t (no look-ahead bias),
+ * per CumProbTrend.txt §5.
+ *
+ * This enables charting how scenario probabilities evolved over time, revealing
+ * trend shifts and probability transitions (e.g. bearish → neutral → bullish).
+ *
+ * @param data    - Full OHLCV array (oldest → newest). Must have ≥ 30 bars.
+ * @param maxDays - Number of days to compute (default 30). Computed from today backwards.
+ * @returns Array of {@link DailyProbSnapshot} sorted newest-first; empty if < 30 bars
+ */
 export function computeHistoricalProbabilities(
   data: OHLCV[],
   maxDays: number = 30,

@@ -19,6 +19,16 @@ const PERSIAN_WEEKDAYS = [
 
 const PERSIAN_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
 
+/**
+ * Convert a number or string to Persian (Farsi) digits.
+ * Wraps the result with LRM (Left-to-Right Mark, U+200E) to ensure
+ * numbers always render left-to-right even in RTL context.
+ *
+ * @param n - Number or string containing Latin digits (0-9)
+ * @returns String with digits converted to Persian (۰-۹) and wrapped in LRM marks
+ *
+ * @example toPersianDigits(1404) → '\u200E۱۴۰۴\u200E'
+ */
 export function toPersianDigits(n: number | string): string {
   const converted = String(n).replace(/\d/g, (d) => PERSIAN_DIGITS[parseInt(d)]);
   // Wrap with LRM (Left-to-Right Mark, U+200E) to ensure numbers always render
@@ -28,6 +38,17 @@ export function toPersianDigits(n: number | string): string {
 }
 
 // ─── Gregorian → Jalali ─────────────────────────────────────────────────────
+/**
+ * Convert a Gregorian date to a Jalali (Shamsi / Solar Hijri) date.
+ * Pure TypeScript implementation with no external dependencies.
+ *
+ * @param gy - Gregorian year (e.g. 2025)
+ * @param gm - Gregorian month (1-12)
+ * @param gd - Gregorian day (1-31)
+ * @returns Object with Jalali date: { jy, jm, jd }
+ *
+ * @example gregorianToJalali(2025, 3, 21) → { jy: 1404, jm: 1, jd: 1 }
+ */
 export function gregorianToJalali(gy: number, gm: number, gd: number): { jy: number; jm: number; jd: number } {
   const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
   let jy: number;
@@ -54,6 +75,17 @@ export function gregorianToJalali(gy: number, gm: number, gd: number): { jy: num
 }
 
 // ─── Jalali → Gregorian ─────────────────────────────────────────────────────
+/**
+ * Convert a Jalali (Shamsi / Solar Hijri) date to a Gregorian date.
+ * Pure TypeScript implementation with no external dependencies.
+ *
+ * @param jy - Jalali year (e.g. 1404)
+ * @param jm - Jalali month (1-12)
+ * @param jd - Jalali day (1-31)
+ * @returns Object with Gregorian date: { gy, gm, gd }
+ *
+ * @example jalaliToGregorian(1404, 1, 1) → { gy: 2025, gm: 3, gd: 21 }
+ */
 export function jalaliToGregorian(jy: number, jm: number, jd: number): { gy: number; gm: number; gd: number } {
   let gy: number;
   if (jy > 979) {
@@ -82,6 +114,13 @@ export function jalaliToGregorian(jy: number, jm: number, jd: number): { gy: num
 }
 
 // ─── Is Jalali Leap Year ────────────────────────────────────────────────────
+/**
+ * Check if a Jalali year is a leap year.
+ * Uses the 2820-year cycle algorithm with known break points.
+ *
+ * @param jy - Jalali year
+ * @returns True if the year is a leap year (Esfand has 30 days)
+ */
 export function isJalaliLeap(jy: number): boolean {
   const breaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
   let jp = breaks[0];
@@ -99,6 +138,16 @@ export function isJalaliLeap(jy: number): boolean {
 }
 
 // ─── Format Jalali Date (from Gregorian input) ──────────────────────────────
+/**
+ * Format a Gregorian date as a Jalali (Shamsi) date string in Persian digits.
+ *
+ * @param gy - Gregorian year
+ * @param gm - Gregorian month (1-12)
+ * @param gd - Gregorian day (1-31)
+ * @param format - Output format: 'full' (e.g. '۲۱ فروردین ۱۴۰۴'),
+ *                 'short' (e.g. '۲۱ فرو ۱۴۰۴'), 'compact' (e.g. '۱۴۰۴/۰۱/۲۱')
+ * @returns Formatted Jalali date string in Persian digits
+ */
 export function formatJalali(gy: number, gm: number, gd: number, format: 'full' | 'short' | 'compact' = 'short'): string {
   const { jy, jm, jd } = gregorianToJalali(gy, gm, gd);
   switch (format) {
@@ -113,6 +162,12 @@ export function formatJalali(gy: number, gm: number, gd: number, format: 'full' 
 }
 
 // ─── Parse date string (YYYY/MM/DD or YYYY-MM-DD) to components ─────────────
+/**
+ * Parse a date string (YYYY/MM/DD or YYYY-MM-DD) into year/month/day components.
+ *
+ * @param dateStr - Date string in YYYY/MM/DD or YYYY-MM-DD format
+ * @returns Object with { gy, gm, gd } or null if parsing fails
+ */
 export function parseDateString(dateStr: string): { gy: number; gm: number; gd: number } | null {
   const cleaned = dateStr.replace(/[\\/-]/g, '/');
   const parts = cleaned.split('/');
@@ -128,6 +183,13 @@ export function parseDateString(dateStr: string): { gy: number; gm: number; gd: 
 }
 
 // ─── Convert candle date string (Gregorian) to Jalali ──────────────────────
+/**
+ * Convert a Gregorian date string (YYYY-MM-DD) to a formatted Jalali date string.
+ *
+ * @param dateStr - Gregorian date string (e.g. '2025-03-21')
+ * @param format - Output format: 'full', 'short', or 'compact'
+ * @returns Formatted Jalali date string, or the original string if parsing fails
+ */
 export function candleDateToJalali(dateStr: string, format: 'full' | 'short' | 'compact' = 'short'): string {
   const parsed = parseDateString(dateStr);
   if (!parsed) return dateStr;
@@ -137,6 +199,14 @@ export function candleDateToJalali(dateStr: string, format: 'full' | 'short' | '
 // ─── Format an ALREADY Jalali date string (no conversion needed) ────────────
 // This is the correct function for TSETMC & TGJU data where dates are already Shamsi
 // Input format: "1404/01/15" or "1404-01-15"
+/**
+ * Format an already-Jalali date string (no conversion needed).
+ * Use this for TSETMC & TGJU data where dates are already Shamsi.
+ *
+ * @param dateStr - Jalali date string in YYYY/MM/DD or YYYY-MM-DD format (e.g. '1404/01/15')
+ * @param format - Output format: 'full', 'short', or 'compact' (default)
+ * @returns Formatted Jalali date string in Persian digits
+ */
 export function formatJalaliString(dateStr: string, format: 'full' | 'short' | 'compact' = 'compact'): string {
   const parsed = parseDateString(dateStr);
   if (!parsed) return toPersianDigits(dateStr);
@@ -153,6 +223,15 @@ export function formatJalaliString(dateStr: string, format: 'full' | 'short' | '
 }
 
 // ─── Get weekday name in Persian (from Gregorian date) ─────────────────
+/**
+ * Get the Persian weekday name for a Gregorian date.
+ * Persian week starts on Saturday (شنبه).
+ *
+ * @param gy - Gregorian year
+ * @param gm - Gregorian month (1-12)
+ * @param gd - Gregorian day (1-31)
+ * @returns Persian weekday name (e.g. 'شنبه', 'یکشنبه', ...)
+ */
 export function getPersianWeekday(gy: number, gm: number, gd: number): string {
   const d = new Date(gy, gm - 1, gd);
   const day = d.getDay();
@@ -161,6 +240,13 @@ export function getPersianWeekday(gy: number, gm: number, gd: number): string {
 }
 
 // ─── Full Persian date with weekday (auto-detects Gregorian vs Jalali) ───
+/**
+ * Format a date string as a full Persian date with weekday.
+ * Auto-detects whether the input is Gregorian (year ≥ 1900) or Jalali.
+ *
+ * @param dateStr - Date string (Gregorian or Jalali) in YYYY/MM/DD or YYYY-MM-DD format
+ * @returns Full Persian date with weekday (e.g. 'شنبه، ۲۱ فروردین ۱۴۰۴')
+ */
 export function fullPersianDate(dateStr: string): string {
   const parsed = parseDateString(dateStr);
   if (!parsed) return dateStr;
@@ -182,6 +268,15 @@ export function fullPersianDate(dateStr: string): string {
 
 // ─── Smart date converter: auto-detects and returns correct Jalali string ───
 // Use this anywhere you need a single Jalali date from an unknown-source date string
+/**
+ * Smart date converter: auto-detects whether input is Gregorian or Jalali
+ * and returns the correctly formatted Jalali string.
+ * Use this anywhere you need a single Jalali date from an unknown-source date string.
+ *
+ * @param dateStr - Date string (Gregorian if year ≥ 1900, otherwise Jalali)
+ * @param format - Output format: 'full', 'short', or 'compact' (default)
+ * @returns Formatted Jalali date string
+ */
 export function smartJalaliDate(dateStr: string, format: 'full' | 'short' | 'compact' = 'short'): string {
   if (isGregorianDate(dateStr)) {
     const p = parseDateString(dateStr);
@@ -192,6 +287,12 @@ export function smartJalaliDate(dateStr: string, format: 'full' | 'short' | 'com
 }
 
 // ─── Detect if a date string is Gregorian (year >= 1900) ──────────────
+/**
+ * Detect if a date string is Gregorian (year ≥ 1900) or Jalali.
+ *
+ * @param dateStr - Date string to check
+ * @returns True if the year component is ≥ 1900 (Gregorian), false otherwise
+ */
 export function isGregorianDate(dateStr: string): boolean {
   const parsed = parseDateString(dateStr);
   if (!parsed) return false;
@@ -199,6 +300,14 @@ export function isGregorianDate(dateStr: string): boolean {
 }
 
 // ─── Build Jalali time map for lightweight-charts (dates already Jalali) ───
+/**
+ * Build a Jalali time map for lightweight-charts from candle data where dates are already Jalali.
+ * Maps each candle's index to its formatted Jalali date string.
+ *
+ * @param candles - Array of objects with a 'date' property containing Jalali date strings
+ * @param format - Output format: 'compact' (default) or 'short'
+ * @returns Map from candle index (number) to formatted Jalali date string
+ */
 export function buildJalaliTimeMap(candles: Array<{ date: string }>, format: 'compact' | 'short' = 'compact'): Map<number, string> {
   const map = new Map<number, string>();
   candles.forEach((c, i) => {

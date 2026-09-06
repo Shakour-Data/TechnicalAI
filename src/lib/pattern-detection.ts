@@ -6,41 +6,92 @@ import type { OHLCV } from './ta-engine';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
+/**
+ * Represents a single detected technical analysis pattern.
+ *
+ * Each pattern is classified by category (classic, harmonic, candlestick, elliott),
+ * carries a directional signal (bullish/bearish/neutral), and includes a
+ * strength score from 0 to 1 indicating pattern confidence.
+ */
 export interface PatternResult {
-  name: string;         // Persian name
-  nameEn: string;       // English name
+  /** Persian (Farsi) name of the pattern, e.g. 'سر و شانه' */
+  name: string;
+  /** English name of the pattern, e.g. 'Head & Shoulders' */
+  nameEn: string;
+  /** Analysis school the pattern belongs to */
   category: 'classic' | 'harmonic' | 'candlestick' | 'elliott';
+  /** Predicted market direction signaled by the pattern */
   direction: 'bullish' | 'bearish' | 'neutral';
-  strength: number;     // 0-1
+  /** Pattern confidence/strength from 0 (weak) to 1 (strong) */
+  strength: number;
+  /** Current lifecycle status of the pattern */
   status: 'forming' | 'completed' | 'failed';
-  priceLevel?: number;  // key price level (neckline, PRZ, etc.)
-  description: string;  // brief Persian description
+  /** Key price level for the pattern (neckline, PRZ, resistance, etc.) */
+  priceLevel?: number;
+  /** Brief human-readable description in Persian */
+  description: string;
 }
 
+/**
+ * Aggregate result of scanning OHLCV data across all four pattern schools.
+ *
+ * Contains arrays of detected patterns grouped by category, a combined
+ * `all` array sorted by strength (descending), and six school-level
+ * composite scores (0–1) that summarise confidence per analysis method.
+ */
 export interface DetectedPatterns {
+  /** Classic chart patterns (Head & Shoulders, Double Top, Triangles, etc.) */
   classic: PatternResult[];
+  /** Harmonic patterns (Gartley, Butterfly, Bat, Crab, Shark, Cypher) */
   harmonic: PatternResult[];
+  /** Candlestick patterns (single & multi-candle formations) */
   candlestick: PatternResult[];
+  /** Elliott Wave patterns (Impulse, Diagonals, Corrections, etc.) */
   elliott: PatternResult[];
+  /** All detected patterns across every category, sorted by strength descending */
   all: PatternResult[];
+  /** Composite confidence scores (0–1) per analysis school */
   schoolScores: {
+    /** Score derived from classic chart patterns */
     classical: number;
+    /** Score derived from oscillator-related candlestick patterns (Doji, Star, Harami, Engulfing) */
     oscillator: number;
+    /** Score derived from volume-related candlestick patterns (Marubozu, Kicker, Three Methods) */
     volume: number;
+    /** Score derived from harmonic patterns */
     harmonic: number;
+    /** Score derived from Elliott Wave patterns */
     elliott: number;
+    /** Blended score across all schools, weighted by pattern count */
     hybrid: number;
   };
 }
 
 // ─── Utility Functions ──────────────────────────────────────────────────────
 
+/**
+ * A local swing high or swing low identified in OHLCV data.
+ * Used as the building block for classic, harmonic, and Elliott pattern detection.
+ */
 interface SwingPoint {
+  /** Bar index in the source OHLCV array */
   index: number;
+  /** Price at the swing point (high for peaks, low for troughs) */
   price: number;
+  /** Whether this point is a local high (peak) or local low (trough) */
   type: 'high' | 'low';
 }
 
+/**
+ * Identify local swing highs and lows in OHLCV data.
+ *
+ * A bar is a swing high if its high is strictly greater than the highs of
+ * `order` bars on each side; similarly for swing lows.
+ *
+ * @param data  - Array of OHLCV bars to scan
+ * @param order - Number of surrounding bars on each side that must be lower/higher (default 3)
+ * @returns Array of SwingPoint objects sorted by index
+ */
 function findSwingPoints(data: OHLCV[], order: number = 3): SwingPoint[] {
   const swings: SwingPoint[] = [];
   const len = data.length;
@@ -57,50 +108,81 @@ function findSwingPoints(data: OHLCV[], order: number = 3): SwingPoint[] {
   return swings;
 }
 
+/**
+ * Compute the arithmetic mean of a numeric array.
+ * @param arr - Input numbers
+ * @returns The average, or 0 for an empty array
+ */
 function avg(arr: number[]): number {
   if (arr.length === 0) return 0;
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
+/**
+ * Check whether two values are approximately equal within a relative tolerance.
+ * @param a         - First value
+ * @param b         - Second value (denominator)
+ * @param tolerance - Maximum allowed relative deviation (default 0.05 = 5%)
+ * @returns True if |a/b − 1| ≤ tolerance
+ */
 function nearRatio(a: number, b: number, tolerance: number = 0.05): boolean {
   if (b === 0) return a === 0;
   return Math.abs(a / b - 1) <= tolerance;
 }
 
+/** Absolute body size (|close − open|) of a candle. */
 function bodySize(c: OHLCV): number {
   return Math.abs(c.close - c.open);
 }
 
+/** Upper shadow length of a candle. */
 function upperShadow(c: OHLCV): number {
   return c.high - Math.max(c.open, c.close);
 }
 
+/** Lower shadow length of a candle. */
 function lowerShadow(c: OHLCV): number {
   return Math.min(c.open, c.close) - c.low;
 }
 
+/** True if the candle closed higher than it opened. */
 function isBullish(c: OHLCV): boolean {
   return c.close > c.open;
 }
 
+/** True if the candle closed lower than it opened. */
 function isBearish(c: OHLCV): boolean {
   return c.close < c.open;
 }
 
+/** Full range (high − low) of a candle. */
 function totalRange(c: OHLCV): number {
   return c.high - c.low;
 }
 
+/** Typical price: (high + low + close) / 3. */
 function typicalPrice(c: OHLCV): number {
   return (c.high + c.low + c.close) / 3;
 }
 
+/**
+ * Simple moving average over the last `period` values.
+ * @param values - Source array
+ * @param period - Lookback window
+ * @returns SMA value, or 0 if insufficient data
+ */
 function sma(values: number[], period: number): number {
   if (values.length < period) return 0;
   const slice = values.slice(-period);
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
+/**
+ * Exponential moving average.
+ * @param values - Source array
+ * @param period - EMA period (controls smoothing factor k = 2/(period+1))
+ * @returns EMA value, or 0 if insufficient data
+ */
 function ema(values: number[], period: number): number {
   if (values.length < period) return 0;
   const k = 2 / (period + 1);
@@ -111,21 +193,31 @@ function ema(values: number[], period: number): number {
   return result;
 }
 
-// Fib ratios
-const PHI = 0.618;
-const PHI_EXT = 1.618;
-const PHI_386 = 0.382;
-const PHI_786 = 0.786;
-const PHI_886 = 0.886;
-const PHI_127 = 1.27;
-const PHI_141 = 1.414;
-const PHI_236 = 2.236;
-const PHI_314 = 3.14;
-const PHI_423 = 4.236;
+/** Fibonacci & derived ratios used in harmonic pattern detection. */
+const PHI = 0.618;       // φ (golden ratio conjugate)
+const PHI_EXT = 1.618;   // φ extended (1/φ)
+const PHI_386 = 0.382;   // 1 − φ
+const PHI_786 = 0.786;   // √φ
+const PHI_886 = 0.886;   // √(φ × 0.618 + φ)
+const PHI_127 = 1.27;    // √(1.618)
+const PHI_141 = 1.414;   // √2
+const PHI_236 = 2.236;   // √5
+const PHI_314 = 3.14;    // ≈ π
+const PHI_423 = 4.236;   // 1.618² + 1.618
+/** Tolerance for Fibonacci ratio matching (5%). */
 const FIB_TOL = 0.05;
 
 // ─── 1. Classic Pattern Detectors ───────────────────────────────────────────
 
+/**
+ * Detect Head & Shoulders (bearish) and Inverse Head & Shoulders (bullish) patterns.
+ *
+ * Identifies three-peak formations where the middle peak (head) is the highest/lowest
+ * and the two flanking peaks (shoulders) are at approximately the same level (>85% similarity).
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns Array of detected Head & Shoulders patterns (0–2 results)
+ */
 function detectHeadAndShoulders(data: OHLCV[]): PatternResult[] {
   const results: PatternResult[] = [];
   if (data.length < 30) return results;
@@ -180,6 +272,15 @@ function detectHeadAndShoulders(data: OHLCV[]): PatternResult[] {
   return results;
 }
 
+/**
+ * Detect a Double Top (bearish reversal) pattern.
+ *
+ * Two swing highs at approximately the same price level (>96% similarity)
+ * with a trough between them. Confirmed when price breaks below the trough.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDoubleTop(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const swings = findSwingPoints(data, 3);
@@ -205,6 +306,15 @@ function detectDoubleTop(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Double Bottom (bullish reversal) pattern.
+ *
+ * Two swing lows at approximately the same price level (>96% similarity)
+ * with a peak between them. Confirmed when price breaks above the peak.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDoubleBottom(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const swings = findSwingPoints(data, 3);
@@ -230,6 +340,13 @@ function detectDoubleBottom(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Triple Top (bearish reversal) pattern.
+ * Three swing highs within 4% variance, confirmed on neckline break.
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectTripleTop(data: OHLCV[]): PatternResult {
   if (data.length < 30) return null!;
   const swings = findSwingPoints(data, 3);
@@ -257,6 +374,13 @@ function detectTripleTop(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Triple Bottom (bullish reversal) pattern.
+ * Three swing lows within 4% variance, confirmed on neckline break.
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectTripleBottom(data: OHLCV[]): PatternResult {
   if (data.length < 30) return null!;
   const swings = findSwingPoints(data, 3);
@@ -284,6 +408,13 @@ function detectTripleBottom(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect an Ascending Triangle (bullish continuation) pattern.
+ * Flat resistance with rising higher lows.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectAscendingTriangle(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const swings = findSwingPoints(data, 3);
@@ -310,6 +441,13 @@ function detectAscendingTriangle(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Descending Triangle (bearish continuation) pattern.
+ * Flat support with falling lower highs.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDescendingTriangle(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const swings = findSwingPoints(data, 3);
@@ -336,6 +474,13 @@ function detectDescendingTriangle(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Symmetric Triangle (continuation) pattern.
+ * Converging trendlines with similar slopes.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectSymmetricTriangle(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const swings = findSwingPoints(data, 3);
@@ -367,6 +512,13 @@ function detectSymmetricTriangle(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect an Ascending Wedge (bearish reversal) pattern.
+ * Both trendlines rising but lower line rising faster (converging upward).
+ *
+ * @param data - OHLCV bars (minimum 25)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectAscendingWedge(data: OHLCV[]): PatternResult {
   if (data.length < 25) return null!;
   const swings = findSwingPoints(data, 3);
@@ -396,6 +548,13 @@ function detectAscendingWedge(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Descending Wedge (bullish reversal) pattern.
+ * Both trendlines falling but upper line falling faster (converging downward).
+ *
+ * @param data - OHLCV bars (minimum 25)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDescendingWedge(data: OHLCV[]): PatternResult {
   if (data.length < 25) return null!;
   const swings = findSwingPoints(data, 3);
@@ -424,6 +583,13 @@ function detectDescendingWedge(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Bull Flag (bullish continuation) pattern.
+ * Sharp price pole upward followed by a slight downward-sloping flag.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullFlag(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const poleLen = Math.min(10, Math.floor(data.length * 0.3));
@@ -453,6 +619,13 @@ function detectBullFlag(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Bear Flag (bearish continuation) pattern.
+ * Sharp price pole downward followed by a slight upward-sloping flag.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBearFlag(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const poleLen = Math.min(10, Math.floor(data.length * 0.3));
@@ -481,6 +654,13 @@ function detectBearFlag(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect Pennant (bullish or bearish continuation) patterns.
+ * Sharp price move (pole) followed by a small converging triangle (pennant).
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns Array of detected Pennant patterns (0–1 results)
+ */
 function detectPennant(data: OHLCV[]): PatternResult[] {
   const results: PatternResult[] = [];
   if (data.length < 20) return results;
@@ -519,6 +699,13 @@ function detectPennant(data: OHLCV[]): PatternResult[] {
   return results;
 }
 
+/**
+ * Detect a Cup & Handle (bullish continuation) pattern.
+ * U-shaped cup followed by a smaller downward drift (handle).
+ *
+ * @param data - OHLCV bars (minimum 40)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectCupAndHandle(data: OHLCV[]): PatternResult {
   if (data.length < 40) return null!;
   const swings = findSwingPoints(data, 3);
@@ -552,6 +739,13 @@ function detectCupAndHandle(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Rectangle / Channel (continuation) pattern.
+ * Horizontal support and resistance with low variance.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectRectangle(data: OHLCV[]): PatternResult {
   if (data.length < 20) return null!;
   const swings = findSwingPoints(data, 3);
@@ -583,6 +777,13 @@ function detectRectangle(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Broadening Top (bearish) pattern.
+ * Expanding triangle with rising highs and falling lows.
+ *
+ * @param data - OHLCV bars (minimum 25)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBroadeningTop(data: OHLCV[]): PatternResult {
   if (data.length < 25) return null!;
   const swings = findSwingPoints(data, 3);
@@ -605,6 +806,13 @@ function detectBroadeningTop(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Broadening Bottom (bullish) pattern.
+ * Expanding triangle suggesting accumulation at the bottom.
+ *
+ * @param data - OHLCV bars (minimum 25)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBroadeningBottom(data: OHLCV[]): PatternResult {
   if (data.length < 25) return null!;
   const swings = findSwingPoints(data, 3);
@@ -626,6 +834,13 @@ function detectBroadeningBottom(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Diamond Top (bearish reversal) pattern.
+ * Broadening phase followed by converging phase at a market top.
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDiamondTop(data: OHLCV[]): PatternResult {
   if (data.length < 30) return null!;
   const swings = findSwingPoints(data, 3);
@@ -651,6 +866,13 @@ function detectDiamondTop(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect a Diamond Bottom (bullish reversal) pattern.
+ * Broadening phase followed by converging phase at a market bottom.
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDiamondBottom(data: OHLCV[]): PatternResult {
   if (data.length < 30) return null!;
   const swings = findSwingPoints(data, 3);
@@ -674,6 +896,24 @@ function detectDiamondBottom(data: OHLCV[]): PatternResult {
   };
 }
 
+/**
+ * Detect all classic chart patterns in the given OHLCV data.
+ *
+ * Scans for 16 classic patterns:
+ *   1. Head & Shoulders / Inverse Head & Shoulders
+ *   2. Double Top / Double Bottom
+ *   3. Triple Top / Triple Bottom
+ *   4. Ascending Triangle / Descending Triangle / Symmetric Triangle
+ *   5. Ascending Wedge / Descending Wedge
+ *   6. Bull Flag / Bear Flag / Pennant
+ *   7. Cup & Handle
+ *   8. Rectangle / Channel
+ *   9. Broadening Top / Broadening Bottom
+ *  10. Diamond Top / Diamond Bottom
+ *
+ * @param data - Array of OHLCV bars (minimum length varies per pattern, 40+ recommended)
+ * @returns Array of detected classic PatternResult objects
+ */
 function detectAllClassic(data: OHLCV[]): PatternResult[] {
   const r: PatternResult[] = [];
   r.push(...detectHeadAndShoulders(data));
@@ -700,11 +940,20 @@ function detectAllClassic(data: OHLCV[]): PatternResult[] {
 
 // ─── 2. Harmonic Pattern Detectors ──────────────────────────────────────────
 
+/**
+ * Specification of a harmonic pattern's expected Fibonacci ratios.
+ * Used to match the AB, BC, and CD legs against target ratios within tolerance.
+ */
 interface HarmonicSpec {
+  /** Persian name */
   name: string;
+  /** English name */
   nameEn: string;
+  /** Expected AB/XA Fibonacci ratio */
   abRatio: number;
+  /** Expected BC/AB Fibonacci ratio */
   bcRatio: number;
+  /** Expected CD/BC Fibonacci ratio */
   cdRatio: number;
 }
 
@@ -735,6 +984,22 @@ const HARMONIC_SPECS: Record<string, { bull: HarmonicSpec; bear: HarmonicSpec }>
   }
 };
 
+/**
+ * Attempt to match a harmonic pattern against five pivot prices (X, A, B, C, D).
+ *
+ * Computes the actual AB/XA, BC/AB, and CD/BC ratios and compares each against
+ * the spec's expected ratios within a 5% tolerance. At least 2 of 3 ratios must
+ * match for the pattern to qualify.
+ *
+ * @param X         - Price at pivot X (pattern origin)
+ * @param A         - Price at pivot A
+ * @param B         - Price at pivot B
+ * @param C         - Price at pivot C
+ * @param D         - Price at pivot D (PRZ / Potential Reversal Zone)
+ * @param spec      - Harmonic pattern specification with expected Fibonacci ratios
+ * @param direction - 'bullish' or 'bearish'
+ * @returns A PatternResult if at least 2 of 3 ratio conditions match, otherwise null
+ */
 function detectHarmonicFromPoints(
   X: number, A: number, B: number, C: number, D: number,
   spec: HarmonicSpec,
@@ -777,6 +1042,22 @@ function detectHarmonicFromPoints(
   };
 }
 
+/**
+ * Detect all harmonic patterns in the given OHLCV data.
+ *
+ * Scans recent combinations of 5 swing points (X, A, B, C, D) against 6 specs:
+ *   1. Gartley  (AB=0.618, BC=0.382, CD=0.786)
+ *   2. Butterfly (AB=0.786, BC=0.382, CD=1.618)
+ *   3. Bat      (AB=0.382, BC=0.886, CD=0.886)
+ *   4. Crab     (AB=0.382, BC=0.382, CD=1.618)
+ *   5. Shark    (AB=0.786, BC=0.618, CD=0.886)
+ *   6. Cypher   (AB=0.786, BC=1.27,  CD=0.786)
+ *
+ * Both bullish and bearish variants are tested. Results are deduplicated by nameEn.
+ *
+ * @param data - Array of OHLCV bars (minimum 20)
+ * @returns Array of detected harmonic PatternResult objects
+ */
 function detectAllHarmonics(data: OHLCV[]): PatternResult[] {
   const results: PatternResult[] = [];
   if (data.length < 20) return results;
@@ -825,6 +1106,13 @@ function detectAllHarmonics(data: OHLCV[]): PatternResult[] {
 
 // ─── 3. Candlestick Pattern Detectors ───────────────────────────────────────
 
+/**
+ * Detect a Hammer (bullish single-candle) pattern.
+ * Small body at top with long lower shadow (≥2× body), in downtrend.
+ *
+ * @param data - OHLCV bars (minimum 5 for trend confirmation)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectHammer(data: OHLCV[]): PatternResult | null {
   if (data.length < 1) return null;
   const c = data[data.length - 1];
@@ -847,6 +1135,13 @@ function detectHammer(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect an Inverted Hammer (bullish single-candle) pattern.
+ * Small body at bottom with long upper shadow (≥2× body), in downtrend.
+ *
+ * @param data - OHLCV bars (minimum 5 for trend confirmation)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectInvertedHammer(data: OHLCV[]): PatternResult | null {
   if (data.length < 1) return null;
   const c = data[data.length - 1];
@@ -868,6 +1163,13 @@ function detectInvertedHammer(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bullish Engulfing (two-candle reversal) pattern.
+ * Bearish candle followed by a larger bullish candle that engulfs it.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullishEngulfing(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -885,6 +1187,13 @@ function detectBullishEngulfing(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Morning Star (bullish three-candle reversal) pattern.
+ * Large bearish candle, small-body star, large bullish candle.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectMorningStar(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -904,6 +1213,13 @@ function detectMorningStar(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Three White Soldiers (bullish three-candle) pattern.
+ * Three consecutive bullish candles with progressively higher opens and closes.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeWhiteSoldiers(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -921,6 +1237,13 @@ function detectThreeWhiteSoldiers(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect a Piercing Line (bullish two-candle) pattern.
+ * Bearish candle followed by bullish candle closing above its midpoint.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectPiercingLine(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -936,6 +1259,13 @@ function detectPiercingLine(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bullish Harami (two-candle) pattern.
+ * Large bearish candle containing a smaller bullish candle.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullishHarami(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -951,6 +1281,13 @@ function detectBullishHarami(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Tweezer Bottom (bullish two-candle) pattern.
+ * Two candles with matching lows, first bearish then bullish.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectTweezerBottom(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const c1 = data[data.length - 2];
@@ -966,6 +1303,13 @@ function detectTweezerBottom(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Dragonfly Doji (bullish single-candle) pattern.
+ * Doji with no upper shadow and long lower shadow.
+ *
+ * @param data - OHLCV bars (minimum 1)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDragonflyDoji(data: OHLCV[]): PatternResult | null {
   if (data.length < 1) return null;
   const c = data[data.length - 1];
@@ -982,6 +1326,13 @@ function detectDragonflyDoji(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bullish Marubozu (single-candle) pattern.
+ * Bullish candle with negligible shadows (open = low, close = high).
+ *
+ * @param data - OHLCV bars (minimum 1)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullishMarubozu(data: OHLCV[]): PatternResult | null {
   if (data.length < 1) return null;
   const c = data[data.length - 1];
@@ -997,6 +1348,13 @@ function detectBullishMarubozu(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Rising Three Methods (bullish five-candle continuation) pattern.
+ * Long bullish candle, three small bearish candles within its range, then another bullish candle.
+ *
+ * @param data - OHLCV bars (minimum 5)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectRisingThreeMethods(data: OHLCV[]): PatternResult | null {
   if (data.length < 5) return null;
   const c1 = data[data.length - 5];
@@ -1017,6 +1375,13 @@ function detectRisingThreeMethods(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bullish Kicker (two-candle strong reversal) pattern.
+ * Bearish candle followed by a gap-up bullish candle — sudden sentiment shift.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullishKicker(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -1031,6 +1396,13 @@ function detectBullishKicker(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Three Inside Up (bullish three-candle confirmation) pattern.
+ * Bearish candle, smaller bullish inside it, then bullish closing above first candle's open.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeInsideUp(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1047,6 +1419,13 @@ function detectThreeInsideUp(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Three Outside Up (bullish three-candle confirmation) pattern.
+ * Bearish candle engulfed by bullish, then another bullish closing higher.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeOutsideUp(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1063,6 +1442,13 @@ function detectThreeOutsideUp(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Mat Hold (bullish five-candle continuation) pattern.
+ * Bullish candle, bearish retreat, then bullish continuation closing above first high.
+ *
+ * @param data - OHLCV bars (minimum 5)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectMatHold(data: OHLCV[]): PatternResult | null {
   if (data.length < 5) return null;
   const c1 = data[data.length - 5];
@@ -1081,6 +1467,13 @@ function detectMatHold(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Stick Sandwich (bullish three-candle) pattern.
+ * Bullish, bearish, bullish with matching open prices of first and third candles.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectStickSandwich(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1097,6 +1490,13 @@ function detectStickSandwich(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Bullish Breakaway (five-candle reversal) pattern.
+ * Bearish with gap-down, then recovery closing above first candle's close.
+ *
+ * @param data - OHLCV bars (minimum 5)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullishBreakaway(data: OHLCV[]): PatternResult | null {
   if (data.length < 5) return null;
   const c1 = data[data.length - 5];
@@ -1115,6 +1515,13 @@ function detectBullishBreakaway(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Three Stars in South (bullish three-candle) pattern.
+ * Three bearish candles with progressively smaller bodies and lower shadows — selling exhaustion.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeStarsInSouth(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1135,6 +1542,13 @@ function detectThreeStarsInSouth(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Bullish Separating Lines (two-candle) pattern.
+ * Bearish candle followed by bullish candle with same open price.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBullishSeparatingLines(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const c1 = data[data.length - 2];
@@ -1149,6 +1563,13 @@ function detectBullishSeparatingLines(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Homing Pigeon (bullish two-candle) pattern.
+ * Two bearish candles where the second is contained within the first — seller weakness.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectHomingPigeon(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const c1 = data[data.length - 2];
@@ -1164,6 +1585,13 @@ function detectHomingPigeon(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Ladder Bottom (bullish five-candle) pattern.
+ * Four bearish candles making progressively lower lows, then a bullish candle — seller exhaustion.
+ *
+ * @param data - OHLCV bars (minimum 5)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectLadderBottom(data: OHLCV[]): PatternResult | null {
   if (data.length < 5) return null;
   const candles = data.slice(-5);
@@ -1184,6 +1612,13 @@ function detectLadderBottom(data: OHLCV[]): PatternResult | null {
 
 // ─── Bearish Candlestick Patterns ────────────────────────────────────────────
 
+/**
+ * Detect a Hanging Man (bearish single-candle) pattern.
+ * Hammer-like candle appearing at the top of an uptrend.
+ *
+ * @param data - OHLCV bars (minimum 6 for trend confirmation)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectHangingMan(data: OHLCV[]): PatternResult | null {
   if (data.length < 6) return null;
   const c = data[data.length - 1];
@@ -1204,6 +1639,13 @@ function detectHangingMan(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Shooting Star (bearish single-candle) pattern.
+ * Small body at bottom with long upper shadow (≥2× body), in uptrend.
+ *
+ * @param data - OHLCV bars (minimum 6 for trend confirmation)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectShootingStar(data: OHLCV[]): PatternResult | null {
   if (data.length < 6) return null;
   const c = data[data.length - 1];
@@ -1224,6 +1666,13 @@ function detectShootingStar(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bearish Engulfing (two-candle reversal) pattern.
+ * Bullish candle followed by a larger bearish candle that engulfs it.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBearishEngulfing(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -1240,6 +1689,13 @@ function detectBearishEngulfing(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect an Evening Star (bearish three-candle reversal) pattern.
+ * Large bullish candle, small-body star, large bearish candle.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectEveningStar(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1257,6 +1713,13 @@ function detectEveningStar(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Three Black Crows (bearish three-candle) pattern.
+ * Three consecutive bearish candles with progressively lower opens and closes.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeBlackCrows(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1274,6 +1737,13 @@ function detectThreeBlackCrows(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Dark Cloud Cover (bearish two-candle) pattern.
+ * Bullish candle followed by bearish candle closing below its midpoint.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDarkCloudCover(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -1289,6 +1759,13 @@ function detectDarkCloudCover(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bearish Harami (two-candle) pattern.
+ * Large bullish candle containing a smaller bearish candle.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBearishHarami(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -1304,6 +1781,13 @@ function detectBearishHarami(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Tweezer Top (bearish two-candle) pattern.
+ * Two candles with matching highs, first bullish then bearish.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectTweezerTop(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const c1 = data[data.length - 2];
@@ -1319,6 +1803,13 @@ function detectTweezerTop(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Gravestone Doji (bearish single-candle) pattern.
+ * Doji with no lower shadow and long upper shadow.
+ *
+ * @param data - OHLCV bars (minimum 1)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectGravestoneDoji(data: OHLCV[]): PatternResult | null {
   if (data.length < 1) return null;
   const c = data[data.length - 1];
@@ -1335,6 +1826,13 @@ function detectGravestoneDoji(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bearish Marubozu (single-candle) pattern.
+ * Bearish candle with negligible shadows (open = high, close = low).
+ *
+ * @param data - OHLCV bars (minimum 1)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBearishMarubozu(data: OHLCV[]): PatternResult | null {
   if (data.length < 1) return null;
   const c = data[data.length - 1];
@@ -1350,6 +1848,13 @@ function detectBearishMarubozu(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Falling Three Methods (bearish five-candle continuation) pattern.
+ * Long bearish candle, three small bullish candles within its range, then another bearish candle.
+ *
+ * @param data - OHLCV bars (minimum 5)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectFallingThreeMethods(data: OHLCV[]): PatternResult | null {
   if (data.length < 5) return null;
   const c1 = data[data.length - 5];
@@ -1369,6 +1874,13 @@ function detectFallingThreeMethods(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Bearish Kicker (two-candle strong reversal) pattern.
+ * Bullish candle followed by a gap-down bearish candle — sudden sentiment shift.
+ *
+ * @param data - OHLCV bars (minimum 2)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectBearishKicker(data: OHLCV[]): PatternResult | null {
   if (data.length < 2) return null;
   const prev = data[data.length - 2];
@@ -1383,6 +1895,13 @@ function detectBearishKicker(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Three Inside Down (bearish three-candle confirmation) pattern.
+ * Bullish candle, smaller bearish inside it, then bearish closing below first candle's open.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeInsideDown(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1399,6 +1918,13 @@ function detectThreeInsideDown(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Three Outside Down (bearish three-candle confirmation) pattern.
+ * Bullish candle engulfed by bearish, then another bearish closing lower.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectThreeOutsideDown(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1415,6 +1941,13 @@ function detectThreeOutsideDown(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Advance Block (bearish three-candle) pattern.
+ * Three bullish candles with progressively smaller bodies — buying exhaustion.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectAdvanceBlock(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1433,6 +1966,13 @@ function detectAdvanceBlock(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Deliberation (bearish three-candle) pattern.
+ * Two strong bullish candles followed by a weak third — buyer hesitation.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDeliberation(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1450,6 +1990,13 @@ function detectDeliberation(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Two Crows (bearish three-candle) pattern.
+ * Bullish candle, gap-up bearish, then another bearish closing below first candle's close.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectTwoCrows(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1466,6 +2013,13 @@ function detectTwoCrows(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Upside Gap Two Crows (bearish three-candle) pattern.
+ * Bullish candle with gap-up, then two bearish candles closing below first close.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectUpsideGapTwoCrows(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1481,6 +2035,13 @@ function detectUpsideGapTwoCrows(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect Identical Three Crows (bearish three-candle) pattern.
+ * Three bearish candles with approximately equal body sizes and opens near prior closes.
+ *
+ * @param data - OHLCV bars (minimum 3)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectIdenticalThreeCrows(data: OHLCV[]): PatternResult | null {
   if (data.length < 3) return null;
   const c1 = data[data.length - 3];
@@ -1499,6 +2060,13 @@ function detectIdenticalThreeCrows(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect Concealing Baby Swallow (bearish four-candle) pattern.
+ * Two black marubozu-like candles, a third bearish opening inside second, then a small bullish candle.
+ *
+ * @param data - OHLCV bars (minimum 4)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectConcealingBabySwallow(data: OHLCV[]): PatternResult | null {
   if (data.length < 4) return null;
   const c1 = data[data.length - 4];
@@ -1519,6 +2087,26 @@ function detectConcealingBabySwallow(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect all candlestick patterns in the given OHLCV data.
+ *
+ * Scans for 40 candlestick patterns:
+ * - 21 bullish patterns: Hammer, Inverted Hammer, Bullish Engulfing, Morning Star,
+ *   Three White Soldiers, Piercing Line, Bullish Harami, Tweezer Bottom,
+ *   Dragonfly Doji, Bullish Marubozu, Rising Three Methods, Bullish Kicker,
+ *   Three Inside Up, Three Outside Up, Mat Hold, Stick Sandwich,
+ *   Bullish Breakaway, Three Stars in South, Bullish Separating Lines,
+ *   Homing Pigeon, Ladder Bottom
+ * - 19 bearish patterns: Hanging Man, Shooting Star, Bearish Engulfing, Evening Star,
+ *   Three Black Crows, Dark Cloud Cover, Bearish Harami, Tweezer Top,
+ *   Gravestone Doji, Bearish Marubozu, Falling Three Methods, Bearish Kicker,
+ *   Three Inside Down, Three Outside Down, Advance Block, Deliberation,
+ *   Two Crows, Upside Gap Two Crows, Identical Three Crows,
+ *   Concealing Baby Swallow
+ *
+ * @param data - Array of OHLCV bars (minimum length varies per pattern, 6+ recommended)
+ * @returns Array of detected candlestick PatternResult objects
+ */
 function detectAllCandlestick(data: OHLCV[]): PatternResult[] {
   const r: PatternResult[] = [];
   const add = (fn: (d: OHLCV[]) => PatternResult | null) => { const p = fn(data); if (p) r.push(p); };
@@ -1573,6 +2161,14 @@ function detectAllCandlestick(data: OHLCV[]): PatternResult[] {
 
 // ─── 4. Elliott Wave Pattern Detectors ──────────────────────────────────────
 
+/**
+ * Detect an Impulse Wave (5-wave Elliott motive structure) pattern.
+ * Looks for 5 swing points forming the classic 1-2-3-4-5 structure
+ * where wave 3 is not the shortest and wave 2 doesn't retrace beyond wave 1's start.
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectImpulseWave(data: OHLCV[]): PatternResult | null {
   if (data.length < 30) return null;
   const swings = findSwingPoints(data, 3);
@@ -1613,6 +2209,13 @@ function detectImpulseWave(data: OHLCV[]): PatternResult | null {
   return null;
 }
 
+/**
+ * Detect a Leading Diagonal (Elliott wedge in wave-1 position) pattern.
+ * Converging channel of 5 waves at the start of an impulse.
+ *
+ * @param data - OHLCV bars (minimum 25)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectLeadingDiagonal(data: OHLCV[]): PatternResult | null {
   if (data.length < 25) return null;
   const swings = findSwingPoints(data, 2);
@@ -1637,6 +2240,13 @@ function detectLeadingDiagonal(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect an Ending Diagonal (Elliott wedge in wave-5 position) pattern.
+ * Converging channel of 5 waves at the end of an impulse — signals reversal.
+ *
+ * @param data - OHLCV bars (minimum 25)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectEndingDiagonal(data: OHLCV[]): PatternResult | null {
   if (data.length < 25) return null;
   const swings = findSwingPoints(data, 2);
@@ -1665,6 +2275,13 @@ function detectEndingDiagonal(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Zigzag (ABC) corrective pattern.
+ * Sharp correction where B retraces 30–80% of A, then C extends.
+ *
+ * @param data - OHLCV bars (minimum 15)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectZigzag(data: OHLCV[]): PatternResult | null {
   if (data.length < 15) return null;
   const swings = findSwingPoints(data, 3);
@@ -1687,6 +2304,13 @@ function detectZigzag(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Flat (ABC) corrective pattern.
+ * Sideways correction where A and B moves are each <60% of the total range.
+ *
+ * @param data - OHLCV bars (minimum 15)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectFlat(data: OHLCV[]): PatternResult | null {
   if (data.length < 15) return null;
   const swings = findSwingPoints(data, 3);
@@ -1709,6 +2333,13 @@ function detectFlat(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect an Expanded Flat (irregular) corrective pattern.
+ * B extends beyond the start of A, and C extends beyond the end of A.
+ *
+ * @param data - OHLCV bars (minimum 15)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectExpandedFlat(data: OHLCV[]): PatternResult | null {
   if (data.length < 15) return null;
   const swings = findSwingPoints(data, 3);
@@ -1736,6 +2367,13 @@ function detectExpandedFlat(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Running Flat corrective pattern.
+ * C fails to reach the end of A (between 50–100% of A) — signals trend continuation.
+ *
+ * @param data - OHLCV bars (minimum 15)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectRunningFlat(data: OHLCV[]): PatternResult | null {
   if (data.length < 15) return null;
   const swings = findSwingPoints(data, 3);
@@ -1757,6 +2395,13 @@ function detectRunningFlat(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect an Elliott Triangle (converging corrective) pattern.
+ * Converging swing highs and lows — typically occurs in wave-4 position.
+ *
+ * @param data - OHLCV bars (minimum 20)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectElliottTriangle(data: OHLCV[]): PatternResult | null {
   if (data.length < 20) return null;
   const swings = findSwingPoints(data, 3);
@@ -1779,6 +2424,13 @@ function detectElliottTriangle(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Complex Correction (WXY) pattern.
+ * Three linked corrective patterns with alternating swing directions and similar W/Y amplitude ratio (0.5–2.0).
+ *
+ * @param data - OHLCV bars (minimum 35)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectComplexCorrection(data: OHLCV[]): PatternResult | null {
   if (data.length < 35) return null;
   const swings = findSwingPoints(data, 3);
@@ -1809,6 +2461,13 @@ function detectComplexCorrection(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect a Double Three corrective pattern.
+ * Two corrective patterns joined by an X wave — 6 alternating swings with similar amplitude ranges.
+ *
+ * @param data - OHLCV bars (minimum 30)
+ * @returns PatternResult if detected, null otherwise
+ */
 function detectDoubleThree(data: OHLCV[]): PatternResult | null {
   if (data.length < 30) return null;
   const swings = findSwingPoints(data, 3);
@@ -1835,6 +2494,24 @@ function detectDoubleThree(data: OHLCV[]): PatternResult | null {
   };
 }
 
+/**
+ * Detect all Elliott Wave patterns in the given OHLCV data.
+ *
+ * Scans for 10 Elliott patterns:
+ *   1. Impulse Wave    (5-wave motive structure)
+ *   2. Leading Diagonal (wedge in wave-1 position)
+ *   3. Ending Diagonal  (wedge in wave-5 position)
+ *   4. Zigzag (ABC)     (sharp correction)
+ *   5. Flat (ABC)       (sideways correction)
+ *   6. Expanded Flat    (irregular flat with extended B & C)
+ *   7. Running Flat     (C fails to reach A)
+ *   8. Triangle (ABC)   (converging corrective triangle)
+ *   9. Complex Correction (WXY)
+ *  10. Double Three     (two corrective patterns joined by X wave)
+ *
+ * @param data - Array of OHLCV bars (minimum 15–35 depending on pattern)
+ * @returns Array of detected Elliott PatternResult objects
+ */
 function detectAllElliott(data: OHLCV[]): PatternResult[] {
   const r: PatternResult[] = [];
   const add = (fn: (d: OHLCV[]) => PatternResult | null) => { const p = fn(data); if (p) r.push(p); };
@@ -1855,6 +2532,23 @@ function detectAllElliott(data: OHLCV[]): PatternResult[] {
 
 // ─── School Scores Computation ──────────────────────────────────────────────
 
+/**
+ * Compute six school-level composite confidence scores (0–1) from detected patterns.
+ *
+ * The scores summarise signal strength per analysis method:
+ * - **classical**: average strength of classic patterns, boosted by count
+ * - **oscillator**: strength of oscillator-type candlestick patterns (Doji, Star, Harami, Engulfing)
+ * - **volume**: strength of volume-type candlestick patterns (Marubozu, Kicker, Three Methods)
+ * - **harmonic**: average strength of harmonic patterns, boosted by count
+ * - **elliott**: average strength of Elliott patterns, boosted by count
+ * - **hybrid**: blended score across all schools, weighted by total pattern count
+ *
+ * @param classic      - Detected classic patterns
+ * @param harmonic     - Detected harmonic patterns
+ * @param candlestick  - Detected candlestick patterns
+ * @param elliott      - Detected Elliott patterns
+ * @returns SchoolScores object with each score rounded to 3 decimal places
+ */
 function computeSchoolScores(classic: PatternResult[], harmonic: PatternResult[], candlestick: PatternResult[], elliott: PatternResult[]): DetectedPatterns['schoolScores'] {
   const classicScore = classic.length > 0
     ? Math.min(1, avg(classic.map(p => p.strength)) * (1 + classic.length * 0.1))
@@ -1901,6 +2595,28 @@ function computeSchoolScores(classic: PatternResult[], harmonic: PatternResult[]
 
 // ─── Main Detection Function ────────────────────────────────────────────────
 
+/**
+ * Main entry point — scan OHLCV data for all technical analysis patterns.
+ *
+ * Runs detection across four schools (classic, harmonic, candlestick, Elliott Wave),
+ * merges results into a single `all` array sorted by strength (descending),
+ * and computes six school-level composite confidence scores.
+ *
+ * Pattern categories detected:
+ * - **Classic (16)**: Head & Shoulders, Double/Top/Bottom, Triple Top/Bottom,
+ *   Ascending/Descending/Symmetric Triangles, Ascending/Descending Wedges,
+ *   Bull/Bear Flags, Pennant, Cup & Handle, Rectangle, Broadening Top/Bottom,
+ *   Diamond Top/Bottom
+ * - **Harmonic (6 × 2)**: Gartley, Butterfly, Bat, Crab, Shark, Cypher
+ *   (each in bullish + bearish variant)
+ * - **Candlestick (40)**: 21 bullish + 19 bearish single/multi-candle formations
+ * - **Elliott (10)**: Impulse Wave, Leading/Ending Diagonal, Zigzag, Flat,
+ *   Expanded/Running Flat, Triangle, Complex Correction (WXY), Double Three
+ *
+ * @param data - Array of OHLCV bars; more bars yield better detection
+ *              (recommend 50+ for classic, 20+ for harmonic/candlestick, 30+ for Elliott)
+ * @returns DetectedPatterns object with categorized arrays, merged sorted array, and school scores
+ */
 export function detectAllPatterns(data: OHLCV[]): DetectedPatterns {
   const classic = detectAllClassic(data);
   const harmonic = detectAllHarmonics(data);

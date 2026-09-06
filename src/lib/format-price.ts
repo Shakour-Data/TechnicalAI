@@ -18,6 +18,11 @@ export type DataSource = 'tse' | 'tgju' | 'yahoo';
  * - TGJU/Yahoo USD-based categories (forex, energy, metal, world_index, foreign_stock, commodity):
  *   Uses price magnitude to determine natural precision.
  * - Yahoo stocks/crypto/ETFs: uses price magnitude.
+ *
+ * @param price - The price value to determine decimals for
+ * @param category - Instrument category (e.g. 'currency', 'crypto', 'stock', 'forex')
+ * @param source - Data source: 'tse', 'tgju', or 'yahoo'
+ * @returns Number of decimal places (0, 2, 4, or 6)
  */
 export function detectDecimals(price: number, category: string, source: DataSource): number {
   if (price === 0 || !Number.isFinite(price)) return 2;
@@ -78,10 +83,15 @@ const YAHOO_CURRENCY_MAP: Record<string, string> = {
  * Logic:
  * - TSE stocks/bonds/futures/salaf/mortgage/etf: ریال
  * - TSE/TGJU indices: واحد
- * - TGJU currency/gold/silver/gold_etf: تومان
+ * - TGJU currency/gold/silver/gold_etf: ریال (TGJU API returns Rials)
  * - TGJU crypto: تتر
  * - TGJU forex/energy/metal/world_index/foreign_stock/commodity: دلار
  * - Yahoo: use Yahoo's explicit currency field, mapped to Persian
+ *
+ * @param category - Instrument category
+ * @param source - Data source: 'tse', 'tgju', or 'yahoo'
+ * @param yahooCurrency - Yahoo Finance currency code (e.g. 'USD', 'EUR'). Only used when source='yahoo'
+ * @returns Persian currency unit string (e.g. 'ریال', 'تومان', 'دلار', 'واحد')
  */
 export function getCurrencyUnit(
   category: string,
@@ -110,6 +120,9 @@ export function getCurrencyUnit(
 
 /**
  * Get the data source from instrument metadata.
+ *
+ * @param item - Instrument object with optional yahooSymbol, tgjuKey, and category
+ * @returns Detected DataSource: 'yahoo' if yahooSymbol present, 'tgju' if tgjuKey or TGJU category, else 'tse'
  */
 export function detectSource(item: { yahooSymbol?: string; tgjuKey?: string; category?: string }): DataSource {
   if (item.yahooSymbol) return 'yahoo';
@@ -123,7 +136,12 @@ export function detectSource(item: { yahooSymbol?: string; tgjuKey?: string; cat
 
 /**
  * Format a price in Persian (Farsi) with the given number of decimal places.
- * Uses Persian digits and thousand separators.
+ * Uses Persian digits and thousand separators. Wraps with LRM marks for correct
+ * left-to-right number rendering in RTL context.
+ *
+ * @param price - The numeric price value to format
+ * @param decimals - Number of decimal places
+ * @returns Formatted price string in Persian digits, or '—' for invalid values
  */
 export function formatPriceFa(price: number, decimals: number): string {
   if (price == null || !Number.isFinite(price)) return '—';
@@ -137,6 +155,10 @@ export function formatPriceFa(price: number, decimals: number): string {
 
 /**
  * Format a price in English (Latin) digits with the given number of decimal places.
+ *
+ * @param price - The numeric price value to format
+ * @param decimals - Number of decimal places
+ * @returns Formatted price string in Latin digits, or '—' for invalid values
  */
 export function formatPriceEn(price: number, decimals: number): string {
   if (price == null || !Number.isFinite(price)) return '—';
@@ -148,7 +170,13 @@ export function formatPriceEn(price: number, decimals: number): string {
 
 /**
  * Format a price with currency unit in Persian.
- * Example: formatPriceWithUnit(1250.5, 2, 'تومان') → '۱,۲۵۰٫۵۰ تومان'
+ *
+ * @param price - The numeric price value to format
+ * @param decimals - Number of decimal places
+ * @param unit - Persian currency unit string (e.g. 'تومان', 'ریال', 'دلار')
+ * @returns Formatted price with unit appended, or '—' for invalid values
+ *
+ * @example formatPriceWithUnit(1250.5, 2, 'تومان') → '۱,۲۵۰٫۵۰ تومان'
  */
 export function formatPriceWithUnit(price: number, decimals: number, unit: string): string {
   if (price == null || !Number.isFinite(price)) return '—';
@@ -157,8 +185,12 @@ export function formatPriceWithUnit(price: number, decimals: number, unit: strin
 }
 
 /**
- * Format a percent change value.
- * Example: formatChangePercent(2.5) → '+۲٫۵۰٪'
+ * Format a percent change value with sign and Persian digits.
+ *
+ * @param pcp - Percent change value (e.g. 2.5 for +2.5%)
+ * @returns Formatted percent string with sign, Persian digits, and ٪ symbol
+ *
+ * @example formatChangePercent(2.5) → '+۲٫۵۰٪'
  */
 export function formatChangePercent(pcp: number): string {
   const sign = pcp > 0 ? '+' : '';
@@ -174,6 +206,13 @@ export function formatChangePercent(pcp: number): string {
 
 /**
  * Format a price with auto-detected decimals and currency unit.
+ * Convenience function that combines detectDecimals, getCurrencyUnit, and formatPriceWithUnit.
+ *
+ * @param price - The numeric price value to format
+ * @param category - Instrument category
+ * @param source - Data source
+ * @param yahooCurrency - Yahoo currency code (optional, only used when source='yahoo')
+ * @returns Object with formatted price string, detected decimals, and detected unit
  */
 export function formatAuto(
   price: number,

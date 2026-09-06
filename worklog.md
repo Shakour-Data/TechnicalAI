@@ -52,3 +52,44 @@ Stage Summary:
 - All existing modules updated for integration
 - No lint errors, dev server compiles successfully
 - fetchMLRegime() deprecated (was dead code calling non-existent Python service)
+
+---
+Task ID: 6
+Agent: Main
+Task: Create 3-level system documentation and add JSDoc comments to all key functions
+
+Work Log:
+- Read all 48 lib/*.ts files, 11 components/tse/*.tsx files, and all API routes
+- Created SYSTEM_DOCS.md with 3 levels of documentation (Farsi):
+  - Level 1: System Architecture Overview (purpose, layers, data flow, data sources, regime engines, themes)
+  - Level 2: Module-Level Documentation (16 modules documented in detail with algorithms, formulas, weight breakdowns)
+  - Level 3: Function/API-Level Documentation (all major functions, API routes, interfaces, data structures)
+- Added JSDoc comments to 20+ source files:
+  - ta-engine.ts: analyze(), calcTrend(), linearRegression(), computeHistoricalProbabilities(), OHLCV, TAResult, ScenarioResult
+  - regime-engine.ts: all 20+ exported functions/types (fuzzyRegimeDetector, Markov chain, adaptiveWeightedVote, detectRegime, toMSLRegime)
+  - volume-profile.ts: approximateVolumeProfile(), countTouch(), volumeAtLevel(), calculateEnhancedSRStrength()
+  - msl-feedback.ts: FeedbackStore class with all 12 methods, 4 interfaces, 6 convenience functions
+  - ml-engine.ts: extractVDSSFeatures(), trainAdaptiveModel(), calculateBullConsensus(), calculateScenarioProbabilities()
+  - ml-logistic.ts: StandardScaler, LogisticRegressionModel, timeSeriesSplit(), AdaptiveWeightModel
+  - composite-scores.ts: calcTrendStrength(), calcSRStrength(), calcSRStrengthEnhanced()
+  - bayesian-weights.ts: updateIndicatorWeight(), getNormalizedWeights(), applyBayesianAdjustment()
+  - sr-analyzer.ts: analyzeSupportResistance(), all internal functions
+  - pattern-detection.ts: detectAllPatterns(), all pattern detectors (classic, harmonic, candlestick, Elliott)
+  - decision-graph.ts: buildDecisionGraph(), enforceSumTo100(), DAG structure
+  - ai-postprocess.ts: postProcessAIOutput(), validatePricesInText(), fixPersianText()
+  - probability-trend.ts: buildTrendFromDailySnapshots(), getTrendInterpretation()
+  - indicator-arrays.ts: computeDailyIndicators()
+  - format-price.ts: all 8 functions
+  - jalali.ts: all 12 functions
+  - candlestick-patterns.ts: all 10 patterns
+  - zai-shared.ts: all 8 functions (getZai, rateLimitedZaiCall, dedicatedAIChatCompletion, etc.)
+  - API routes: analysis, vdes-analysis, ml-predict
+- Created comprehensive code-to-doc alignment table in Level 3
+- All documentation verified against actual implemented code
+
+Stage Summary:
+- SYSTEM_DOCS.md: ~1000 lines of 3-level documentation in Farsi
+- 20+ source files enhanced with JSDoc (total ~2500 lines of documentation added)
+- Zero code logic changes — only comments added
+- All documented algorithms, formulas, and weights match actual code implementation
+- Dev server running successfully, pre-existing lint errors unchanged

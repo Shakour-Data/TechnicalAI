@@ -1,0 +1,1049 @@
+     1→     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→     2→// Per-Day Indicator Calculator — 60+ Technical Indicators
+     3→     3→// Volume-aware system: skips volume-dependent indicators when no volume data
+     4→     4→// ═══════════════════════════════════════════════════════════════════════════════
+     5→     5→
+     6→     6→// ─── Types & Constants ─────────────────────────────────────────────────────────
+     7→     7→
+     8→     8→export interface OHLCV {
+     9→     9→  date: string;
+    10→    10→  open: number;
+    11→    11→  high: number;
+    12→    12→  low: number;
+    13→    13→  close: number;
+    14→    14→  volume: number;
+    15→    15→}
+    16→    16→
+    17→    17→/** Set of indicator field names that require volume data to produce meaningful values. */
+    18→    18→export const VOLUME_DEPENDENT_INDICATORS: ReadonlySet<string> = new Set([
+    19→    19→  'mfi',
+    20→    20→  'obv',
+    21→    21→  'vpt',
+    22→    22→  'vosc',
+    23→    23→  'chaikinAD',
+    24→    24→  'forceIndex',
+    25→    25→  'vap',
+    26→    26→  'vwap',
+    27→    27→  'vwma20',
+    28→    28→]);
+    29→    29→
+    30→    30→export interface DailyIndicators {
+    31→    31→  // ── OHLCV Data ──
+    32→    32→  date: string;
+    33→    33→  open: number;
+    34→    34→  high: number;
+    35→    35→  low: number;
+    36→    36→  close: number;
+    37→    37→  volume: number;
+    38→    38→  /** True when all candles have volume > 0 */
+    39→    39→  hasVolume: boolean;
+    40→    40→
+    41→    41→  // ── Trend: Moving Averages (13) ──
+    42→    42→  ma10: number;
+    43→    43→  ma21: number;
+    44→    44→  ma50: number;
+    45→    45→  ma100: number;
+    46→    46→  ma200: number;
+    47→    47→  ema9: number;
+    48→    48→  ema12: number;
+    49→    49→  ema26: number;
+    50→    50→  vwma20: number;
+    51→    51→  wma20: number;
+    52→    52→  hma20: number;
+    53→    53→  tma20: number;
+    54→    54→  lma20: number;
+    55→    55→
+    56→    56→  // ── Trend: Ichimoku Cloud (4) ──
+    57→    57→  ichimokuTenkan: number;
+    58→    58→  ichimokuKijun: number;
+    59→    59→  ichimokuSenkouA: number;
+    60→    60→  ichimokuSenkouB: number;
+    61→    61→
+    62→    62→  // ── Trend: Heiken Ashi (4) ──
+    63→    63→  haOpen: number;
+    64→    64→  haHigh: number;
+    65→    65→  haLow: number;
+    66→    66→  haClose: number;
+    67→    67→
+    68→    68→  // ── Oscillators (20) ──
+    69→    69→  rsi: number;
+    70→    70→  stochK: number;
+    71→    71→  stochD: number;
+    72→    72→  stochRsiK: number;
+    73→    73→  stochRsiD: number;
+    74→    74→  williamsR: number;
+    75→    75→  momentum: number;
+    76→    76→  roc: number;
+    77→    77→  trix: number;
+    78→    78→  cci: number;
+    79→    79→  mfi: number;
+    80→    80→  macd: number;
+    81→    81→  macdSignal: number;
+    82→    82→  macdHist: number;
+    83→    83→  adx: number;
+    84→    84→  dmiPlus: number;
+    85→    85→  dmiMinus: number;
+    86→    86→  sar: number;
+    87→    87→  awesomeOsc: number;
+    88→    88→  fisherTransform: number;
+    89→    89→
+    90→    90→  // ── Volatility (12) ──
+    91→    91→  atr: number;
+    92→    92→  bbUpper: number;
+    93→    93→  bbMiddle: number;
+    94→    94→  bbLower: number;
+    95→    95→  bbWidth: number;
+    96→    96→  kcUpper: number;
+    97→    97→  kcMiddle: number;
+    98→    98→  kcLower: number;
+    99→    99→  envUpper: number;
+   100→   100→  envLower: number;
+   101→   101→  histVolatility: number;
+   102→   102→  stdDev20: number;
+   103→   103→
+   104→   104→  // ── Volume (7) ──
+   105→   105→  obv: number;
+   106→   106→  vpt: number;
+   107→   107→  vosc: number;
+   108→   108→  chaikinAD: number;
+   109→   109→  forceIndex: number;
+   110→   110→  vap: number;
+   111→   111→  vwap: number;
+   112→   112→}
+   113→   113→
+   114→   114→// ─── Rounding Helpers ───────────────────────────────────────────────────────────
+   115→   115→
+   116→   116→const r0 = (v: number): number => Math.round(v);
+   117→   117→const r1 = (v: number): number => Math.round(v * 10) / 10;
+   118→   118→const r2 = (v: number): number => Math.round(v * 100) / 100;
+   119→   119→const r4 = (v: number): number => Math.round(v * 10000) / 10000;
+   120→   120→
+   121→   121→// ═══════════════════════════════════════════════════════════════════════════════
+   122→   122→// HELPERS
+   123→   123→// ═══════════════════════════════════════════════════════════════════════════════
+   124→   124→
+   125→   125→// ─── EMA (full array) ───────────────────────────────────────────────────────────
+   126→   126→function emaArray(data: number[], period: number): number[] {
+   127→   127→  const result: number[] = new Array(data.length).fill(0);
+   128→   128→  if (data.length < period) return result;
+   129→   129→  let sum = 0;
+   130→   130→  for (let i = 0; i < period; i++) sum += data[i];
+   131→   131→  result[period - 1] = sum / period;
+   132→   132→  const k = 2 / (period + 1);
+   133→   133→  for (let i = period; i < data.length; i++) {
+   134→   134→    result[i] = data[i] * k + result[i - 1] * (1 - k);
+   135→   135→  }
+   136→   136→  return result;
+   137→   137→}
+   138→   138→
+   139→   139→// ═══════════════════════════════════════════════════════════════════════════════
+   140→   140→// SECTION 1: MOVING AVERAGES
+   141→   141→// ═══════════════════════════════════════════════════════════════════════════════
+   142→   142→
+   143→   143→// ─── SMA (full array) ──────────────────────────────────────────────────────────
+   144→   144→function smaArray(closes: number[], period: number): number[] {
+   145→   145→  const result: number[] = new Array(closes.length).fill(0);
+   146→   146→  for (let i = period - 1; i < closes.length; i++) {
+   147→   147→    let sum = 0;
+   148→   148→    for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+   149→   149→    result[i] = sum / period;
+   150→   150→  }
+   151→   151→  return result;
+   152→   152→}
+   153→   153→
+   154→   154→// ─── WMA — Weighted Moving Average ─────────────────────────────────────────────
+   155→   155→function wmaArray(data: number[], period: number): number[] {
+   156→   156→  const result: number[] = new Array(data.length).fill(0);
+   157→   157→  if (data.length < period) return result;
+   158→   158→  const denom = period * (period + 1) / 2;
+   159→   159→  for (let i = period - 1; i < data.length; i++) {
+   160→   160→    let sum = 0;
+   161→   161→    for (let j = 0; j < period; j++) sum += data[i - j] * (period - j);
+   162→   162→    result[i] = sum / denom;
+   163→   163→  }
+   164→   164→  return result;
+   165→   165→}
+   166→   166→
+   167→   167→// ─── HMA — Hull Moving Average ─────────────────────────────────────────────────
+   168→   168→function hmaArray(closes: number[], period: number): number[] {
+   169→   169→  const halfPeriod = Math.max(1, Math.floor(period / 2));
+   170→   170→  const sqrtPeriod = Math.max(2, Math.floor(Math.sqrt(period)));
+   171→   171→  const wmaHalf = wmaArray(closes, halfPeriod);
+   172→   172→  const wmaFull = wmaArray(closes, period);
+   173→   173→  const diff = new Array(closes.length).fill(0);
+   174→   174→  for (let i = 0; i < closes.length; i++) diff[i] = 2 * wmaHalf[i] - wmaFull[i];
+   175→   175→  return wmaArray(diff, sqrtPeriod);
+   176→   176→}
+   177→   177→
+   178→   178→// ─── TMA — Triangular Moving Average (SMA of SMA) ──────────────────────────────
+   179→   179→function tmaArray(closes: number[], period: number): number[] {
+   180→   180→  const halfPeriod = Math.max(2, Math.ceil(period / 2));
+   181→   181→  const firstPass = smaArray(closes, period);
+   182→   182→  return smaArray(firstPass, halfPeriod);
+   183→   183→}
+   184→   184→
+   185→   185→// ─── LMA — Linear Regression (Least Squares) Moving Average ────────────────────
+   186→   186→function lmaArray(closes: number[], period: number): number[] {
+   187→   187→  const result: number[] = new Array(closes.length).fill(0);
+   188→   188→  if (closes.length < period) return result;
+   189→   189→  const sumX = period * (period - 1) / 2;
+   190→   190→  const sumX2 = (period - 1) * period * (2 * period - 1) / 6;
+   191→   191→  const denom = period * sumX2 - sumX * sumX;
+   192→   192→  if (denom === 0) return result;
+   193→   193→  for (let i = period - 1; i < closes.length; i++) {
+   194→   194→    let sumY = 0;
+   195→   195→    let sumXY = 0;
+   196→   196→    for (let j = 0; j < period; j++) {
+   197→   197→      const idx = i - period + 1 + j;
+   198→   198→      sumY += closes[idx];
+   199→   199→      sumXY += j * closes[idx];
+   200→   200→    }
+   201→   201→    const b = (period * sumXY - sumX * sumY) / denom;
+   202→   202→    const a = (sumY - b * sumX) / period;
+   203→   203→    result[i] = a + b * (period - 1);
+   204→   204→  }
+   205→   205→  return result;
+   206→   206→}
+   207→   207→
+   208→   208→// ─── VWMA — Volume Weighted Moving Average ──────────────────────────────────────
+   209→   209→function vwmaArray(closes: number[], volumes: number[], period: number): number[] {
+   210→   210→  const result: number[] = new Array(closes.length).fill(0);
+   211→   211→  if (closes.length < period) return result;
+   212→   212→  for (let i = period - 1; i < closes.length; i++) {
+   213→   213→    let pvSum = 0;
+   214→   214→    let vSum = 0;
+   215→   215→    for (let j = i - period + 1; j <= i; j++) {
+   216→   216→      pvSum += closes[j] * volumes[j];
+   217→   217→      vSum += volumes[j];
+   218→   218→    }
+   219→   219→    result[i] = vSum === 0 ? 0 : pvSum / vSum;
+   220→   220→  }
+   221→   221→  return result;
+   222→   222→}
+   223→   223→
+   224→   224→// ═══════════════════════════════════════════════════════════════════════════════
+   225→   225→// SECTION 2: ICHIMOKU CLOUD (9, 26, 52)
+   226→   226→// ═══════════════════════════════════════════════════════════════════════════════
+   227→   227→
+   228→   228→function ichimokuArray(
+   229→   229→  highs: number[],
+   230→   230→  lows: number[],
+   231→   231→  tenkanP: number = 9,
+   232→   232→  kijunP: number = 26,
+   233→   233→  senkouBP: number = 52,
+   234→   234→): { tenkan: number[]; kijun: number[]; senkouA: number[]; senkouB: number[] } {
+   235→   235→  const len = highs.length;
+   236→   236→  const tenkan: number[] = new Array(len).fill(0);
+   237→   237→  const kijun: number[] = new Array(len).fill(0);
+   238→   238→  const senkouA: number[] = new Array(len).fill(0);
+   239→   239→  const senkouB: number[] = new Array(len).fill(0);
+   240→   240→
+   241→   241→  for (let i = tenkanP - 1; i < len; i++) {
+   242→   242→    let hh = -Infinity, ll = Infinity;
+   243→   243→    for (let j = i - tenkanP + 1; j <= i; j++) {
+   244→   244→      if (highs[j] > hh) hh = highs[j];
+   245→   245→      if (lows[j] < ll) ll = lows[j];
+   246→   246→    }
+   247→   247→    tenkan[i] = (hh + ll) / 2;
+   248→   248→  }
+   249→   249→
+   250→   250→  for (let i = kijunP - 1; i < len; i++) {
+   251→   251→    let hh = -Infinity, ll = Infinity;
+   252→   252→    for (let j = i - kijunP + 1; j <= i; j++) {
+   253→   253→      if (highs[j] > hh) hh = highs[j];
+   254→   254→      if (lows[j] < ll) ll = lows[j];
+   255→   255→    }
+   256→   256→    kijun[i] = (hh + ll) / 2;
+   257→   257→  }
+   258→   258→
+   259→   259→  for (let i = kijunP - 1; i < len; i++) {
+   260→   260→    senkouA[i] = (tenkan[i] + kijun[i]) / 2;
+   261→   261→  }
+   262→   262→
+   263→   263→  for (let i = senkouBP - 1; i < len; i++) {
+   264→   264→    let hh = -Infinity, ll = Infinity;
+   265→   265→    for (let j = i - senkouBP + 1; j <= i; j++) {
+   266→   266→      if (highs[j] > hh) hh = highs[j];
+   267→   267→      if (lows[j] < ll) ll = lows[j];
+   268→   268→    }
+   269→   269→    senkouB[i] = (hh + ll) / 2;
+   270→   270→  }
+   271→   271→
+   272→   272→  return { tenkan, kijun, senkouA, senkouB };
+   273→   273→}
+   274→   274→
+   275→   275→// ═══════════════════════════════════════════════════════════════════════════════
+   276→   276→// SECTION 3: HEIKEN ASHI
+   277→   277→// ═══════════════════════════════════════════════════════════════════════════════
+   278→   278→
+   279→   279→function heikenAshiArray(
+   280→   280→  opens: number[],
+   281→   281→  highs: number[],
+   282→   282→  lows: number[],
+   283→   283→  closes: number[],
+   284→   284→): { haOpen: number[]; haHigh: number[]; haLow: number[]; haClose: number[] } {
+   285→   285→  const len = closes.length;
+   286→   286→  const haOpen: number[] = new Array(len).fill(0);
+   287→   287→  const haClose: number[] = new Array(len).fill(0);
+   288→   288→  const haHigh: number[] = new Array(len).fill(0);
+   289→   289→  const haLow: number[] = new Array(len).fill(0);
+   290→   290→  if (len === 0) return { haOpen, haHigh, haLow, haClose };
+   291→   291→
+   292→   292→  haClose[0] = (opens[0] + highs[0] + lows[0] + closes[0]) / 4;
+   293→   293→  haOpen[0] = (opens[0] + closes[0]) / 2;
+   294→   294→  haHigh[0] = highs[0];
+   295→   295→  haLow[0] = lows[0];
+   296→   296→
+   297→   297→  for (let i = 1; i < len; i++) {
+   298→   298→    haClose[i] = (opens[i] + highs[i] + lows[i] + closes[i]) / 4;
+   299→   299→    haOpen[i] = (haOpen[i - 1] + haClose[i - 1]) / 2;
+   300→   300→    haHigh[i] = Math.max(highs[i], haOpen[i], haClose[i]);
+   301→   301→    haLow[i] = Math.min(lows[i], haOpen[i], haClose[i]);
+   302→   302→  }
+   303→   303→
+   304→   304→  return { haOpen, haHigh, haLow, haClose };
+   305→   305→}
+   306→   306→
+   307→   307→// ═══════════════════════════════════════════════════════════════════════════════
+   308→   308→// SECTION 4: OSCILLATORS
+   309→   309→// ═══════════════════════════════════════════════════════════════════════════════
+   310→   310→
+   311→   311→// ─── RSI (full array) ──────────────────────────────────────────────────────────
+   312→   312→function rsiArray(closes: number[], period: number = 14): number[] {
+   313→   313→  const result: number[] = new Array(closes.length).fill(0);
+   314→   314→  if (closes.length < period + 1) return result;
+   315→   315→
+   316→   316→  let gainSum = 0,
+   317→   317→    lossSum = 0;
+   318→   318→  for (let i = 1; i <= period; i++) {
+   319→   319→    const diff = closes[i] - closes[i - 1];
+   320→   320→    if (diff > 0) gainSum += diff;
+   321→   321→    else lossSum += Math.abs(diff);
+   322→   322→  }
+   323→   323→  let avgGain = gainSum / period;
+   324→   324→  let avgLoss = lossSum / period;
+   325→   325→  result[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+   326→   326→
+   327→   327→  for (let i = period + 1; i < closes.length; i++) {
+   328→   328→    const diff = closes[i] - closes[i - 1];
+   329→   329→    const gain = diff > 0 ? diff : 0;
+   330→   330→    const loss = diff < 0 ? Math.abs(diff) : 0;
+   331→   331→    avgGain = (avgGain * (period - 1) + gain) / period;
+   332→   332→    avgLoss = (avgLoss * (period - 1) + loss) / period;
+   333→   333→    result[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+   334→   334→  }
+   335→   335→  return result;
+   336→   336→}
+   337→   337→
+   338→   338→// ─── Stochastic (full array) ───────────────────────────────────────────────────
+   339→   339→function stochasticArray(
+   340→   340→  highs: number[],
+   341→   341→  lows: number[],
+   342→   342→  closes: number[],
+   343→   343→  kPeriod: number = 14,
+   344→   344→  dPeriod: number = 3,
+   345→   345→): { k: number[]; d: number[] } {
+   346→   346→  const kArr: number[] = new Array(closes.length).fill(0);
+   347→   347→  const dArr: number[] = new Array(closes.length).fill(0);
+   348→   348→
+   349→   349→  for (let i = kPeriod - 1; i < closes.length; i++) {
+   350→   350→    let highest = -Infinity,
+   351→   351→      lowest = Infinity;
+   352→   352→    for (let j = i - kPeriod + 1; j <= i; j++) {
+   353→   353→      if (highs[j] > highest) highest = highs[j];
+   354→   354→      if (lows[j] < lowest) lowest = lows[j];
+   355→   355→    }
+   356→   356→    kArr[i] = highest === lowest ? 50 : ((closes[i] - lowest) / (highest - lowest)) * 100;
+   357→   357→  }
+   358→   358→
+   359→   359→  for (let i = kPeriod - 1 + dPeriod - 1; i < closes.length; i++) {
+   360→   360→    let sum = 0;
+   361→   361→    for (let j = i - dPeriod + 1; j <= i; j++) sum += kArr[j];
+   362→   362→    dArr[i] = sum / dPeriod;
+   363→   363→  }
+   364→   364→  return { k: kArr, d: dArr };
+   365→   365→}
+   366→   366→
+   367→   367→// ─── Stochastic RSI ────────────────────────────────────────────────────────────
+   368→   368→function stochRsiArray(
+   369→   369→  closes: number[],
+   370→   370→  rsiPeriod: number = 14,
+   371→   371→  stochPeriod: number = 14,
+   372→   372→  smoothPeriod: number = 3,
+   373→   373→): { k: number[]; d: number[] } {
+   374→   374→  const rsiValues = rsiArray(closes, rsiPeriod);
+   375→   375→  const kArr: number[] = new Array(closes.length).fill(0);
+   376→   376→  const dArr: number[] = new Array(closes.length).fill(0);
+   377→   377→  const startIdx = rsiPeriod - 1 + stochPeriod - 1;
+   378→   378→
+   379→   379→  for (let i = startIdx; i < closes.length; i++) {
+   380→   380→    let minRsi = Infinity,
+   381→   381→      maxRsi = -Infinity;
+   382→   382→    for (let j = i - stochPeriod + 1; j <= i; j++) {
+   383→   383→      if (rsiValues[j] < minRsi) minRsi = rsiValues[j];
+   384→   384→      if (rsiValues[j] > maxRsi) maxRsi = rsiValues[j];
+   385→   385→    }
+   386→   386→    kArr[i] = maxRsi === minRsi ? 50 : ((rsiValues[i] - minRsi) / (maxRsi - minRsi)) * 100;
+   387→   387→  }
+   388→   388→
+   389→   389→  for (let i = startIdx + smoothPeriod - 1; i < closes.length; i++) {
+   390→   390→    let sum = 0;
+   391→   391→    for (let j = i - smoothPeriod + 1; j <= i; j++) sum += kArr[j];
+   392→   392→    dArr[i] = sum / smoothPeriod;
+   393→   393→  }
+   394→   394→  return { k: kArr, d: dArr };
+   395→   395→}
+   396→   396→
+   397→   397→// ─── Williams %R ────────────────────────────────────────────────────────────────
+   398→   398→function williamsRArray(
+   399→   399→  highs: number[],
+   400→   400→  lows: number[],
+   401→   401→  closes: number[],
+   402→   402→  period: number = 14,
+   403→   403→): number[] {
+   404→   404→  const result: number[] = new Array(closes.length).fill(0);
+   405→   405→  for (let i = period - 1; i < closes.length; i++) {
+   406→   406→    let highest = -Infinity,
+   407→   407→      lowest = Infinity;
+   408→   408→    for (let j = i - period + 1; j <= i; j++) {
+   409→   409→      if (highs[j] > highest) highest = highs[j];
+   410→   410→      if (lows[j] < lowest) lowest = lows[j];
+   411→   411→    }
+   412→   412→    result[i] = highest === lowest ? -50 : ((highest - closes[i]) / (highest - lowest)) * -100;
+   413→   413→  }
+   414→   414→  return result;
+   415→   415→}
+   416→   416→
+   417→   417→// ─── Momentum ───────────────────────────────────────────────────────────────────
+   418→   418→function momentumArray(closes: number[], period: number = 10): number[] {
+   419→   419→  const result: number[] = new Array(closes.length).fill(0);
+   420→   420→  for (let i = period; i < closes.length; i++) {
+   421→   421→    result[i] = closes[i] - closes[i - period];
+   422→   422→  }
+   423→   423→  return result;
+   424→   424→}
+   425→   425→
+   426→   426→// ─── ROC — Rate of Change ──────────────────────────────────────────────────────
+   427→   427→function rocArray(closes: number[], period: number = 12): number[] {
+   428→   428→  const result: number[] = new Array(closes.length).fill(0);
+   429→   429→  for (let i = period; i < closes.length; i++) {
+   430→   430→    result[i] = closes[i - period] === 0 ? 0 : ((closes[i] - closes[i - period]) / closes[i - period]) * 100;
+   431→   431→  }
+   432→   432→  return result;
+   433→   433→}
+   434→   434→
+   435→   435→// ─── TRIX — Triple EMA Rate of Change ──────────────────────────────────────────
+   436→   436→function trixArray(closes: number[], period: number = 9): number[] {
+   437→   437→  const result: number[] = new Array(closes.length).fill(0);
+   438→   438→  const startIdx = 3 * (period - 1) + 1;
+   439→   439→  if (closes.length < startIdx) return result;
+   440→   440→
+   441→   441→  const ema1 = emaArray(closes, period);
+   442→   442→  const ema2 = emaArray(ema1, period);
+   443→   443→  const ema3 = emaArray(ema2, period);
+   444→   444→
+   445→   445→  for (let i = startIdx; i < closes.length; i++) {
+   446→   446→    if (ema3[i - 1] === 0) {
+   447→   447→      result[i] = 0;
+   448→   448→    } else {
+   449→   449→      result[i] = ((ema3[i] - ema3[i - 1]) / Math.abs(ema3[i - 1])) * 100;
+   450→   450→    }
+   451→   451→  }
+   452→   452→  return result;
+   453→   453→}
+   454→   454→
+   455→   455→// ─── CCI (full array) ──────────────────────────────────────────────────────────
+   456→   456→function cciArray(
+   457→   457→  highs: number[],
+   458→   458→  lows: number[],
+   459→   459→  closes: number[],
+   460→   460→  period: number = 20,
+   461→   461→): number[] {
+   462→   462→  const len = closes.length;
+   463→   463→  const result: number[] = new Array(len).fill(0);
+   464→   464→
+   465→   465→  for (let i = period - 1; i < len; i++) {
+   466→   466→    let tpSum = 0;
+   467→   467→    for (let j = i - period + 1; j <= i; j++) {
+   468→   468→      tpSum += (highs[j] + lows[j] + closes[j]) / 3;
+   469→   469→    }
+   470→   470→    const tpMean = tpSum / period;
+   471→   471→    let md = 0;
+   472→   472→    for (let j = i - period + 1; j <= i; j++) {
+   473→   473→      md += Math.abs((highs[j] + lows[j] + closes[j]) / 3 - tpMean);
+   474→   474→    }
+   475→   475→    md /= period;
+   476→   476→    result[i] = md === 0 ? 0 : ((highs[i] + lows[i] + closes[i]) / 3 - tpMean) / (0.015 * md);
+   477→   477→  }
+   478→   478→  return result;
+   479→   479→}
+   480→   480→
+   481→   481→// ─── MFI (full array) ──────────────────────────────────────────────────────────
+   482→   482→function mfiArray(
+   483→   483→  highs: number[],
+   484→   484→  lows: number[],
+   485→   485→  closes: number[],
+   486→   486→  volumes: number[],
+   487→   487→  period: number = 14,
+   488→   488→): number[] {
+   489→   489→  const len = closes.length;
+   490→   490→  const result: number[] = new Array(len).fill(0);
+   491→   491→
+   492→   492→  for (let i = period; i < len; i++) {
+   493→   493→    let posFlow = 0,
+   494→   494→      negFlow = 0;
+   495→   495→    for (let j = i - period + 1; j <= i; j++) {
+   496→   496→      const tp = (highs[j] + lows[j] + closes[j]) / 3;
+   497→   497→      const prevTp = (highs[j - 1] + lows[j - 1] + closes[j - 1]) / 3;
+   498→   498→      const mf = tp * volumes[j];
+   499→   499→      if (tp > prevTp) posFlow += mf;
+   500→   500→      else negFlow += mf;
+   501→   501→    }
+   502→   502→    result[i] = negFlow === 0 ? 100 : 100 - 100 / (1 + posFlow / negFlow);
+   503→   503→  }
+   504→   504→  return result;
+   505→   505→}
+   506→   506→
+   507→   507→// ─── MACD (full array) ─────────────────────────────────────────────────────────
+   508→   508→function macdArray(
+   509→   509→  closes: number[],
+   510→   510→  fast: number = 12,
+   511→   511→  slow: number = 26,
+   512→   512→  signal: number = 9,
+   513→   513→): { line: number[]; signalArr: number[]; histogram: number[] } {
+   514→   514→  const len = closes.length;
+   515→   515→  const line: number[] = new Array(len).fill(0);
+   516→   516→  const signalArr: number[] = new Array(len).fill(0);
+   517→   517→  const histogram: number[] = new Array(len).fill(0);
+   518→   518→
+   519→   519→  const emaFast = emaArray(closes, fast);
+   520→   520→  const emaSlow = emaArray(closes, slow);
+   521→   521→
+   522→   522→  for (let i = 0; i < len; i++) {
+   523→   523→    line[i] = emaFast[i] - emaSlow[i];
+   524→   524→  }
+   525→   525→
+   526→   526→  const macdSignalEma = emaArray(line, signal);
+   527→   527→  for (let i = 0; i < len; i++) {
+   528→   528→    signalArr[i] = macdSignalEma[i];
+   529→   529→    histogram[i] = line[i] - macdSignalEma[i];
+   530→   530→  }
+   531→   531→
+   532→   532→  return { line, signalArr, histogram };
+   533→   533→}
+   534→   534→
+   535→   535→// ─── ADX + DMI (full array) ────────────────────────────────────────────────────
+   536→   536→function adxArray(
+   537→   537→  highs: number[],
+   538→   538→  lows: number[],
+   539→   539→  closes: number[],
+   540→   540→  period: number = 14,
+   541→   541→): { adx: number[]; dmiPlus: number[]; dmiMinus: number[] } {
+   542→   542→  const len = closes.length;
+   543→   543→  const adxResult: number[] = new Array(len).fill(0);
+   544→   544→  const dmiPlusResult: number[] = new Array(len).fill(0);
+   545→   545→  const dmiMinusResult: number[] = new Array(len).fill(0);
+   546→   546→  if (len < period * 2 + 1) return { adx: adxResult, dmiPlus: dmiPlusResult, dmiMinus: dmiMinusResult };
+   547→   547→
+   548→   548→  const tr: number[] = new Array(len).fill(0);
+   549→   549→  const plusDM: number[] = new Array(len).fill(0);
+   550→   550→  const minusDM: number[] = new Array(len).fill(0);
+   551→   551→
+   552→   552→  for (let i = 1; i < len; i++) {
+   553→   553→    tr[i] = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
+   554→   554→    const upMove = highs[i] - highs[i - 1];
+   555→   555→    const downMove = lows[i - 1] - lows[i];
+   556→   556→    plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
+   557→   557→    minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
+   558→   558→  }
+   559→   559→
+   560→   560→  const smooth = (arr: number[], start: number) => {
+   561→   561→    let sum = 0;
+   562→   562→    for (let i = start; i < start + period; i++) sum += arr[i];
+   563→   563→    const res: number[] = new Array(len).fill(0);
+   564→   564→    res[start + period - 1] = sum;
+   565→   565→    for (let i = start + period; i < len; i++) {
+   566→   566→      res[i] = res[i - 1] - res[i - 1] / period + arr[i];
+   567→   567→    }
+   568→   568→    return res;
+   569→   569→  };
+   570→   570→
+   571→   571→  const atrSmooth = smooth(tr, 1);
+   572→   572→  const sPlusDM = smooth(plusDM, 1);
+   573→   573→  const sMinusDM = smooth(minusDM, 1);
+   574→   574→
+   575→   575→  // Compute DI+ and DI-
+   576→   576→  for (let i = 1; i < len; i++) {
+   577→   577→    const atrVal = atrSmooth[i];
+   578→   578→    dmiPlusResult[i] = atrVal === 0 ? 0 : (sPlusDM[i] / atrVal) * 100;
+   579→   579→    dmiMinusResult[i] = atrVal === 0 ? 0 : (sMinusDM[i] / atrVal) * 100;
+   580→   580→  }
+   581→   581→
+   582→   582→  const dx: number[] = new Array(len).fill(0);
+   583→   583→  for (let i = 1; i < len; i++) {
+   584→   584→    const sum = sPlusDM[i] + sMinusDM[i];
+   585→   585→    dx[i] = sum === 0 ? 0 : (Math.abs(sPlusDM[i] - sMinusDM[i]) / sum) * 100;
+   586→   586→  }
+   587→   587→
+   588→   588→  // ADX = smoothed DX
+   589→   589→  let adxSum = 0;
+   590→   590→  const startIdx = period * 2;
+   591→   591→  for (let i = period + 1; i <= startIdx; i++) adxSum += dx[i];
+   592→   592→  adxResult[startIdx] = adxSum / period;
+   593→   593→  for (let i = startIdx + 1; i < len; i++) {
+   594→   594→    adxResult[i] = (adxResult[i - 1] * (period - 1) + dx[i]) / period;
+   595→   595→  }
+   596→   596→
+   597→   597→  return { adx: adxResult, dmiPlus: dmiPlusResult, dmiMinus: dmiMinusResult };
+   598→   598→}
+   599→   599→
+   600→   600→// ─── Parabolic SAR (full array) ────────────────────────────────────────────────
+   601→   601→function sarArray(highs: number[], lows: number[], closes: number[]): number[] {
+   602→   602→  const len = closes.length;
+   603→   603→  const result: number[] = new Array(len).fill(0);
+   604→   604→  if (len < 2) return result;
+   605→   605→
+   606→   606→  let isLong = closes[1] > closes[0];
+   607→   607→  let af = 0.02;
+   608→   608→  let ep = isLong ? highs[1] : lows[1];
+   609→   609→  result[0] = lows[0];
+   610→   610→  result[1] = isLong ? lows[0] : highs[0];
+   611→   611→
+   612→   612→  for (let i = 2; i < len; i++) {
+   613→   613→    result[i] = result[i - 1] + af * (ep - result[i - 1]);
+   614→   614→
+   615→   615→    if (isLong) {
+   616→   616→      if (lows[i] < result[i]) {
+   617→   617→        isLong = false;
+   618→   618→        result[i] = ep;
+   619→   619→        ep = lows[i];
+   620→   620→        af = 0.02;
+   621→   621→      } else {
+   622→   622→        if (highs[i] > ep) {
+   623→   623→          ep = highs[i];
+   624→   624→          af = Math.min(af + 0.02, 0.2);
+   625→   625→        }
+   626→   626→      }
+   627→   627→    } else {
+   628→   628→      if (highs[i] > result[i]) {
+   629→   629→        isLong = true;
+   630→   630→        result[i] = ep;
+   631→   631→        ep = highs[i];
+   632→   632→        af = 0.02;
+   633→   633→      } else {
+   634→   634→        if (lows[i] < ep) {
+   635→   635→          ep = lows[i];
+   636→   636→          af = Math.min(af + 0.02, 0.2);
+   637→   637→        }
+   638→   638→      }
+   639→   639→    }
+   640→   640→  }
+   641→   641→  return result;
+   642→   642→}
+   643→   643→
+   644→   644→// ─── Awesome Oscillator ────────────────────────────────────────────────────────
+   645→   645→function awesomeOscArray(highs: number[], lows: number[]): number[] {
+   646→   646→  const len = highs.length;
+   647→   647→  const median = new Array(len).fill(0);
+   648→   648→  for (let i = 0; i < len; i++) median[i] = (highs[i] + lows[i]) / 2;
+   649→   649→  const sma5 = smaArray(median, 5);
+   650→   650→  const sma34 = smaArray(median, 34);
+   651→   651→  const result: number[] = new Array(len).fill(0);
+   652→   652→  for (let i = 0; i < len; i++) result[i] = sma5[i] - sma34[i];
+   653→   653→  return result;
+   654→   654→}
+   655→   655→
+   656→   656→// ─── Fisher Transform ──────────────────────────────────────────────────────────
+   657→   657→function fisherTransformArray(highs: number[], lows: number[], period: number = 9): number[] {
+   658→   658→  const result: number[] = new Array(highs.length).fill(0);
+   659→   659→  if (highs.length < period) return result;
+   660→   660→
+   661→   661→  for (let i = period - 1; i < highs.length; i++) {
+   662→   662→    let maxH = -Infinity,
+   663→   663→      minL = Infinity;
+   664→   664→    for (let j = i - period + 1; j <= i; j++) {
+   665→   665→      if (highs[j] > maxH) maxH = highs[j];
+   666→   666→      if (lows[j] < minL) minL = lows[j];
+   667→   667→    }
+   668→   668→    const range = maxH - minL;
+   669→   669→    if (range === 0) {
+   670→   670→      result[i] = 0;
+   671→   671→      continue;
+   672→   672→    }
+   673→   673→    const raw = ((highs[i] + lows[i]) / 2 - minL) / range;
+   674→   674→    const x = Math.max(-0.999, Math.min(0.999, 2 * raw - 1));
+   675→   675→    result[i] = 0.5 * Math.log((1 + x) / (1 - x));
+   676→   676→  }
+   677→   677→  return result;
+   678→   678→}
+   679→   679→
+   680→   680→// ═══════════════════════════════════════════════════════════════════════════════
+   681→   681→// SECTION 5: VOLATILITY
+   682→   682→// ═══════════════════════════════════════════════════════════════════════════════
+   683→   683→
+   684→   684→// ─── ATR (full array) ──────────────────────────────────────────────────────────
+   685→   685→function atrArray(highs: number[], lows: number[], closes: number[], period: number = 14): number[] {
+   686→   686→  const len = closes.length;
+   687→   687→  const tr: number[] = new Array(len).fill(0);
+   688→   688→  const result: number[] = new Array(len).fill(0);
+   689→   689→
+   690→   690→  for (let i = 1; i < len; i++) {
+   691→   691→    tr[i] = Math.max(
+   692→   692→      highs[i] - lows[i],
+   693→   693→      Math.abs(highs[i] - closes[i - 1]),
+   694→   694→      Math.abs(lows[i] - closes[i - 1]),
+   695→   695→    );
+   696→   696→  }
+   697→   697→
+   698→   698→  if (len < period + 1) return result;
+   699→   699→
+   700→   700→  let sum = 0;
+   701→   701→  for (let i = 1; i <= period; i++) sum += tr[i];
+   702→   702→  result[period] = sum / period;
+   703→   703→  for (let i = period + 1; i < len; i++) {
+   704→   704→    result[i] = (result[i - 1] * (period - 1) + tr[i]) / period;
+   705→   705→  }
+   706→   706→  return result;
+   707→   707→}
+   708→   708→
+   709→   709→// ─── Bollinger Bands (full array) ──────────────────────────────────────────────
+   710→   710→function bollingerArray(
+   711→   711→  closes: number[],
+   712→   712→  period: number = 20,
+   713→   713→  mult: number = 2,
+   714→   714→): { upper: number[]; middle: number[]; lower: number[]; width: number[] } {
+   715→   715→  const middle = smaArray(closes, period);
+   716→   716→  const upper: number[] = new Array(closes.length).fill(0);
+   717→   717→  const lower: number[] = new Array(closes.length).fill(0);
+   718→   718→  const width: number[] = new Array(closes.length).fill(0);
+   719→   719→
+   720→   720→  for (let i = period - 1; i < closes.length; i++) {
+   721→   721→    let sumSq = 0;
+   722→   722→    for (let j = i - period + 1; j <= i; j++) {
+   723→   723→      sumSq += (closes[j] - middle[i]) ** 2;
+   724→   724→    }
+   725→   725→    const stdDev = Math.sqrt(sumSq / period);
+   726→   726→    upper[i] = middle[i] + mult * stdDev;
+   727→   727→    lower[i] = middle[i] - mult * stdDev;
+   728→   728→    width[i] = middle[i] === 0 ? 0 : ((upper[i] - lower[i]) / middle[i]) * 100;
+   729→   729→  }
+   730→   730→  return { upper, middle, lower, width };
+   731→   731→}
+   732→   732→
+   733→   733→// ─── Keltner Channels ───────────────────────────────────────────────────────────
+   734→   734→function keltnerArray(
+   735→   735→  closes: number[],
+   736→   736→  highs: number[],
+   737→   737→  lows: number[],
+   738→   738→  emaPeriod: number = 20,
+   739→   739→  atrPeriod: number = 20,
+   740→   740→  mult: number = 2,
+   741→   741→): { upper: number[]; middle: number[]; lower: number[] } {
+   742→   742→  const middle = emaArray(closes, emaPeriod);
+   743→   743→  const atr = atrArray(highs, lows, closes, atrPeriod);
+   744→   744→  const upper: number[] = new Array(closes.length).fill(0);
+   745→   745→  const lower: number[] = new Array(closes.length).fill(0);
+   746→   746→  for (let i = 0; i < closes.length; i++) {
+   747→   747→    upper[i] = middle[i] + mult * atr[i];
+   748→   748→    lower[i] = middle[i] - mult * atr[i];
+   749→   749→  }
+   750→   750→  return { upper, middle, lower };
+   751→   751→}
+   752→   752→
+   753→   753→// ─── Envelopes ──────────────────────────────────────────────────────────────────
+   754→   754→function envelopeArray(
+   755→   755→  closes: number[],
+   756→   756→  period: number = 20,
+   757→   757→  pct: number = 2.5,
+   758→   758→): { upper: number[]; lower: number[] } {
+   759→   759→  const middle = smaArray(closes, period);
+   760→   760→  const upper: number[] = new Array(closes.length).fill(0);
+   761→   761→  const lower: number[] = new Array(closes.length).fill(0);
+   762→   762→  const factorUp = 1 + pct / 100;
+   763→   763→  const factorDn = 1 - pct / 100;
+   764→   764→  for (let i = 0; i < closes.length; i++) {
+   765→   765→    upper[i] = middle[i] * factorUp;
+   766→   766→    lower[i] = middle[i] * factorDn;
+   767→   767→  }
+   768→   768→  return { upper, lower };
+   769→   769→}
+   770→   770→
+   771→   771→// ─── Historical Volatility (annualized) ────────────────────────────────────────
+   772→   772→function histVolatilityArray(closes: number[], period: number = 20): number[] {
+   773→   773→  const result: number[] = new Array(closes.length).fill(0);
+   774→   774→  if (closes.length < period + 1) return result;
+   775→   775→
+   776→   776→  const logReturns: number[] = new Array(closes.length).fill(0);
+   777→   777→  for (let i = 1; i < closes.length; i++) {
+   778→   778→    logReturns[i] = closes[i - 1] === 0 ? 0 : Math.log(closes[i] / closes[i - 1]);
+   779→   779→  }
+   780→   780→
+   781→   781→  for (let i = period; i < closes.length; i++) {
+   782→   782→    let sum = 0;
+   783→   783→    for (let j = i - period + 1; j <= i; j++) sum += logReturns[j];
+   784→   784→    const mean = sum / period;
+   785→   785→    let sumSq = 0;
+   786→   786→    for (let j = i - period + 1; j <= i; j++) sumSq += (logReturns[j] - mean) ** 2;
+   787→   787→    result[i] = Math.sqrt(sumSq / period) * Math.sqrt(252);
+   788→   788→  }
+   789→   789→  return result;
+   790→   790→}
+   791→   791→
+   792→   792→// ─── Standard Deviation ─────────────────────────────────────────────────────────
+   793→   793→function stdDevArray(closes: number[], period: number = 20): number[] {
+   794→   794→  const result: number[] = new Array(closes.length).fill(0);
+   795→   795→  const sma = smaArray(closes, period);
+   796→   796→  for (let i = period - 1; i < closes.length; i++) {
+   797→   797→    let sumSq = 0;
+   798→   798→    for (let j = i - period + 1; j <= i; j++) {
+   799→   799→      sumSq += (closes[j] - sma[i]) ** 2;
+   800→   800→    }
+   801→   801→    result[i] = Math.sqrt(sumSq / period);
+   802→   802→  }
+   803→   803→  return result;
+   804→   804→}
+   805→   805→
+   806→   806→// ═══════════════════════════════════════════════════════════════════════════════
+   807→   807→// SECTION 6: VOLUME INDICATORS
+   808→   808→// ═══════════════════════════════════════════════════════════════════════════════
+   809→   809→
+   810→   810→// ─── OBV — On Balance Volume ────────────────────────────────────────────────────
+   811→   811→function obvArray(closes: number[], volumes: number[]): number[] {
+   812→   812→  const result: number[] = new Array(closes.length).fill(0);
+   813→   813→  if (closes.length === 0) return result;
+   814→   814→  result[0] = volumes[0];
+   815→   815→  for (let i = 1; i < closes.length; i++) {
+   816→   816→    if (closes[i] > closes[i - 1]) result[i] = result[i - 1] + volumes[i];
+   817→   817→    else if (closes[i] < closes[i - 1]) result[i] = result[i - 1] - volumes[i];
+   818→   818→    else result[i] = result[i - 1];
+   819→   819→  }
+   820→   820→  return result;
+   821→   821→}
+   822→   822→
+   823→   823→// ─── VPT — Volume Price Trend ──────────────────────────────────────────────────
+   824→   824→function vptArray(closes: number[], volumes: number[]): number[] {
+   825→   825→  const result: number[] = new Array(closes.length).fill(0);
+   826→   826→  for (let i = 1; i < closes.length; i++) {
+   827→   827→    const pctChange = closes[i - 1] === 0 ? 0 : (closes[i] - closes[i - 1]) / closes[i - 1];
+   828→   828→    result[i] = result[i - 1] + volumes[i] * pctChange;
+   829→   829→  }
+   830→   830→  return result;
+   831→   831→}
+   832→   832→
+   833→   833→// ─── VOSC — Volume Oscillator ──────────────────────────────────────────────────
+   834→   834→function voscArray(volumes: number[], shortP: number = 12, longP: number = 26): number[] {
+   835→   835→  const smaShort = smaArray(volumes, shortP);
+   836→   836→  const smaLong = smaArray(volumes, longP);
+   837→   837→  const result: number[] = new Array(volumes.length).fill(0);
+   838→   838→  for (let i = 0; i < volumes.length; i++) {
+   839→   839→    result[i] = smaLong[i] === 0 ? 0 : ((smaShort[i] - smaLong[i]) / smaLong[i]) * 100;
+   840→   840→  }
+   841→   841→  return result;
+   842→   842→}
+   843→   843→
+   844→   844→// ─── Chaikin A/D Line ──────────────────────────────────────────────────────────
+   845→   845→function chaikinADArray(highs: number[], lows: number[], closes: number[], volumes: number[]): number[] {
+   846→   846→  const result: number[] = new Array(closes.length).fill(0);
+   847→   847→  for (let i = 0; i < closes.length; i++) {
+   848→   848→    const range = highs[i] - lows[i];
+   849→   849→    const clv = range === 0 ? 0 : ((closes[i] - lows[i]) - (highs[i] - closes[i])) / range;
+   850→   850→    result[i] = (i === 0 ? 0 : result[i - 1]) + clv * volumes[i];
+   851→   851→  }
+   852→   852→  return result;
+   853→   853→}
+   854→   854→
+   855→   855→// ─── Force Index (EMA-smoothed) ────────────────────────────────────────────────
+   856→   856→function forceIndexArray(closes: number[], volumes: number[], period: number = 13): number[] {
+   857→   857→  const len = closes.length;
+   858→   858→  const result: number[] = new Array(len).fill(0);
+   859→   859→  if (len < 2) return result;
+   860→   860→  const raw = new Array(len).fill(0);
+   861→   861→  for (let i = 1; i < len; i++) raw[i] = (closes[i] - closes[i - 1]) * volumes[i];
+   862→   862→  const smoothed = emaArray(raw, period);
+   863→   863→  return smoothed;
+   864→   864→}
+   865→   865→
+   866→   866→// ─── VAP — Volume at Price (simplified: rolling VWAP using typical price) ──────
+   867→   867→function vapArray(highs: number[], lows: number[], closes: number[], volumes: number[], period: number = 20): number[] {
+   868→   868→  const result: number[] = new Array(closes.length).fill(0);
+   869→   869→  if (closes.length < period) return result;
+   870→   870→  for (let i = period - 1; i < closes.length; i++) {
+   871→   871→    let pvSum = 0;
+   872→   872→    let vSum = 0;
+   873→   873→    for (let j = i - period + 1; j <= i; j++) {
+   874→   874→      const tp = (highs[j] + lows[j] + closes[j]) / 3;
+   875→   875→      pvSum += tp * volumes[j];
+   876→   876→      vSum += volumes[j];
+   877→   877→    }
+   878→   878→    result[i] = vSum === 0 ? 0 : pvSum / vSum;
+   879→   879→  }
+   880→   880→  return result;
+   881→   881→}
+   882→   882→
+   883→   883→// ─── VWAP — Volume Weighted Average Price (cumulative) ─────────────────────────
+   884→   884→function vwapArray(highs: number[], lows: number[], closes: number[], volumes: number[]): number[] {
+   885→   885→  const result: number[] = new Array(closes.length).fill(0);
+   886→   886→  if (closes.length === 0) return result;
+   887→   887→  let cumPV = 0;
+   888→   888→  let cumV = 0;
+   889→   889→  for (let i = 0; i < closes.length; i++) {
+   890→   890→    const tp = (highs[i] + lows[i] + closes[i]) / 3;
+   891→   891→    cumPV += tp * volumes[i];
+   892→   892→    cumV += volumes[i];
+   893→   893→    result[i] = cumV === 0 ? 0 : cumPV / cumV;
+   894→   894→  }
+   895→   895→  return result;
+   896→   896→}
+   897→   897→
+   898→   898→// ═══════════════════════════════════════════════════════════════════════════════
+   899→   899→// MAIN: Compute all indicators per day
+   900→   900→// ═══════════════════════════════════════════════════════════════════════════════
+   901→   901→
+   902→   902→export function computeDailyIndicators(candles: OHLCV[]): DailyIndicators[] {
+   903→   903→  const closes = candles.map((c) => c.close);
+   904→   904→  const highs = candles.map((c) => c.high);
+   905→   905→  const lows = candles.map((c) => c.low);
+   906→   906→  const opens = candles.map((c) => c.open);
+   907→   907→  const volumes = candles.map((c) => c.volume);
+   908→   908→
+   909→   909→  // Volume-aware check
+   910→   910→  const hasVolume = candles.length > 0 && candles.every((c) => c.volume > 0);
+   911→   911→
+   912→   912→  // ── Moving Averages ──
+   913→   913→  const ma10Arr = smaArray(closes, 10);
+   914→   914→  const ma21Arr = smaArray(closes, 21);
+   915→   915→  const ma50Arr = smaArray(closes, 50);
+   916→   916→  const ma100Arr = smaArray(closes, 100);
+   917→   917→  const ma200Arr = smaArray(closes, 200);
+   918→   918→  const ema9Arr = emaArray(closes, 9);
+   919→   919→  const ema12Arr = emaArray(closes, 12);
+   920→   920→  const ema26Arr = emaArray(closes, 26);
+   921→   921→  const wma20Arr = wmaArray(closes, 20);
+   922→   922→  const hma20Arr = hmaArray(closes, 20);
+   923→   923→  const tma20Arr = tmaArray(closes, 20);
+   924→   924→  const lma20Arr = lmaArray(closes, 20);
+   925→   925→  const vwma20Arr = hasVolume ? vwmaArray(closes, volumes, 20) : new Array(closes.length).fill(0);
+   926→   926→
+   927→   927→  // ── Ichimoku Cloud ──
+   928→   928→  const ich = ichimokuArray(highs, lows, 9, 26, 52);
+   929→   929→
+   930→   930→  // ── Heiken Ashi ──
+   931→   931→  const ha = heikenAshiArray(opens, highs, lows, closes);
+   932→   932→
+   933→   933→  // ── Oscillators ──
+   934→   934→  const rsiArr = rsiArray(closes, 14);
+   935→   935→  const stoch = stochasticArray(highs, lows, closes, 14, 3);
+   936→   936→  const stochRsi = stochRsiArray(closes, 14, 14, 3);
+   937→   937→  const williamsRArr = williamsRArray(highs, lows, closes, 14);
+   938→   938→  const momentumArr = momentumArray(closes, 10);
+   939→   939→  const rocArr = rocArray(closes, 12);
+   940→   940→  const trixArr = trixArray(closes, 9);
+   941→   941→  const cciArr = cciArray(highs, lows, closes, 20);
+   942→   942→  const mfiArr = hasVolume ? mfiArray(highs, lows, closes, volumes, 14) : new Array(closes.length).fill(0);
+   943→   943→  const macd = macdArray(closes, 12, 26, 9);
+   944→   944→  const adxData = adxArray(highs, lows, closes, 14);
+   945→   945→  const sarArr = sarArray(highs, lows, closes);
+   946→   946→  const awesomeOscArr = awesomeOscArray(highs, lows);
+   947→   947→  const fisherArr = fisherTransformArray(highs, lows, 9);
+   948→   948→
+   949→   949→  // ── Volatility ──
+   950→   950→  const atrArr = atrArray(highs, lows, closes, 14);
+   951→   951→  const bb = bollingerArray(closes, 20, 2);
+   952→   952→  const kc = keltnerArray(closes, highs, lows, 20, 20, 2);
+   953→   953→  const env = envelopeArray(closes, 20, 2.5);
+   954→   954→  const histVolArr = histVolatilityArray(closes, 20);
+   955→   955→  const stdDevArr = stdDevArray(closes, 20);
+   956→   956→
+   957→   957→  // ── Volume ──
+   958→   958→  const obvArr = hasVolume ? obvArray(closes, volumes) : new Array(closes.length).fill(0);
+   959→   959→  const vptArr = hasVolume ? vptArray(closes, volumes) : new Array(closes.length).fill(0);
+   960→   960→  const voscArr = hasVolume ? voscArray(volumes, 12, 26) : new Array(closes.length).fill(0);
+   961→   961→  const chaikinADArr = hasVolume ? chaikinADArray(highs, lows, closes, volumes) : new Array(closes.length).fill(0);
+   962→   962→  const forceIndexArr = hasVolume ? forceIndexArray(closes, volumes, 13) : new Array(closes.length).fill(0);
+   963→   963→  const vapArr = hasVolume ? vapArray(highs, lows, closes, volumes, 20) : new Array(closes.length).fill(0);
+   964→   964→  const vwapArr = hasVolume ? vwapArray(highs, lows, closes, volumes) : new Array(closes.length).fill(0);
+   965→   965→
+   966→   966→  // ── Map to output ──
+   967→   967→  return candles.map((c, i) => ({
+   968→   968→    date: c.date,
+   969→   969→    open: c.open,
+   970→   970→    high: c.high,
+   971→   971→    low: c.low,
+   972→   972→    close: c.close,
+   973→   973→    volume: c.volume,
+   974→   974→    hasVolume,
+   975→   975→
+   976→   976→    // Trend: Moving Averages
+   977→   977→    ma10: r0(ma10Arr[i]),
+   978→   978→    ma21: r0(ma21Arr[i]),
+   979→   979→    ma50: r0(ma50Arr[i]),
+   980→   980→    ma100: r0(ma100Arr[i]),
+   981→   981→    ma200: r0(ma200Arr[i]),
+   982→   982→    ema9: r0(ema9Arr[i]),
+   983→   983→    ema12: r0(ema12Arr[i]),
+   984→   984→    ema26: r0(ema26Arr[i]),
+   985→   985→    vwma20: r0(vwma20Arr[i]),
+   986→   986→    wma20: r0(wma20Arr[i]),
+   987→   987→    hma20: r0(hma20Arr[i]),
+   988→   988→    tma20: r0(tma20Arr[i]),
+   989→   989→    lma20: r0(lma20Arr[i]),
+   990→   990→
+   991→   991→    // Trend: Ichimoku Cloud
+   992→   992→    ichimokuTenkan: r0(ich.tenkan[i]),
+   993→   993→    ichimokuKijun: r0(ich.kijun[i]),
+   994→   994→    ichimokuSenkouA: r0(ich.senkouA[i]),
+   995→   995→    ichimokuSenkouB: r0(ich.senkouB[i]),
+   996→   996→
+   997→   997→    // Trend: Heiken Ashi
+   998→   998→    haOpen: r0(ha.haOpen[i]),
+   999→   999→    haHigh: r0(ha.haHigh[i]),
+  1000→  1000→    haLow: r0(ha.haLow[i]),
+  1001→  1001→    haClose: r0(ha.haClose[i]),
+  1002→  1002→
+  1003→  1003→    // Oscillators
+  1004→  1004→    rsi: r1(rsiArr[i]),
+  1005→  1005→    stochK: r1(stoch.k[i]),
+  1006→  1006→    stochD: r1(stoch.d[i]),
+  1007→  1007→    stochRsiK: r1(stochRsi.k[i]),
+  1008→  1008→    stochRsiD: r1(stochRsi.d[i]),
+  1009→  1009→    williamsR: r1(williamsRArr[i]),
+  1010→  1010→    momentum: r2(momentumArr[i]),
+  1011→  1011→    roc: r2(rocArr[i]),
+  1012→  1012→    trix: r4(trixArr[i]),
+  1013→  1013→    cci: r1(cciArr[i]),
+  1014→  1014→    mfi: r1(mfiArr[i]),
+  1015→  1015→    macd: r2(macd.line[i]),
+  1016→  1016→    macdSignal: r2(macd.signalArr[i]),
+  1017→  1017→    macdHist: r2(macd.histogram[i]),
+  1018→  1018→    adx: r1(adxData.adx[i]),
+  1019→  1019→    dmiPlus: r1(adxData.dmiPlus[i]),
+  1020→  1020→    dmiMinus: r1(adxData.dmiMinus[i]),
+  1021→  1021→    sar: r0(sarArr[i]),
+  1022→  1022→    awesomeOsc: r2(awesomeOscArr[i]),
+  1023→  1023→    fisherTransform: r2(fisherArr[i]),
+  1024→  1024→
+  1025→  1025→    // Volatility
+  1026→  1026→    atr: r0(atrArr[i]),
+  1027→  1027→    bbUpper: r0(bb.upper[i]),
+  1028→  1028→    bbMiddle: r0(bb.middle[i]),
+  1029→  1029→    bbLower: r0(bb.lower[i]),
+  1030→  1030→    bbWidth: r2(bb.width[i]),
+  1031→  1031→    kcUpper: r0(kc.upper[i]),
+  1032→  1032→    kcMiddle: r0(kc.middle[i]),
+  1033→  1033→    kcLower: r0(kc.lower[i]),
+  1034→  1034→    envUpper: r0(env.upper[i]),
+  1035→  1035→    envLower: r0(env.lower[i]),
+  1036→  1036→    histVolatility: r4(histVolArr[i]),
+  1037→  1037→    stdDev20: r2(stdDevArr[i]),
+  1038→  1038→
+  1039→  1039→    // Volume
+  1040→  1040→    obv: r0(obvArr[i]),
+  1041→  1041→    vpt: r2(vptArr[i]),
+  1042→  1042→    vosc: r2(voscArr[i]),
+  1043→  1043→    chaikinAD: r2(chaikinADArr[i]),
+  1044→  1044→    forceIndex: r2(forceIndexArr[i]),
+  1045→  1045→    vap: r0(vapArr[i]),
+  1046→  1046→    vwap: r0(vwapArr[i]),
+  1047→  1047→  }));
+  1048→  1048→}
+  1049→  1049→

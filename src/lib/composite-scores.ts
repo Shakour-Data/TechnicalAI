@@ -7,26 +7,70 @@ import type { OHLCV, LevelStrength } from './ta-engine';
 import { approximateVolumeProfile, countTouch, volumeAtLevel, type VolumeProfileResult, type TouchCountResult } from './volume-profile';
 import { calculateTrendStrengthRB, type RuleBasedRegimeInput } from './regime-engine';
 
+/**
+ * Result of the 6-component trend strength composite score.
+ *
+ * Overall is a weighted sum of six normalized (0–1) sub-scores:
+ *   - ADX Normalized      × 0.20
+ *   - Slope Strength      × 0.15
+ *   - MA Alignment        × 0.20
+ *   - Price Position      × 0.15
+ *   - Momentum Strength   × 0.15
+ *   - Pullback Quality    × 0.15
+ *
+ * All sub-scores are clamped to [0, 1] before weighting.
+ */
 export interface TrendStrengthResult {
-  overall: number;           // 0-1
-  adxNormalized: number;    // 0-1
-  slopeStrength: number;    // 0-1
-  maAlignment: number;      // 0-1
-  pricePosition: number;    // 0-1
-  momentumStrength: number; // 0-1
-  pullbackQuality: number;  // 0-1
+  /** Overall composite trend strength score (0–1), weighted average of all components. */
+  overall: number;
+  /** ADX normalized to 0–1 by dividing raw ADX by 60. Weight: 0.20. */
+  adxNormalized: number;
+  /** EMA10–EMA20 slope normalized by volatility. Weight: 0.15. */
+  slopeStrength: number;
+  /** Fraction of consecutive EMA pairs in correct order (4 pairs). Weight: 0.20. */
+  maAlignment: number;
+  /** How far price is from EMA50, normalized. Weight: 0.15. */
+  pricePosition: number;
+  /** Combined RSI deviation and MACD histogram strength. Weight: 0.15. */
+  momentumStrength: number;
+  /** Quality of pullback within recent range (higher = shallow pullback). Weight: 0.15. */
+  pullbackQuality: number;
+  /** Human-readable Farsi description of trend direction and strength. */
   description: string;
 }
 
+/**
+ * Result of the 7-component support/resistance strength composite score.
+ *
+ * Overall is a weighted sum of seven normalized (0–1) sub-scores:
+ *   - Touch Count             × 0.20
+ *   - Time Validity           × 0.10
+ *   - Volume Profile          × 0.15
+ *   - Volatility Adjustment   × 0.10
+ *   - Historical Significance × 0.15
+ *   - Fibonacci Confluence    × 0.15
+ *   - Pattern Support         × 0.15
+ *
+ * All sub-scores are clamped to [0, 1] before weighting.
+ */
 export interface SRStrengthResult {
-  overall: number;              // 0-1
-  touchCount: number;           // 0-1
-  timeValidity: number;         // 0-1
-  volumeProfile: number;        // 0-1
-  volatilityAdjustment: number; // 0-1
-  historicalSignificance: number; // 0-1
-  fibonacciConfluence: number;  // 0-1
-  patternSupport: number;       // 0-1
+  /** Overall composite S/R strength score (0–1), weighted average of all components. */
+  overall: number;
+  /** Number of price touches near the level, normalized by /5. Weight: 0.20. */
+  touchCount: number;
+  /** How long the level has been valid (bars since first touch / 180). Weight: 0.10. */
+  timeValidity: number;
+  /** Volume concentration at the level vs. average volume. Weight: 0.15. */
+  volumeProfile: number;
+  /** Inverse of ATR/price — lower volatility → higher score. Weight: 0.10. */
+  volatilityAdjustment: number;
+  /** Count of major highs/lows within ±1% of the level, normalized by /4. Weight: 0.15. */
+  historicalSignificance: number;
+  /** Number of Fibonacci levels within ATR threshold, normalized by /3. Weight: 0.15. */
+  fibonacciConfluence: number;
+  /** Number of detection methods that identified this level, normalized by /3. Weight: 0.15. */
+  patternSupport: number;
+  /** Human-readable Farsi description of level strength, touches, and Fibonacci confluences. */
   description: string;
 }
 
@@ -36,6 +80,35 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 // TREND STRENGTH — 6 Components
 // ═════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Calculate the 6-component trend strength composite score.
+ *
+ * Combines six normalized sub-scores into a single 0–1 composite that quantifies
+ * how strong and well-structured the current trend is.
+ *
+ * ### Weight Breakdown
+ * | Component           | Weight | Description |
+ * |---------------------|--------|-------------|
+ * | ADX Normalized      | 0.20   | Raw ADX divided by 60, clamped to [0,1] |
+ * | Slope Strength      | 0.15   | EMA10–EMA20 slope normalized by volatility |
+ * | MA Alignment        | 0.20   | Fraction of 4 consecutive EMA pairs in order |
+ * | Price Position       | 0.15   | Distance of price from EMA50, normalized |
+ * | Momentum Strength   | 0.15   | Average of RSI deviation and MACD strength |
+ * | Pullback Quality    | 0.15   | Shallow pullback → high; deep pullback → low |
+ *
+ * @param data          - Array of OHLCV bars (used for pullback quality lookback of up to 20 bars)
+ * @param ema10         - 10-period EMA value
+ * @param ema20         - 20-period EMA value
+ * @param ema50         - 50-period EMA value
+ * @param ema100        - 100-period EMA value
+ * @param ema200        - 200-period EMA value
+ * @param rsi           - Current RSI value (0–100 scale)
+ * @param macdHist      - Current MACD histogram value
+ * @param macdHistStdDev - Standard deviation of MACD histogram (for normalization)
+ * @param adx           - Current ADX value (typical range 0–60+)
+ * @param price         - Current price
+ * @returns A {@link TrendStrengthResult} with all six component scores, the weighted overall, and a Farsi description
+ */
 export function calcTrendStrength(
   data: OHLCV[],
   ema10: number, ema20: number, ema50: number, ema100: number, ema200: number,
@@ -120,6 +193,31 @@ export function calcTrendStrength(
 // SR STRENGTH — 7 Components
 // ═════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Calculate the 7-component support/resistance strength composite score.
+ *
+ * Evaluates how significant a price level is as support or resistance by scoring
+ * seven independent factors and combining them into a single 0–1 composite.
+ *
+ * ### Weight Breakdown
+ * | Component               | Weight | Description |
+ * |-------------------------|--------|-------------|
+ * | Touch Count             | 0.20   | Price touches within ATR×0.3 threshold, normalized by /5 |
+ * | Time Validity           | 0.10   | Bars since first touch / 180 |
+ * | Volume Profile          | 0.15   | Average volume at level vs. overall average volume |
+ * | Volatility Adjustment   | 0.10   | 1 − ATR/price (lower volatility → higher score) |
+ * | Historical Significance | 0.15   | Major highs/lows within ±1%, normalized by /4 |
+ * | Fibonacci Confluence    | 0.15   | Fibonacci ratios within threshold, normalized by /3 |
+ * | Pattern Support         | 0.15   | Number of detection methods, normalized by /3 |
+ *
+ * @param levelPrice    - The price of the S/R level being evaluated
+ * @param levelStrength - The LevelStrength object for this level (may be undefined); used for method count (pattern support)
+ * @param data          - Array of OHLCV bars (up to 100 most recent bars used)
+ * @param price         - Current price
+ * @param atr           - Current Average True Range value
+ * @param allLevels     - All detected S/R levels (reserved for future cross-level analysis)
+ * @returns A {@link SRStrengthResult} with all seven component scores, the weighted overall, and a Farsi description
+ */
 export function calcSRStrength(
   levelPrice: number,
   levelStrength: LevelStrength | undefined,
@@ -214,20 +312,40 @@ export function calcSRStrength(
 // Uses approximateVolumeProfile (no Level-2 data needed) and countTouch
 // for more accurate S/R level strength assessment.
 
+/**
+ * Extended result of the enhanced S/R strength calculation.
+ *
+ * Inherits all 7 base components from {@link SRStrengthResult} and augments them with
+ * volume-profile-derived metrics for a more accurate strength assessment.
+ *
+ * The enhanced overall score blends:
+ *   - 70% of the base 7-component composite
+ *   - 30% of an enhancement composite, itself weighted as:
+ *       - Volume Concentration Boost  × 0.40
+ *       - POC Proximity Boost         × 0.30
+ *       - Enhanced Touch Boost        × 0.20
+ *       - Value Area Boost            × 0.10
+ */
 export interface EnhancedSRStrengthFullResult extends SRStrengthResult {
-  /** Volume profile POC relative to this level */
+  /** Relative distance from the volume profile Point of Control (POC) to this level (0 = at POC). */
   volumePOCDistance: number;
-  /** Is the level inside the Value Area? */
+  /** Whether the level price falls inside the volume profile Value Area (between valueAreaLow and valueAreaHigh). */
   inValueArea: boolean;
-  /** Touch count with 0.2% tolerance (from volume-profile.ts) */
+  /** Precise touch count result using 0.2% tolerance from {@link countTouch}. */
   enhancedTouchCount: TouchCountResult;
-  /** Volume concentration at this level (from volume profile) */
+  /** Volume concentration at this level from the volume profile (0–1 scale). */
   volumeConcentration: number;
 }
 
 /**
- * Compute volume profile for the given data (cached per call site).
- * Returns a VolumeProfileResult that can be reused for multiple levels.
+ * Compute a volume profile for the given OHLCV data.
+ *
+ * Uses the last 60 bars and delegates to {@link approximateVolumeProfile}.
+ * The result can be reused across multiple S/R level evaluations to avoid redundant computation.
+ *
+ * @param data    - Array of OHLCV bars (only the most recent 60 are used)
+ * @param numBins - Number of volume profile bins (default: 100)
+ * @returns A {@link VolumeProfileResult} containing POC, Value Area, and per-bin volumes
  */
 export function computeVolumeProfile(data: OHLCV[], numBins: number = 100): VolumeProfileResult {
   const recentData = data.slice(-Math.min(60, data.length)); // 60 bars for volume profile
@@ -235,11 +353,26 @@ export function computeVolumeProfile(data: OHLCV[], numBins: number = 100): Volu
 }
 
 /**
- * Enhanced SR Strength calculation using volume profile and touch count.
- * Augments the original 7-component calcSRStrength with:
- *   - Volume Profile concentration (POC proximity, Value Area membership)
- *   - Precise touch count with configurable tolerance
- *   - Combined scoring with adaptive weights
+ * Calculate enhanced S/R strength using volume profile and precise touch count.
+ *
+ * Builds on the base 7-component {@link calcSRStrength} and augments it with:
+ *   - **Volume Profile concentration** — how much volume sits at this level
+ *   - **POC proximity** — distance from the Point of Control
+ *   - **Value Area membership** — whether the level is inside the high-volume zone
+ *   - **Precise touch count** — using 0.2% tolerance via {@link countTouch}
+ *
+ * ### Blending Formula
+ * The final overall score = 0.70 × baseOverall + 0.30 × enhancementScore, where:
+ *   enhancementScore = volumeBoost × 0.40 + pocBoost × 0.30 + touchBoost × 0.20 + valueAreaBoost × 0.10
+ *
+ * @param levelPrice    - The price of the S/R level being evaluated
+ * @param levelStrength - The LevelStrength object for this level (may be undefined); used for pattern support in base score
+ * @param data          - Array of OHLCV bars (last 50 bars used for enhanced touch count; last 60 for volume profile)
+ * @param price         - Current price
+ * @param atr           - Current Average True Range value
+ * @param allLevels     - All detected S/R levels (passed through to base calculation)
+ * @param volumeProfile - Pre-computed volume profile result; if omitted, one is computed automatically via {@link computeVolumeProfile}
+ * @returns An {@link EnhancedSRStrengthFullResult} with all base scores, volume profile metrics, and an updated Farsi description
  */
 export function calcSRStrengthEnhanced(
   levelPrice: number,

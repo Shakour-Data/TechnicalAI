@@ -8,11 +8,26 @@
 
 // ─── Price Validation ───────────────────────────────────────────
 
+/**
+ * A known price reference extracted from analysis input data.
+ * Used to detect hallucinated (fabricated) prices in AI output text.
+ */
 interface PriceReference {
+  /** Descriptive label for the price (e.g. 'currentPrice', 'ma21', 'resistance1') */
   label: string;
+  /** The actual numeric price value */
   value: number;
 }
 
+/**
+ * Extract known price references from the analysis request body.
+ * Collects current price, moving averages, Bollinger bands, SAR, ATR,
+ * support/resistance levels, and scenario targets into a flat array
+ * of labelled price references for hallucination detection.
+ *
+ * @param body - The analysis request body containing technical indicator values
+ * @returns Array of PriceReference objects with label and value for each known price
+ */
 export function buildPriceReferences(body: Record<string, unknown>): PriceReference[] {
   const refs: PriceReference[] = [];
   const add = (label: string, val: number | null | undefined) => {
@@ -44,12 +59,26 @@ export function buildPriceReferences(body: Record<string, unknown>): PriceRefere
   return refs;
 }
 
+/**
+ * Convert Persian (۰-۹) and Arabic (٠-٩) digits in a string to Latin (0-9) digits.
+ *
+ * @param str - String potentially containing Persian/Arabic digits
+ * @returns String with all digits converted to Latin (0-9)
+ */
 function faToEn(str: string): string {
   return str
     .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0))
     .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660));
 }
 
+/**
+ * Extract all positive numeric values from Persian text.
+ * Handles Persian digits (۰-۹), Arabic digits (٠-٩), Latin digits (0-9),
+ * and Persian/Arabic thousand separators (٬ ,).
+ *
+ * @param text - Persian text that may contain numeric values
+ * @returns Array of positive finite numbers found in the text
+ */
 function extractPersianNumbers(text: string): number[] {
   const numbers: number[] = [];
   const pattern = /[\-]?([۰-۹٠-٩0-9]+([٬,][۰-۹٠-٩0-9]+)*)/g;
@@ -62,6 +91,15 @@ function extractPersianNumbers(text: string): number[] {
   return numbers;
 }
 
+/**
+ * Validate that numeric values in AI-generated text correspond to known price references.
+ * Numbers outside 10%–300% of current price are ignored. A number is flagged as a
+ * hallucination if it differs by more than 15% from every known reference price.
+ *
+ * @param text - The AI-generated Persian text to validate
+ * @param priceRefs - Array of known price references from the analysis input
+ * @returns Object with `valid` (true if ≤2 hallucinations) and `hallucinationCount`
+ */
 export function validatePricesInText(
   text: string,
   priceRefs: PriceReference[],
@@ -305,6 +343,21 @@ function fixZwnjSpacing(text: string): string {
   return result;
 }
 
+/**
+ * Fix Persian text quality issues in AI-generated output.
+ *
+ * Applies 5 categories of fixes:
+ * 1. **ZWNJ spacing** — Correct نیم‌فاصله usage per Persian orthography standards
+ *    (فرهنگستان زبان و ادب فارسی): compound words get ZWNJ, separate words get space
+ * 2. **Stuck words** — Split incorrectly concatenated words (e.g. کوتاهمدت → کوتاه‌مدت)
+ * 3. **Mixed Persian-English** — Replace hybrid words (e.g. بولیnger → بولینگر)
+ * 4. **AI typos** — Fix common LLM spelling mistakes and word forms
+ * 5. **Paragraph normalization** — Ensure proper double-newline paragraph breaks,
+ *    fix punctuation spacing, and normalize whitespace
+ *
+ * @param text - Raw AI-generated Persian text
+ * @returns Cleaned Persian text with corrected spacing, orthography, and formatting
+ */
 export function fixPersianText(text: string): string {
   let result = text;
 
@@ -405,6 +458,22 @@ function fixNumberDirection(text: string): string {
 
 // ─── Technical Code Cleanup ───────────────────────────────────────
 
+/**
+ * Strip leaked technical codes and CJK characters from AI-generated text.
+ *
+ * Performs the following cleanups:
+ * - Removes Chinese/CJK characters (often leaked by multilingual models)
+ * - Strips internal code references: SC###, R###, MA###, DI+/DI-
+ * - Replaces English technical acronyms with Persian equivalents:
+ *   RSI → شاخص قدرت نسبی, MACD → واگراف هیستوگرام, MFI → شاخص جریان نقدی,
+ *   CCI → شاخص کانال کالا, ADX → شاخص شدت روند, ATR → دامنه تلواتی,
+ *   SAR → حمایت پویا, OBV → جریان تجمعی حجم
+ * - Removes R² = N statistical artifacts
+ * - Fixes double spaces and trims whitespace
+ *
+ * @param text - AI-generated text that may contain leaked technical codes
+ * @returns Cleaned text with technical codes removed or replaced
+ */
 export function stripTechnicalCodes(text: string): string {
   let result = text;
 
@@ -438,12 +507,35 @@ export function stripTechnicalCodes(text: string): string {
 
 // ─── Full Pipeline ───────────────────────────────────────────────
 
+/**
+ * Result of the post-processing pipeline.
+ */
 export interface PostProcessResult {
+  /** The cleaned, post-processed text */
   text: string;
+  /** True if no more than 2 hallucinated prices were detected */
   priceValid: boolean;
+  /** Count of hallucinated prices found in the text */
   hallucinationCount: number;
 }
 
+/**
+ * Full post-processing pipeline for AI-generated analysis text.
+ *
+ * Applies 3 stages in order:
+ * 1. **Technical Code Cleanup** (`stripTechnicalCodes`) — Remove leaked codes, CJK chars,
+ *    replace English acronyms with Persian equivalents
+ * 2. **Persian Text Quality** (`fixPersianText`) — Fix ZWNJ/spacing, stuck words,
+ *    mixed scripts, AI typos, paragraph formatting
+ * 3. **Number Direction** (`fixNumberDirection`) — Wrap numbers with LRM marks
+ *    for correct RTL rendering
+ * 4. **Price Validation** (`validatePricesInText`) — Detect hallucinated prices
+ *    that don't match any known reference
+ *
+ * @param rawText - Raw AI-generated text to post-process
+ * @param priceRefs - Array of known price references for hallucination detection
+ * @returns PostProcessResult with cleaned text, validation status, and hallucination count
+ */
 export function postProcessAIOutput(
   rawText: string,
   priceRefs: PriceReference[],

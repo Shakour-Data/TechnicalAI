@@ -13,69 +13,99 @@ import type { VotingWeights } from './regime-engine';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * A record tracking a single prediction made by the MSL system.
+ *
+ * Stores the full context of a prediction including the symbol, predicted
+ * scenario/direction/probability, the price at prediction time, snapshots of
+ * both component weights and voting weights, and any subsequent user feedback.
+ * At most {@link MAX_STORED_PREDICTIONS} (500) records are kept in the store;
+ * oldest unfeedbacked entries are evicted first.
+ */
 export interface PredictionRecord {
-  /** Unique ID for this prediction */
+  /** Unique ID for this prediction (format: `pred_<timestamp>_<random>`) */
   id: string;
-  /** Symbol (e.g., 'فولاد') */
+  /** Market symbol (e.g., 'فولاد') */
   symbol: string;
-  /** Timestamp of prediction */
+  /** Unix timestamp (ms) when the prediction was created */
   timestamp: number;
-  /** The predicted scenario (e.g., 'SC6') */
+  /** The predicted scenario label (e.g., 'SC6') */
   predictedScenario: string;
-  /** Predicted direction: 1=bullish, -1=bearish, 0=neutral */
+  /** Predicted direction: 1 = bullish, -1 = bearish, 0 = neutral */
   predictedDirection: number;
-  /** Predicted probability (0-1) */
+  /** Predicted probability in the range [0, 1] */
   predictedProbability: number;
-  /** Price at time of prediction */
+  /** Asset price at the time the prediction was made */
   priceAtPrediction: number;
-  /** Component weights at time of prediction */
+  /** Snapshot of VDSS component weights at prediction time */
   weightsSnapshot: Record<string, number>;
-  /** Voting weights at time of prediction */
+  /** Snapshot of voting weights at prediction time */
   votingWeightsSnapshot: VotingWeights | null;
-  /** User feedback (if provided) */
+  /** User feedback on this prediction, or `null` if not yet provided */
   feedback: FeedbackRecord | null;
 }
 
+/**
+ * Captures user feedback on a prediction.
+ *
+ * Records whether the prediction was correct, the actual market direction
+ * and price observed after the prediction period, the feedback timestamp,
+ * and an optional user comment.
+ */
 export interface FeedbackRecord {
-  /** Was the prediction correct? */
+  /** Whether the prediction was correct */
   isCorrect: boolean;
-  /** Actual direction: 1=bullish, -1=bearish, 0=neutral */
+  /** Actual direction observed: 1 = bullish, -1 = bearish, 0 = neutral */
   actualDirection: number;
-  /** Actual price after the prediction period */
+  /** Actual price observed after the prediction period */
   actualPrice: number;
-  /** Timestamp of feedback */
+  /** Unix timestamp (ms) when the feedback was submitted */
   feedbackTimestamp: number;
-  /** User comment (optional) */
+  /** Optional user comment explaining the feedback */
   comment?: string;
 }
 
+/**
+ * Represents a single adjustment to a VDSS component weight.
+ *
+ * Recorded every time the adaptive weight-update algorithm modifies a
+ * feature weight. Includes the feature name, the old and new weight values,
+ * the delta, and a human-readable reason string (in Persian).
+ */
 export interface WeightAdjustment {
   /** Name of the weight/feature being adjusted */
   feature: string;
-  /** Old value */
+  /** Weight value before the adjustment */
   oldValue: number;
-  /** New value */
+  /** Weight value after the adjustment */
   newValue: number;
-  /** Absolute change */
+  /** Absolute change (newValue − oldValue) */
   delta: number;
-  /** Reason for the change */
+  /** Human-readable reason for the adjustment (Persian) */
   reason: string;
 }
 
+/**
+ * Aggregated feedback statistics for the MSL prediction system.
+ *
+ * Provides overall accuracy, per-scenario and per-direction breakdowns,
+ * a rolling recent-accuracy metric (last 20 feedbacks), and the most
+ * recent weight adjustments (last 50).
+ */
 export interface FeedbackStats {
-  /** Total predictions recorded */
+  /** Total number of predictions recorded (with and without feedback) */
   totalPredictions: number;
-  /** Total feedback received */
+  /** Total number of predictions that have received user feedback */
   totalFeedback: number;
-  /** Accuracy (correct / total with feedback) */
+  /** Overall accuracy: correct predictions / total with feedback (0–1) */
   accuracy: number;
-  /** Accuracy by scenario */
+  /** Accuracy broken down by predicted scenario label */
   accuracyByScenario: Record<string, { correct: number; total: number }>;
-  /** Accuracy by direction */
+  /** Accuracy broken down by predicted direction (bull/bear/neutral) */
   accuracyByDirection: { bull: number; bear: number; neutral: number };
-  /** Recent accuracy (last 20 feedbacks) */
+  /** Rolling accuracy over the last 20 feedbacked predictions (0–1) */
   recentAccuracy: number;
-  /** Weight adjustment history (last 50) */
+  /** The 50 most recent weight adjustments */
   recentAdjustments: WeightAdjustment[];
 }
 
@@ -92,6 +122,25 @@ const MAX_LEARNING_RATE = 0.05;
 // FEEDBACK STORE
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Singleton-compatible feedback store that maintains prediction records and
+ * adaptive weight state in memory, persisted to `localStorage`.
+ *
+ * **Key behaviours:**
+ * - Records predictions and user feedback, automatically adjusting VDSS
+ *   component weights via an adaptive learning-rate algorithm.
+ * - Persists all state to `localStorage` on every mutation (SSR-safe).
+ * - Caps stored predictions at 500; evicts the oldest unfeedbacked entry first.
+ * - Caps stored weight adjustments at 100.
+ *
+ * **Adaptive learning rate:**
+ * - Default LR = 0.01. When recent accuracy > 70%, LR decays toward 0.001
+ *   (converging). When recent accuracy < 40%, LR grows toward 0.05 (exploring).
+ *   Transition is smoothed with a 0.9/0.1 exponential moving average.
+ *
+ * **Weight bounds:** Individual weights are clamped to [0.05, 0.5] and then
+ * normalized so their sum equals 1.
+ */
 class FeedbackStore {
   private predictions: Map<string, PredictionRecord> = new Map();
   private adjustments: WeightAdjustment[] = [];
@@ -106,7 +155,14 @@ class FeedbackStore {
   // ─── Core Operations ────────────────────────────────────────────────────
 
   /**
-   * Record a new prediction (before feedback is available).
+   * Record a new prediction before feedback is available.
+   *
+   * Stores the prediction in the in-memory map and persists to `localStorage`.
+   * If the total number of predictions exceeds 500, the oldest prediction
+   * that has not yet received feedback is evicted.
+   *
+   * @param record - Prediction data (the `feedback` field is omitted; it will be set to `null`)
+   * @returns The unique ID assigned to the prediction
    */
   addPrediction(record: Omit<PredictionRecord, 'feedback'>): string {
     const id = record.id || `pred_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -125,7 +181,14 @@ class FeedbackStore {
   }
 
   /**
-   * Record user feedback for a prediction and trigger weight update.
+   * Record user feedback for a prediction and trigger an adaptive weight update.
+   *
+   * Looks up the prediction by ID, attaches the feedback (with an auto-generated
+   * timestamp), then runs the weight-update algorithm.
+   *
+   * @param predictionId - The unique ID of the prediction to update
+   * @param feedback    - Feedback data (the `feedbackTimestamp` is omitted; set automatically)
+   * @returns An array of weight adjustments made, or `null` if the prediction ID was not found
    */
   recordFeedback(
     predictionId: string,
@@ -146,7 +209,14 @@ class FeedbackStore {
   }
 
   /**
-   * Record feedback by symbol (finds the most recent prediction for that symbol).
+   * Record feedback by symbol, finding the most recent unfeedbacked prediction
+   * for the given symbol.
+   *
+   * Useful when the caller knows the market symbol but not the specific prediction ID.
+   *
+   * @param symbol   - Market symbol to search for (e.g., 'فولاد')
+   * @param feedback - Feedback data (the `feedbackTimestamp` is omitted; set automatically)
+   * @returns An array of weight adjustments made, or `null` if no matching prediction was found
    */
   recordFeedbackBySymbol(
     symbol: string,
@@ -170,14 +240,24 @@ class FeedbackStore {
   // ─── Weight Update Algorithm ────────────────────────────────────────────
 
   /**
-   * Update VDSS component weights based on prediction error.
+   * Update VDSS component weights based on prediction error from feedback.
    *
-   * Algorithm:
-   * 1. Compute error = |predicted - actual|
-   * 2. For each component weight, adjust based on its contribution to the error
-   * 3. If prediction was correct, slightly increase the weights of contributing components
-   * 4. If prediction was wrong, decrease the weights of the strongest contributors
-   * 5. Adaptive learning rate: decrease if recent accuracy is high, increase if low
+   * **Algorithm:**
+   * 1. Compute direction error = |predictedDirection − actualDirection|
+   * 2. Adjust the adaptive learning rate based on recent accuracy:
+   *    - recentAccuracy > 0.7 → target LR = 0.001 (converging)
+   *    - recentAccuracy < 0.4 → target LR = 0.05  (exploring)
+   *    - otherwise            → target LR = 0.01  (default)
+   *    - Smoothed: `lr = lr × 0.9 + target × 0.1`
+   * 3. For each component weight in the prediction snapshot:
+   *    - **Correct prediction:** reward = lr × weight × 0.5 → newWeight = weight + reward
+   *    - **Wrong prediction:** penalty = lr × weight × directionError → newWeight = weight − penalty
+   * 4. Clamp each weight to **[0.05, 0.5]** for numerical stability
+   * 5. Normalize all weights so they sum to 1
+   * 6. Only record adjustments where |delta| > 0.0001
+   *
+   * @param record - The prediction record (must have `feedback` attached)
+   * @returns An array of weight adjustments (may be empty if no meaningful changes)
    */
   private updateWeightsFromFeedback(record: PredictionRecord): WeightAdjustment[] {
     const feedback = record.feedback;
@@ -250,6 +330,14 @@ class FeedbackStore {
 
   // ─── Query Operations ───────────────────────────────────────────────────
 
+  /**
+   * Compute aggregated feedback statistics.
+   *
+   * Includes overall accuracy, per-scenario and per-direction breakdowns,
+   * recent accuracy (last 20 feedbacks), and the 50 most recent weight adjustments.
+   *
+   * @returns A snapshot of current feedback statistics
+   */
   getStats(): FeedbackStats {
     const predictions = Array.from(this.predictions.values());
     const withFeedback = predictions.filter(p => p.feedback !== null);
@@ -296,18 +384,48 @@ class FeedbackStore {
     };
   }
 
+  /**
+   * Get a shallow copy of the current adaptive weights.
+   *
+   * These weights have been adjusted by all feedback processed so far.
+   *
+   * @returns A mapping of feature names to their current weight values
+   */
   getCurrentWeights(): Record<string, number> {
     return { ...this.currentWeights };
   }
 
+  /**
+   * Get the current adaptive learning rate.
+   *
+   * The learning rate is adjusted automatically based on recent accuracy:
+   * ranges from 0.001 (high accuracy, converging) to 0.05 (low accuracy, exploring).
+   *
+   * @returns The current learning rate value
+   */
   getLearningRate(): number {
     return this.learningRate;
   }
 
+  /**
+   * Retrieve a prediction by its unique ID.
+   *
+   * @param id - The prediction ID to look up
+   * @returns The prediction record, or `undefined` if not found
+   */
   getPrediction(id: string): PredictionRecord | undefined {
     return this.predictions.get(id);
   }
 
+  /**
+   * Get recent predictions sorted by timestamp (newest first).
+   *
+   * Optionally filter by symbol and limit the number of results.
+   *
+   * @param symbol - Optional market symbol to filter by (e.g., 'فولاد')
+   * @param limit  - Maximum number of predictions to return (default: 20)
+   * @returns An array of prediction records sorted newest-first
+   */
   getRecentPredictions(symbol?: string, limit: number = 20): PredictionRecord[] {
     let preds = Array.from(this.predictions.values());
     if (symbol) preds = preds.filter(p => p.symbol === symbol);
@@ -316,6 +434,13 @@ class FeedbackStore {
 
   // ─── Persistence ────────────────────────────────────────────────────────
 
+  /**
+   * Persist the store state (predictions, adjustments, learning rate, weights)
+   * to `localStorage` under the key `msl_feedback_store`.
+   *
+   * No-op during SSR (`typeof window === 'undefined'`). Silently catches
+   * storage errors (e.g., quota exceeded or sandboxed environment).
+   */
   private saveToStorage(): void {
     if (typeof window === 'undefined') return; // SSR guard
     try {
@@ -331,6 +456,14 @@ class FeedbackStore {
     }
   }
 
+  /**
+   * Load store state from `localStorage`.
+   *
+   * Restores predictions, weight adjustments, learning rate, and current weights.
+   * No-op during SSR (`typeof window === 'undefined'`). If the stored data is
+   * corrupted or unparseable, the store starts fresh (all fields remain at
+   * their constructor defaults).
+   */
   private loadFromStorage(): void {
     if (typeof window === 'undefined') return; // SSR guard
     try {
@@ -350,6 +483,13 @@ class FeedbackStore {
     }
   }
 
+  /**
+   * Find the ID of the oldest prediction that has not yet received feedback.
+   *
+   * Used during eviction when the prediction count exceeds the 500-record cap.
+   *
+   * @returns The ID of the oldest unfeedbacked prediction, or `null` if all have feedback
+   */
   private findOldestUnfeedbacked(): string | null {
     let oldestId: string | null = null;
     let oldestTime = Infinity;
@@ -362,7 +502,12 @@ class FeedbackStore {
     return oldestId;
   }
 
-  /** Clear all stored data */
+  /**
+   * Clear all stored data from memory and `localStorage`.
+   *
+   * Resets predictions, adjustments, learning rate (back to 0.01), and current
+   * weights. Also removes the `localStorage` entry.
+   */
   clear(): void {
     this.predictions.clear();
     this.adjustments = [];
@@ -378,6 +523,14 @@ class FeedbackStore {
 
 let _instance: FeedbackStore | null = null;
 
+/**
+ * Get the singleton {@link FeedbackStore} instance.
+ *
+ * Creates the instance on first call (which also triggers `loadFromStorage`).
+ * Subsequent calls return the same instance.
+ *
+ * @returns The shared feedback store instance
+ */
 export function getFeedbackStore(): FeedbackStore {
   if (!_instance) {
     _instance = new FeedbackStore();
@@ -389,7 +542,13 @@ export function getFeedbackStore(): FeedbackStore {
 
 /**
  * Record a new prediction in the feedback store.
- * Call this when a new analysis is generated.
+ *
+ * Convenience wrapper around {@link FeedbackStore.addPrediction}.
+ * Call this whenever a new MSL analysis is generated. The prediction ID
+ * and timestamp are generated automatically.
+ *
+ * @param params - Prediction parameters (symbol, scenario, direction, probability, price, weights)
+ * @returns The unique ID assigned to the new prediction
  */
 export function recordPrediction(params: {
   symbol: string;
@@ -411,8 +570,17 @@ export function recordPrediction(params: {
 
 /**
  * Record user feedback for a prediction.
- * Call this when the user confirms or denies a prediction.
- * Returns weight adjustments made.
+ *
+ * Convenience wrapper around {@link FeedbackStore.recordFeedback}.
+ * Call this when the user confirms or denies a prediction. Triggers an
+ * adaptive weight update automatically.
+ *
+ * @param predictionId    - The ID of the prediction to provide feedback for
+ * @param isCorrect       - Whether the prediction was correct
+ * @param actualDirection  - The actual direction observed (1 = bull, -1 = bear, 0 = neutral)
+ * @param actualPrice     - The actual price observed after the prediction period
+ * @param comment         - Optional user comment explaining the feedback
+ * @returns An array of weight adjustments made, or `null` if the prediction was not found
  */
 export function recordFeedback(
   predictionId: string,
@@ -431,7 +599,15 @@ export function recordFeedback(
 
 /**
  * Update weights from feedback — convenience wrapper.
- * Computes the error and adjusts all component weights.
+ *
+ * Equivalent to calling {@link recordFeedback}; records the feedback and
+ * returns the resulting weight adjustments.
+ *
+ * @param predictionId    - The ID of the prediction
+ * @param isCorrect       - Whether the prediction was correct
+ * @param actualDirection  - The actual direction observed
+ * @param actualPrice     - The actual price observed
+ * @returns An array of weight adjustments, or `null` if the prediction was not found
  */
 export function updateWeightsFromFeedback(
   predictionId: string,
@@ -443,14 +619,22 @@ export function updateWeightsFromFeedback(
 }
 
 /**
- * Get current adaptive weights (after all feedback adjustments).
+ * Get the current adaptive weights after all feedback-driven adjustments.
+ *
+ * Convenience wrapper around {@link FeedbackStore.getCurrentWeights}.
+ *
+ * @returns A mapping of feature names to their current adaptive weight values
  */
 export function getAdaptiveWeights(): Record<string, number> {
   return getFeedbackStore().getCurrentWeights();
 }
 
 /**
- * Get feedback statistics for display in the UI.
+ * Get aggregated feedback statistics for display in the UI.
+ *
+ * Convenience wrapper around {@link FeedbackStore.getStats}.
+ *
+ * @returns A snapshot of current feedback statistics including accuracy, breakdowns, and adjustments
  */
 export function getFeedbackStats(): FeedbackStats {
   return getFeedbackStore().getStats();

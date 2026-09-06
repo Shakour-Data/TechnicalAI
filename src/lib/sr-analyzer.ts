@@ -15,46 +15,112 @@ import { approximateVolumeProfile, countTouch, type VolumeProfileResult } from '
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * ML-optimized feature weights used to compute each S/R level's composite score.
+ *
+ * Trained via OLS regression on historical bounce detection (see `trainMLWeights`).
+ * Each weight represents the relative importance of one feature in predicting
+ * whether a price level will act as support/resistance.
+ *
+ * Weights are always non-negative, clamped to a minimum of 0.05 per feature,
+ * and normalized so that `touch + volume + overlap + freshness + distance === 1`.
+ *
+ * @example Default weights (domain-knowledge fallback):
+ * ```
+ * { touch: 0.28, volume: 0.22, overlap: 0.25, freshness: 0.15, distance: 0.10 }
+ * ```
+ */
 export interface MLWeights {
+  /** Weight for `touchCount` — how many times price has touched this level (within 1%). */
   touch: number;
+  /** Weight for `volumeRatio` — average volume at touches vs. overall average volume. */
   volume: number;
+  /** Weight for `overlapCount` — number of other levels within 1% (confluence signal). */
   overlap: number;
+  /** Weight for `freshness` — recency of last touch (0 = oldest, 1 = most recent bar). */
   freshness: number;
+  /** Weight for `distancePercent` — how far the level is from the current price. */
   distance: number;
 }
 
+/**
+ * A single support or resistance level with its ML-computed score and metadata.
+ *
+ * Produced by {@link analyzeSupportResistance} after the full pipeline:
+ * discovery → feature extraction → ML scoring → distance filtering → score capping.
+ *
+ * Levels are classified as **targets** when their score ≥ 7.0.
+ */
 export interface SRLevel {
+  /** Price value of the support/resistance level (psychologically rounded). */
   price: number;
-  score: number;          // 0-10 composite ML score
-  grade: string;          // Very Strong / Strong / Moderate / Weak
-  overlapCount: number;   // number of other levels within 1%
-  isTarget: boolean;      // score ≥ 7
+  /** Composite ML score from 0 to 10 (0.5-step granularity). See {@link calculatePowerScore}. */
+  score: number;
+  /** Human-readable strength grade (Persian): بسیار قوی / قوی / متوسط / ضعیف / بسیار ضعیف. */
+  grade: string;
+  /** Number of other discovered levels within 1% of this level — indicates confluence. */
+  overlapCount: number;
+  /** Whether this level is a price target (score ≥ 7.0). */
+  isTarget: boolean;
+  /** How many bars touched this level (within 1% tolerance). */
   touchCount: number;
+  /** Average volume at touches / overall average volume (capped at 5×). Enhanced by volume profile. */
   volumeRatio: number;
+  /** Days (bars) since the last touch of this level. 999 for synthetic levels. */
   daysSinceLastTouch: number;
+  /** Absolute distance from current price as a percentage: `|price − currentPrice| / currentPrice`. */
   distancePercent: number;
 }
 
+/**
+ * Complete result of support/resistance analysis.
+ *
+ * Returned by {@link analyzeSupportResistance}. Contains up to 6 supports and 6 resistances,
+ * the trained ML weights, and price targets (levels with score ≥ 7.0).
+ */
 export interface SRAnalysisResult {
-  supports: SRLevel[];          // 6 items, sorted nearest→farthest
-  resistances: SRLevel[];       // 6 items, sorted nearest→farthest
+  /** Support levels below current price (up to 6), sorted nearest → farthest. */
+  supports: SRLevel[];
+  /** Resistance levels above current price (up to 6), sorted nearest → farthest. */
+  resistances: SRLevel[];
+  /** The ML weights used for scoring (trained or default fallback). */
   mlWeights: MLWeights;
+  /** Resistance levels with score ≥ 7.0 — potential upside price targets. */
   upwardTargets: SRLevel[];
+  /** Support levels with score ≥ 7.0 — potential downside price targets. */
   downwardTargets: SRLevel[];
 }
 
-// Internal level with raw features before ML scoring
+/**
+ * Internal intermediate level discovered by the multi-source scanner, before ML scoring.
+ *
+ * `sourceCount` tracks convergence: how many of the 7 independent sources
+ * (Pivot, Fibonacci, Swing, MA, BB, Recent H/L, Psychological) identified this level.
+ */
 interface RawLevel {
+  /** Psychologically-rounded price of the discovered level. */
   price: number;
-  sourceCount: number;   // how many sources identified this level (convergence)
+  /** Number of independent sources that identified this level (convergence score). */
+  sourceCount: number;
 }
 
+/**
+ * Five ML features extracted for each candidate level, used as input to the scoring model.
+ *
+ * These features are normalized to 0-1 during weight training and mapped to 0-10
+ * sub-scores during {@link calculatePowerScore}.
+ */
 interface LevelFeatures {
+  /** Number of bars where price touched within 1% of this level. */
   touchCount: number;
+  /** Average volume at touches / overall average volume (capped at 5×). */
   volumeRatio: number;
+  /** Number of other discovered levels within 1% of this level. */
   overlapCount: number;
-  freshness: number;      // 0-1, 1 = most recent
-  distancePercent: number; // |price - level| / price
+  /** Recency of last touch: 0 = oldest bar, 1 = most recent bar. */
+  freshness: number;
+  /** Absolute distance from current price as a percentage: `|level − price| / price`. */
+  distancePercent: number;
 }
 
 // ─── Default Weights (domain knowledge fallback) ─────────────────────────────
@@ -71,6 +137,36 @@ const DEFAULT_WEIGHTS: MLWeights = {
 // 1. Psychological Number Rounding
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Round a price to the nearest "psychological" number — the round numbers that
+ * traders and algorithms naturally watch as support/resistance.
+ *
+ * The rounding step scales with price magnitude:
+ * | Price Range        | Rounding Step |
+ * |--------------------|---------------|
+ * | ≥ 1,000,000        | 50,000        |
+ * | ≥ 500,000          | 10,000        |
+ * | ≥ 100,000          | 5,000         |
+ * | ≥ 50,000           | 2,000         |
+ * | ≥ 10,000           | 1,000         |
+ * | ≥ 5,000            | 500           |
+ * | ≥ 1,000            | 100           |
+ * | ≥ 500              | 50            |
+ * | ≥ 100              | 10            |
+ * | ≥ 10               | 5             |
+ * | ≥ 1                | 1             |
+ * | < 1                | 0.01          |
+ *
+ * @param price - The raw price to round.
+ * @returns The price rounded to the nearest psychological step.
+ *
+ * @example
+ * ```ts
+ * roundToPsychological(15372)   // → 15400  (step=100)
+ * roundToPsychological(482.5)   // → 500    (step=50)
+ * roundToPsychological(0.0342)  // → 0.03   (step=0.01)
+ * ```
+ */
 export function roundToPsychological(price: number): number {
   const abs = Math.abs(price);
   let step: number;
@@ -93,6 +189,16 @@ export function roundToPsychological(price: number): number {
 // 2. Level Discovery (multi-source)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Identify swing highs and swing lows in the OHLCV data.
+ *
+ * A bar is a swing high if its `high` is strictly greater than all neighbouring bars'
+ * highs within `lookback` bars on each side. Similarly for swing lows.
+ *
+ * @param data     - Historical OHLCV bars.
+ * @param lookback - Number of bars to check on each side of a candidate.
+ * @returns Arrays of swing-high and swing-low prices.
+ */
 function findSwingLevels(data: OHLCV[], lookback: number): { highs: number[]; lows: number[] } {
   const highs: number[] = [];
   const lows: number[] = [];
@@ -110,12 +216,29 @@ function findSwingLevels(data: OHLCV[], lookback: number): { highs: number[]; lo
   return { highs, lows };
 }
 
+/**
+ * Simple Moving Average of the last `period` values.
+ *
+ * @param values - Array of numeric values (typically closing prices).
+ * @param period - Window size; only the last `period` values are used.
+ * @returns The SMA value, or 0 if there are fewer than `period` values.
+ */
 function sma(values: number[], period: number): number {
   if (values.length < period) return 0;
   const slice = values.slice(-period);
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
+/**
+ * Exponential Moving Average over the full array.
+ *
+ * Uses the standard EMA formula: `EMA_i = value_i × k + EMA_{i-1} × (1 − k)`
+ * where `k = 2 / (period + 1)`.
+ *
+ * @param values - Array of numeric values (typically closing prices).
+ * @param period - EMA period (smoothing factor).
+ * @returns The final EMA value, or 0 if there are fewer than `period` values.
+ */
 function emaCalc(values: number[], period: number): number {
   if (values.length < period) return 0;
   const k = 2 / (period + 1);
@@ -126,6 +249,13 @@ function emaCalc(values: number[], period: number): number {
   return result;
 }
 
+/**
+ * Calculate Bollinger Bands (20-period, 2σ) from closing prices.
+ *
+ * @param closes - Array of closing prices.
+ * @returns Object with `upper`, `middle` (SMA-20), and `lower` band values.
+ *          Returns `{ upper: 0, middle: 0, lower: 0 }` if fewer than 20 closes.
+ */
 function calcBB(closes: number[]): { upper: number; middle: number; lower: number } {
   const period = 20;
   if (closes.length < period) return { upper: 0, middle: 0, lower: 0 };
@@ -135,6 +265,25 @@ function calcBB(closes: number[]): { upper: number; middle: number; lower: numbe
   return { upper: mean + 2 * std, middle: mean, lower: mean - 2 * std };
 }
 
+/**
+ * Discover all candidate support/resistance levels from 7 independent sources.
+ *
+ * **Sources:**
+ * 1. **Pivot Points** — Classic pivot math (PP, R1-R3, S1-S3) from the prior bar.
+ * 2. **Fibonacci Retracement** — 23.6%, 38.2%, 50%, 61.8%, 78.6% of the recent 66-bar range.
+ * 3. **Swing Highs/Lows** — Local extrema at lookback periods 3, 5, 7, and 10.
+ * 4. **Moving Averages** — SMA(5,10,21,50,100,200) and EMA(12,26), filtered to >1% from price.
+ * 5. **Bollinger Bands** — Upper and lower bands (20-period, 2σ).
+ * 6. **Recent High/Low Zones** — Rolling high and low over 5, 22, and 66 bars.
+ * 7. **Psychological Round Numbers** — Round numbers at 5% intervals from 80%–125% of price.
+ *
+ * All discovered prices are rounded to psychological numbers (see {@link roundToPsychological}).
+ * Nearby levels (within 1%) are merged and their `sourceCount` is incremented (confluence tracking).
+ *
+ * @param data         - Historical OHLCV bars (at least 10 required for meaningful results).
+ * @param currentPrice - The current market price, used for MA/psychological filtering.
+ * @returns Array of {@link RawLevel} objects with psychologically-rounded prices and source counts.
+ */
 function discoverAllLevels(data: OHLCV[], currentPrice: number): RawLevel[] {
   const rawMap = new Map<number, number>(); // level → sourceCount
   const closes = data.map(d => d.close);
@@ -220,6 +369,24 @@ function discoverAllLevels(data: OHLCV[], currentPrice: number): RawLevel[] {
 // 3. Feature Extraction for Each Level
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Extract 5 ML features for a single candidate level.
+ *
+ * **Features:**
+ * | Feature          | Description                                                      | Range    |
+ * |------------------|------------------------------------------------------------------|----------|
+ * | `touchCount`     | Bars where price came within 1% of the level                     | 0–N      |
+ * | `volumeRatio`    | Avg volume at touches ÷ overall avg volume (capped at 5×)        | 0–5      |
+ * | `overlapCount`   | Other levels within 1% of this level (confluence)                | 0–N      |
+ * | `freshness`      | Recency of last touch: (lastTouchIndex+1) / totalBars             | 0–1      |
+ * | `distancePercent`| `|level − currentPrice| / currentPrice`                            | 0–1+     |
+ *
+ * @param level        - The candidate level price.
+ * @param allLevels    - All discovered levels (for overlap computation).
+ * @param data         - Historical OHLCV bars.
+ * @param currentPrice - Current market price.
+ * @returns The 5 extracted features as a {@link LevelFeatures} object.
+ */
 function extractFeatures(
   level: number,
   allLevels: RawLevel[],
@@ -427,6 +594,22 @@ function solveLinearSystem(A: number[][], b: number[]): number[] | null {
 // 5. Score Calculation
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Compute the composite 0–10 power score for a level using ML weights.
+ *
+ * Each feature is first mapped to a 0–10 sub-score:
+ * - `touchScore`    = min(10, 1 + touchCount × 0.8)
+ * - `volumeScore`   = min(10, max(1, volumeRatio × 3.3))
+ * - `overlapScore`  = min(10, overlapCount × 2)
+ * - `freshnessScore`= min(10, 1 + freshness × 9)
+ * - `distanceScore` = min(10, max(1, 10 − distancePercent × 30))  — closer = higher
+ *
+ * The raw score is the weighted sum × 10, then clamped to [0.5, 10] with 0.1 rounding.
+ *
+ * @param feats   - The 5 extracted features for this level.
+ * @param weights - The ML-optimized (or default) feature weights.
+ * @returns Composite score in [0.5, 10] with one decimal place.
+ */
 function calculatePowerScore(
   feats: LevelFeatures,
   weights: MLWeights,
@@ -450,6 +633,20 @@ function calculatePowerScore(
   return Math.min(10, Math.max(0.5, Math.round(raw * 10) / 10));
 }
 
+/**
+ * Map a numeric score to a Persian-language strength grade.
+ *
+ * | Score Range | Grade (Persian) | English Equivalent |
+ * |-------------|-----------------|-------------------|
+ * | ≥ 8.5       | بسیار قوی       | Very Strong       |
+ * | ≥ 7.0       | قوی             | Strong            |
+ * | ≥ 5.0       | متوسط           | Moderate          |
+ * | ≥ 3.0       | ضعیف            | Weak              |
+ * | < 3.0       | بسیار ضعیف      | Very Weak         |
+ *
+ * @param score - The 0–10 composite score.
+ * @returns Persian grade string.
+ */
 function getGrade(score: number): string {
   if (score >= 8.5) return 'بسیار قوی';
   if (score >= 7.0) return 'قوی';
@@ -463,10 +660,25 @@ function getGrade(score: number): string {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Rules:
- * - Nearest level: can be any distance up to 10% from price
- * - Consecutive levels: must be 5-10% apart
- * - If not enough levels, generate synthetic ones at 7.5% intervals
+ * Filter and space levels according to the 5–10% distance-gap rules.
+ *
+ * **Rules:**
+ * - **Nearest level:** can be any distance up to 10% from the current price.
+ * - **Consecutive levels:** must be 5–10% apart from the previous selected level.
+ *   - If a candidate is < 5% away, it is merged into the previous level
+ *     (keeping the higher-score one and boosting its score by 0.5).
+ *   - If a candidate is > 10% away, it is skipped entirely.
+ * - **Synthetic extension:** If fewer than `targetCount` levels are found, synthetic
+ *   levels are generated at 7.5% intervals (midpoint of the 5–10% range)
+ *   with score 2.0 and grade "ضعیف".
+ *
+ * Supports are sorted descending (nearest first); resistances ascending (nearest first).
+ *
+ * @param levels       - Pre-scored S/R levels (all on one side of the current price).
+ * @param currentPrice - The current market price.
+ * @param isSupport    - `true` for supports (below price), `false` for resistances (above).
+ * @param targetCount  - Desired number of output levels (typically 6).
+ * @returns Filtered array of at most `targetCount` levels, properly spaced.
  */
 function filterByDistance(
   levels: SRLevel[],
@@ -561,6 +773,17 @@ function filterByDistance(
 // 7. Price Target Determination (score ≥ 7)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Determine price targets from supports and resistances.
+ *
+ * A level becomes a target when its score ≥ 7.0 ("Strong" or better).
+ * - **Upward targets:** resistance levels with score ≥ 7.0 (price targets on the upside).
+ * - **Downward targets:** support levels with score ≥ 7.0 (price targets on the downside).
+ *
+ * @param supports     - Final support levels.
+ * @param resistances  - Final resistance levels.
+ * @returns Upward and downward target arrays with `isTarget` set to `true`.
+ */
 function determineTargets(
   supports: SRLevel[],
   resistances: SRLevel[],
@@ -581,8 +804,14 @@ function determineTargets(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * At most 2 levels in a group can have score 10 (rounded).
- * The 3rd+ highest-scored levels that would round to 10 are capped at 9.4.
+ * Cap the number of "perfect" scores (≥ 9.5, which rounds to 10) to at most 2 per side.
+ *
+ * This prevents the output from having many levels with identical maximum scores,
+ * which would make it impossible for users to prioritize. The 3rd+ levels that would
+ * round to 10 are capped at 9.4 and their grade is recalculated.
+ *
+ * @param levels - Array of scored S/R levels (mutated in place for efficiency).
+ * @returns The same array with excess perfect scores capped.
  */
 function capMaxPerfectScores(levels: SRLevel[]): SRLevel[] {
   const MAX_PERFECT = 2;
@@ -621,6 +850,58 @@ function capMaxPerfectScores(levels: SRLevel[]): SRLevel[] {
 // 8. MAIN ANALYSIS FUNCTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Perform ML-based support/resistance analysis on historical OHLCV data.
+ *
+ * This is the main entry point for the S/R analyzer. It combines 7 independent
+ * level-discovery sources, ML-optimized scoring, distance-gap filtering, and score
+ * capping to produce up to 6 supports and 6 resistances with price targets.
+ *
+ * ## Algorithm Flow
+ *
+ * 1. **Discover levels** from 7 sources
+ *    (Pivot Points, Fibonacci, Swing H/L, Moving Averages, Bollinger Bands,
+ *    Recent H/L Zones, Psychological Round Numbers).
+ *    Nearby levels (< 0.5% apart) are merged with confluence tracking.
+ *
+ * 2. **Compute volume profile** over the last 60 bars (80 bins) for enhanced
+ *    volume scoring — no Level-2 data required.
+ *
+ * 3. **Train ML weights** via OLS regression on historical bounce detection.
+ *    Falls back to domain-knowledge defaults if < 20 samples are available.
+ *
+ * 4. **Extract 5 features** per level and compute scores:
+ *    - `touchCount` — bars touching within 1%
+ *    - `volumeRatio` — enhanced by volume-profile concentration & value-area boost
+ *    - `overlapCount` — confluence with other levels within 1%
+ *    - `freshness` — recency of last touch
+ *    - `distancePercent` — distance from current price
+ *
+ * 5. **Distance filter** — enforce 5–10% gap rules (relaxed for the nearest level):
+ *    - Nearest level: up to 10% from price
+ *    - Subsequent levels: 5–10% from previous level (too-close → merge, too-far → skip)
+ *    - Synthetic extension at 7.5% intervals if fewer than 6 levels found
+ *
+ * 6. **Score cap** — at most 2 levels per side may have score ≥ 9.5 (rounds to 10);
+ *    excess are capped at 9.4.
+ *
+ * 7. **Target selection** — levels with score ≥ 7.0 are marked as price targets
+ *    (upward = resistances, downward = supports).
+ *
+ * @param data         - Historical OHLCV bars. Must contain at least 10 bars.
+ * @param currentPrice - The current market price. Must be > 0.
+ * @returns {@link SRAnalysisResult} with up to 6 supports, 6 resistances, ML weights, and targets.
+ *          Returns empty arrays and default weights if input is invalid.
+ *
+ * @example
+ * ```ts
+ * const result = analyzeSupportResistance(ohlcvData, 15372.50);
+ * console.log(result.supports);      // up to 6 support levels, nearest→farthest
+ * console.log(result.resistances);   // up to 6 resistance levels, nearest→farthest
+ * console.log(result.upwardTargets);  // resistances with score ≥ 7
+ * console.log(result.mlWeights);      // trained or default weights
+ * ```
+ */
 export function analyzeSupportResistance(
   data: OHLCV[],
   currentPrice: number,

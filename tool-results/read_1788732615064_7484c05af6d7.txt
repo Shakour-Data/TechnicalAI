@@ -1,0 +1,710 @@
+     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→// ML Logistic Regression Engine — Pure TypeScript, No External Dependencies
+     3→// Implements: StandardScaler, LogisticRegression (L2), TimeSeriesSplit
+     4→// Used by: ml-engine.ts (AdaptiveWeightModel)
+     5→// ═══════════════════════════════════════════════════════════════════════════════
+     6→
+     7→// ─── StandardScaler ──────────────────────────────────────────────────────────
+     8→
+     9→/**
+    10→ * Standard score normalization (z-score) transformer.
+    11→ *
+    12→ * Computes per-feature mean and standard deviation from a training matrix,
+    13→ * then scales each value to (x - μ) / σ. Features with near-zero variance
+    14→ * (σ < 1e-8) are treated as constant and mapped to 0 after transformation.
+    15→ *
+    16→ * Follows the same API convention as scikit-learn's StandardScaler:
+    17→ *   fit → transform   or   fitTransform (convenience).
+    18→ */
+    19→export class StandardScaler {
+    20→  /** Per-feature arithmetic means computed during fit */
+    21→  mean: number[] = [];
+    22→  /** Per-feature standard deviations computed during fit */
+    23→  std: number[] = [];
+    24→  /** Number of features (columns) detected during fit */
+    25→  nFeatures = 0;
+    26→  private fitted = false;
+    27→
+    28→  /**
+    29→   * Compute the mean and standard deviation for each feature column.
+    30→   *
+    31→   * Algorithm:
+    32→   *   1. Sum each column and divide by n to obtain the mean.
+    33→   *   2. Compute population variance (÷ n, not n−1) and take the square root.
+    34→   *   3. If any σ < 1e-8, clamp it to 1 to avoid division-by-zero in transform.
+    35→   *
+    36→   * @param X - Training data matrix (n_samples × n_features).
+    37→   *             Each inner array must have the same length.
+    38→   * @returns void — results are stored internally in `mean`, `std`, and `nFeatures`.
+    39→   */
+    40→  fit(X: number[][]): void {
+    41→    const n = X.length;
+    42→    this.nFeatures = X[0]?.length ?? 0;
+    43→    if (n === 0 || this.nFeatures === 0) return;
+    44→
+    45→    this.mean = new Array(this.nFeatures).fill(0);
+    46→    this.std = new Array(this.nFeatures).fill(0);
+    47→
+    48→    for (let i = 0; i < n; i++) {
+    49→      for (let j = 0; j < this.nFeatures; j++) {
+    50→        this.mean[j] += X[i][j];
+    51→      }
+    52→    }
+    53→    for (let j = 0; j < this.nFeatures; j++) {
+    54→      this.mean[j] /= n;
+    55→    }
+    56→
+    57→    for (let i = 0; i < n; i++) {
+    58→      for (let j = 0; j < this.nFeatures; j++) {
+    59→        const diff = X[i][j] - this.mean[j];
+    60→        this.std[j] += diff * diff;
+    61→      }
+    62→    }
+    63→    for (let j = 0; j < this.nFeatures; j++) {
+    64→      this.std[j] = Math.sqrt(this.std[j] / n);
+    65→      if (this.std[j] < 1e-8) this.std[j] = 1;
+    66→    }
+    67→
+    68→    this.fitted = true;
+    69→  }
+    70→
+    71→  /**
+    72→   * Apply z-score normalization using the statistics from the most recent fit.
+    73→   *
+    74→   * Each element is transformed as:  x' = (x − μ) / σ.
+    75→   * If the scaler has not been fitted, the input is returned unchanged.
+    76→   * Features with σ ≤ 1e-10 are mapped to 0.
+    77→   *
+    78→   * @param X - Data matrix to transform (n_samples × n_features).
+    79→   *             Must have the same number of columns as the data used in fit.
+    80→   * @returns A new matrix with the same shape as X, containing standardized values.
+    81→   */
+    82→  transform(X: number[][]): number[][] {
+    83→    if (!this.fitted) return X;
+    84→    return X.map(row =>
+    85→      row.map((val, j) => (this.std[j] > 1e-10 ? (val - this.mean[j]) / this.std[j] : 0))
+    86→    );
+    87→  }
+    88→
+    89→  /**
+    90→   * Convenience method: fit the scaler to X, then transform X in one call.
+    91→   *
+    92→   * Equivalent to `scaler.fit(X); return scaler.transform(X);` but avoids
+    93→   * the overhead of an extra iteration over the data.
+    94→   *
+    95→   * @param X - Training data matrix (n_samples × n_features).
+    96→   * @returns A new matrix with standardized values, same shape as X.
+    97→   */
+    98→  fitTransform(X: number[][]): number[][] {
+    99→    this.fit(X);
+   100→    return this.transform(X);
+   101→  }
+   102→}
+   103→
+   104→// ─── Sigmoid (Numerically Stable) ─────────────────────────────────────────────
+   105→
+   106→/**
+   107→ * Numerically stable sigmoid activation function.
+   108→ *
+   109→ * Uses two separate branches to avoid overflow in Math.exp:
+   110→ *   - For z ≥ 0: σ(z) = 1 / (1 + e^(−z))   — e^(−z) is small, no overflow.
+   111→ *   - For z < 0: σ(z) = e^z / (1 + e^z)     — e^z is small, no overflow.
+   112→ *
+   113→ * @param z - Input logit (raw linear combination of weights × features + bias).
+   114→ * @returns A value in the open interval (0, 1) representing P(class = 1).
+   115→ */
+   116→function sigmoid(z: number): number {
+   117→  if (z >= 0) {
+   118→    return 1 / (1 + Math.exp(-z));
+   119→  }
+   120→  const ez = Math.exp(z);
+   121→  return ez / (1 + ez);
+   122→}
+   123→
+   124→/**
+   125→ * Binary logistic regression classifier with L2 regularization, trained via
+   126→ * batch gradient descent.
+   127→ *
+   128→ * The model learns a weight vector w and bias b such that:
+   129→ *   P(y = 1 | x) = σ(w · x + b)
+   130→ *
+   131→ * Key features:
+   132→ *   - **L2 regularization** with strength λ = 1 / C (applied to weights only,
+   133→ *     not the bias) to prevent overfitting.
+   134→ *   - **class_weight = 'balanced'** support — automatically up-weights the
+   135→ *     minority class so that the gradient contributions of both classes are equal.
+   136→ *   - **Early stopping** — halts when the L2 norm of the gradient vector falls
+   137→ *     below 1e-7.
+   138→ *   - **Random weight initialization** — weights are drawn from U(−0.005, 0.005)
+   139→ *     for better convergence than zero-initialization.
+   140→ */
+   141→export class LogisticRegressionModel {
+   142→  /** Learned feature weights (length = nFeatures after fit) */
+   143→  weights: number[] = [];
+   144→  /** Learned bias / intercept term */
+   145→  bias = 0;
+   146→  /** Number of features detected during fit */
+   147→  nFeatures = 0;
+   148→  /** Inverse regularization strength — smaller C ⇒ stronger L2 penalty */
+   149→  private readonly C: number;
+   150→  /** Maximum number of gradient descent iterations */
+   151→  private readonly maxIter: number;
+   152→  /** Learning rate (step size) for gradient descent */
+   153→  private readonly lr: number;
+   154→
+   155→  /**
+   156→   * Create a new logistic regression model instance.
+   157→   *
+   158→   * @param C      - Inverse L2 regularization strength. Default 0.1 yields
+   159→   *                  moderate regularization (λ = 10). Increase to reduce
+   160→   *                  regularization; decrease to increase it.
+   161→   * @param maxIter - Maximum number of gradient descent iterations.
+   162→   * @param lr      - Learning rate for gradient descent updates.
+   163→   */
+   164→  constructor(C = 0.1, maxIter = 1000, lr = 0.01) {
+   165→    this.C = C;
+   166→    this.maxIter = maxIter;
+   167→    this.lr = lr;
+   168→  }
+   169→
+   170→  /**
+   171→   * Train the logistic regression model on the given labeled data.
+   172→   *
+   173→   * Algorithm (batch gradient descent with L2 regularization):
+   174→   *   1. Initialize weights to small random values, bias to 0.
+   175→   *   2. If classWeight is 'balanced', compute per-class sample weights:
+   176→   *        w_pos = n / (2 × n_pos),  w_neg = n / (2 × n_neg)
+   177→   *      so that each class contributes equally to the gradient.
+   178→   *   3. For each iteration up to maxIter:
+   179→   *      a. Forward pass: compute σ(w · x_i + b) for every sample.
+   180→   *      b. Compute weighted gradients: dw_j = (1/n) Σ (σ_i − y_i) × x_ij × sw_i + λ × w_j / n
+   181→   *         db    = (1/n) Σ (σ_i − y_i) × sw_i
+   182→   *         where λ = 1/C and sw_i is the class weight for sample i.
+   183→   *      c. Update: w ← w − lr × dw,  b ← b − lr × db.
+   184→   *      d. Early stop if ‖[dw, db]‖₂ < 1e-7.
+   185→   *
+   186→   * @param X           - Feature matrix (n_samples × n_features). Must be non-empty.
+   187→   * @param y           - Binary label vector (1 = positive/bullish, 0 = negative/bearish).
+   188→   *                       Length must match X.length.
+   189→   * @param classWeight - 'balanced' to auto-balance class contributions, or null for
+   190→   *                       uniform (equal) weighting. Default is 'balanced'.
+   191→   * @returns void — learned parameters are stored in `weights` and `bias`.
+   192→   */
+   193→  fit(X: number[][], y: number[], classWeight: 'balanced' | null = 'balanced'): void {
+   194→    const n = X.length;
+   195→    this.nFeatures = X[0]?.length ?? 0;
+   196→    if (n === 0 || this.nFeatures === 0) return;
+   197→
+   198→    // Initialize weights to small random values for better convergence
+   199→    this.weights = Array.from({ length: this.nFeatures }, () => (Math.random() - 0.5) * 0.01);
+   200→    this.bias = 0;
+   201→
+   202→    // Class weights for balanced classes
+   203→    let wPos = 1, wNeg = 1;
+   204→    if (classWeight === 'balanced') {
+   205→      const nPos = y.reduce((s, v) => s + v, 0);
+   206→      const nNeg = n - nPos;
+   207→      wPos = n / (2 * Math.max(nPos, 1));
+   208→      wNeg = n / (2 * Math.max(nNeg, 1));
+   209→    }
+   210→
+   211→    const lambda = 1 / this.C; // L2 regularization strength
+   212→    const eps = 1e-12; // numerical stability
+   213→
+   214→    for (let iter = 0; iter < this.maxIter; iter++) {
+   215→      // Forward pass: compute predictions
+   216→      const predictions: number[] = [];
+   217→      for (let i = 0; i < n; i++) {
+   218→        let z = this.bias;
+   219→        for (let j = 0; j < this.nFeatures; j++) {
+   220→          z += X[i][j] * this.weights[j];
+   221→        }
+   222→        predictions.push(sigmoid(z));
+   223→      }
+   224→
+   225→      // Compute gradients
+   226→      const dw = new Array(this.nFeatures).fill(0);
+   227→      let db = 0;
+   228→
+   229→      for (let i = 0; i < n; i++) {
+   230→        const error = predictions[i] - y[i];
+   231→        const sw = y[i] === 1 ? wPos : wNeg;
+   232→
+   233→        for (let j = 0; j < this.nFeatures; j++) {
+   234→          dw[j] += error * X[i][j] * sw;
+   235→        }
+   236→        db += error * sw;
+   237→      }
+   238→
+   239→      // Add L2 regularization (not to bias)
+   240→      for (let j = 0; j < this.nFeatures; j++) {
+   241→        dw[j] = dw[j] / n + lambda * this.weights[j] / n;
+   242→      }
+   243→      db /= n;
+   244→
+   245→      // Gradient descent update
+   246→      for (let j = 0; j < this.nFeatures; j++) {
+   247→        this.weights[j] -= this.lr * dw[j];
+   248→      }
+   249→      this.bias -= this.lr * db;
+   250→
+   251→      // Early stopping if gradients are tiny
+   252→      let gradNorm = 0;
+   253→      for (let j = 0; j < this.nFeatures; j++) gradNorm += dw[j] * dw[j];
+   254→      gradNorm = Math.sqrt(gradNorm + db * db);
+   255→      if (gradNorm < 1e-7) break;
+   256→    }
+   257→  }
+   258→
+   259→  /**
+   260→   * Predict class probabilities for each sample in the matrix.
+   261→   *
+   262→   * For each row x, computes p = σ(w · x + b) and returns [1−p, p],
+   263→   * where index 0 is P(bearish) and index 1 is P(bullish).
+   264→   *
+   265→   * @param X - Feature matrix (n_samples × n_features).
+   266→   * @returns An n_samples × 2 matrix where each row is [P(class 0), P(class 1)].
+   267→   */
+   268→  predict_proba(X: number[][]): number[][] {
+   269→    return X.map(row => {
+   270→      let z = this.bias;
+   271→      for (let j = 0; j < this.nFeatures; j++) z += row[j] * this.weights[j];
+   272→      const p = sigmoid(z);
+   273→      return [1 - p, p]; // [P(class 0=bearish), P(class 1=bullish)]
+   274→    });
+   275→  }
+   276→
+   277→  /**
+   278→   * Predict class probabilities for a single feature vector.
+   279→   *
+   280→   * More efficient than predict_proba when only one sample is needed,
+   281→   * as it avoids creating intermediate arrays.
+   282→   *
+   283→   * @param x - Single feature vector of length n_features.
+   284→   * @returns A tuple [P(class 0 = bearish), P(class 1 = bullish)].
+   285→   */
+   286→  predict_proba_single(x: number[]): [number, number] {
+   287→    let z = this.bias;
+   288→    for (let j = 0; j < this.nFeatures; j++) z += x[j] * this.weights[j];
+   289→    const p = sigmoid(z);
+   290→    return [1 - p, p];
+   291→  }
+   292→
+   293→  /**
+   294→   * Predict binary class labels for each sample.
+   295→   *
+   296→   * Assigns class 1 (bullish) when P(class 1) > 0.5, otherwise class 0 (bearish).
+   297→   *
+   298→   * @param X - Feature matrix (n_samples × n_features).
+   299→   * @returns An array of predicted labels (0 or 1), length n_samples.
+   300→   */
+   301→  predict(X: number[][]): number[] {
+   302→    return this.predict_proba(X).map(probs => probs[1] > 0.5 ? 1 : 0);
+   303→  }
+   304→
+   305→  /**
+   306→   * Compute classification accuracy on the given test data.
+   307→   *
+   308→   * Accuracy = (number of correct predictions) / (total samples).
+   309→   * Returns 0.5 when y is empty (a neutral baseline).
+   310→   *
+   311→   * @param X - Feature matrix (n_samples × n_features).
+   312→   * @param y - True binary labels, same length as X.
+   313→   * @returns Accuracy in [0, 1]. Returns 0.5 for empty input.
+   314→   */
+   315→  score(X: number[][], y: number[]): number {
+   316→    const preds = this.predict(X);
+   317→    let correct = 0;
+   318→    for (let i = 0; i < y.length; i++) {
+   319→      if (preds[i] === y[i]) correct++;
+   320→    }
+   321→    return y.length > 0 ? correct / y.length : 0.5;
+   322→  }
+   323→
+   324→  /**
+   325→   * Get absolute coefficient magnitudes normalized so they sum to 1.
+   326→   *
+   327→   * Useful for feature importance ranking: each value represents the
+   328→   * relative contribution of that feature to the decision boundary,
+   329→   * regardless of sign. If all weights are zero, returns uniform 1/n.
+   330→   *
+   331→   * @returns An array of non-negative values summing to 1, one per feature.
+   332→   */
+   333→  getNormalizedWeights(): number[] {
+   334→    const absW = this.weights.map(Math.abs);
+   335→    const total = absW.reduce((s, v) => s + v, 0);
+   336→    return total > 0 ? absW.map(w => w / total) : new Array(this.nFeatures).fill(1 / this.nFeatures);
+   337→  }
+   338→
+   339→  /**
+   340→   * Get a shallow copy of the raw learned weight coefficients.
+   341→   *
+   342→   * Unlike getNormalizedWeights, this preserves sign information:
+   343→   *   - Positive coefficient → feature pushes prediction toward class 1 (bullish).
+   344→   *   - Negative coefficient → feature pushes prediction toward class 0 (bearish).
+   345→   *
+   346→   * @returns A new array containing the weight values (may be negative).
+   347→   */
+   348→  getCoefficients(): number[] {
+   349→    return [...this.weights];
+   350→  }
+   351→}
+   352→
+   353→// ─── TimeSeriesSplit ─────────────────────────────────────────────────────────
+   354→
+   355→/**
+   356→ * A single fold from time-series cross-validation.
+   357→ *
+   358→ * `train` and `val` are arrays of sample indices into the original dataset.
+   359→ * All train indices are strictly less than all val indices, preserving
+   360→ * temporal ordering (no future data leaks into training).
+   361→ */
+   362→export interface TSSplitFold {
+   363→  /** Sample indices for the training partition (always temporally before val) */
+   364→  train: number[];
+   365→  /** Sample indices for the validation partition (always temporally after train) */
+   366→  val: number[];
+   367→}
+   368→
+   369→/**
+   370→ * Time-series cross-validation splitter that preserves temporal order.
+   371→ *
+   372→ * Unlike standard k-fold CV, this splitter guarantees that all training
+   373→ * indices precede all validation indices in every fold, preventing future
+   374→ * data from leaking into the training set — a critical requirement for
+   375→ * sequential / financial data.
+   376→ *
+   377→ * Algorithm:
+   378→ *   1. Divide the n samples into (nSplits + 1) equal-sized blocks.
+   379→ *   2. For fold i (0-indexed):
+   380→ *        - train = samples [0, …, foldSize × (i+1) − 1]
+   381→ *        - val   = samples [foldSize × (i+1), …, foldSize × (i+2) − 1]
+   382→ *   3. The training set grows with each fold, mimicking real-world deployment
+   383→ *      where more history becomes available over time.
+   384→ *   4. Returns an empty array if n < nSplits + 1 (not enough data to split).
+   385→ *
+   386→ * @param n       - Total number of samples in the dataset.
+   387→ * @param nSplits - Number of cross-validation folds. Default is 3.
+   388→ * @returns An array of TSSplitFold objects, one per fold. Each fold contains
+   389→ *          disjoint train and val index arrays with train < val.
+   390→ */
+   391→export function timeSeriesSplit(n: number, nSplits = 3): TSSplitFold[] {
+   392→  const folds: TSSplitFold[] = [];
+   393→  if (n < nSplits + 1) return folds;
+   394→
+   395→  const foldSize = Math.floor(n / (nSplits + 1));
+   396→
+   397→  for (let i = 0; i < nSplits; i++) {
+   398→    const trainEnd = foldSize * (i + 1);
+   399→    const valEnd = Math.min(foldSize * (i + 2), n);
+   400→
+   401→    if (valEnd <= trainEnd) continue;
+   402→
+   403→    const train: number[] = [];
+   404→    for (let j = 0; j < trainEnd; j++) train.push(j);
+   405→
+   406→    const val: number[] = [];
+   407→    for (let j = trainEnd; j < valEnd; j++) val.push(j);
+   408→
+   409→    if (val.length > 0) folds.push({ train, val });
+   410→  }
+   411→
+   412→  return folds;
+   413→}
+   414→
+   415→// ─── Adaptive Weight Model ───────────────────────────────────────────────────
+   416→
+   417→/**
+   418→ * Ordered list of the 16 VDSS (Volatility-Driven Scoring System) feature names.
+   419→ *
+   420→ * The index of each name corresponds to its column position in the feature
+   421→ * matrix X used by LogisticRegressionModel and AdaptiveWeightModel.
+   422→ * Grouped by category:
+   423→ *   - f_ prefix → oscillator / momentum features (RSI, MFI, CCI, MACD, Stoch, etc.)
+   424→ *   - s_ prefix → structural / regime features (ADX, Bollinger, MAs, ATR, Trend, S/R)
+   425→ */
+   426→export const VDSS_FEATURE_NAMES = [
+   427→  'f_rsi', 'f_mfi', 'f_cci', 's_adx',
+   428→  'f_macd', 'f_stoch', 's_bb', 's_ma21', 's_ma100', 's_ema',
+   429→  's_atr', 's_trend', 's_sr',
+   430→  'f_stochCross', 'f_macdCross', 'f_div',
+   431→] as const;
+   432→
+   433→/** Union type of all valid VDSS feature name strings */
+   434→export type VDSSFeatureName = typeof VDSS_FEATURE_NAMES[number];
+   435→
+   436→/**
+   437→ * Complete result object returned by AdaptiveWeightModel.getResult().
+   438→ *
+   439→ * Contains the model's learned parameters, validation metrics, the most
+   440→ * recent prediction probability, and derived adaptive parameters that
+   441→ * downstream layers (scenario / edge calculators) consume.
+   442→ */
+   443→export interface AdaptiveModelResult {
+   444→  /** Normalized feature importance weights (sum = 1), one per VDSS feature */
+   445→  weights: number[];
+   446→  /** Raw logistic regression coefficients (may be negative, one per feature) */
+   447→  coefficients: number[];
+   448→  /** Average accuracy across all TimeSeriesSplit validation folds */
+   449→  recentAccuracy: number;
+   450→  /** Whether the model has been successfully trained on sufficient data */
+   451→  isTrained: boolean;
+   452→  /** Number of training samples used in the most recent train() call */
+   453→  sampleCount: number;
+   454→  /** P(bullish) for the most recent single-sample prediction, or null if none */
+   455→  predictionProb: number | null;
+   456→  /** Adaptive parameters derived from logistic regression coefficients */
+   457→  adaptiveParams: {
+   458→    /** Blend factor for momentum-based signals (e.g. RSI), derived from coefficient[0] */
+   459→    momentumFactor: number;
+   460→    /** Blend factor for volatility-based signals (e.g. ATR), derived from coefficient[10] */
+   461→    volatilityFactor: number;
+   462→    /** Blend factor for trend-based signals (e.g. trend score), derived from coefficient[11] */
+   463→    trendFactor: number;
+   464→  };
+   465→}
+   466→
+   467→/**
+   468→ * AdaptiveWeightModel — the top-level ML pipeline that combines
+   469→ * StandardScaler + LogisticRegressionModel with TimeSeriesSplit validation.
+   470→ *
+   471→ * Orchestrates the full workflow:
+   472→ *   1. **train()**  — validates with 3-fold time-series CV, then fits the final
+   473→ *      model on all data. Stores normalized weights and raw coefficients.
+   474→ *   2. **predictScore()** — standardizes a single feature vector and returns
+   475→ *      P(bullish) from the logistic model.
+   476→ *   3. **predictBatch()** — batch prediction; returns [0.5, 0.5] fallback when
+   477→ *      the model is not trained.
+   478→ *   4. **getAdaptiveParams()** — maps learned coefficients to interpretable
+   479→ *      momentumFactor, volatilityFactor, trendFactor for downstream use.
+   480→ *   5. **getEdgeCoefficients()** — produces normalized coefficient weights for
+   481→ *      the edge/scenario calculation layer.
+   482→ *   6. **getResult()** — assembles the full AdaptiveModelResult for API responses.
+   483→ *
+   484→ * Designed for per-symbol training; each symbol maintains its own instance.
+   485→ */
+   486→export class AdaptiveWeightModel {
+   487→  /** Standard scaler for feature normalization */
+   488→  private scaler = new StandardScaler();
+   489→  /** Underlying logistic regression model (C=0.1, maxIter=1000, lr=0.01) */
+   490→  private model = new LogisticRegressionModel(0.1, 1000, 0.01);
+   491→  /** Cached normalized feature importance weights (sum=1), or null before training */
+   492→  private _weights: number[] | null = null;
+   493→  /** Cached raw logistic regression coefficients, or null before training */
+   494→  private _coefficients: number[] | null = null;
+   495→  /** Whether train() has been successfully called */
+   496→  private _isTrained = false;
+   497→  /** Average validation accuracy from the most recent train() */
+   498→  private _recentAccuracy = 0.5;
+   499→  /** Number of samples used in the most recent train() */
+   500→  private _sampleCount = 0;
+   501→  /** Most recent P(bullish) from predictScore(), or null */
+   502→  private _predictionProb: number | null = null;
+   503→  /** Minimum number of samples required before training is allowed */
+   504→  readonly minSamples: number;
+   505→
+   506→  /**
+   507→   * Create a new AdaptiveWeightModel.
+   508→   *
+   509→   * @param minSamples - Minimum number of training samples required to trigger
+   510→   *                      training. Defaults to 70. If fewer samples are provided,
+   511→   *                      train() will return false.
+   512→   */
+   513→  constructor(minSamples = 70) {
+   514→    this.minSamples = minSamples;
+   515→  }
+   516→
+   517→  /** Whether the model has been successfully trained */
+   518→  get isTrained() { return this._isTrained; }
+   519→  /** Average validation accuracy across time-series folds (0.5 before training) */
+   520→  get recentAccuracy() { return this._recentAccuracy; }
+   521→  /** Normalized feature importance weights (sum=1), or null before training */
+   522→  get weights() { return this._weights; }
+   523→  /** Raw logistic regression coefficients, or null before training */
+   524→  get coefficients() { return this._coefficients; }
+   525→  /** Number of samples used in the most recent training */
+   526→  get sampleCount() { return this._sampleCount; }
+   527→
+   528→  /**
+   529→   * Train the adaptive weight model on historical feature data and binary labels.
+   530→   *
+   531→   * Pipeline:
+   532→   *   1. Validate: require at least minSamples rows and exactly 16 feature columns.
+   533→   *   2. TimeSeriesSplit: generate 3 folds that respect temporal order.
+   534→   *   3. For each fold:
+   535→   *        a. Fit a StandardScaler on the training partition only.
+   536→   *        b. Train a LogisticRegressionModel on the scaled training data.
+   537→   *        c. Evaluate accuracy on the scaled validation data.
+   538→   *   4. Fit the **final** model on ALL data (scaler + logistic regression).
+   539→   *   5. Cache normalized weights, raw coefficients, average validation accuracy.
+   540→   *
+   541→   * @param X - Feature matrix (n_samples × 16). Each row is a VDSS feature vector
+   542→   *            in the order defined by VDSS_FEATURE_NAMES.
+   543→   * @param y - Binary labels: 1 = bullish (5-day return > 1%), 0 = otherwise.
+   544→   *            Length must match X.length.
+   545→   * @returns true if training succeeded, false if insufficient data or no valid folds.
+   546→   */
+   547→  train(X: number[][], y: number[]): boolean {
+   548→    if (X.length < this.minSamples || X[0]?.length !== 16) return false;
+   549→
+   550→    const folds = timeSeriesSplit(X.length, 3);
+   551→    if (folds.length === 0) return false;
+   552→
+   553→    const accuracies: number[] = [];
+   554→
+   555→    for (const { train: trainIdx, val: valIdx } of folds) {
+   556→      const XTrain = trainIdx.map(i => X[i]);
+   557→      const yTrain = trainIdx.map(i => y[i]);
+   558→      const XVal = valIdx.map(i => X[i]);
+   559→      const yVal = valIdx.map(i => y[i]);
+   560→
+   561→      // Standardize
+   562→      const scalerFold = new StandardScaler();
+   563→      const XTrainScaled = scalerFold.fitTransform(XTrain);
+   564→      const XValScaled = scalerFold.transform(XVal);
+   565→
+   566→      // Train
+   567→      const modelFold = new LogisticRegressionModel(0.1, 1000, 0.01);
+   568→      modelFold.fit(XTrainScaled, yTrain, 'balanced');
+   569→
+   570→      // Evaluate
+   571→      const acc = modelFold.score(XValScaled, yVal);
+   572→      accuracies.push(acc);
+   573→    }
+   574→
+   575→    // Train final model on ALL data
+   576→    this.scaler.fitTransform(X);
+   577→    this.model.fit(this.scaler.transform(X), y, 'balanced');
+   578→
+   579→    // Average validation accuracy
+   580→    this._recentAccuracy = accuracies.length > 0
+   581→      ? accuracies.reduce((a, b) => a + b, 0) / accuracies.length
+   582→      : 0.5;
+   583→
+   584→    // Extract normalized weights
+   585→    this._weights = this.model.getNormalizedWeights();
+   586→    this._coefficients = this.model.getCoefficients();
+   587→    this._isTrained = true;
+   588→    this._sampleCount = X.length;
+   589→
+   590→    return true;
+   591→  }
+   592→
+   593→  /**
+   594→   * Predict the probability of a bullish outcome for a single feature vector.
+   595→   *
+   596→   * Standardizes the input using the fitted scaler, then applies the logistic
+   597→   * model to obtain P(bullish). Also caches the result in _predictionProb
+   598→   * for retrieval via getResult().
+   599→   *
+   600→   * @param xNew - A single feature vector of length 16, in VDSS_FEATURE_NAMES order.
+   601→   * @returns P(bullish) in (0, 1), or null if the model is not trained or the
+   602→   *          input is invalid (wrong length).
+   603→   */
+   604→  predictScore(xNew: number[]): number | null {
+   605→    if (!this._isTrained || !xNew || xNew.length !== 16) return null;
+   606→    const xScaled = this.scaler.transform([xNew])[0];
+   607→    const [_, pBull] = this.model.predict_proba_single(xScaled);
+   608→    this._predictionProb = pBull;
+   609→    return pBull;
+   610→  }
+   611→
+   612→  /**
+   613→   * Extract interpretable adaptive parameters from the learned coefficients.
+   614→   *
+   615→   * Maps three key coefficients to factors in [0.5, 1.0] via the sigmoid function:
+   616→   *   - coefficient[0]  (f_rsi)  → momentumFactor  = 0.5 + 0.5 × σ(c₀)
+   617→   *   - coefficient[10] (s_atr)  → volatilityFactor = 0.5 + 0.5 × σ(c₁₀)
+   618→   *   - coefficient[11] (s_trend) → trendFactor     = 0.5 + 0.5 × σ(c₁₁)
+   619→   *
+   620→   * The sigmoid maps any real coefficient to (0, 1); the 0.5 + 0.5 × transform
+   621→   * shifts the range to (0.5, 1.0), ensuring factors never fully suppress a signal.
+   622→   *
+   623→   * If the model is not trained, returns conservative defaults:
+   624→   *   { momentumFactor: 0.7, volatilityFactor: 0.5, trendFactor: 0.6 }
+   625→   *
+   626→   * @returns An object with momentumFactor, volatilityFactor, and trendFactor,
+   627→   *          each in the range (0.5, 1.0) when the model is trained.
+   628→   */
+   629→  getAdaptiveParams(): { momentumFactor: number; volatilityFactor: number; trendFactor: number } {
+   630→    if (!this._isTrained || !this._coefficients) {
+   631→      return { momentumFactor: 0.7, volatilityFactor: 0.5, trendFactor: 0.6 };
+   632→    }
+   633→
+   634→    const c = this._coefficients;
+   635→    const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
+   636→
+   637→    // Feature indices: 0=f_rsi, 10=s_atr, 11=s_trend
+   638→    const rsiCoef = c[0] ?? 0;
+   639→    const atrCoef = c[10] ?? 0;
+   640→    const trendCoef = c[11] ?? 0;
+   641→
+   642→    return {
+   643→      momentumFactor: 0.5 + 0.5 * sigmoid(rsiCoef),
+   644→      volatilityFactor: 0.5 + 0.5 * sigmoid(atrCoef),
+   645→      trendFactor: 0.5 + 0.5 * sigmoid(trendCoef),
+   646→    };
+   647→  }
+   648→
+   649→  /**
+   650→   * Extract normalized edge weight coefficients from the learned model.
+   651→   *
+   652→   * Takes the absolute values of three key coefficients and normalizes them
+   653→   * to sum to 1, producing relative importance weights for the edge/scenario layer:
+   654→   *   - |coefficient[11]| (s_trend)  → trendCoef
+   655→   *   - |coefficient[0]|  (f_rsi)    → momentumCoef
+   656→   *   - |coefficient[10]| (s_atr)    → volatilityCoef
+   657→   *
+   658→   * If the model is not trained or all three coefficients are zero, returns
+   659→   * uniform weights: { trendCoef: 1/3, momentumCoef: 1/3, volatilityCoef: 1/3 }.
+   660→   *
+   661→   * @returns An object with trendCoef, momentumCoef, and volatilityCoef,
+   662→   *          each ≥ 0 and summing to 1.
+   663→   */
+   664→  getEdgeCoefficients(): { trendCoef: number; momentumCoef: number; volatilityCoef: number } {
+   665→    if (!this._isTrained || !this._coefficients) {
+   666→      return { trendCoef: 1 / 3, momentumCoef: 1 / 3, volatilityCoef: 1 / 3 };
+   667→    }
+   668→
+   669→    const c = this._coefficients;
+   670→    const absTrend = Math.abs(c[11] ?? 0);   // s_trend
+   671→    const absMomentum = Math.abs(c[0] ?? 0); // f_rsi
+   672→    const absVolatility = Math.abs(c[10] ?? 0); // s_atr
+   673→
+   674→    const total = absTrend + absMomentum + absVolatility;
+   675→    if (total === 0) return { trendCoef: 1 / 3, momentumCoef: 1 / 3, volatilityCoef: 1 / 3 };
+   676→
+   677→    return {
+   678→      trendCoef: absTrend / total,
+   679→      momentumCoef: absMomentum / total,
+   680→      volatilityCoef: absVolatility / total,
+   681→    };
+   682→  }
+   683→
+   684→  /**
+   685→   * Assemble the complete result object for API responses.
+   686→   *
+   687→   * Aggregates all model state into a single AdaptiveModelResult:
+   688→   *   - weights:         normalized feature importances (falls back to uniform 1/16)
+   689→   *   - coefficients:    raw logistic regression coefficients (falls back to zeros)
+   690→   *   - recentAccuracy:  average TimeSeriesSplit validation accuracy
+   691→   *   - isTrained:       whether train() has succeeded
+   692→   *   - sampleCount:     number of training samples
+   693→   *   - predictionProb:  most recent P(bullish) from predictScore(), or null
+   694→   *   - adaptiveParams:  derived momentum/volatility/trend factors
+   695→   *
+   696→   * @returns A fully populated AdaptiveModelResult object.
+   697→   */
+   698→  getResult(): AdaptiveModelResult {
+   699→    return {
+   700→      weights: this._weights ?? new Array(16).fill(1 / 16),
+   701→      coefficients: this._coefficients ?? new Array(16).fill(0),
+   702→      recentAccuracy: this._recentAccuracy,
+   703→      isTrained: this._isTrained,
+   704→      sampleCount: this._sampleCount,
+   705→      predictionProb: this._predictionProb,
+   706→      adaptiveParams: this.getAdaptiveParams(),
+   707→    };
+   708→  }
+   709→}
+   710→

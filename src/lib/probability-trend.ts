@@ -22,10 +22,20 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Scenario keys ─────────────────────────────────────────────────────────────
+/**
+ * The 9 probability scenario keys, ordered from most bearish (SC1) to most bullish (SC9).
+ * - SC1–SC4: Bearish scenarios (شوک نزولی → نزولی خفیف)
+ * - SC5: Neutral scenario (رنج)
+ * - SC6–SC9: Bullish scenarios (صعودی خفیف → شوک صعودی)
+ */
 export const SCENARIO_KEYS = [
   'SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9',
 ] as const;
 
+/**
+ * Persian labels and group classification for each of the 9 scenarios.
+ * Each scenario belongs to exactly one group: bearish, neutral, or bullish.
+ */
 export const SCENARIO_META: Record<string, { label: string; group: 'bearish' | 'neutral' | 'bullish' }> = {
   SC1: { label: 'شوک نزولی', group: 'bearish' },
   SC2: { label: 'نزولی شتاب‌دار', group: 'bearish' },
@@ -50,57 +60,98 @@ const CDF_ORDER_MAP: Record<string, readonly string[]> = {
 };
 
 // ── Interfaces ─────────────────────────────────────────────────────────────────
+/** A single data point in a trend series — one day's individual and cumulative probability */
 export interface DayPoint {
-  day: number;           // 1 = most recent (today), 30 = 30 days ago
+  /** Day number: 1 = most recent (today), 30 = 30 days ago */
+  day: number;
+  /** Individual probability for this scenario on this day */
   individualProb: number;
+  /** Cumulative (CDF) probability within the scenario's group on this day */
   cumulativeProb: number;
 }
 
+/** Classified direction of a probability trend over the lookback period */
 export type TrendDirection = 'rising' | 'falling' | 'stable' | 'volatile';
 
+/** Full trend analysis for a single scenario (SC1–SC9) */
 export interface ScenarioTrend {
+  /** Scenario key (e.g. 'SC1', 'SC5', 'SC9') */
   scenarioKey: string;
+  /** Persian label (e.g. 'شوک نزولی', 'رنج', 'شوک صعودی') */
   label: string;
+  /** Group classification */
   group: 'bearish' | 'neutral' | 'bullish';
+  /** Today's individual probability for this scenario */
   currentProbability: number;
+  /** Array of {day, individualProb, cumulativeProb} for the 30-day trend */
   trend: DayPoint[];
+  /** Classified trend direction */
   trendDirection: TrendDirection;
+  /** Day number (1-based) when probability peaked */
   peakDay: number;
+  /** Peak individual probability value */
   peakProbability: number;
+  /** Persian narrative interpretation */
   interpretation: string;
 }
 
+/** Trend analysis for a scenario group (bullish / neutral / bearish) */
 export interface GroupTrend {
+  /** Group name */
   group: 'bearish' | 'neutral' | 'bullish';
+  /** Persian label ('گاوی', 'خنثی', 'خرسی') */
   label: string;
+  /** Cumulative probability trend for the group over 30 days */
   trend: DayPoint[];
+  /** Classified trend direction */
   trendDirection: TrendDirection;
+  /** Day number when cumulative probability peaked */
   peakDay: number;
+  /** Peak cumulative probability */
   peakProbability: number;
+  /** Persian narrative interpretation */
   interpretation: string;
 }
 
+/** Which scenario dominates in a specific time period and the recommended action */
 export interface ScenarioDominance {
+  /** Period key (e.g. 'day_1_5') */
   period: string;
+  /** Persian period label (e.g. 'روز ۱-۵') */
   periodLabel: string;
+  /** Key of the dominant scenario in this period */
   dominantScenario: string;
+  /** Persian label of the dominant scenario */
   dominantLabel: string;
+  /** Total probability of the dominant scenario in this period */
   probability: number;
+  /** Recommended trading action in Persian */
   action: string;
 }
 
+/** Complete result of the probability trend analysis */
 export interface ProbabilityTrendResult {
+  /** Number of days in the trend (typically 30) */
   horizon: number;
+  /** Per-scenario trend data (9 entries) */
   scenarios: ScenarioTrend[];
+  /** Per-group trend data (3 entries: bullish, neutral, bearish) */
   groups: GroupTrend[];
+  /** Scenario dominance per time period (3 periods) */
   dominance: ScenarioDominance[];
 }
 
-/** A single day's probability snapshot — input to buildTrendFromDailySnapshots */
+/**
+ * A single day's probability snapshot — input to buildTrendFromDailySnapshots.
+ * Represents the 9-scenario probability distribution for one trading day.
+ */
 export interface DailyProbabilitySnapshot {
+  /** Date string (YYYY-MM-DD) */
   date: string;
-  dayIndex: number;  // 0 = today, -1 = yesterday, -2, ..., -29
-  probs: Record<string, number>; // SC1-SC9, sum = 1
+  /** Relative day index: 0 = today, -1 = yesterday, -2, ..., -29 */
+  dayIndex: number;
+  /** Individual probabilities for SC1–SC9. Must sum to 1.0 */
+  probs: Record<string, number>;
 }
 
 type ScenarioProbabilities = Record<string, number>;
@@ -110,6 +161,15 @@ type ScenarioProbabilities = Record<string, number>;
  * Calculate cumulative (CDF) probability for a scenario within its group.
  * CDF = sum of individual probs from most severe to this scenario (inclusive).
  * This uses ALL sibling scenarios' individual probs from the same day.
+ *
+ * CDF order per documentation §4:
+ * - Bullish (most severe → least): SC9 → SC8 → SC7 → SC6
+ * - Neutral: SC5 (CDF = individual)
+ * - Bearish (most severe → least): SC1 → SC2 → SC3 → SC4
+ *
+ * @param key - Scenario key (e.g. 'SC7')
+ * @param allDayIndividuals - All 9 individual probabilities for the same day
+ * @returns Cumulative probability for the given scenario
  */
 export function calculateCDF(
   key: string,
@@ -125,7 +185,14 @@ export function calculateCDF(
   return cum;
 }
 
-/** Calculate group cumulative for a single day */
+/**
+ * Calculate group cumulative probabilities for a single day.
+ * Each group's cumulative = CDF of its least-severe scenario = total probability of the group.
+ * Bullish_Cum + Neutral_Cum + Bearish_Cum = 1.0
+ *
+ * @param allDayIndividuals - All 9 individual probabilities for one day
+ * @returns Object with bullishCum, neutralCum, bearishCum (should sum to ~1.0)
+ */
 export function calculateGroupCumulatives(
   allDayIndividuals: Record<string, number>,
 ): { bullishCum: number; neutralCum: number; bearishCum: number } {
@@ -214,6 +281,14 @@ export function buildSingleDayTrend(
 }
 
 // ── Group trends ───────────────────────────────────────────────────────────────
+/**
+ * Build trend data for each group (bullish, neutral, bearish) from daily snapshots.
+ * Group cumulative = CDF of the least-severe scenario in the group = total group probability.
+ *
+ * @param dailySnapshots - Array of daily probability snapshots
+ * @param horizon - Number of days to include
+ * @returns Array of 3 GroupTrend objects (bullish, neutral, bearish)
+ */
 function buildGroupTrends(
   dailySnapshots: DailyProbabilitySnapshot[],
   horizon: number,
@@ -262,6 +337,14 @@ function buildGroupTrends(
 }
 
 // ── Trend direction detection ─────────────────────────────────────────────────
+/**
+ * Classify the direction of a probability trend.
+ * Analyzes first/last/mid values and direction-change frequency.
+ *
+ * @param trend - Array of DayPoint values
+ * @returns 'rising' if last > first + 0.03, 'falling' if last < first - 0.03,
+ *          'volatile' if >60% of steps are direction changes, otherwise 'stable'
+ */
 function detectTrendDirection(trend: DayPoint[]): TrendDirection {
   if (trend.length < 3) return 'stable';
 
@@ -284,6 +367,18 @@ function detectTrendDirection(trend: DayPoint[]): TrendDirection {
 }
 
 // ── Interpretations (Persian) ─────────────────────────────────────────────────
+/**
+ * Build a Persian narrative interpretation for a single scenario trend.
+ * Describes cumulative probability level and associated signal strength.
+ *
+ * @param key - Scenario key
+ * @param label - Persian scenario label
+ * @param group - Scenario group ('bullish', 'neutral', 'bearish')
+ * @param trend - DayPoint array
+ * @param peakDay - Day of peak probability
+ * @param peakProb - Peak probability value
+ * @returns Persian interpretation string
+ */
 function buildScenarioInterpretation(
   key: string, label: string, group: string, trend: DayPoint[], peakDay: number, peakProb: number,
 ): string {
@@ -303,6 +398,17 @@ function buildScenarioInterpretation(
   return `${label}: احتمال خنثی ${pct(current)}٪`;
 }
 
+/**
+ * Build a Persian narrative interpretation for a group trend.
+ * Reports current cumulative probability and 30-day direction (افزایشی/کاهشی/پایدار).
+ *
+ * @param group - Group name
+ * @param label - Persian group label
+ * @param trend - DayPoint array for the group
+ * @param peakDay - Day of peak cumulative probability
+ * @param peakProb - Peak cumulative probability
+ * @returns Persian interpretation string
+ */
 function buildGroupInterpretation(
   group: string, label: string, trend: DayPoint[], peakDay: number, peakProb: number,
 ): string {
@@ -334,6 +440,13 @@ const DOMINANCE_ACTIONS: Record<string, string> = {
   bearish: 'کاهش مواجهه یا خروج تدریجی از موقعیت‌ها',
 };
 
+/**
+ * Compute which scenario dominates in each of 3 time periods (days 1-5, 6-15, 16-30).
+ * Dominance = scenario with highest total individual probability in the period.
+ *
+ * @param scenarios - Array of 9 ScenarioTrend objects
+ * @returns Array of 3 ScenarioDominance objects, one per period
+ */
 function computeDominance(scenarios: ScenarioTrend[]): ScenarioDominance[] {
   const horizon = scenarios[0]?.trend.length ?? 30;
   return DOMINANCE_PERIODS.map(p => {
@@ -359,6 +472,18 @@ function computeDominance(scenarios: ScenarioTrend[]): ScenarioDominance[] {
 }
 
 // ── Persian interpretation helper ─────────────────────────────────────────────
+/**
+ * Generate a comprehensive Persian narrative summary of the probability trend analysis.
+ *
+ * Produces a multi-line string covering:
+ * - Dominant trend direction (bullish/bearish/neutral) with emoji indicators
+ * - Current cumulative probabilities for all 3 groups
+ * - Primary trading signal recommendation
+ * - Scenario dominance per time period with recommended actions
+ *
+ * @param results - Complete ProbabilityTrendResult from buildTrendFromDailySnapshots
+ * @returns Multi-line Persian narrative summary string
+ */
 export function getTrendInterpretation(results: ProbabilityTrendResult): string {
   const lines: string[] = [];
   if (results.groups.length === 0) return 'داده کافی برای تحلیل روند موجود نیست.';
@@ -390,7 +515,13 @@ export function getTrendInterpretation(results: ProbabilityTrendResult): string 
 }
 
 // ── Legacy compat: calculateProbabilityTrend (single-day fallback) ────────────
-/** @deprecated Use buildTrendFromDailySnapshots for correct 30-day trends */
+/**
+ * Legacy single-day probability trend calculator.
+ * @deprecated Use buildTrendFromDailySnapshots for correct 30-day trends without decay or look-ahead bias
+ * @param probs - Individual probabilities for SC1–SC9 (must sum to 1)
+ * @param _horizon - Unused (kept for backward compatibility)
+ * @returns ProbabilityTrendResult with a single-day trend
+ */
 export function calculateProbabilityTrend(
   probs: ScenarioProbabilities,
   _horizon: number = 30,

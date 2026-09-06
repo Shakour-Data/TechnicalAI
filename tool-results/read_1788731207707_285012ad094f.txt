@@ -1,0 +1,602 @@
+     1→'use client';
+     2→
+     3→import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+     4→import {
+     5→  createChart,
+     6→  CandlestickSeries,
+     7→  LineSeries,
+     8→  HistogramSeries,
+     9→  ColorType,
+    10→  CrosshairMode,
+    11→  type IChartApi,
+    12→  type Time,
+    13→} from 'lightweight-charts';
+    14→import {
+    15→  MousePointer2,
+    16→  Minus,
+    17→  ArrowLeftRight,
+    18→  MoveVertical,
+    19→  Layers,
+    20→  RectangleHorizontal,
+    21→  Type,
+    22→  Pencil,
+    23→  Ruler,
+    24→  ArrowUpRight,
+    25→  Trash2,
+    26→  X,
+    27→  Circle,
+    28→  Waypoints,
+    29→  MessageSquare,
+    30→  TrendingUp,
+    31→  GitBranch,
+    32→  ArrowRight,
+    33→  Spline,
+    34→} from 'lucide-react';
+    35→import { formatJalaliString, candleDateToJalali, isGregorianDate, toPersianDigits } from '@/lib/jalali';
+    36→import { useTheme } from '@/lib/theme-store';
+    37→
+    38→/* ----------------------------- TYPES ----- */
+    39→
+    40→interface DrawingPoint {
+    41→  time: number;
+    42→  price: number;
+    43→}
+    44→
+    45→interface Drawing {
+    46→  id: string;
+    47→  type: string;
+    48→  points: DrawingPoint[];
+    49→  color: string;
+    50→  lineWidth: number;
+    51→  text?: string;
+    52→  completed: boolean;
+    53→}
+    54→
+    55→interface LevelStrength {
+    56→  price: number;
+    57→  strength: number;
+    58→  isTarget: boolean;
+    59→  score: number;
+    60→  grade: string;
+    61→  overlapCount: number;
+    62→  methods: string[];
+    63→  fibRatio?: string;
+    64→  fibLabel?: string;
+    65→}
+    66→
+    67→interface CandlestickChartProps {
+    68→  data: Array<{
+    69→    date: string;
+    70→    open: number;
+    71→    high: number;
+    72→    low: number;
+    73→    close: number;
+    74→    volume: number;
+    75→  }>;
+    76→  ta: {
+    77→    sma: Record<string, number>;
+    78→    ema: Record<string, number>;
+    79→    bollingerBands: { upper: number; middle: number; lower: number };
+    80→    resistances: number[];
+    81→    supports: number[];
+    82→    supportStrengths: LevelStrength[];
+    83→    resistanceStrengths: LevelStrength[];
+    84→    sar: number;
+    85→    smaArray?: Record<string, number[]>;
+    86→    emaArray?: Record<string, number[]>;
+    87→    ichimokuArrays?: { tenkan: number[]; kijun: number[]; senkouA: number[]; senkouB: number[] };
+    88→    vwapArray?: number[];
+    89→  } | null;
+    90→  height?: number;
+    91→  priceDecimals?: number;
+    92→}
+    93→
+    94→/* ----------------------------- CONSTANTS -- */
+    95→
+    96→const BULL = '#22c55e';   // Candle up — vivid green
+    97→const BEAR = '#ef4444';   // Candle down — vivid red
+    98→const SUPPORT_COLOR = '#2563eb';  // Support lines — blue
+    99→const RESIST_COLOR = '#ea580c'; // Resistance lines — orange
+   100→
+   101→
+   102→const PALETTE = ['#22c55e', '#ef4444', '#d97706', '#0891b2', '#7c3aed', '#374151'];
+   103→
+   104→const SMA_CFG = [
+   105→  { key: 'sma9', color: '#8b5cf6', title: 'SMA 9' },
+   106→  { key: 'sma21', color: '#06b6d4', title: 'SMA 21' },
+   107→  { key: 'sma50', color: '#d946ef', title: 'SMA 50' },
+   108→  { key: 'sma100', color: '#a855f7', title: 'SMA 100' },
+   109→  { key: 'sma200', color: '#ec4899', title: 'SMA 200' },
+   110→];
+   111→
+   112→const EMA_CFG = [
+   113→  { key: 'ema9', color: '#8b5cf6', title: 'EMA 9', dash: [2, 2] as [number, number] },
+   114→  { key: 'ema21', color: '#06b6d4', title: 'EMA 21', dash: [2, 2] as [number, number] },
+   115→  { key: 'ema50', color: '#d946ef', title: 'EMA 50', dash: [2, 2] as [number, number] },
+   116→  { key: 'ema200', color: '#ec4899', title: 'EMA 200', dash: [2, 2] as [number, number] },
+   117→];
+   118→
+   119→const FIB_LEVELS = [
+   120→  { pct: 0, label: '0%' },
+   121→  { pct: 0.236, label: '23.6%' },
+   122→  { pct: 0.382, label: '38.2%' },
+   123→  { pct: 0.5, label: '50%' },
+   124→  { pct: 0.618, label: '61.8%' },
+   125→  { pct: 0.786, label: '78.6%' },
+   126→  { pct: 1, label: '100%' },
+   127→];
+   128→
+   129→const FIB_EXT_LEVELS = [
+   130→  { pct: 0, label: '0%' },
+   131→  { pct: 0.382, label: '38.2%' },
+   132→  { pct: 0.5, label: '50%' },
+   133→  { pct: 0.618, label: '61.8%' },
+   134→  { pct: 0.786, label: '78.6%' },
+   135→  { pct: 1, label: '100%' },
+   136→  { pct: 1.272, label: '127.2%' },
+   137→  { pct: 1.618, label: '161.8%' },
+   138→  { pct: 2.0, label: '200%' },
+   139→  { pct: 2.618, label: '261.8%' },
+   140→];
+   141→
+   142→type ToolType = 'cursor' | 'trendline' | 'hline' | 'vline' | 'ray' | 'fibonacci' | 'fibext' | 'rectangle' | 'ellipse' | 'path' | 'text' | 'callout' | 'brush' | 'measure' | 'arrow' | 'pitchfork' | 'channel' | 'regression';
+   143→
+   144→// — S/R strength-based line styling (solid only, thickness = strength) ————
+   145→function srLineStyle(strength: number, isTarget: boolean): { lineWidth: number; lineStyle: 0; color: string } {
+   146→  if (isTarget) {
+   147→    return { lineWidth: 4, lineStyle: 0, color: '' };
+   148→  }
+   149→  if (strength >= 9) return { lineWidth: 5, lineStyle: 0, color: '' };
+   150→  if (strength >= 7) return { lineWidth: 4, lineStyle: 0, color: '' };
+   151→  if (strength >= 5) return { lineWidth: 3, lineStyle: 0, color: '' };
+   152→  if (strength >= 3) return { lineWidth: 2, lineStyle: 0, color: '' };
+   153→  return { lineWidth: 1, lineStyle: 0, color: '' };
+   154→}
+   155→
+   156→interface ToolDef {
+   157→  id: ToolType;
+   158→  label: string;
+   159→  icon: React.ReactNode;
+   160→}
+   161→
+   162→const TOOLS: ToolDef[] = [
+   163→  { id: 'cursor', label: 'مؤشر', icon: <MousePointer2 className="w-3.5 h-3.5" /> },
+   164→  { id: 'trendline', label: 'خط روند', icon: <Minus className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+   165→  { id: 'hline', label: 'خط افقی', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+   166→  { id: 'vline', label: 'خط عمودی', icon: <MoveVertical className="w-3.5 h-3.5" /> },
+   167→  { id: 'ray', label: 'پرتو', icon: <ArrowRight className="w-3.5 h-3.5" style={{ transform: 'rotate(-30deg)' }} /> },
+   168→  { id: 'fibonacci', label: 'فیبوناچی بازگشتی', icon: <Layers className="w-3.5 h-3.5" /> },
+   169→  { id: 'fibext', label: 'فیبوناچی گشایش', icon: <GitBranch className="w-3.5 h-3.5" /> },
+   170→  { id: 'rectangle', label: 'مستطیل', icon: <RectangleHorizontal className="w-3.5 h-3.5" /> },
+   171→  { id: 'ellipse', label: 'بیضی', icon: <Circle className="w-3.5 h-3.5" /> },
+   172→  { id: 'path', label: 'مسیر', icon: <Spline className="w-3.5 h-3.5" /> },
+   173→  { id: 'text', label: 'متن', icon: <Type className="w-3.5 h-3.5" /> },
+   174→  { id: 'callout', label: 'یادداشت', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+   175→  { id: 'brush', label: 'قلم', icon: <Pencil className="w-3.5 h-3.5" /> },
+   176→  { id: 'measure', label: 'اندازه‌گیری', icon: <Ruler className="w-3.5 h-3.5" /> },
+   177→  { id: 'arrow', label: 'پیکان', icon: <ArrowUpRight className="w-3.5 h-3.5" /> },
+   178→  { id: 'pitchfork', label: 'چنگال اندروز', icon: <Waypoints className="w-3.5 h-3.5" /> },
+   179→  { id: 'channel', label: 'کانال موازی', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+   180→  { id: 'regression', label: 'خط رگرسیون', icon: <TrendingUp className="w-3.5 h-3.5" style={{ transform: 'scaleX(-1)' }} /> },
+   181→];
+   182→
+   183→/* ----------------------------- SKELETON ---- */
+   184→
+   185→export function CandlestickChartSkeleton() {
+   186→  const { colors: C } = useTheme();
+   187→  return (
+   188→    <div className="w-full">
+   189→      <div className="h-10 rounded-t-lg" style={{ background: C.cardBg, borderBottom: `1px solid ${C.cardBorder}` }} />
+   190→      <div className="w-full rounded-b-lg" style={{ height: 520, background: C.cardBg, opacity: 0.5 }} />
+   191→    </div>
+   192→  );
+   193→}
+   194→
+   195→/* ----------------------------- COMPONENT --- */
+   196→
+   197→export default function CandlestickChart({ data, ta, height = 520, priceDecimals = 0 }: CandlestickChartProps) {
+   198→  const { colors: C, isDark } = useTheme();
+   199→  const chartContainerRef = useRef<HTMLDivElement>(null);
+   200→  const svgRef = useRef<SVGSVGElement>(null);
+   201→  const chartRef = useRef<IChartApi | null>(null);
+   202→  const csRef = useRef<any>(null);
+   203→  const subscriberRef = useRef<{ dispose: () => void } | null>(null);
+   204→  const crosshairSubRef = useRef<{ dispose: () => void } | null>(null);
+   205→
+   206→  // Crosshair legend state
+   207→  const [hoverInfo, setHoverInfo] = useState<{ date: string; o: number; h: number; l: number; c: number; v: number; chg: number } | null>(null);
+   208→
+   209→  // Build Jalali date strings for all candles (memoized)
+   210→  const jalaliDates = useMemo(() => {
+   211→    return data.map((d) =>
+   212→      isGregorianDate(d.date) ? candleDateToJalali(d.date, 'full') : formatJalaliString(d.date, 'full')
+   213→    );
+   214→  }, [data]);
+   215→
+   216→  const [drawings, setDrawings] = useState<Drawing[]>([]);
+   217→  const [activeTool, setActiveTool] = useState<ToolType>('cursor');
+   218→  const [activeColor, setActiveColor] = useState(PALETTE[0]);
+   219→  const [isDrawing, setIsDrawing] = useState(false);
+   220→  const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
+   221→  const [textInput, setTextInput] = useState<{ x: number; y: number; drawingId: string } | null>(null);
+   222→  const [textValue, setTextValue] = useState('');
+   223→  const [renderKey, setRenderKey] = useState(0);
+   224→  const [chartSize, setChartSize] = useState({ w: 0, h: 0 });
+   225→
+   226→  /* - Helper: coordinate conversion -------------- */
+   227→  const getChartPoint = useCallback((clientX: number, clientY: number): DrawingPoint | null => {
+   228→    const chart = chartRef.current;
+   229→    const container = chartContainerRef.current;
+   230→    if (!chart || !container) return null;
+   231→    const rect = container.getBoundingClientRect();
+   232→    const x = clientX - rect.left;
+   233→    const y = clientY - rect.top;
+   234→    const price = csRef.current?.coordinateToPrice(y) ?? null;
+   235→    const time = chart.timeScale().coordinateToTime(x);
+   236→    if (price === null || time === null) return null;
+   237→    return { time: time as number, price };
+   238→  }, []);
+   239→
+   240→  /* - SVG Rendering --------------------- */
+   241→  const renderDrawings = useCallback(() => {
+   242→    const chart = chartRef.current;
+   243→    const svg = svgRef.current;
+   244→    const container = chartContainerRef.current;
+   245→    if (!chart || !svg || !container || drawings.length === 0) {
+   246→      if (svg) svg.innerHTML = '';
+   247→      return;
+   248→    }
+   249→
+   250→    const rect = container.getBoundingClientRect();
+   251→    const w = rect.width;
+   252→    const h = rect.height;
+   253→    if (w === 0 || h === 0) return;
+   254→
+   255→    let html = '';
+   256→
+   257→    // Defs for arrow markers
+   258→    html += `<defs>`;
+   259→    PALETTE.forEach((c) => {
+   260→      html += `<marker id="arrow-${c.replace('#','')}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="${c}" /></marker>`;
+   261→    });
+   262→    html += `</defs>`;
+   263→
+   264→    const allDrawings = [...drawings];
+   265→    if (currentDrawing) allDrawings.push(currentDrawing);
+   266→
+   267→    for (const d of allDrawings) {
+   268→      if (!d.completed && d.points.length === 0) continue;
+   269→      const col = d.color;
+   270→      const lw = d.lineWidth;
+   271→
+   272→      switch (d.type) {
+   273→        case 'trendline': {
+   274→          if (d.points.length < 1) break;
+   275→          const p0 = d.points[0];
+   276→          const p1 = d.points.length > 1 ? d.points[d.points.length - 1] : p0;
+   277→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   278→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   279→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   280→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   281→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   282→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" />`;
+   283→          break;
+   284→        }
+   285→        case 'hline': {
+   286→          if (d.points.length < 1) break;
+   287→          const p = d.points[0];
+   288→          const y = csRef.current?.priceToCoordinate(p.price);
+   289→          if (y == null) break;
+   290→          html += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   291→          html += `<text x="4" y="${y - 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${toPersianDigits(p.price.toFixed(priceDecimals))}</text>`;
+   292→          break;
+   293→        }
+   294→        case 'vline': {
+   295→          if (d.points.length < 1) break;
+   296→          const p = d.points[0];
+   297→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   298→          if (x == null) break;
+   299→          html += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   300→          break;
+   301→        }
+   302→        case 'fibonacci': {
+   303→          if (d.points.length < 2) break;
+   304→          const p0 = d.points[0];
+   305→          const p1 = d.points[1];
+   306→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   307→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   308→          if (x0 == null || x1 == null) break;
+   309→          const priceHigh = Math.max(p0.price, p1.price);
+   310→          const priceLow = Math.min(p0.price, p1.price);
+   311→          const priceRange = priceHigh - priceLow;
+   312→          if (priceRange === 0) break;
+   313→
+   314→          const yTop = csRef.current?.priceToCoordinate(priceHigh);
+   315→          const yBottom = csRef.current?.priceToCoordinate(priceLow);
+   316→          if (yTop == null || yBottom == null) break;
+   317→          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBottom - yTop}" fill="${col}" opacity="0.04" />`;
+   318→
+   319→          for (const level of FIB_LEVELS) {
+   320→            const price = priceHigh - level.pct * priceRange;
+   321→            const y = csRef.current?.priceToCoordinate(price);
+   322→            if (y == null) continue;
+   323→            html += `<line x1="${Math.min(x0,x1) - 10}" y1="${y}" x2="${Math.max(x0,x1) + 10}" y2="${y}" stroke="${col}" stroke-width="1" opacity="0.6" />`;
+   324→            html += `<rect x="${Math.max(x0,x1) + 12}" y="${y - 8}" width="56" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
+   325→            html += `<text x="${Math.max(x0,x1) + 14}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(priceDecimals))}</text>`;
+   326→          }
+   327→          break;
+   328→        }
+   329→        case 'rectangle': {
+   330→          if (d.points.length < 2) break;
+   331→          const p0 = d.points[0];
+   332→          const p1 = d.points[d.points.length - 1];
+   333→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   334→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   335→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   336→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   337→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   338→          const rx = Math.min(x0, x1);
+   339→          const ry = Math.min(y0, y1);
+   340→          const rw = Math.abs(x1 - x0);
+   341→          const rh = Math.abs(y1 - y0);
+   342→          html += `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${col}" fill-opacity="0.08" stroke="${col}" stroke-width="${lw}" rx="2" />`;
+   343→          break;
+   344→        }
+   345→        case 'text': {
+   346→          if (d.points.length < 1 || !d.text) break;
+   347→          const p = d.points[0];
+   348→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   349→          const y = csRef.current?.priceToCoordinate(p.price);
+   350→          if (x == null || y == null) break;
+   351→          html += `<rect x="${x + 4}" y="${y - 16}" width="${d.text.length * 8 + 12}" height="22" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
+   352→          html += `<text x="${x + 10}" y="${y + 1}" fill="${col}" font-size="12" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
+   353→          break;
+   354→        }
+   355→        case 'brush': {
+   356→          if (d.points.length < 2) break;
+   357→          let pts = '';
+   358→          let valid = true;
+   359→          for (const p of d.points) {
+   360→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   361→            const y = csRef.current?.priceToCoordinate(p.price);
+   362→            if (x == null || y == null) { valid = false; break; }
+   363→            pts += `${x},${y} `;
+   364→          }
+   365→          if (!valid || pts.length === 0) break;
+   366→          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+   367→          break;
+   368→        }
+   369→        case 'measure': {
+   370→          if (d.points.length < 2) break;
+   371→          const p0 = d.points[0];
+   372→          const p1 = d.points[d.points.length - 1];
+   373→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   374→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   375→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   376→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   377→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   378→
+   379→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   380→          const diff = p1.price - p0.price;
+   381→          const pctChg = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+   382→          const bars = Math.abs(Math.round(p1.time - p0.time));
+   383→          const midX = (x0 + x1) / 2;
+   384→          const midY = (y0 + y1) / 2;
+   385→          const label = `${diff >= 0 ? '+' : ''}${toPersianDigits(diff.toFixed(priceDecimals))} (${pctChg >= 0 ? '+' : ''}${toPersianDigits(pctChg.toFixed(1))}%) ${toPersianDigits(String(bars))}bar`;
+   386→          html += `<rect x="${midX - 40}" y="${midY - 24}" width="80" height="20" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
+   387→          html += `<text x="${midX - 36}" y="${midY - 10}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
+   388→          break;
+   389→        }
+   390→        case 'arrow': {
+   391→          if (d.points.length < 2) break;
+   392→          const p0 = d.points[0];
+   393→          const p1 = d.points[d.points.length - 1];
+   394→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   395→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   396→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   397→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   398→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   399→          const markerId = `arrow-${col.replace('#','')}`;
+   400→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" marker-end="url(#${markerId})" />`;
+   401→          break;
+   402→        }
+   403→        case 'ray': {
+   404→          if (d.points.length < 2) break;
+   405→          const p0 = d.points[0];
+   406→          const p1 = d.points[d.points.length - 1];
+   407→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   408→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   409→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   410→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   411→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   412→          // Extend the line from p1 to the edge of the chart
+   413→          const dx = x1 - x0;
+   414→          const dy = y1 - y0;
+   415→          const extendFactor = 10;
+   416→          const xEnd = x1 + dx * extendFactor;
+   417→          const yEnd = y1 + dy * extendFactor;
+   418→          html += `<line x1="${x0}" y1="${y0}" x2="${xEnd}" y2="${yEnd}" stroke="${col}" stroke-width="${lw}" />`;
+   419→          break;
+   420→        }
+   421→        case 'fibext': {
+   422→          if (d.points.length < 2) break;
+   423→          const p0 = d.points[0];
+   424→          const p1 = d.points[1];
+   425→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   426→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   427→          if (x0 == null || x1 == null) break;
+   428→          const priceHigh = Math.max(p0.price, p1.price);
+   429→          const priceLow = Math.min(p0.price, p1.price);
+   430→          const priceRange = priceHigh - priceLow;
+   431→          if (priceRange === 0) break;
+   432→          const yTop = csRef.current?.priceToCoordinate(priceHigh);
+   433→          const yBot = csRef.current?.priceToCoordinate(priceLow);
+   434→          if (yTop == null || yBot == null) break;
+   435→          // Extension base rect (0-100%)
+   436→          html += `<rect x="${Math.min(x0,x1)}" y="${yTop}" width="${Math.abs(x1-x0)}" height="${yBot - yTop}" fill="${col}" opacity="0.04" />`;
+   437→          // Extension zone (100%+)
+   438→          const extY = csRef.current?.priceToCoordinate(priceHigh - 2.618 * priceRange);
+   439→          if (extY != null) {
+   440→            html += `<rect x="${Math.max(x0,x1)}" y="${yBot}" width="${Math.abs(x1-x0) * 2}" height="${extY - yBot}" fill="${col}" opacity="0.02" />`;
+   441→          }
+   442→          for (const level of FIB_EXT_LEVELS) {
+   443→            const price = priceHigh - level.pct * priceRange;
+   444→            const y = csRef.current?.priceToCoordinate(price);
+   445→            if (y == null) continue;
+   446→            const isExt = level.pct > 1;
+   447→            const xStart = isExt ? Math.max(x0, x1) : Math.min(x0, x1) - 10;
+   448→            const xEnd = isExt ? Math.max(x0, x1) + Math.abs(x1 - x0) * 1.5 : Math.max(x0, x1) + 10;
+   449→            html += `<line x1="${xStart}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="${col}" stroke-width="1" opacity="${isExt ? '0.4' : '0.6'}" ${isExt ? 'stroke-dasharray="4,3"' : ''} />`;
+   450→            html += `<rect x="${xEnd + 2}" y="${y - 8}" width="64" height="16" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="2" />`;
+   451→            html += `<text x="${xEnd + 4}" y="${y + 4}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${toPersianDigits(level.label)} ${toPersianDigits(price.toFixed(priceDecimals))}</text>`;
+   452→          }
+   453→          break;
+   454→        }
+   455→        case 'ellipse': {
+   456→          if (d.points.length < 2) break;
+   457→          const p0 = d.points[0];
+   458→          const p1 = d.points[d.points.length - 1];
+   459→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   460→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   461→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   462→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   463→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   464→          const cx = (x0 + x1) / 2;
+   465→          const cy = (y0 + y1) / 2;
+   466→          const rx = Math.abs(x1 - x0) / 2;
+   467→          const ry = Math.abs(y1 - y0) / 2;
+   468→          html += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${col}" fill-opacity="0.06" stroke="${col}" stroke-width="${lw}" />`;
+   469→          break;
+   470→        }
+   471→        case 'path': {
+   472→          if (d.points.length < 2) break;
+   473→          let pts = '';
+   474→          let valid = true;
+   475→          for (const p of d.points) {
+   476→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   477→            const y = csRef.current?.priceToCoordinate(p.price);
+   478→            if (x == null || y == null) { valid = false; break; }
+   479→            pts += `${x},${y} `;
+   480→          }
+   481→          if (!valid || pts.length === 0) break;
+   482→          html += `<polyline points="${pts.trim()}" fill="none" stroke="${col}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round" />`;
+   483→          // Draw dots at each vertex
+   484→          for (const p of d.points) {
+   485→            const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   486→            const y = csRef.current?.priceToCoordinate(p.price);
+   487→            if (x == null || y == null) continue;
+   488→            html += `<circle cx="${x}" cy="${y}" r="3" fill="${col}" />`;
+   489→          }
+   490→          break;
+   491→        }
+   492→        case 'callout': {
+   493→          if (d.points.length < 1 || !d.text) break;
+   494→          const p = d.points[0];
+   495→          const x = chart.timeScale().timeToCoordinate(p.time as Time);
+   496→          const y = csRef.current?.priceToCoordinate(p.price);
+   497→          if (x == null || y == null) break;
+   498→          const boxW = Math.max(d.text.length * 8 + 20, 60);
+   499→          const boxH = 28;
+   500→          const boxX = x + 8;
+   501→          const boxY = y - boxH - 8;
+   502→          // Arrow from box to point
+   503→          html += `<line x1="${boxX}" y1="${boxY + boxH}" x2="${x}" y2="${y}" stroke="${col}" stroke-width="1" />`;
+   504→          html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="${C.cardBg}" stroke="${col}" stroke-width="1" rx="4" />`;
+   505→          html += `<text x="${boxX + 6}" y="${boxY + boxH / 2 + 4}" fill="${col}" font-size="11" font-family="Vazirmatn, sans-serif">${d.text}</text>`;
+   506→          break;
+   507→        }
+   508→        case 'pitchfork': {
+   509→          if (d.points.length < 3) break;
+   510→          const p0 = d.points[0]; // start of median
+   511→          const p1 = d.points[1]; // end of median
+   512→          const p2 = d.points[2]; // fork point
+   513→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   514→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   515→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   516→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   517→          const x2 = chart.timeScale().timeToCoordinate(p2.time as Time);
+   518→          const y2 = csRef.current?.priceToCoordinate(p2.price);
+   519→          if (x0 == null || y0 == null || x1 == null || y1 == null || x2 == null || y2 == null) break;
+   520→          // Median line (p0 -> p1 extended)
+   521→          const dx = x1 - x0;
+   522→          const dy = y1 - y0;
+   523→          html += `<line x1="${x0}" y1="${y0}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5}" stroke="${col}" stroke-width="${lw}" />`;
+   524→          // Upper parallel: offset = (p2 - median_line) distance
+   525→          const medianSlope = dx !== 0 ? dy / dx : 0;
+   526→          const medianYatX2 = y0 + medianSlope * (x2 - x0);
+   527→          const offset = y2 - medianYatX2;
+   528→          html += `<line x1="${x0}" y1="${y0 + offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 + offset}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   529→          // Lower parallel: mirror the offset
+   530→          html += `<line x1="${x0}" y1="${y0 - offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 - offset}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="4,2" />`;
+   531→          break;
+   532→        }
+   533→        case 'channel': {
+   534→          if (d.points.length < 3) break;
+   535→          const p0 = d.points[0];
+   536→          const p1 = d.points[1];
+   537→          const p2 = d.points[2];
+   538→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   539→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   540→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   541→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   542→          const x2 = chart.timeScale().timeToCoordinate(p2.time as Time);
+   543→          const y2 = csRef.current?.priceToCoordinate(p2.price);
+   544→          if (x0 == null || y0 == null || x1 == null || y1 == null || x2 == null || y2 == null) break;
+   545→          // Line 1: p0 -> p1 (base)
+   546→          const dx = x1 - x0;
+   547→          const dy = y1 - y0;
+   548→          html += `<line x1="${x0}" y1="${y0}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5}" stroke="${col}" stroke-width="${lw}" />`;
+   549→          // Parallel through p2
+   550→          const slope = dx !== 0 ? dy / dx : 0;
+   551→          const lineYatX2 = y0 + slope * (x2 - x0);
+   552→          const offset = y2 - lineYatX2;
+   553→          html += `<line x1="${x0}" y1="${y0 + offset}" x2="${x1 + dx * 5}" y2="${y1 + dy * 5 + offset}" stroke="${col}" stroke-width="${lw}" />`;
+   554→          // Fill the channel
+   555→          const extX = x1 + dx * 5;
+   556→          const extY1 = y1 + dy * 5;
+   557→          const extY2 = y1 + dy * 5 + offset;
+   558→          html += `<polygon points="${x0},${y0} ${extX},${extY1} ${extX},${extY2} ${x0},${y0 + offset}" fill="${col}" fill-opacity="0.05" />`;
+   559→          break;
+   560→        }
+   561→        case 'regression': {
+   562→          if (d.points.length < 2) break;
+   563→          const p0 = d.points[0];
+   564→          const p1 = d.points[d.points.length - 1];
+   565→          const x0 = chart.timeScale().timeToCoordinate(p0.time as Time);
+   566→          const y0 = csRef.current?.priceToCoordinate(p0.price);
+   567→          const x1 = chart.timeScale().timeToCoordinate(p1.time as Time);
+   568→          const y1 = csRef.current?.priceToCoordinate(p1.price);
+   569→          if (x0 == null || y0 == null || x1 == null || y1 == null) break;
+   570→          // Draw a straight line from p0 to p1 (linear regression line)
+   571→          html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${lw}" stroke-dasharray="6,3" />`;
+   572→          // Show the price change
+   573→          const diff = p1.price - p0.price;
+   574→          const pct = p0.price !== 0 ? ((diff / p0.price) * 100) : 0;
+   575→          const midX = (x0 + x1) / 2;
+   576→          const midY = (y0 + y1) / 2 - 14;
+   577→          const label = `رگرسیون: ${diff >= 0 ? '+' : ''}${toPersianDigits(pct.toFixed(1))}%`;
+   578→          html += `<rect x="${midX - 50}" y="${midY - 10}" width="100" height="18" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="1" rx="3" />`;
+   579→          html += `<text x="${midX - 46}" y="${midY + 3}" fill="${col}" font-size="10" font-family="Vazirmatn, sans-serif">${label}</text>`;
+   580→          break;
+   581→        }
+   582→      }
+   583→    }
+   584→
+   585→    svg.innerHTML = html;
+   586→  }, [drawings, currentDrawing, priceDecimals]);
+   587→
+   588→  // OHLC change color helper
+   589→  const chgColor = useCallback((o: number, c: number) => c >= o ? BULL : BEAR, []);
+   590→
+   591→  /* - Chart Build ---------------------- */
+   592→  const build = useCallback(() => {
+   593→    const chartEl = chartContainerRef.current;
+   594→    if (!chartEl || data.length === 0) return;
+   595→
+   596→    if (chartRef.current) {
+   597→      chartRef.current.remove();
+   598→      chartRef.current = null;
+   599→    }
+   600→
+
+[showing lines 1-600 of 1209; use offset=601 with limit to continue reading]

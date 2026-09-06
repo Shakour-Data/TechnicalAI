@@ -1,0 +1,1925 @@
+     1→// ═══════════════════════════════════════════════════════════════════════════════
+     2→// Pattern Detection Engine — Classic, Harmonic, Candlestick, Elliott Wave
+     3→// ═══════════════════════════════════════════════════════════════════════════════
+     4→
+     5→import type { OHLCV } from './ta-engine';
+     6→
+     7→// ─── Interfaces ─────────────────────────────────────────────────────────────
+     8→
+     9→export interface PatternResult {
+    10→  name: string;         // Persian name
+    11→  nameEn: string;       // English name
+    12→  category: 'classic' | 'harmonic' | 'candlestick' | 'elliott';
+    13→  direction: 'bullish' | 'bearish' | 'neutral';
+    14→  strength: number;     // 0-1
+    15→  status: 'forming' | 'completed' | 'failed';
+    16→  priceLevel?: number;  // key price level (neckline, PRZ, etc.)
+    17→  description: string;  // brief Persian description
+    18→}
+    19→
+    20→export interface DetectedPatterns {
+    21→  classic: PatternResult[];
+    22→  harmonic: PatternResult[];
+    23→  candlestick: PatternResult[];
+    24→  elliott: PatternResult[];
+    25→  all: PatternResult[];
+    26→  schoolScores: {
+    27→    classical: number;
+    28→    oscillator: number;
+    29→    volume: number;
+    30→    harmonic: number;
+    31→    elliott: number;
+    32→    hybrid: number;
+    33→  };
+    34→}
+    35→
+    36→// ─── Utility Functions ──────────────────────────────────────────────────────
+    37→
+    38→interface SwingPoint {
+    39→  index: number;
+    40→  price: number;
+    41→  type: 'high' | 'low';
+    42→}
+    43→
+    44→function findSwingPoints(data: OHLCV[], order: number = 3): SwingPoint[] {
+    45→  const swings: SwingPoint[] = [];
+    46→  const len = data.length;
+    47→  for (let i = order; i < len - order; i++) {
+    48→    let isHigh = true;
+    49→    let isLow = true;
+    50→    for (let j = 1; j <= order; j++) {
+    51→      if (data[i].high <= data[i - j].high || data[i].high <= data[i + j].high) isHigh = false;
+    52→      if (data[i].low >= data[i - j].low || data[i].low >= data[i + j].low) isLow = false;
+    53→    }
+    54→    if (isHigh) swings.push({ index: i, price: data[i].high, type: 'high' });
+    55→    if (isLow) swings.push({ index: i, price: data[i].low, type: 'low' });
+    56→  }
+    57→  return swings;
+    58→}
+    59→
+    60→function avg(arr: number[]): number {
+    61→  if (arr.length === 0) return 0;
+    62→  return arr.reduce((s, v) => s + v, 0) / arr.length;
+    63→}
+    64→
+    65→function nearRatio(a: number, b: number, tolerance: number = 0.05): boolean {
+    66→  if (b === 0) return a === 0;
+    67→  return Math.abs(a / b - 1) <= tolerance;
+    68→}
+    69→
+    70→function bodySize(c: OHLCV): number {
+    71→  return Math.abs(c.close - c.open);
+    72→}
+    73→
+    74→function upperShadow(c: OHLCV): number {
+    75→  return c.high - Math.max(c.open, c.close);
+    76→}
+    77→
+    78→function lowerShadow(c: OHLCV): number {
+    79→  return Math.min(c.open, c.close) - c.low;
+    80→}
+    81→
+    82→function isBullish(c: OHLCV): boolean {
+    83→  return c.close > c.open;
+    84→}
+    85→
+    86→function isBearish(c: OHLCV): boolean {
+    87→  return c.close < c.open;
+    88→}
+    89→
+    90→function totalRange(c: OHLCV): number {
+    91→  return c.high - c.low;
+    92→}
+    93→
+    94→function typicalPrice(c: OHLCV): number {
+    95→  return (c.high + c.low + c.close) / 3;
+    96→}
+    97→
+    98→function sma(values: number[], period: number): number {
+    99→  if (values.length < period) return 0;
+   100→  const slice = values.slice(-period);
+   101→  return slice.reduce((a, b) => a + b, 0) / period;
+   102→}
+   103→
+   104→function ema(values: number[], period: number): number {
+   105→  if (values.length < period) return 0;
+   106→  const k = 2 / (period + 1);
+   107→  let result = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+   108→  for (let i = period; i < values.length; i++) {
+   109→    result = values[i] * k + result * (1 - k);
+   110→  }
+   111→  return result;
+   112→}
+   113→
+   114→// Fib ratios
+   115→const PHI = 0.618;
+   116→const PHI_EXT = 1.618;
+   117→const PHI_386 = 0.382;
+   118→const PHI_786 = 0.786;
+   119→const PHI_886 = 0.886;
+   120→const PHI_127 = 1.27;
+   121→const PHI_141 = 1.414;
+   122→const PHI_236 = 2.236;
+   123→const PHI_314 = 3.14;
+   124→const PHI_423 = 4.236;
+   125→const FIB_TOL = 0.05;
+   126→
+   127→// ─── 1. Classic Pattern Detectors ───────────────────────────────────────────
+   128→
+   129→function detectHeadAndShoulders(data: OHLCV[]): PatternResult[] {
+   130→  const results: PatternResult[] = [];
+   131→  if (data.length < 30) return results;
+   132→  const swings = findSwingPoints(data, 3);
+   133→  const highs = swings.filter(s => s.type === 'high');
+   134→  const lows = swings.filter(s => s.type === 'low');
+   135→
+   136→  // Bearish Head & Shoulders: left shoulder < head > right shoulder, neckline support
+   137→  for (let i = 2; i < highs.length; i++) {
+   138→    const ls = highs[i - 2];
+   139→    const hd = highs[i - 1];
+   140→    const rs = highs[i];
+   141→    if (hd.price > ls.price && hd.price > rs.price) {
+   142→      const sim = 1 - Math.abs(ls.price - rs.price) / hd.price;
+   143→      if (sim > 0.85) {
+   144→        const neckline = (ls.price + rs.price) / 2;
+   145→        const last = data[data.length - 1];
+   146→        const dist = (last.close - neckline) / neckline;
+   147→        const status = dist > 0.01 ? 'forming' : dist < -0.005 ? 'completed' : 'forming';
+   148→        results.push({
+   149→          name: 'سر و شانه', nameEn: 'Head & Shoulders', category: 'classic',
+   150→          direction: 'bearish', strength: sim * 0.8 + (status === 'completed' ? 0.2 : 0),
+   151→          status, priceLevel: neckline,
+   152→          description: `الگوی سر و شانه نزولی با خط گردن ${neckline.toFixed(0)}`
+   153→        });
+   154→      }
+   155→    }
+   156→  }
+   157→
+   158→  // Bullish Inverse Head & Shoulders
+   159→  for (let i = 2; i < lows.length; i++) {
+   160→    const ls = lows[i - 2];
+   161→    const hd = lows[i - 1];
+   162→    const rs = lows[i];
+   163→    if (hd.price < ls.price && hd.price < rs.price) {
+   164→      const sim = 1 - Math.abs(ls.price - rs.price) / hd.price;
+   165→      if (sim > 0.85) {
+   166→        const neckline = (ls.price + rs.price) / 2;
+   167→        const last = data[data.length - 1];
+   168→        const dist = (last.close - neckline) / neckline;
+   169→        const status = dist < -0.01 ? 'forming' : dist > 0.005 ? 'completed' : 'forming';
+   170→        results.push({
+   171→          name: 'سر و شانه معکوس', nameEn: 'Inverse Head & Shoulders', category: 'classic',
+   172→          direction: 'bullish', strength: sim * 0.8 + (status === 'completed' ? 0.2 : 0),
+   173→          status, priceLevel: neckline,
+   174→          description: `الگوی سر و شانه معکوس صعودی با خط گردن ${neckline.toFixed(0)}`
+   175→        });
+   176→      }
+   177→    }
+   178→  }
+   179→
+   180→  return results;
+   181→}
+   182→
+   183→function detectDoubleTop(data: OHLCV[]): PatternResult {
+   184→  if (data.length < 20) return null!;
+   185→  const swings = findSwingPoints(data, 3);
+   186→  const highs = swings.filter(s => s.type === 'high');
+   187→  if (highs.length < 2) return null!;
+   188→
+   189→  const len = highs.length;
+   190→  const h1 = highs[len - 2];
+   191→  const h2 = highs[len - 1];
+   192→  const sim = 1 - Math.abs(h1.price - h2.price) / h1.price;
+   193→  if (sim < 0.96) return null!;
+   194→
+   195→  const trough = Math.min(...data.slice(h1.index, h2.index + 1).map(d => d.low));
+   196→  const last = data[data.length - 1];
+   197→  const broken = last.close < trough;
+   198→
+   199→  return {
+   200→    name: 'دو سقف', nameEn: 'Double Top', category: 'classic',
+   201→    direction: 'bearish', strength: Math.min(sim, 1),
+   202→    status: broken ? 'completed' : 'forming',
+   203→    priceLevel: trough,
+   204→    description: `الگوی دو سقف نزولی با خط گردن ${trough.toFixed(0)}`
+   205→  };
+   206→}
+   207→
+   208→function detectDoubleBottom(data: OHLCV[]): PatternResult {
+   209→  if (data.length < 20) return null!;
+   210→  const swings = findSwingPoints(data, 3);
+   211→  const lows = swings.filter(s => s.type === 'low');
+   212→  if (lows.length < 2) return null!;
+   213→
+   214→  const len = lows.length;
+   215→  const l1 = lows[len - 2];
+   216→  const l2 = lows[len - 1];
+   217→  const sim = 1 - Math.abs(l1.price - l2.price) / l1.price;
+   218→  if (sim < 0.96) return null!;
+   219→
+   220→  const peak = Math.max(...data.slice(l1.index, l2.index + 1).map(d => d.high));
+   221→  const last = data[data.length - 1];
+   222→  const broken = last.close > peak;
+   223→
+   224→  return {
+   225→    name: 'دو کف', nameEn: 'Double Bottom', category: 'classic',
+   226→    direction: 'bullish', strength: Math.min(sim, 1),
+   227→    status: broken ? 'completed' : 'forming',
+   228→    priceLevel: peak,
+   229→    description: `الگوی دو کف صعودی با خط گردن ${peak.toFixed(0)}`
+   230→  };
+   231→}
+   232→
+   233→function detectTripleTop(data: OHLCV[]): PatternResult {
+   234→  if (data.length < 30) return null!;
+   235→  const swings = findSwingPoints(data, 3);
+   236→  const highs = swings.filter(s => s.type === 'high');
+   237→  if (highs.length < 3) return null!;
+   238→
+   239→  const h = [highs[highs.length - 3], highs[highs.length - 2], highs[highs.length - 1]];
+   240→  const avgPrice = (h[0].price + h[1].price + h[2].price) / 3;
+   241→  const variance = h.reduce((s, p) => s + Math.abs(p.price - avgPrice), 0) / avgPrice;
+   242→  if (variance > 0.04) return null!;
+   243→
+   244→  const neckline = Math.min(
+   245→    Math.min(...data.slice(h[0].index, h[1].index + 1).map(d => d.low)),
+   246→    Math.min(...data.slice(h[1].index, h[2].index + 1).map(d => d.low))
+   247→  );
+   248→  const last = data[data.length - 1];
+   249→  const broken = last.close < neckline;
+   250→
+   251→  return {
+   252→    name: 'سه سقف', nameEn: 'Triple Top', category: 'classic',
+   253→    direction: 'bearish', strength: 1 - variance * 10,
+   254→    status: broken ? 'completed' : 'forming',
+   255→    priceLevel: neckline,
+   256→    description: `الگوی سه سقف نزولی با خط گردن ${neckline.toFixed(0)}`
+   257→  };
+   258→}
+   259→
+   260→function detectTripleBottom(data: OHLCV[]): PatternResult {
+   261→  if (data.length < 30) return null!;
+   262→  const swings = findSwingPoints(data, 3);
+   263→  const lows = swings.filter(s => s.type === 'low');
+   264→  if (lows.length < 3) return null!;
+   265→
+   266→  const l = [lows[lows.length - 3], lows[lows.length - 2], lows[lows.length - 1]];
+   267→  const avgPrice = (l[0].price + l[1].price + l[2].price) / 3;
+   268→  const variance = l.reduce((s, p) => s + Math.abs(p.price - avgPrice), 0) / avgPrice;
+   269→  if (variance > 0.04) return null!;
+   270→
+   271→  const neckline = Math.max(
+   272→    Math.max(...data.slice(l[0].index, l[1].index + 1).map(d => d.high)),
+   273→    Math.max(...data.slice(l[1].index, l[2].index + 1).map(d => d.high))
+   274→  );
+   275→  const last = data[data.length - 1];
+   276→  const broken = last.close > neckline;
+   277→
+   278→  return {
+   279→    name: 'سه کف', nameEn: 'Triple Bottom', category: 'classic',
+   280→    direction: 'bullish', strength: 1 - variance * 10,
+   281→    status: broken ? 'completed' : 'forming',
+   282→    priceLevel: neckline,
+   283→    description: `الگوی سه کف صعودی با خط گردن ${neckline.toFixed(0)}`
+   284→  };
+   285→}
+   286→
+   287→function detectAscendingTriangle(data: OHLCV[]): PatternResult {
+   288→  if (data.length < 20) return null!;
+   289→  const swings = findSwingPoints(data, 3);
+   290→  const highs = swings.filter(s => s.type === 'high');
+   291→  const lows = swings.filter(s => s.type === 'low');
+   292→  if (highs.length < 2 || lows.length < 2) return null!;
+   293→
+   294→  const recentHighs = highs.slice(-3);
+   295→  const recentLows = lows.slice(-3);
+   296→  const hAvg = avg(recentHighs.map(h => h.price));
+   297→  const hVar = recentHighs.reduce((s, h) => s + Math.abs(h.price - hAvg), 0) / hAvg;
+   298→  const lRising = recentLows.length >= 2 && recentLows[recentLows.length - 1].price > recentLows[0].price;
+   299→
+   300→  if (hVar > 0.02 || !lRising) return null!;
+   301→
+   302→  const last = data[data.length - 1];
+   303→  const broken = last.close > hAvg;
+   304→  return {
+   305→    name: 'مثلث صعودی', nameEn: 'Ascending Triangle', category: 'classic',
+   306→    direction: 'bullish', strength: 0.6 + (broken ? 0.4 : lRising ? 0.2 : 0),
+   307→    status: broken ? 'completed' : 'forming',
+   308→    priceLevel: hAvg,
+   309→    description: `الگوی مثلث صعودی با مقاومت ${hAvg.toFixed(0)}`
+   310→  };
+   311→}
+   312→
+   313→function detectDescendingTriangle(data: OHLCV[]): PatternResult {
+   314→  if (data.length < 20) return null!;
+   315→  const swings = findSwingPoints(data, 3);
+   316→  const highs = swings.filter(s => s.type === 'high');
+   317→  const lows = swings.filter(s => s.type === 'low');
+   318→  if (highs.length < 2 || lows.length < 2) return null!;
+   319→
+   320→  const recentHighs = highs.slice(-3);
+   321→  const recentLows = lows.slice(-3);
+   322→  const lAvg = avg(recentLows.map(l => l.price));
+   323→  const lVar = recentLows.reduce((s, l) => s + Math.abs(l.price - lAvg), 0) / lAvg;
+   324→  const hFalling = recentHighs.length >= 2 && recentHighs[recentHighs.length - 1].price < recentHighs[0].price;
+   325→
+   326→  if (lVar > 0.02 || !hFalling) return null!;
+   327→
+   328→  const last = data[data.length - 1];
+   329→  const broken = last.close < lAvg;
+   330→  return {
+   331→    name: 'مثلث نزولی', nameEn: 'Descending Triangle', category: 'classic',
+   332→    direction: 'bearish', strength: 0.6 + (broken ? 0.4 : 0.2),
+   333→    status: broken ? 'completed' : 'forming',
+   334→    priceLevel: lAvg,
+   335→    description: `الگوی مثلث نزولی با حمایت ${lAvg.toFixed(0)}`
+   336→  };
+   337→}
+   338→
+   339→function detectSymmetricTriangle(data: OHLCV[]): PatternResult {
+   340→  if (data.length < 20) return null!;
+   341→  const swings = findSwingPoints(data, 3);
+   342→  const highs = swings.filter(s => s.type === 'high');
+   343→  const lows = swings.filter(s => s.type === 'low');
+   344→  if (highs.length < 3 || lows.length < 3) return null!;
+   345→
+   346→  const rh = highs.slice(-3);
+   347→  const rl = lows.slice(-3);
+   348→  const hConverging = rh[rh.length - 1].price < rh[0].price;
+   349→  const lConverging = rl[rl.length - 1].price > rl[0].price;
+   350→  const hSlope = (rh[rh.length - 1].price - rh[0].price) / (rh[rh.length - 1].index - rh[0].index);
+   351→  const lSlope = (rl[rl.length - 1].price - rl[0].price) / (rl[rl.length - 1].index - rl[0].index);
+   352→  const slopeSim = 1 - Math.abs(Math.abs(hSlope) - Math.abs(lSlope)) / (Math.abs(hSlope) + Math.abs(lSlope) + 0.001);
+   353→
+   354→  if (!hConverging || !lConverging || slopeSim < 0.5) return null!;
+   355→
+   356→  const apex = (rh[rh.length - 1].price + rl[rl.length - 1].price) / 2;
+   357→  const last = data[data.length - 1];
+   358→  const dir = last.close > apex ? 'bullish' : 'bearish';
+   359→
+   360→  return {
+   361→    name: 'مثلث متقارن', nameEn: 'Symmetric Triangle', category: 'classic',
+   362→    direction: dir as 'bullish' | 'bearish',
+   363→    strength: slopeSim * 0.7 + 0.3,
+   364→    status: 'forming',
+   365→    priceLevel: apex,
+   366→    description: `الگوی مثلث متقارن با رأس تقریبی ${apex.toFixed(0)}`
+   367→  };
+   368→}
+   369→
+   370→function detectAscendingWedge(data: OHLCV[]): PatternResult {
+   371→  if (data.length < 25) return null!;
+   372→  const swings = findSwingPoints(data, 3);
+   373→  const highs = swings.filter(s => s.type === 'high');
+   374→  const lows = swings.filter(s => s.type === 'low');
+   375→  if (highs.length < 3 || lows.length < 3) return null!;
+   376→
+   377→  const rh = highs.slice(-3);
+   378→  const rl = lows.slice(-3);
+   379→  const hRising = rh[rh.length - 1].price > rh[0].price;
+   380→  const lRising = rl[rl.length - 1].price > rl[0].price;
+   381→  if (!hRising || !lRising) return null!;
+   382→
+   383→  const hSlope = (rh[rh.length - 1].price - rh[0].price) / (rh[rh.length - 1].index - rh[0].index);
+   384→  const lSlope = (rl[rl.length - 1].price - rl[0].price) / (rl[rl.length - 1].index - rl[0].index);
+   385→  // Both rising but lows rising faster (converging upward)
+   386→  if (lSlope <= hSlope) return null!;
+   387→
+   388→  const last = data[data.length - 1];
+   389→  const broken = last.close < rl[rl.length - 1].price;
+   390→  return {
+   391→    name: 'گوه صعودی', nameEn: 'Ascending Wedge', category: 'classic',
+   392→    direction: 'bearish', strength: 0.6 + (broken ? 0.4 : 0),
+   393→    status: broken ? 'completed' : 'forming',
+   394→    priceLevel: rl[rl.length - 1].price,
+   395→    description: `الگوی گوه صعودی — سیگنال نزولی`
+   396→  };
+   397→}
+   398→
+   399→function detectDescendingWedge(data: OHLCV[]): PatternResult {
+   400→  if (data.length < 25) return null!;
+   401→  const swings = findSwingPoints(data, 3);
+   402→  const highs = swings.filter(s => s.type === 'high');
+   403→  const lows = swings.filter(s => s.type === 'low');
+   404→  if (highs.length < 3 || lows.length < 3) return null!;
+   405→
+   406→  const rh = highs.slice(-3);
+   407→  const rl = lows.slice(-3);
+   408→  const hFalling = rh[rh.length - 1].price < rh[0].price;
+   409→  const lFalling = rl[rl.length - 1].price < rl[0].price;
+   410→  if (!hFalling || !lFalling) return null!;
+   411→
+   412→  const hSlope = (rh[rh.length - 1].price - rh[0].price) / (rh[rh.length - 1].index - rh[0].index);
+   413→  const lSlope = (rl[rl.length - 1].price - rl[0].price) / (rl[rl.length - 1].index - rl[0].index);
+   414→  if (hSlope >= lSlope) return null!;
+   415→
+   416→  const last = data[data.length - 1];
+   417→  const broken = last.close > rh[rh.length - 1].price;
+   418→  return {
+   419→    name: 'گوه نزولی', nameEn: 'Descending Wedge', category: 'classic',
+   420→    direction: 'bullish', strength: 0.6 + (broken ? 0.4 : 0),
+   421→    status: broken ? 'completed' : 'forming',
+   422→    priceLevel: rh[rh.length - 1].price,
+   423→    description: `الگوی گوه نزولی — سیگنال صعودی`
+   424→  };
+   425→}
+   426→
+   427→function detectBullFlag(data: OHLCV[]): PatternResult {
+   428→  if (data.length < 20) return null!;
+   429→  const poleLen = Math.min(10, Math.floor(data.length * 0.3));
+   430→  const flagLen = Math.min(10, Math.floor(data.length * 0.2));
+   431→  const flagStart = data.length - flagLen;
+   432→  const poleEnd = flagStart;
+   433→  const poleStart = Math.max(0, poleEnd - poleLen);
+   434→
+   435→  if (poleStart >= poleEnd) return null!;
+   436→  const poleRise = data[poleEnd - 1].close - data[poleStart].close;
+   437→  if (poleRise <= 0) return null!;
+   438→
+   439→  const flagHighs = data.slice(flagStart).map(d => d.high);
+   440→  const flagLows = data.slice(flagStart).map(d => d.low);
+   441→  const flagTrend = sma(flagHighs, flagLen) - sma(flagLows, flagLen);
+   442→  const flagSlope = (flagHighs[flagHighs.length - 1] - flagHighs[0]) / (flagLen || 1);
+   443→
+   444→  if (flagSlope > 0 || flagTrend > poleRise * 0.3) return null!;
+   445→
+   446→  const last = data[data.length - 1];
+   447→  return {
+   448→    name: 'پرچم صعودی', nameEn: 'Bull Flag', category: 'classic',
+   449→    direction: 'bullish', strength: 0.5 + Math.min(poleRise / (last.close || 1), 0.3) + (flagSlope < 0 ? 0.2 : 0),
+   450→    status: 'forming',
+   451→    priceLevel: Math.max(...flagHighs),
+   452→    description: `الگوی پرچم صعودی — ادامه روند صعودی مورد انتظار`
+   453→  };
+   454→}
+   455→
+   456→function detectBearFlag(data: OHLCV[]): PatternResult {
+   457→  if (data.length < 20) return null!;
+   458→  const poleLen = Math.min(10, Math.floor(data.length * 0.3));
+   459→  const flagLen = Math.min(10, Math.floor(data.length * 0.2));
+   460→  const flagStart = data.length - flagLen;
+   461→  const poleEnd = flagStart;
+   462→  const poleStart = Math.max(0, poleEnd - poleLen);
+   463→
+   464→  if (poleStart >= poleEnd) return null!;
+   465→  const poleDrop = data[poleStart].close - data[poleEnd - 1].close;
+   466→  if (poleDrop <= 0) return null!;
+   467→
+   468→  const flagHighs = data.slice(flagStart).map(d => d.high);
+   469→  const flagLows = data.slice(flagStart).map(d => d.low);
+   470→  const flagSlope = (flagLows[flagLows.length - 1] - flagLows[0]) / (flagLen || 1);
+   471→
+   472→  if (flagSlope < 0) return null!;
+   473→
+   474→  const last = data[data.length - 1];
+   475→  return {
+   476→    name: 'پرچم نزولی', nameEn: 'Bear Flag', category: 'classic',
+   477→    direction: 'bearish', strength: 0.5 + Math.min(poleDrop / (last.close || 1), 0.3) + (flagSlope > 0 ? 0.2 : 0),
+   478→    status: 'forming',
+   479→    priceLevel: Math.min(...flagLows),
+   480→    description: `الگوی پرچم نزولی — ادامه روند نزولی مورد انتظار`
+   481→  };
+   482→}
+   483→
+   484→function detectPennant(data: OHLCV[]): PatternResult[] {
+   485→  const results: PatternResult[] = [];
+   486→  if (data.length < 20) return results;
+   487→
+   488→  const poleLen = Math.min(10, Math.floor(data.length * 0.25));
+   489→  const flagLen = Math.min(10, Math.floor(data.length * 0.15));
+   490→  const flagStart = data.length - flagLen;
+   491→  const poleEnd = flagStart;
+   492→  const poleStart = Math.max(0, poleEnd - poleLen);
+   493→
+   494→  if (poleStart >= poleEnd || flagLen < 3) return results;
+   495→
+   496→  const poleMove = data[poleEnd - 1].close - data[poleStart].close;
+   497→  const absPoleMove = Math.abs(poleMove);
+   498→  if (absPoleMove === 0) return results;
+   499→
+   500→  const highs = data.slice(flagStart).map(d => d.high);
+   501→  const lows = data.slice(flagStart).map(d => d.low);
+   502→  const hConverge = highs[highs.length - 1] < highs[0];
+   503→  const lConverge = lows[lows.length - 1] > lows[0];
+   504→  if (!(hConverge && lConverge)) return results;
+   505→
+   506→  const isBull = poleMove > 0;
+   507→  results.push({
+   508→    name: isBull ? 'پرچم‌نما صعودی' : 'پرچم‌نما نزولی',
+   509→    nameEn: isBull ? 'Bull Pennant' : 'Bear Pennant',
+   510→    category: 'classic',
+   511→    direction: isBull ? 'bullish' : 'bearish',
+   512→    strength: 0.7,
+   513→    status: 'forming',
+   514→    priceLevel: avg(highs),
+   515→    description: isBull
+   516→      ? 'الگوی پرچم‌نما صعودی — ادامۀ روند صعودی'
+   517→      : 'الگوی پرچم‌نما نزولی — ادامۀ روند نزولی'
+   518→  });
+   519→  return results;
+   520→}
+   521→
+   522→function detectCupAndHandle(data: OHLCV[]): PatternResult {
+   523→  if (data.length < 40) return null!;
+   524→  const swings = findSwingPoints(data, 3);
+   525→  const lows = swings.filter(s => s.type === 'low');
+   526→  if (lows.length < 3) return null!;
+   527→
+   528→  // Look for U-shape: high, low, high with a small dip (handle)
+   529→  const recentLows = lows.slice(-5);
+   530→  if (recentLows.length < 3) return null!;
+   531→
+   532→  // Cup: first and last swing lows should be near same level, middle ones lower
+   533→  const cupL = recentLows.slice(0, Math.ceil(recentLows.length * 0.7));
+   534→  const cupBottom = Math.min(...cupL.map(l => l.price));
+   535→  const cupRim = avg([recentLows[0].price, cupL[cupL.length - 1].price]);
+   536→  const depth = (cupRim - cupBottom) / cupRim;
+   537→  if (depth < 0.05 || depth > 0.5) return null!;
+   538→
+   539→  const handleLows = recentLows.slice(Math.ceil(recentLows.length * 0.7));
+   540→  if (handleLows.length === 0) return null!;
+   541→  const handleDepth = (cupRim - avg(handleLows.map(l => l.price))) / cupRim;
+   542→  if (handleDepth > 0.3 * depth) return null!;
+   543→
+   544→  const last = data[data.length - 1];
+   545→  const broken = last.close > cupRim;
+   546→  return {
+   547→    name: 'فنجان و دسته', nameEn: 'Cup & Handle', category: 'classic',
+   548→    direction: 'bullish', strength: 0.5 + (broken ? 0.3 : 0) + Math.min(depth, 0.2),
+   549→    status: broken ? 'completed' : 'forming',
+   550→    priceLevel: cupRim,
+   551→    description: `الگوی فنجان و دسته صعودی با سطح مقاومت ${cupRim.toFixed(0)}`
+   552→  };
+   553→}
+   554→
+   555→function detectRectangle(data: OHLCV[]): PatternResult {
+   556→  if (data.length < 20) return null!;
+   557→  const swings = findSwingPoints(data, 3);
+   558→  const highs = swings.filter(s => s.type === 'high');
+   559→  const lows = swings.filter(s => s.type === 'low');
+   560→  if (highs.length < 2 || lows.length < 2) return null!;
+   561→
+   562→  const rh = highs.slice(-3);
+   563→  const rl = lows.slice(-3);
+   564→  const hAvg = avg(rh.map(h => h.price));
+   565→  const lAvg = avg(rl.map(l => l.price));
+   566→  const hVar = rh.reduce((s, h) => s + Math.abs(h.price - hAvg), 0) / hAvg;
+   567→  const lVar = rl.reduce((s, l) => s + Math.abs(l.price - lAvg), 0) / lAvg;
+   568→
+   569→  if (hVar > 0.03 || lVar > 0.03) return null!;
+   570→  if ((hAvg - lAvg) / lAvg < 0.02) return null!;
+   571→
+   572→  const last = data[data.length - 1];
+   573→  const mid = (hAvg + lAvg) / 2;
+   574→  const dir = last.close > mid ? 'bullish' : 'bearish';
+   575→
+   576→  return {
+   577→    name: 'مستطیل / کانال', nameEn: 'Rectangle / Channel', category: 'classic',
+   578→    direction: dir as 'bullish' | 'bearish',
+   579→    strength: (1 - hVar * 20) * (1 - lVar * 20),
+   580→    status: 'forming',
+   581→    priceLevel: mid,
+   582→    description: `الگوی مستطیل با محدوده ${lAvg.toFixed(0)} تا ${hAvg.toFixed(0)}`
+   583→  };
+   584→}
+   585→
+   586→function detectBroadeningTop(data: OHLCV[]): PatternResult {
+   587→  if (data.length < 25) return null!;
+   588→  const swings = findSwingPoints(data, 3);
+   589→  const highs = swings.filter(s => s.type === 'high');
+   590→  const lows = swings.filter(s => s.type === 'low');
+   591→  if (highs.length < 3 || lows.length < 3) return null!;
+   592→
+   593→  const rh = highs.slice(-3);
+   594→  const rl = lows.slice(-3);
+   595→  const hExpanding = rh[rh.length - 1].price > rh[0].price;
+   596→  const lExpanding = rl[rl.length - 1].price < rl[0].price;
+   597→  if (!hExpanding || !lExpanding) return null!;
+   598→
+   599→  return {
+   600→    name: 'بالا‌گشاد', nameEn: 'Broadening Top', category: 'classic',
+   601→    direction: 'bearish', strength: 0.6,
+   602→    status: 'forming',
+   603→    priceLevel: rl[rl.length - 1].price,
+   604→    description: `الگوی بالا‌گشاد — افزایش نوسان و احتمال نزول`
+   605→  };
+   606→}
+   607→
+   608→function detectBroadeningBottom(data: OHLCV[]): PatternResult {
+   609→  if (data.length < 25) return null!;
+   610→  const swings = findSwingPoints(data, 3);
+   611→  const highs = swings.filter(s => s.type === 'high');
+   612→  const lows = swings.filter(s => s.type === 'low');
+   613→  if (highs.length < 3 || lows.length < 3) return null!;
+   614→
+   615→  const rh = highs.slice(-3);
+   616→  const rl = lows.slice(-3);
+   617→  const hExpanding = rh[rh.length - 1].price > rh[0].price;
+   618→  const lExpanding = rl[rl.length - 1].price < rl[0].price;
+   619→  if (!hExpanding || !lExpanding) return null!;
+   620→
+   621→  return {
+   622→    name: 'پایین‌گشاد', nameEn: 'Broadening Bottom', category: 'classic',
+   623→    direction: 'bullish', strength: 0.5,
+   624→    status: 'forming',
+   625→    description: `الگوی پایین‌گشاد — تجمع در کف و احتمال صعود`
+   626→  };
+   627→}
+   628→
+   629→function detectDiamondTop(data: OHLCV[]): PatternResult {
+   630→  if (data.length < 30) return null!;
+   631→  const swings = findSwingPoints(data, 3);
+   632→  const highs = swings.filter(s => s.type === 'high');
+   633→  const lows = swings.filter(s => s.type === 'low');
+   634→  if (highs.length < 4 || lows.length < 4) return null!;
+   635→
+   636→  const rh = highs.slice(-4);
+   637→  const rl = lows.slice(-4);
+   638→  // Diamond: high-low-high-low pattern where highs rise then fall, lows fall then rise
+   639→  const h1 = rh[0].price, h2 = rh[1].price, h3 = rh[2].price, h4 = rh[3].price;
+   640→  const l1 = rl[0].price, l2 = rl[1].price, l3 = rl[2].price, l4 = rl[3].price;
+   641→  const topShape = h2 > h1 && h3 > h2 && h4 < h3;
+   642→  const bottomShape = l2 < l1 && l3 < l2 && l4 > l3;
+   643→  if (!topShape || !bottomShape) return null!;
+   644→
+   645→  return {
+   646→    name: 'لوزی بالا', nameEn: 'Diamond Top', category: 'classic',
+   647→    direction: 'bearish', strength: 0.65,
+   648→    status: 'forming',
+   649→    priceLevel: (l1 + l4) / 2,
+   650→    description: `الگوی لوزی بالا — سیگنال بازگشت نزولی`
+   651→  };
+   652→}
+   653→
+   654→function detectDiamondBottom(data: OHLCV[]): PatternResult {
+   655→  if (data.length < 30) return null!;
+   656→  const swings = findSwingPoints(data, 3);
+   657→  const highs = swings.filter(s => s.type === 'high');
+   658→  const lows = swings.filter(s => s.type === 'low');
+   659→  if (highs.length < 4 || lows.length < 4) return null!;
+   660→
+   661→  const rh = highs.slice(-4);
+   662→  const rl = lows.slice(-4);
+   663→  const h1 = rh[0].price, h2 = rh[1].price, h3 = rh[2].price, h4 = rh[3].price;
+   664→  const l1 = rl[0].price, l2 = rl[1].price, l3 = rl[2].price, l4 = rl[3].price;
+   665→  const topShape = h2 < h1 && h3 < h2 && h4 > h3;
+   666→  const bottomShape = l2 > l1 && l3 > l2 && l4 < l3;
+   667→  if (!topShape || !bottomShape) return null!;
+   668→
+   669→  return {
+   670→    name: 'لوزی پایین', nameEn: 'Diamond Bottom', category: 'classic',
+   671→    direction: 'bullish', strength: 0.6,
+   672→    status: 'forming',
+   673→    description: `الگوی لوزی پایین — سیگنال بازگشت صعودی`
+   674→  };
+   675→}
+   676→
+   677→function detectAllClassic(data: OHLCV[]): PatternResult[] {
+   678→  const r: PatternResult[] = [];
+   679→  r.push(...detectHeadAndShoulders(data));
+   680→  const dt = detectDoubleTop(data); if (dt) r.push(dt);
+   681→  const db = detectDoubleBottom(data); if (db) r.push(db);
+   682→  const tt = detectTripleTop(data); if (tt) r.push(tt);
+   683→  const tb = detectTripleBottom(data); if (tb) r.push(tb);
+   684→  const at = detectAscendingTriangle(data); if (at) r.push(at);
+   685→  const dtri = detectDescendingTriangle(data); if (dtri) r.push(dtri);
+   686→  const st = detectSymmetricTriangle(data); if (st) r.push(st);
+   687→  const aw = detectAscendingWedge(data); if (aw) r.push(aw);
+   688→  const dw = detectDescendingWedge(data); if (dw) r.push(dw);
+   689→  const bf = detectBullFlag(data); if (bf) r.push(bf);
+   690→  const brf = detectBearFlag(data); if (brf) r.push(brf);
+   691→  r.push(...detectPennant(data));
+   692→  const ch = detectCupAndHandle(data); if (ch) r.push(ch);
+   693→  const rect = detectRectangle(data); if (rect) r.push(rect);
+   694→  const bt = detectBroadeningTop(data); if (bt) r.push(bt);
+   695→  const bb = detectBroadeningBottom(data); if (bb) r.push(bb);
+   696→  const diamT = detectDiamondTop(data); if (diamT) r.push(diamT);
+   697→  const diamB = detectDiamondBottom(data); if (diamB) r.push(diamB);
+   698→  return r;
+   699→}
+   700→
+   701→// ─── 2. Harmonic Pattern Detectors ──────────────────────────────────────────
+   702→
+   703→interface HarmonicSpec {
+   704→  name: string;
+   705→  nameEn: string;
+   706→  abRatio: number;
+   707→  bcRatio: number;
+   708→  cdRatio: number;
+   709→}
+   710→
+   711→const HARMONIC_SPECS: Record<string, { bull: HarmonicSpec; bear: HarmonicSpec }> = {
+   712→  gartley: {
+   713→    bull: { name: 'گارتلی صعودی', nameEn: 'Bullish Gartley', abRatio: PHI_618, bcRatio: PHI_386, cdRatio: PHI_786 },
+   714→    bear: { name: 'گارتلی نزولی', nameEn: 'Bearish Gartley', abRatio: PHI_618, bcRatio: PHI_386, cdRatio: PHI_786 }
+   715→  },
+   716→  butterfly: {
+   717→    bull: { name: 'پروانه صعودی', nameEn: 'Bullish Butterfly', abRatio: PHI_786, bcRatio: PHI_386, cdRatio: PHI_1618 },
+   718→    bear: { name: 'پروانه نزولی', nameEn: 'Bearish Butterfly', abRatio: PHI_786, bcRatio: PHI_386, cdRatio: PHI_1618 }
+   719→  },
+   720→  bat: {
+   721→    bull: { name: 'خفاش صعودی', nameEn: 'Bullish Bat', abRatio: PHI_386, bcRatio: PHI_886, cdRatio: PHI_886 },
+   722→    bear: { name: 'خفاش نزولی', nameEn: 'Bearish Bat', abRatio: PHI_386, bcRatio: PHI_886, cdRatio: PHI_886 }
+   723→  },
+   724→  crab: {
+   725→    bull: { name: 'خرچنگ صعودی', nameEn: 'Bullish Crab', abRatio: PHI_386, bcRatio: PHI_386, cdRatio: PHI_1618 },
+   726→    bear: { name: 'خرچنگ نزولی', nameEn: 'Bearish Crab', abRatio: PHI_386, bcRatio: PHI_386, cdRatio: PHI_1618 }
+   727→  },
+   728→  shark: {
+   729→    bull: { name: 'کوسه صعودی', nameEn: 'Bullish Shark', abRatio: PHI_786, bcRatio: PHI, cdRatio: PHI_886 },
+   730→    bear: { name: 'کوسه نزولی', nameEn: 'Bearish Shark', abRatio: PHI_786, bcRatio: PHI, cdRatio: PHI_886 }
+   731→  },
+   732→  cypher: {
+   733→    bull: { name: 'سایفر صعودی', nameEn: 'Bullish Cypher', abRatio: PHI_786, bcRatio: PHI_127, cdRatio: PHI_786 },
+   734→    bear: { name: 'سایفر نزولی', nameEn: 'Bearish Cypher', abRatio: PHI_786, bcRatio: PHI_127, cdRatio: PHI_786 }
+   735→  }
+   736→};
+   737→
+   738→function detectHarmonicFromPoints(
+   739→  X: number, A: number, B: number, C: number, D: number,
+   740→  spec: HarmonicSpec,
+   741→  direction: 'bullish' | 'bearish'
+   742→): PatternResult | null {
+   743→  const xLeg = Math.abs(A - X);
+   744→  const aLeg = Math.abs(B - A);
+   745→  const bLeg = Math.abs(C - B);
+   746→  const cLeg = Math.abs(D - C);
+   747→
+   748→  if (xLeg === 0 || aLeg === 0 || bLeg === 0) return null;
+   749→
+   750→  const abR = aLeg / xLeg;
+   751→  const bcR = bLeg / aLeg;
+   752→  const cdR = cLeg / bLeg;
+   753→
+   754→  const abMatch = nearRatio(abR, spec.abRatio, FIB_TOL);
+   755→  const bcMatch = nearRatio(bcR, spec.bcRatio, FIB_TOL);
+   756→  const cdMatch = nearRatio(cdR, spec.cdRatio, FIB_TOL);
+   757→
+   758→  let conditions = 0;
+   759→  if (abMatch) conditions++;
+   760→  if (bcMatch) conditions++;
+   761→  if (cdMatch) conditions++;
+   762→
+   763→  if (conditions < 2) return null;
+   764→
+   765→  const strength = conditions === 3 ? 0.9 : 0.6;
+   766→  const prz = (B + C) / 2; // Potential Reversal Zone
+   767→
+   768→  return {
+   769→    name: spec.name,
+   770→    nameEn: spec.nameEn,
+   771→    category: 'harmonic',
+   772→    direction,
+   773→    strength,
+   774→    status: 'forming',
+   775→    priceLevel: prz,
+   776→    description: `الگوی هارمونیک ${spec.nameEn} در ناحیه بازگشتی ${prz.toFixed(0)}`
+   777→  };
+   778→}
+   779→
+   780→function detectAllHarmonics(data: OHLCV[]): PatternResult[] {
+   781→  const results: PatternResult[] = [];
+   782→  if (data.length < 20) return results;
+   783→
+   784→  const swings = findSwingPoints(data, 2);
+   785→  if (swings.length < 5) return results;
+   786→
+   787→  // Try recent combinations of 5 swing points (X, A, B, C, D)
+   788→  const recent = swings.slice(-8);
+   789→  for (let i = 0; i <= recent.length - 5; i++) {
+   790→    const pts = recent.slice(i, i + 5);
+   791→    // X, A should alternate high/low
+   792→    for (const [key, { bull, bear }] of Object.entries(HARMONIC_SPECS)) {
+   793→      // Bullish: X is high, A is low, B is high, C is low, D is high
+   794→      const bullPt = detectHarmonicFromPoints(
+   795→        pts[0].type === 'high' ? pts[0].price : 0,
+   796→        pts[1].type === 'low' ? pts[1].price : 0,
+   797→        pts[2].type === 'high' ? pts[2].price : 0,
+   798→        pts[3].type === 'low' ? pts[3].price : 0,
+   799→        pts[4].type === 'high' ? pts[4].price : 0,
+   800→        bull, 'bullish'
+   801→      );
+   802→      if (bullPt) results.push(bullPt);
+   803→
+   804→      // Bearish: X is low, A is high, B is low, C is high, D is low
+   805→      const bearPt = detectHarmonicFromPoints(
+   806→        pts[0].type === 'low' ? pts[0].price : 0,
+   807→        pts[1].type === 'high' ? pts[1].price : 0,
+   808→        pts[2].type === 'low' ? pts[2].price : 0,
+   809→        pts[3].type === 'high' ? pts[3].price : 0,
+   810→        pts[4].type === 'low' ? pts[4].price : 0,
+   811→        bear, 'bearish'
+   812→      );
+   813→      if (bearPt) results.push(bearPt);
+   814→    }
+   815→  }
+   816→
+   817→  // Deduplicate by nameEn
+   818→  const seen = new Set<string>();
+   819→  return results.filter(r => {
+   820→    if (seen.has(r.nameEn)) return false;
+   821→    seen.add(r.nameEn);
+   822→    return true;
+   823→  });
+   824→}
+   825→
+   826→// ─── 3. Candlestick Pattern Detectors ───────────────────────────────────────
+   827→
+   828→function detectHammer(data: OHLCV[]): PatternResult | null {
+   829→  if (data.length < 1) return null;
+   830→  const c = data[data.length - 1];
+   831→  const range = totalRange(c);
+   832→  if (range === 0) return null;
+   833→  const body = bodySize(c);
+   834→  const ls = lowerShadow(c);
+   835→  const us = upperShadow(c);
+   836→  if (ls < body * 2) return null;
+   837→  if (us > body * 0.5) return null;
+   838→  // Must be in downtrend
+   839→  if (data.length < 5) return null;
+   840→  const prevTrend = data.slice(-6, -1).filter(d => isBearish(d)).length >= 3;
+   841→  if (!prevTrend) return null;
+   842→  return {
+   843→    name: 'چکش', nameEn: 'Hammer', category: 'candlestick',
+   844→    direction: 'bullish', strength: 0.6 + Math.min(ls / range, 0.3),
+   845→    status: 'completed', priceLevel: c.low,
+   846→    description: 'الگوی چکش در انتهای روند نزولی — سیگنال صعودی'
+   847→  };
+   848→}
+   849→
+   850→function detectInvertedHammer(data: OHLCV[]): PatternResult | null {
+   851→  if (data.length < 1) return null;
+   852→  const c = data[data.length - 1];
+   853→  const range = totalRange(c);
+   854→  if (range === 0) return null;
+   855→  const body = bodySize(c);
+   856→  const us = upperShadow(c);
+   857→  const ls = lowerShadow(c);
+   858→  if (us < body * 2) return null;
+   859→  if (ls > body * 0.5) return null;
+   860→  if (data.length < 5) return null;
+   861→  const prevTrend = data.slice(-6, -1).filter(d => isBearish(d)).length >= 3;
+   862→  if (!prevTrend) return null;
+   863→  return {
+   864→    name: 'چکش معکوس', nameEn: 'Inverted Hammer', category: 'candlestick',
+   865→    direction: 'bullish', strength: 0.55 + Math.min(us / range, 0.3),
+   866→    status: 'completed', priceLevel: c.high,
+   867→    description: 'الگوی چکش معکوس — سیگنال صعودی ضعیف'
+   868→  };
+   869→}
+   870→
+   871→function detectBullishEngulfing(data: OHLCV[]): PatternResult | null {
+   872→  if (data.length < 2) return null;
+   873→  const prev = data[data.length - 2];
+   874→  const curr = data[data.length - 1];
+   875→  if (!isBearish(prev) || !isBullish(curr)) return null;
+   876→  if (curr.open <= prev.close) return null;
+   877→  if (curr.close >= prev.open) return null;
+   878→  const engulfs = bodySize(curr) > bodySize(prev);
+   879→  if (!engulfs) return null;
+   880→  return {
+   881→    name: 'پوشای صعودی', nameEn: 'Bullish Engulfing', category: 'candlestick',
+   882→    direction: 'bullish', strength: 0.7 + (curr.volume > (prev.volume || curr.volume) ? 0.2 : 0),
+   883→    status: 'completed',
+   884→    description: 'الگوی پوشای صعودی — سیگنال بازگشت قوی'
+   885→  };
+   886→}
+   887→
+   888→function detectMorningStar(data: OHLCV[]): PatternResult | null {
+   889→  if (data.length < 3) return null;
+   890→  const c1 = data[data.length - 3];
+   891→  const c2 = data[data.length - 2];
+   892→  const c3 = data[data.length - 1];
+   893→  if (!isBearish(c1) || !isBullish(c3)) return null;
+   894→  const c2Body = bodySize(c2);
+   895→  const c1Body = bodySize(c1);
+   896→  const c3Body = bodySize(c3);
+   897→  if (c2Body > c1Body * 0.3) return null; // star should be small
+   898→  const gap = c2.high < c1.close;
+   899→  return {
+   900→    name: 'ستاره صبحگاهی', nameEn: 'Morning Star', category: 'candlestick',
+   901→    direction: 'bullish', strength: 0.65 + (gap ? 0.2 : 0) + (c3Body > c1Body ? 0.1 : 0),
+   902→    status: 'completed', priceLevel: c2.low,
+   903→    description: 'الگوی ستاره صبحگاهی — سیگنال بازگشت صعودی سه‌کندلی'
+   904→  };
+   905→}
+   906→
+   907→function detectThreeWhiteSoldiers(data: OHLCV[]): PatternResult | null {
+   908→  if (data.length < 3) return null;
+   909→  const c1 = data[data.length - 3];
+   910→  const c2 = data[data.length - 2];
+   911→  const c3 = data[data.length - 1];
+   912→  if (!isBullish(c1) || !isBullish(c2) || !isBullish(c3)) return null;
+   913→  if (c2.open > c1.open && c3.open > c2.open && c2.close > c1.close && c3.close > c2.close) {
+   914→    return {
+   915→      name: 'سه سرباز سفید', nameEn: 'Three White Soldiers', category: 'candlestick',
+   916→      direction: 'bullish', strength: 0.8,
+   917→      status: 'completed',
+   918→      description: 'الگوی سه سرباز سفید — سیگنال صعودی بسیار قوی'
+   919→    };
+   920→  }
+   921→  return null;
+   922→}
+   923→
+   924→function detectPiercingLine(data: OHLCV[]): PatternResult | null {
+   925→  if (data.length < 2) return null;
+   926→  const prev = data[data.length - 2];
+   927→  const curr = data[data.length - 1];
+   928→  if (!isBearish(prev) || !isBullish(curr)) return null;
+   929→  const midpoint = (prev.open + prev.close) / 2;
+   930→  if (curr.close < midpoint || curr.open > prev.close) return null;
+   931→  return {
+   932→    name: 'خط نفوذی', nameEn: 'Piercing Line', category: 'candlestick',
+   933→    direction: 'bullish', strength: 0.6 + (curr.close > midpoint ? 0.15 : 0),
+   934→    status: 'completed',
+   935→    description: 'الگوی خط نفوذی — سیگنال بازگشت صعودی'
+   936→  };
+   937→}
+   938→
+   939→function detectBullishHarami(data: OHLCV[]): PatternResult | null {
+   940→  if (data.length < 2) return null;
+   941→  const prev = data[data.length - 2];
+   942→  const curr = data[data.length - 1];
+   943→  if (!isBearish(prev) || !isBullish(curr)) return null;
+   944→  if (curr.open < prev.close || curr.close > prev.open) return null;
+   945→  if (bodySize(curr) >= bodySize(prev)) return null;
+   946→  return {
+   947→    name: 'هارامی صعودی', nameEn: 'Bullish Harami', category: 'candlestick',
+   948→    direction: 'bullish', strength: 0.55,
+   949→    status: 'completed',
+   950→    description: 'الگوی هارامی صعودی — احتمال توقف نزول'
+   951→  };
+   952→}
+   953→
+   954→function detectTweezerBottom(data: OHLCV[]): PatternResult | null {
+   955→  if (data.length < 2) return null;
+   956→  const c1 = data[data.length - 2];
+   957→  const c2 = data[data.length - 1];
+   958→  const tol = totalRange(c1) * 0.05;
+   959→  if (Math.abs(c1.low - c2.low) > tol) return null;
+   960→  if (!isBearish(c1) || !isBullish(c2)) return null;
+   961→  return {
+   962→    name: 'دوقلوی کف', nameEn: 'Tweezer Bottom', category: 'candlestick',
+   963→    direction: 'bullish', strength: 0.6,
+   964→    status: 'completed', priceLevel: c1.low,
+   965→    description: 'الگوی دوقلوی کف — حمایت دوقلو'
+   966→  };
+   967→}
+   968→
+   969→function detectDragonflyDoji(data: OHLCV[]): PatternResult | null {
+   970→  if (data.length < 1) return null;
+   971→  const c = data[data.length - 1];
+   972→  const body = bodySize(c);
+   973→  const range = totalRange(c);
+   974→  if (range === 0) return null;
+   975→  if (body > range * 0.05) return null; // doji body must be very small
+   976→  if (upperShadow(c) > range * 0.05) return null;
+   977→  return {
+   978→    name: 'دوجی سنجاقک', nameEn: 'Dragonfly Doji', category: 'candlestick',
+   979→    direction: 'bullish', strength: 0.55,
+   980→    status: 'completed', priceLevel: c.low,
+   981→    description: 'الگوی دوجی سنجاقک — سیگنال بازگشت صعودی'
+   982→  };
+   983→}
+   984→
+   985→function detectBullishMarubozu(data: OHLCV[]): PatternResult | null {
+   986→  if (data.length < 1) return null;
+   987→  const c = data[data.length - 1];
+   988→  if (!isBullish(c)) return null;
+   989→  const range = totalRange(c);
+   990→  if (range === 0) return null;
+   991→  if (upperShadow(c) > range * 0.05 || lowerShadow(c) > range * 0.05) return null;
+   992→  return {
+   993→    name: 'ماروبوزوی صعودی', nameEn: 'Bullish Marubozu', category: 'candlestick',
+   994→    direction: 'bullish', strength: 0.75,
+   995→    status: 'completed',
+   996→    description: 'الگوی ماروبوزوی صعودی — خریداران قدرتمند'
+   997→  };
+   998→}
+   999→
+  1000→function detectRisingThreeMethods(data: OHLCV[]): PatternResult | null {
+  1001→  if (data.length < 5) return null;
+  1002→  const c1 = data[data.length - 5];
+  1003→  const c5 = data[data.length - 1];
+  1004→  if (!isBullish(c1) || !isBullish(c5)) return null;
+  1005→  const mid = data.slice(-4, -1);
+  1006→  const allBearish = mid.every(d => isBearish(d));
+  1007→  if (!allBearish) return null;
+  1008→  if (c5.close < c1.close) return null;
+  1009→  if (c5.close <= c1.open) return null;
+  1010→  const midLow = Math.min(...mid.map(d => d.low));
+  1011→  if (midLow < c1.open) return null;
+  1012→  return {
+  1013→    name: 'سه روش صعودی', nameEn: 'Rising Three Methods', category: 'candlestick',
+  1014→    direction: 'bullish', strength: 0.7,
+  1015→    status: 'completed',
+  1016→    description: 'الگوی سه روش صعودی — استراحت و ادامۀ صعود'
+  1017→  };
+  1018→}
+  1019→
+  1020→function detectBullishKicker(data: OHLCV[]): PatternResult | null {
+  1021→  if (data.length < 2) return null;
+  1022→  const prev = data[data.length - 2];
+  1023→  const curr = data[data.length - 1];
+  1024→  if (!isBearish(prev) || !isBullish(curr)) return null;
+  1025→  if (curr.open >= prev.close) return null; // gap up
+  1026→  return {
+  1027→    name: 'کیکر صعودی', nameEn: 'Bullish Kicker', category: 'candlestick',
+  1028→    direction: 'bullish', strength: 0.85,
+  1029→    status: 'completed',
+  1030→    description: 'الگوی کیکر صعودی — تغییر جهت ناگهانی و قوی'
+  1031→  };
+  1032→}
+  1033→
+  1034→function detectThreeInsideUp(data: OHLCV[]): PatternResult | null {
+  1035→  if (data.length < 3) return null;
+  1036→  const c1 = data[data.length - 3];
+  1037→  const c2 = data[data.length - 2];
+  1038→  const c3 = data[data.length - 1];
+  1039→  if (!isBearish(c1) || !isBullish(c2) || !isBullish(c3)) return null;
+  1040→  if (c2.close > c1.close || c2.open < c1.close) return null;
+  1041→  if (c3.close > c1.open) return {
+  1042→    name: 'سه درونی صعودی', nameEn: 'Three Inside Up', category: 'candlestick',
+  1043→    direction: 'bullish', strength: 0.7,
+  1044→    status: 'completed',
+  1045→    description: 'الگوی سه درونی صعودی — تأیید بازگشت'
+  1046→  };
+  1047→  return null;
+  1048→}
+  1049→
+  1050→function detectThreeOutsideUp(data: OHLCV[]): PatternResult | null {
+  1051→  if (data.length < 3) return null;
+  1052→  const c1 = data[data.length - 3];
+  1053→  const c2 = data[data.length - 2];
+  1054→  const c3 = data[data.length - 1];
+  1055→  if (!isBearish(c1) || !isBullish(c2) || !isBullish(c3)) return null;
+  1056→  if (!(c2.open < c1.close && c2.close > c1.open)) return null; // engulfing
+  1057→  if (c3.close > c2.close) return {
+  1058→    name: 'سه بیرونی صعودی', nameEn: 'Three Outside Up', category: 'candlestick',
+  1059→    direction: 'bullish', strength: 0.72,
+  1060→    status: 'completed',
+  1061→    description: 'الگوی سه بیرونی صعودی — ادامه صعود'
+  1062→  };
+  1063→  return null;
+  1064→}
+  1065→
+  1066→function detectMatHold(data: OHLCV[]): PatternResult | null {
+  1067→  if (data.length < 5) return null;
+  1068→  const c1 = data[data.length - 5];
+  1069→  const c5 = data[data.length - 1];
+  1070→  if (!isBullish(c1) || !isBullish(c5)) return null;
+  1071→  const mid = data.slice(-4, -1);
+  1072→  if (!isBearish(mid[0])) return null;
+  1073→  if (c5.close > c1.high && c5.close > c1.close) {
+  1074→    return {
+  1075→      name: 'مات هولد', nameEn: 'Mat Hold', category: 'candlestick',
+  1076→      direction: 'bullish', strength: 0.7,
+  1077→      status: 'completed',
+  1078→      description: 'الگوی مات هولد — ادامۀ روند صعودی'
+  1079→    };
+  1080→  }
+  1081→  return null;
+  1082→}
+  1083→
+  1084→function detectStickSandwich(data: OHLCV[]): PatternResult | null {
+  1085→  if (data.length < 3) return null;
+  1086→  const c1 = data[data.length - 3];
+  1087→  const c2 = data[data.length - 2];
+  1088→  const c3 = data[data.length - 1];
+  1089→  if (!isBullish(c1) || !isBearish(c2) || !isBullish(c3)) return null;
+  1090→  const tol = totalRange(c1) * 0.03;
+  1091→  if (Math.abs(c1.open - c3.open) > tol) return null;
+  1092→  return {
+  1093→    name: 'ساندویچ چوبی', nameEn: 'Stick Sandwich', category: 'candlestick',
+  1094→    direction: 'bullish', strength: 0.55,
+  1095→    status: 'completed',
+  1096→    description: 'الگوی ساندویچ چوبی — سیگنال صعودی'
+  1097→  };
+  1098→}
+  1099→
+  1100→function detectBullishBreakaway(data: OHLCV[]): PatternResult | null {
+  1101→  if (data.length < 5) return null;
+  1102→  const c1 = data[data.length - 5];
+  1103→  const c5 = data[data.length - 1];
+  1104→  if (!isBearish(c1) || !isBullish(c5)) return null;
+  1105→  // Gap down at c2
+  1106→  const c2 = data[data.length - 4];
+  1107→  if (c2.high > c1.low) return null;
+  1108→  const mid = data.slice(-4, -1);
+  1109→  if (!mid.every(d => d.close < c1.close)) return null;
+  1110→  return {
+  1111→    name: 'شکاف صعودی', nameEn: 'Bullish Breakaway', category: 'candlestick',
+  1112→    direction: 'bullish', strength: 0.65,
+  1113→    status: 'completed',
+  1114→    description: 'الگوی شکاف صعودی — بازگشت از شکاف'
+  1115→  };
+  1116→}
+  1117→
+  1118→function detectThreeStarsInSouth(data: OHLCV[]): PatternResult | null {
+  1119→  if (data.length < 3) return null;
+  1120→  const c1 = data[data.length - 3];
+  1121→  const c2 = data[data.length - 2];
+  1122→  const c3 = data[data.length - 1];
+  1123→  if (!isBearish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1124→  // Each candle has progressively smaller body and lower shadow
+  1125→  if (bodySize(c2) >= bodySize(c1)) return null;
+  1126→  if (bodySize(c3) >= bodySize(c2)) return null;
+  1127→  if (lowerShadow(c1) < bodySize(c1) * 0.5) return null;
+  1128→  if (lowerShadow(c2) >= lowerShadow(c1)) return null;
+  1129→  if (c3.low >= c2.low) return null;
+  1130→  return {
+  1131→    name: 'سه ستاره در جنوب', nameEn: 'Three Stars in South', category: 'candlestick',
+  1132→    direction: 'bullish', strength: 0.6,
+  1133→    status: 'completed',
+  1134→    description: 'الگوی سه ستاره در جنوب — تضعیف نیروی فروش'
+  1135→  };
+  1136→}
+  1137→
+  1138→function detectBullishSeparatingLines(data: OHLCV[]): PatternResult | null {
+  1139→  if (data.length < 2) return null;
+  1140→  const c1 = data[data.length - 2];
+  1141→  const c2 = data[data.length - 1];
+  1142→  if (!isBearish(c1) || !isBullish(c2)) return null;
+  1143→  if (c2.open !== c1.open) return null; // same open price
+  1144→  return {
+  1145→    name: 'خطوط جداشونده صعودی', nameEn: 'Bullish Separating Lines', category: 'candlestick',
+  1146→    direction: 'bullish', strength: 0.55,
+  1147→    status: 'completed',
+  1148→    description: 'الگوی خطوط جداشونده صعودی'
+  1149→  };
+  1150→}
+  1151→
+  1152→function detectHomingPigeon(data: OHLCV[]): PatternResult | null {
+  1153→  if (data.length < 2) return null;
+  1154→  const c1 = data[data.length - 2];
+  1155→  const c2 = data[data.length - 1];
+  1156→  if (!isBearish(c1) || !isBearish(c2)) return null;
+  1157→  if (c2.open < c1.close || c2.close > c1.open) return null;
+  1158→  if (bodySize(c2) >= bodySize(c1)) return null;
+  1159→  return {
+  1160→    name: 'کبوتر خانه‌گردان', nameEn: 'Homing Pigeon', category: 'candlestick',
+  1161→    direction: 'bullish', strength: 0.5,
+  1162→    status: 'completed',
+  1163→    description: 'الگوی کبوتر خانه‌گردان — ضعف فروشندگان'
+  1164→  };
+  1165→}
+  1166→
+  1167→function detectLadderBottom(data: OHLCV[]): PatternResult | null {
+  1168→  if (data.length < 5) return null;
+  1169→  const candles = data.slice(-5);
+  1170→  if (!candles.slice(0, 4).every(c => isBearish(c))) return null;
+  1171→  if (!isBullish(candles[4])) return null;
+  1172→  // Each successive low should be lower (or equal) with decreasing body
+  1173→  for (let i = 1; i < 4; i++) {
+  1174→    if (candles[i].low > candles[i - 1].low) return null;
+  1175→    if (bodySize(candles[i]) > bodySize(candles[i - 1]) * 1.2) return null;
+  1176→  }
+  1177→  return {
+  1178→    name: 'نردبان کف', nameEn: 'Ladder Bottom', category: 'candlestick',
+  1179→    direction: 'bullish', strength: 0.65,
+  1180→    status: 'completed',
+  1181→    description: 'الگوی نردبان کف — خستگی فروشندگان'
+  1182→  };
+  1183→}
+  1184→
+  1185→// ─── Bearish Candlestick Patterns ────────────────────────────────────────────
+  1186→
+  1187→function detectHangingMan(data: OHLCV[]): PatternResult | null {
+  1188→  if (data.length < 6) return null;
+  1189→  const c = data[data.length - 1];
+  1190→  const range = totalRange(c);
+  1191→  if (range === 0) return null;
+  1192→  const body = bodySize(c);
+  1193→  const ls = lowerShadow(c);
+  1194→  const us = upperShadow(c);
+  1195→  if (ls < body * 2) return null;
+  1196→  if (us > body * 0.5) return null;
+  1197→  const prevTrend = data.slice(-6, -1).filter(d => isBullish(d)).length >= 3;
+  1198→  if (!prevTrend) return null;
+  1199→  return {
+  1200→    name: 'مرد به دار آویخته', nameEn: 'Hanging Man', category: 'candlestick',
+  1201→    direction: 'bearish', strength: 0.6 + Math.min(ls / range, 0.2),
+  1202→    status: 'completed', priceLevel: c.low,
+  1203→    description: 'الگوی مرد به دار آویخته — سیگنال نزولی در سقف'
+  1204→  };
+  1205→}
+  1206→
+  1207→function detectShootingStar(data: OHLCV[]): PatternResult | null {
+  1208→  if (data.length < 6) return null;
+  1209→  const c = data[data.length - 1];
+  1210→  const range = totalRange(c);
+  1211→  if (range === 0) return null;
+  1212→  const body = bodySize(c);
+  1213→  const us = upperShadow(c);
+  1214→  const ls = lowerShadow(c);
+  1215→  if (us < body * 2) return null;
+  1216→  if (ls > body * 0.5) return null;
+  1217→  const prevTrend = data.slice(-6, -1).filter(d => isBullish(d)).length >= 3;
+  1218→  if (!prevTrend) return null;
+  1219→  return {
+  1220→    name: 'ستاره دنباله‌دار', nameEn: 'Shooting Star', category: 'candlestick',
+  1221→    direction: 'bearish', strength: 0.6 + Math.min(us / range, 0.3),
+  1222→    status: 'completed', priceLevel: c.high,
+  1223→    description: 'الگوی ستاره دنباله‌دار — سیگنال نزولی قوی'
+  1224→  };
+  1225→}
+  1226→
+  1227→function detectBearishEngulfing(data: OHLCV[]): PatternResult | null {
+  1228→  if (data.length < 2) return null;
+  1229→  const prev = data[data.length - 2];
+  1230→  const curr = data[data.length - 1];
+  1231→  if (!isBullish(prev) || !isBearish(curr)) return null;
+  1232→  if (curr.open >= prev.close) return null;
+  1233→  if (curr.close <= prev.open) return null;
+  1234→  if (bodySize(curr) <= bodySize(prev)) return null;
+  1235→  return {
+  1236→    name: 'پوشای نزولی', nameEn: 'Bearish Engulfing', category: 'candlestick',
+  1237→    direction: 'bearish', strength: 0.7 + (curr.volume > (prev.volume || curr.volume) ? 0.2 : 0),
+  1238→    status: 'completed',
+  1239→    description: 'الگوی پوشای نزولی — سیگنال بازگشت نزولی قوی'
+  1240→  };
+  1241→}
+  1242→
+  1243→function detectEveningStar(data: OHLCV[]): PatternResult | null {
+  1244→  if (data.length < 3) return null;
+  1245→  const c1 = data[data.length - 3];
+  1246→  const c2 = data[data.length - 2];
+  1247→  const c3 = data[data.length - 1];
+  1248→  if (!isBullish(c1) || !isBearish(c3)) return null;
+  1249→  const c2Body = bodySize(c2);
+  1250→  if (c2Body > bodySize(c1) * 0.3) return null;
+  1251→  const gap = c2.low > c1.close;
+  1252→  return {
+  1253→    name: 'ستاره شامگاهی', nameEn: 'Evening Star', category: 'candlestick',
+  1254→    direction: 'bearish', strength: 0.65 + (gap ? 0.2 : 0),
+  1255→    status: 'completed', priceLevel: c2.high,
+  1256→    description: 'الگوی ستاره شامگاهی — سیگنال بازگشت نزولی سه‌کندلی'
+  1257→  };
+  1258→}
+  1259→
+  1260→function detectThreeBlackCrows(data: OHLCV[]): PatternResult | null {
+  1261→  if (data.length < 3) return null;
+  1262→  const c1 = data[data.length - 3];
+  1263→  const c2 = data[data.length - 2];
+  1264→  const c3 = data[data.length - 1];
+  1265→  if (!isBearish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1266→  if (c2.open < c1.open && c3.open < c2.open && c2.close < c1.close && c3.close < c2.close) {
+  1267→    return {
+  1268→      name: 'سه کلاغ سیاه', nameEn: 'Three Black Crows', category: 'candlestick',
+  1269→      direction: 'bearish', strength: 0.8,
+  1270→      status: 'completed',
+  1271→      description: 'الگوی سه کلاغ سیاه — سیگنال نزولی بسیار قوی'
+  1272→    };
+  1273→  }
+  1274→  return null;
+  1275→}
+  1276→
+  1277→function detectDarkCloudCover(data: OHLCV[]): PatternResult | null {
+  1278→  if (data.length < 2) return null;
+  1279→  const prev = data[data.length - 2];
+  1280→  const curr = data[data.length - 1];
+  1281→  if (!isBullish(prev) || !isBearish(curr)) return null;
+  1282→  const midpoint = (prev.open + prev.close) / 2;
+  1283→  if (curr.close > midpoint || curr.open < prev.close) return null;
+  1284→  return {
+  1285→    name: 'پوشش ابر تیره', nameEn: 'Dark Cloud Cover', category: 'candlestick',
+  1286→    direction: 'bearish', strength: 0.65,
+  1287→    status: 'completed',
+  1288→    description: 'الگوی پوشش ابر تیره — سیگنال بازگشت نزولی'
+  1289→  };
+  1290→}
+  1291→
+  1292→function detectBearishHarami(data: OHLCV[]): PatternResult | null {
+  1293→  if (data.length < 2) return null;
+  1294→  const prev = data[data.length - 2];
+  1295→  const curr = data[data.length - 1];
+  1296→  if (!isBullish(prev) || !isBearish(curr)) return null;
+  1297→  if (curr.open > prev.close || curr.close < prev.open) return null;
+  1298→  if (bodySize(curr) >= bodySize(prev)) return null;
+  1299→  return {
+  1300→    name: 'هارامی نزولی', nameEn: 'Bearish Harami', category: 'candlestick',
+  1301→    direction: 'bearish', strength: 0.55,
+  1302→    status: 'completed',
+  1303→    description: 'الگوی هارامی نزولی — احتمال توقف صعود'
+  1304→  };
+  1305→}
+  1306→
+  1307→function detectTweezerTop(data: OHLCV[]): PatternResult | null {
+  1308→  if (data.length < 2) return null;
+  1309→  const c1 = data[data.length - 2];
+  1310→  const c2 = data[data.length - 1];
+  1311→  const tol = totalRange(c1) * 0.05;
+  1312→  if (Math.abs(c1.high - c2.high) > tol) return null;
+  1313→  if (!isBullish(c1) || !isBearish(c2)) return null;
+  1314→  return {
+  1315→    name: 'دوقلوی سقف', nameEn: 'Tweezer Top', category: 'candlestick',
+  1316→    direction: 'bearish', strength: 0.6,
+  1317→    status: 'completed', priceLevel: c1.high,
+  1318→    description: 'الگوی دوقلوی سقف — مقاومت دوقلو'
+  1319→  };
+  1320→}
+  1321→
+  1322→function detectGravestoneDoji(data: OHLCV[]): PatternResult | null {
+  1323→  if (data.length < 1) return null;
+  1324→  const c = data[data.length - 1];
+  1325→  const body = bodySize(c);
+  1326→  const range = totalRange(c);
+  1327→  if (range === 0) return null;
+  1328→  if (body > range * 0.05) return null;
+  1329→  if (lowerShadow(c) > range * 0.05) return null;
+  1330→  return {
+  1331→    name: 'دوجی سنگ قبر', nameEn: 'Gravestone Doji', category: 'candlestick',
+  1332→    direction: 'bearish', strength: 0.55,
+  1333→    status: 'completed', priceLevel: c.high,
+  1334→    description: 'الگوی دوجی سنگ قبر — سیگنال نزولی'
+  1335→  };
+  1336→}
+  1337→
+  1338→function detectBearishMarubozu(data: OHLCV[]): PatternResult | null {
+  1339→  if (data.length < 1) return null;
+  1340→  const c = data[data.length - 1];
+  1341→  if (!isBearish(c)) return null;
+  1342→  const range = totalRange(c);
+  1343→  if (range === 0) return null;
+  1344→  if (upperShadow(c) > range * 0.05 || lowerShadow(c) > range * 0.05) return null;
+  1345→  return {
+  1346→    name: 'ماروبوزوی نزولی', nameEn: 'Bearish Marubozu', category: 'candlestick',
+  1347→    direction: 'bearish', strength: 0.75,
+  1348→    status: 'completed',
+  1349→    description: 'الگوی ماروبوزوی نزولی — فروشندگان قدرتمند'
+  1350→  };
+  1351→}
+  1352→
+  1353→function detectFallingThreeMethods(data: OHLCV[]): PatternResult | null {
+  1354→  if (data.length < 5) return null;
+  1355→  const c1 = data[data.length - 5];
+  1356→  const c5 = data[data.length - 1];
+  1357→  if (!isBearish(c1) || !isBearish(c5)) return null;
+  1358→  const mid = data.slice(-4, -1);
+  1359→  const allBullish = mid.every(d => isBullish(d));
+  1360→  if (!allBullish) return null;
+  1361→  if (c5.close > c1.close) return null;
+  1362→  const midHigh = Math.max(...mid.map(d => d.high));
+  1363→  if (midHigh > c1.open) return null;
+  1364→  return {
+  1365→    name: 'سه روش نزولی', nameEn: 'Falling Three Methods', category: 'candlestick',
+  1366→    direction: 'bearish', strength: 0.7,
+  1367→    status: 'completed',
+  1368→    description: 'الگوی سه روش نزولی — استراحت و ادامۀ نزول'
+  1369→  };
+  1370→}
+  1371→
+  1372→function detectBearishKicker(data: OHLCV[]): PatternResult | null {
+  1373→  if (data.length < 2) return null;
+  1374→  const prev = data[data.length - 2];
+  1375→  const curr = data[data.length - 1];
+  1376→  if (!isBullish(prev) || !isBearish(curr)) return null;
+  1377→  if (curr.open <= prev.close) return null; // gap down
+  1378→  return {
+  1379→    name: 'کیکر نزولی', nameEn: 'Bearish Kicker', category: 'candlestick',
+  1380→    direction: 'bearish', strength: 0.85,
+  1381→    status: 'completed',
+  1382→    description: 'الگوی کیکر نزولی — تغییر جهت ناگهانی و قوی'
+  1383→  };
+  1384→}
+  1385→
+  1386→function detectThreeInsideDown(data: OHLCV[]): PatternResult | null {
+  1387→  if (data.length < 3) return null;
+  1388→  const c1 = data[data.length - 3];
+  1389→  const c2 = data[data.length - 2];
+  1390→  const c3 = data[data.length - 1];
+  1391→  if (!isBullish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1392→  if (c2.close < c1.close || c2.open > c1.close) return null;
+  1393→  if (c3.close < c1.open) return {
+  1394→    name: 'سه درونی نزولی', nameEn: 'Three Inside Down', category: 'candlestick',
+  1395→    direction: 'bearish', strength: 0.7,
+  1396→    status: 'completed',
+  1397→    description: 'الگوی سه درونی نزولی — تأیید بازگشت نزولی'
+  1398→  };
+  1399→  return null;
+  1400→}
+  1401→
+  1402→function detectThreeOutsideDown(data: OHLCV[]): PatternResult | null {
+  1403→  if (data.length < 3) return null;
+  1404→  const c1 = data[data.length - 3];
+  1405→  const c2 = data[data.length - 2];
+  1406→  const c3 = data[data.length - 1];
+  1407→  if (!isBullish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1408→  if (!(c2.open > c1.close && c2.close < c1.open)) return null;
+  1409→  if (c3.close < c2.close) return {
+  1410→    name: 'سه بیرونی نزولی', nameEn: 'Three Outside Down', category: 'candlestick',
+  1411→    direction: 'bearish', strength: 0.72,
+  1412→    status: 'completed',
+  1413→    description: 'الگوی سه بیرونی نزولی — ادامه نزول'
+  1414→  };
+  1415→  return null;
+  1416→}
+  1417→
+  1418→function detectAdvanceBlock(data: OHLCV[]): PatternResult | null {
+  1419→  if (data.length < 3) return null;
+  1420→  const c1 = data[data.length - 3];
+  1421→  const c2 = data[data.length - 2];
+  1422→  const c3 = data[data.length - 1];
+  1423→  if (!isBullish(c1) || !isBullish(c2) || !isBullish(c3)) return null;
+  1424→  // Each candle body smaller, and each opens within previous body
+  1425→  if (bodySize(c2) >= bodySize(c1)) return null;
+  1426→  if (bodySize(c3) >= bodySize(c2)) return null;
+  1427→  if (c2.open < c1.open || c3.open < c2.open) return null;
+  1428→  return {
+  1429→    name: 'بلوک پیشرو', nameEn: 'Advance Block', category: 'candlestick',
+  1430→    direction: 'bearish', strength: 0.6,
+  1431→    status: 'completed',
+  1432→    description: 'الگوی بلوک پیشرو — تضعیف صعود'
+  1433→  };
+  1434→}
+  1435→
+  1436→function detectDeliberation(data: OHLCV[]): PatternResult | null {
+  1437→  if (data.length < 3) return null;
+  1438→  const c1 = data[data.length - 3];
+  1439→  const c2 = data[data.length - 2];
+  1440→  const c3 = data[data.length - 1];
+  1441→  if (!isBullish(c1) || !isBullish(c2) || !isBullish(c3)) return null;
+  1442→  // Second candle is strong, third is weak (small body)
+  1443→  if (bodySize(c2) <= bodySize(c1)) return null;
+  1444→  if (bodySize(c3) >= bodySize(c2) * 0.5) return null;
+  1445→  return {
+  1446→    name: 'تأخیر', nameEn: 'Deliberation', category: 'candlestick',
+  1447→    direction: 'bearish', strength: 0.58,
+  1448→    status: 'completed',
+  1449→    description: 'الگوی تأخیر — تردید خریداران'
+  1450→  };
+  1451→}
+  1452→
+  1453→function detectTwoCrows(data: OHLCV[]): PatternResult | null {
+  1454→  if (data.length < 3) return null;
+  1455→  const c1 = data[data.length - 3];
+  1456→  const c2 = data[data.length - 2];
+  1457→  const c3 = data[data.length - 1];
+  1458→  if (!isBullish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1459→  if (c2.open < c1.high) return null; // gap up
+  1460→  if (c3.open > c2.open && c3.close < c1.close) return {
+  1461→    name: 'دو کلاغ', nameEn: 'Two Crows', category: 'candlestick',
+  1462→    direction: 'bearish', strength: 0.55,
+  1463→    status: 'completed',
+  1464→    description: 'الگوی دو کلاغ — سیگنال نزولی'
+  1465→  };
+  1466→  return null;
+  1467→}
+  1468→
+  1469→function detectUpsideGapTwoCrows(data: OHLCV[]): PatternResult | null {
+  1470→  if (data.length < 3) return null;
+  1471→  const c1 = data[data.length - 3];
+  1472→  const c2 = data[data.length - 2];
+  1473→  const c3 = data[data.length - 1];
+  1474→  if (!isBullish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1475→  if (c2.open > c1.high && c3.open > c2.open && c3.close < c1.close) return {
+  1476→    name: 'دو کلاغ با شکاف بالا', nameEn: 'Upside Gap Two Crows', category: 'candlestick',
+  1477→    direction: 'bearish', strength: 0.6,
+  1478→    status: 'completed',
+  1479→    description: 'الگوی دو کلاغ با شکاف بالا — بازگشت نزولی'
+  1480→  };
+  1481→  return null;
+  1482→}
+  1483→
+  1484→function detectIdenticalThreeCrows(data: OHLCV[]): PatternResult | null {
+  1485→  if (data.length < 3) return null;
+  1486→  const c1 = data[data.length - 3];
+  1487→  const c2 = data[data.length - 2];
+  1488→  const c3 = data[data.length - 1];
+  1489→  if (!isBearish(c1) || !isBearish(c2) || !isBearish(c3)) return null;
+  1490→  const tol = totalRange(c1) * 0.05;
+  1491→  if (Math.abs(bodySize(c1) - bodySize(c2)) > tol) return null;
+  1492→  if (Math.abs(bodySize(c2) - bodySize(c3)) > tol) return null;
+  1493→  if (c2.open < c1.close || c3.open < c2.close) return null;
+  1494→  return {
+  1495→    name: 'سه کلاغ یکسان', nameEn: 'Identical Three Crows', category: 'candlestick',
+  1496→    direction: 'bearish', strength: 0.75,
+  1497→    status: 'completed',
+  1498→    description: 'الگوی سه کلاغ یکسان — نزول بسیار قوی'
+  1499→  };
+  1500→}
+  1501→
+  1502→function detectConcealingBabySwallow(data: OHLCV[]): PatternResult | null {
+  1503→  if (data.length < 4) return null;
+  1504→  const c1 = data[data.length - 4];
+  1505→  const c2 = data[data.length - 3];
+  1506→  const c3 = data[data.length - 2];
+  1507→  const c4 = data[data.length - 1];
+  1508→  if (!isBearish(c1) || !isBearish(c2) || !isBearish(c3) || !isBullish(c4)) return null;
+  1509→  // First two are black marubozu-like, third opens inside second and closes at new low
+  1510→  if (bodySize(c1) < totalRange(c1) * 0.7) return null;
+  1511→  if (bodySize(c2) < totalRange(c2) * 0.7) return null;
+  1512→  if (c3.open > c2.open) return null;
+  1513→  if (c4.open < c3.low && c4.close > c3.open) return {
+  1514→    name: 'جوجه بلبل پنهان', nameEn: 'Concealing Baby Swallow', category: 'candlestick',
+  1515→    direction: 'bearish', strength: 0.65,
+  1516→    status: 'completed',
+  1517→    description: 'الگوی جوجه بلبل پنهان — سیگنال نزولی'
+  1518→  };
+  1519→  return null;
+  1520→}
+  1521→
+  1522→function detectAllCandlestick(data: OHLCV[]): PatternResult[] {
+  1523→  const r: PatternResult[] = [];
+  1524→  const add = (fn: (d: OHLCV[]) => PatternResult | null) => { const p = fn(data); if (p) r.push(p); };
+  1525→
+  1526→  // Bullish (21)
+  1527→  add(detectHammer);
+  1528→  add(detectInvertedHammer);
+  1529→  add(detectBullishEngulfing);
+  1530→  add(detectMorningStar);
+  1531→  add(detectThreeWhiteSoldiers);
+  1532→  add(detectPiercingLine);
+  1533→  add(detectBullishHarami);
+  1534→  add(detectTweezerBottom);
+  1535→  add(detectDragonflyDoji);
+  1536→  add(detectBullishMarubozu);
+  1537→  add(detectRisingThreeMethods);
+  1538→  add(detectBullishKicker);
+  1539→  add(detectThreeInsideUp);
+  1540→  add(detectThreeOutsideUp);
+  1541→  add(detectMatHold);
+  1542→  add(detectStickSandwich);
+  1543→  add(detectBullishBreakaway);
+  1544→  add(detectThreeStarsInSouth);
+  1545→  add(detectBullishSeparatingLines);
+  1546→  add(detectHomingPigeon);
+  1547→  add(detectLadderBottom);
+  1548→
+  1549→  // Bearish (19)
+  1550→  add(detectHangingMan);
+  1551→  add(detectShootingStar);
+  1552→  add(detectBearishEngulfing);
+  1553→  add(detectEveningStar);
+  1554→  add(detectThreeBlackCrows);
+  1555→  add(detectDarkCloudCover);
+  1556→  add(detectBearishHarami);
+  1557→  add(detectTweezerTop);
+  1558→  add(detectGravestoneDoji);
+  1559→  add(detectBearishMarubozu);
+  1560→  add(detectFallingThreeMethods);
+  1561→  add(detectBearishKicker);
+  1562→  add(detectThreeInsideDown);
+  1563→  add(detectThreeOutsideDown);
+  1564→  add(detectAdvanceBlock);
+  1565→  add(detectDeliberation);
+  1566→  add(detectTwoCrows);
+  1567→  add(detectUpsideGapTwoCrows);
+  1568→  add(detectIdenticalThreeCrows);
+  1569→  add(detectConcealingBabySwallow);
+  1570→
+  1571→  return r;
+  1572→}
+  1573→
+  1574→// ─── 4. Elliott Wave Pattern Detectors ──────────────────────────────────────
+  1575→
+  1576→function detectImpulseWave(data: OHLCV[]): PatternResult | null {
+  1577→  if (data.length < 30) return null;
+  1578→  const swings = findSwingPoints(data, 3);
+  1579→  if (swings.length < 7) return null;
+  1580→
+  1581→  // Look for 5-wave structure in recent swings
+  1582→  const recent = swings.slice(-7);
+  1583→  // Impulse: wave 1 > wave 2 < wave 3 > wave 4 < wave 5
+  1584→  // with wave 3 not shortest, wave 2 doesn't retrace past wave 1 start
+  1585→  const prices = recent.map(s => s.price);
+  1586→
+  1587→  // Try to find 5-wave pattern: 1(up) 2(down) 3(up) 4(down) 5(up)
+  1588→  for (let i = 0; i <= prices.length - 5; i++) {
+  1589→    const w = prices.slice(i, i + 5);
+  1590→    const isUp = (a: number, b: number) => b > a;
+  1591→    const isDown = (a: number, b: number) => b < a;
+  1592→
+  1593→    if (isUp(w[0], w[1]) && isDown(w[1], w[2]) && isUp(w[2], w[3]) && isDown(w[3], w[4])) {
+  1594→      // Wave 3 should be the longest (or at least not shortest) impulse
+  1595→      const impulse1 = Math.abs(w[1] - w[0]);
+  1596→      const impulse3 = Math.abs(w[3] - w[2]);
+  1597→      const impulse5 = Math.abs(w[4] - w[3]);
+  1598→      if (impulse3 >= impulse1 && impulse3 >= impulse5 * 0.8) {
+  1599→        // Wave 2 should not retrace beyond wave 1 start
+  1600→        const retrace2 = Math.abs(w[2] - w[1]) / impulse1;
+  1601→        if (retrace2 < 1 && retrace2 > 0.2) {
+  1602→          return {
+  1603→            name: 'موج تکانه‌ای', nameEn: 'Impulse Wave', category: 'elliott',
+  1604→            direction: 'bullish', strength: 0.7,
+  1605→            status: 'forming',
+  1606→            priceLevel: w[3],
+  1607→            description: 'الگوی موج تکانه‌ای ۵ موجی الیوت — روند صعودی'
+  1608→          };
+  1609→        }
+  1610→      }
+  1611→    }
+  1612→  }
+  1613→  return null;
+  1614→}
+  1615→
+  1616→function detectLeadingDiagonal(data: OHLCV[]): PatternResult | null {
+  1617→  if (data.length < 25) return null;
+  1618→  const swings = findSwingPoints(data, 2);
+  1619→  if (swings.length < 5) return null;
+  1620→
+  1621→  const recent = swings.slice(-5);
+  1622→  const prices = recent.map(s => s.price);
+  1623→  // Leading diagonal: 5 waves in a wedge (converging channel)
+  1624→  const highs = prices.filter((_, i) => recent[i].type === 'high');
+  1625→  const lows = prices.filter((_, i) => recent[i].type === 'low');
+  1626→  if (highs.length < 3 || lows.length < 2) return null;
+  1627→
+  1628→  const hConverge = highs[highs.length - 1] < highs[0];
+  1629→  const lConverge = lows[lows.length - 1] > lows[0];
+  1630→  if (!hConverge || !lConverge) return null;
+  1631→
+  1632→  return {
+  1633→    name: 'قطر پیشرو', nameEn: 'Leading Diagonal', category: 'elliott',
+  1634→    direction: 'bullish', strength: 0.55,
+  1635→    status: 'forming',
+  1636→    description: 'الگوی قطر پیشرو — شروع موج ۳ قوی مورد انتظار'
+  1637→  };
+  1638→}
+  1639→
+  1640→function detectEndingDiagonal(data: OHLCV[]): PatternResult | null {
+  1641→  if (data.length < 25) return null;
+  1642→  const swings = findSwingPoints(data, 2);
+  1643→  if (swings.length < 5) return null;
+  1644→
+  1645→  const recent = swings.slice(-5);
+  1646→  const prices = recent.map(s => s.price);
+  1647→  const highs = prices.filter((_, i) => recent[i].type === 'high');
+  1648→  const lows = prices.filter((_, i) => recent[i].type === 'low');
+  1649→  if (highs.length < 3 || lows.length < 2) return null;
+  1650→
+  1651→  const hConverge = highs[highs.length - 1] < highs[0];
+  1652→  const lConverge = lows[lows.length - 1] > lows[0];
+  1653→  if (!hConverge || !lConverge) return null;
+  1654→
+  1655→  // Ending diagonal occurs in wave 5 position — check if we're at highs
+  1656→  const lastPrice = data[data.length - 1].close;
+  1657→  const maxPrice = Math.max(...data.slice(-20).map(d => d.high));
+  1658→  if (lastPrice < maxPrice * 0.95) return null;
+  1659→
+  1660→  return {
+  1661→    name: 'قطر پایانی', nameEn: 'Ending Diagonal', category: 'elliott',
+  1662→    direction: 'bearish', strength: 0.6,
+  1663→    status: 'forming',
+  1664→    description: 'الگوی قطر پایانی — پایان روند و بازگشت مورد انتظار'
+  1665→  };
+  1666→}
+  1667→
+  1668→function detectZigzag(data: OHLCV[]): PatternResult | null {
+  1669→  if (data.length < 15) return null;
+  1670→  const swings = findSwingPoints(data, 3);
+  1671→  if (swings.length < 3) return null;
+  1672→
+  1673→  const recent = swings.slice(-3);
+  1674→  const prices = recent.map(s => s.price);
+  1675→  // ABC: A up/down, B retraces, C extends
+  1676→  const abRetrace = Math.abs(prices[1] - prices[0]) / Math.abs(prices[0] - (swings.length > 3 ? swings[swings.length - 4].price : prices[0]));
+  1677→  if (abRetrace < 0.3 || abRetrace > 0.8) return null;
+  1678→
+  1679→  const direction = prices[2] > prices[0] ? 'bullish' : 'bearish';
+  1680→  return {
+  1681→    name: 'زیگزاگ', nameEn: 'Zigzag (ABC)', category: 'elliott',
+  1682→    direction: direction as 'bullish' | 'bearish',
+  1683→    strength: 0.6,
+  1684→    status: 'forming',
+  1685→    priceLevel: prices[1],
+  1686→    description: `الگوی زیگزاگ ABC — تصحیح ${direction === 'bullish' ? 'صعودی' : 'نزولی'}`
+  1687→  };
+  1688→}
+  1689→
+  1690→function detectFlat(data: OHLCV[]): PatternResult | null {
+  1691→  if (data.length < 15) return null;
+  1692→  const swings = findSwingPoints(data, 3);
+  1693→  if (swings.length < 3) return null;
+  1694→
+  1695→  const recent = swings.slice(-3);
+  1696→  const prices = recent.map(s => s.price);
+  1697→  // Flat: A ends near start, B retraces to near start, C ends near A
+  1698→  const aMove = Math.abs(prices[1] - prices[0]);
+  1699→  const bMove = Math.abs(prices[2] - prices[1]);
+  1700→  const totalRange = Math.max(...prices) - Math.min(...prices);
+  1701→  if (totalRange === 0) return null;
+  1702→  if (aMove / totalRange > 0.6 || bMove / totalRange > 0.6) return null;
+  1703→
+  1704→  return {
+  1705→    name: 'تخت', nameEn: 'Flat (ABC)', category: 'elliott',
+  1706→    direction: 'neutral', strength: 0.5,
+  1707→    status: 'forming',
+  1708→    description: 'الگوی تخت — تصحیح افقی'
+  1709→  };
+  1710→}
+  1711→
+  1712→function detectExpandedFlat(data: OHLCV[]): PatternResult | null {
+  1713→  if (data.length < 15) return null;
+  1714→  const swings = findSwingPoints(data, 3);
+  1715→  if (swings.length < 4) return null;
+  1716→
+  1717→  const recent = swings.slice(-4);
+  1718→  const prices = recent.map(s => s.price);
+  1719→  // Expanded flat: B extends beyond start of A, C extends beyond end of A
+  1720→  if (recent.length < 4) return null;
+  1721→  const start = prices[0];
+  1722→  const aEnd = prices[1];
+  1723→  const bEnd = prices[2];
+  1724→  const cEnd = prices[3];
+  1725→
+  1726→  const bBeyond = (recent[2].type === 'high' && bEnd > start) || (recent[2].type === 'low' && bEnd < start);
+  1727→  const cBeyond = (recent[3].type === 'low' && cEnd < aEnd) || (recent[3].type === 'high' && cEnd > aEnd);
+  1728→
+  1729→  if (!bBeyond || !cBeyond) return null;
+  1730→
+  1731→  return {
+  1732→    name: 'تخت گسترده', nameEn: 'Expanded Flat', category: 'elliott',
+  1733→    direction: 'neutral', strength: 0.55,
+  1734→    status: 'forming',
+  1735→    description: 'الگوی تخت گسترده — تصحیح با موج B و C بلندتر'
+  1736→  };
+  1737→}
+  1738→
+  1739→function detectRunningFlat(data: OHLCV[]): PatternResult | null {
+  1740→  if (data.length < 15) return null;
+  1741→  const swings = findSwingPoints(data, 3);
+  1742→  if (swings.length < 3) return null;
+  1743→
+  1744→  const recent = swings.slice(-3);
+  1745→  const prices = recent.map(s => s.price);
+  1746→  // Running flat: B ends beyond start of impulse, C doesn't reach end of A
+  1747→  const aMove = Math.abs(prices[1] - prices[0]);
+  1748→  const cMove = Math.abs(prices[2] - prices[1]);
+  1749→  if (cMove > aMove) return null;
+  1750→  if (cMove < aMove * 0.5) return null;
+  1751→
+  1752→  return {
+  1753→    name: 'تخت در حال اجرا', nameEn: 'Running Flat', category: 'elliott',
+  1754→    direction: 'neutral', strength: 0.5,
+  1755→    status: 'forming',
+  1756→    description: 'الگوی تخت در حال اجرا — سیگنال ادامه روند'
+  1757→  };
+  1758→}
+  1759→
+  1760→function detectElliottTriangle(data: OHLCV[]): PatternResult | null {
+  1761→  if (data.length < 20) return null;
+  1762→  const swings = findSwingPoints(data, 3);
+  1763→  const highs = swings.filter(s => s.type === 'high');
+  1764→  const lows = swings.filter(s => s.type === 'low');
+  1765→  if (highs.length < 3 || lows.length < 3) return null;
+  1766→
+  1767→  const rh = highs.slice(-3);
+  1768→  const rl = lows.slice(-3);
+  1769→  const hConverge = rh[rh.length - 1].price < rh[0].price;
+  1770→  const lConverge = rl[rl.length - 1].price > rl[0].price;
+  1771→  if (!hConverge || !lConverge) return null;
+  1772→
+  1773→  // Each sub-wave should have 3 waves (corrective)
+  1774→  return {
+  1775→    name: 'مثلث الیوت', nameEn: 'Triangle (ABC)', category: 'elliott',
+  1776→    direction: 'neutral', strength: 0.55,
+  1777→    status: 'forming',
+  1778→    description: 'الگوی مثلث الیوت — تصحیح مثلثی در موج ۴'
+  1779→  };
+  1780→}
+  1781→
+  1782→function detectComplexCorrection(data: OHLCV[]): PatternResult | null {
+  1783→  if (data.length < 35) return null;
+  1784→  const swings = findSwingPoints(data, 3);
+  1785→  if (swings.length < 7) return null;
+  1786→
+  1787→  const recent = swings.slice(-7);
+  1788→  const prices = recent.map(s => s.price);
+  1789→  // WXY: three corrective patterns linked — look for alternating wave directions
+  1790→  let alternating = true;
+  1791→  for (let i = 1; i < recent.length; i++) {
+  1792→    if (recent[i].type === recent[i - 1].type) { alternating = false; break; }
+  1793→  }
+  1794→  if (!alternating) return null;
+  1795→
+  1796→  // Check for at least 2 distinct corrective sections
+  1797→  const wEnd = Math.abs(prices[2] - prices[0]);
+  1798→  const yEnd = Math.abs(prices[prices.length - 1] - prices[prices.length - 3]);
+  1799→  if (wEnd === 0 || yEnd === 0) return null;
+  1800→
+  1801→  const ratio = yEnd / wEnd;
+  1802→  if (ratio < 0.5 || ratio > 2) return null;
+  1803→
+  1804→  return {
+  1805→    name: 'تصحیح پیچیده', nameEn: 'Complex Correction (WXY)', category: 'elliott',
+  1806→    direction: 'neutral', strength: 0.5,
+  1807→    status: 'forming',
+  1808→    description: 'الگوی تصحیح پیچیده WXY — ترکیب چند الگوی تصحیحی'
+  1809→  };
+  1810→}
+  1811→
+  1812→function detectDoubleThree(data: OHLCV[]): PatternResult | null {
+  1813→  if (data.length < 30) return null;
+  1814→  const swings = findSwingPoints(data, 3);
+  1815→  if (swings.length < 6) return null;
+  1816→
+  1817→  const recent = swings.slice(-6);
+  1818→  // Double three: two corrective patterns joined by an X wave
+  1819→  // Look for roughly 6 alternating swings with similar amplitude ranges
+  1820→  const prices = recent.map(s => s.price);
+  1821→  const ranges: number[] = [];
+  1822→  for (let i = 1; i < prices.length; i++) {
+  1823→    ranges.push(Math.abs(prices[i] - prices[i - 1]));
+  1824→  }
+  1825→  const avgRange = avg(ranges);
+  1826→  if (avgRange === 0) return null;
+  1827→  const variance = ranges.reduce((s, r) => s + Math.abs(r - avgRange), 0) / avgRange;
+  1828→  if (variance > 1.5) return null; // too irregular
+  1829→
+  1830→  return {
+  1831→    name: 'دو سه‌تایی', nameEn: 'Double Three', category: 'elliott',
+  1832→    direction: 'neutral', strength: 0.5,
+  1833→    status: 'forming',
+  1834→    description: 'الگوی دو سه‌تایی — ترکیب دو الگوی تصحیحی ساده'
+  1835→  };
+  1836→}
+  1837→
+  1838→function detectAllElliott(data: OHLCV[]): PatternResult[] {
+  1839→  const r: PatternResult[] = [];
+  1840→  const add = (fn: (d: OHLCV[]) => PatternResult | null) => { const p = fn(data); if (p) r.push(p); };
+  1841→
+  1842→  add(detectImpulseWave);
+  1843→  add(detectLeadingDiagonal);
+  1844→  add(detectEndingDiagonal);
+  1845→  add(detectZigzag);
+  1846→  add(detectFlat);
+  1847→  add(detectExpandedFlat);
+  1848→  add(detectRunningFlat);
+  1849→  add(detectElliottTriangle);
+  1850→  add(detectComplexCorrection);
+  1851→  add(detectDoubleThree);
+  1852→
+  1853→  return r;
+  1854→}
+  1855→
+  1856→// ─── School Scores Computation ──────────────────────────────────────────────
+  1857→
+  1858→function computeSchoolScores(classic: PatternResult[], harmonic: PatternResult[], candlestick: PatternResult[], elliott: PatternResult[]): DetectedPatterns['schoolScores'] {
+  1859→  const classicScore = classic.length > 0
+  1860→    ? Math.min(1, avg(classic.map(p => p.strength)) * (1 + classic.length * 0.1))
+  1861→    : 0;
+  1862→
+  1863→  const harmonicScore = harmonic.length > 0
+  1864→    ? Math.min(1, avg(harmonic.map(p => p.strength)) * (1 + harmonic.length * 0.2))
+  1865→    : 0;
+  1866→
+  1867→  const candleOscScore = candlestick.filter(p =>
+  1868→    p.nameEn.includes('Doji') || p.nameEn.includes('Star') ||
+  1869→    p.nameEn.includes('Harami') || p.nameEn.includes('Engulfing')
+  1870→  );
+  1871→  const oscillatorScore = candleOscScore.length > 0
+  1872→    ? Math.min(1, avg(candleOscScore.map(p => p.strength)))
+  1873→    : 0;
+  1874→
+  1875→  const candleVolScore = candlestick.filter(p =>
+  1876→    p.nameEn.includes('Marubozu') || p.nameEn.includes('Kicker') ||
+  1877→    p.nameEn.includes('Three Methods')
+  1878→  );
+  1879→  const volumeScore = candleVolScore.length > 0
+  1880→    ? Math.min(1, avg(candleVolScore.map(p => p.strength)))
+  1881→    : 0;
+  1882→
+  1883→  const elliottScore = elliott.length > 0
+  1884→    ? Math.min(1, avg(elliott.map(p => p.strength)) * (1 + elliott.length * 0.15))
+  1885→    : 0;
+  1886→
+  1887→  const allPatterns = [...classic, ...harmonic, ...candlestick, ...elliott];
+  1888→  const hybridScore = allPatterns.length > 0
+  1889→    ? Math.min(1, avg(allPatterns.map(p => p.strength)) * Math.min(allPatterns.length * 0.05, 1.5))
+  1890→    : 0;
+  1891→
+  1892→  return {
+  1893→    classical: Math.round(classicScore * 1000) / 1000,
+  1894→    oscillator: Math.round(oscillatorScore * 1000) / 1000,
+  1895→    volume: Math.round(volumeScore * 1000) / 1000,
+  1896→    harmonic: Math.round(harmonicScore * 1000) / 1000,
+  1897→    elliott: Math.round(elliottScore * 1000) / 1000,
+  1898→    hybrid: Math.round(hybridScore * 1000) / 1000,
+  1899→  };
+  1900→}
+  1901→
+  1902→// ─── Main Detection Function ────────────────────────────────────────────────
+  1903→
+  1904→export function detectAllPatterns(data: OHLCV[]): DetectedPatterns {
+  1905→  const classic = detectAllClassic(data);
+  1906→  const harmonic = detectAllHarmonics(data);
+  1907→  const candlestick = detectAllCandlestick(data);
+  1908→  const elliott = detectAllElliott(data);
+  1909→  const all = [...classic, ...harmonic, ...candlestick, ...elliott];
+  1910→
+  1911→  // Sort by strength descending
+  1912→  all.sort((a, b) => b.strength - a.strength);
+  1913→
+  1914→  const schoolScores = computeSchoolScores(classic, harmonic, candlestick, elliott);
+  1915→
+  1916→  return {
+  1917→    classic,
+  1918→    harmonic,
+  1919→    candlestick,
+  1920→    elliott,
+  1921→    all,
+  1922→    schoolScores,
+  1923→  };
+  1924→}
+  1925→

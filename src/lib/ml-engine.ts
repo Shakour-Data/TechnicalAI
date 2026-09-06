@@ -165,13 +165,42 @@ function calcSAR(data: OHLCV[]): number {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /**
- * Extract the 16 VDSS features at a given point in the data.
- * Feature order must match VDSS_FEATURE_NAMES exactly.
+ * Extract the 16 VDSS (Volatility-Direction-Strength-Structure) features at a
+ * given point in the OHLCV history. Feature order must match
+ * {@link VDSS_FEATURE_NAMES} exactly.
  *
- * @param data - Full OHLCV history (chronological)
- * @param endIdx - Index of the candle to compute features for
- * @param hasVolume - Whether data has valid volume
- * @returns Array of 16 feature values in [0,1] range
+ * The extraction proceeds in two layers:
+ * - **Layer 1** — Raw indicator scores (`s_*`) mapped into [0,1] via
+ *   threshold tables or clamped normalisation.
+ * - **Layer 2** — Momentum-corrected scores (`f_*`) that apply a small delta
+ *   adjustment based on the 5-bar lookback change, plus binary cross-signal
+ *   features (Stochastic cross, MACD cross, RSI divergence).
+ *
+ * ### The 16 Features (in order)
+ * | Index | Name            | Source                       | Layer |
+ * |-------|-----------------|------------------------------|-------|
+ * |  0    | RSI             | `calcRSI(14)`                | 2     |
+ * |  1    | MFI             | `calcMFI(14)` (skip if no vol)| 2    |
+ * |  2    | CCI             | `calcCCI(20)`                | 2     |
+ * |  3    | ADX             | `calcADX(14)` DI± diff       | 1     |
+ * |  4    | MACD            | `calcMACD(12,26,9)` histogram| 2     |
+ * |  5    | Stochastic      | `calcStochastic(14,3,3)`     | 2     |
+ * |  6    | BB_position     | Bollinger %B (20,2)          | 1     |
+ * |  7    | MA21            | Price vs SMA-21              | 1     |
+ * |  8    | MA100           | Price vs SMA-100             | 1     |
+ * |  9    | EMA_gap         | (EMA12-EMA26)/EMA26          | 1     |
+ * | 10    | ATR_pct         | 1 − ATR/price×10, clamped    | 1     |
+ * | 11    | Trend           | R² × |angle| regression      | 1     |
+ * | 12    | SR_distance     | Nearest S/R proximity        | 1     |
+ * | 13    | Stoch_cross     | K/D bullish cross (binary)   | 2     |
+ * | 14    | MACD_cross      | Line/Signal bullish cross    | 2     |
+ * | 15    | Divergence      | Price/RSI divergence (binary)| 2     |
+ *
+ * @param data     - Full OHLCV history (chronological, oldest first)
+ * @param endIdx   - Index of the candle to compute features for
+ * @param hasVolume - Whether the data contains valid volume bars
+ * @returns Array of exactly 16 feature values, each in [0,1].
+ *          Returns `new Array(16).fill(0.5)` if the price at `endIdx` is ≤ 0.
  */
 export function extractVDSSFeatures(data: OHLCV[], endIdx: number, hasVolume: boolean): number[] {
   const slice = data.slice(0, endIdx + 1);
@@ -316,6 +345,7 @@ export function extractVDSSFeatures(data: OHLCV[], endIdx: number, hasVolume: bo
 
 // ─── Model Cache ────────────────────────────────────────────────────────────
 
+/** Cached model entry with timestamp for TTL-based invalidation. */
 interface CachedModel {
   result: AdaptiveModelResult;
   time: number;
@@ -324,12 +354,25 @@ interface CachedModel {
 const modelCache = new Map<string, CachedModel>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+/**
+ * Retrieve a cached adaptive model for the given symbol if it has not expired.
+ * Cache TTL is 1 hour.
+ *
+ * @param symbol - Ticker/symbol identifier
+ * @returns The cached {@link AdaptiveModelResult}, or `null` if absent/expired
+ */
 export function getCachedAdaptiveModel(symbol: string): AdaptiveModelResult | null {
   const cached = modelCache.get(symbol);
   if (cached && Date.now() - cached.time < CACHE_TTL) return cached.result;
   return null;
 }
 
+/**
+ * Store an adaptive model result in the cache with the current timestamp.
+ *
+ * @param symbol - Ticker/symbol identifier
+ * @param result - The model result to cache
+ */
 export function setCachedAdaptiveModel(symbol: string, result: AdaptiveModelResult): void {
   modelCache.set(symbol, { result, time: Date.now() });
 }
@@ -337,14 +380,28 @@ export function setCachedAdaptiveModel(symbol: string, result: AdaptiveModelResu
 // ─── Main Training Function ─────────────────────────────────────────────────
 
 /**
- * Train the Adaptive Weight Model for a given symbol.
- * Extracts 16 VDSS features for each historical candle, creates binary labels,
- * trains Logistic Regression with TimeSeriesSplit validation.
+ * Train the Adaptive Weight Model for a given symbol using logistic regression
+ * with **TimeSeriesSplit** cross-validation.
  *
- * @param data - Full OHLCV history (chronological, oldest first)
- * @param symbol - Symbol identifier for caching
- * @param minSamples - Minimum samples needed (default 70)
- * @returns AdaptiveModelResult or null
+ * ### Training Pipeline
+ * 1. **Feature extraction** — For each candle from index `START_IDX` (40) to
+ *    `data.length − FORWARD_DAYS`, computes the 16 VDSS features via
+ *    {@link extractVDSSFeatures}.
+ * 2. **Binary labelling** — Labels each sample as `1` (bullish) if the
+ *    5-day forward return exceeds +1%, otherwise `0` (bearish).
+ * 3. **Model training** — Fits an {@link AdaptiveWeightModel} (L2-regularised
+ *    logistic regression) with TimeSeriesSplit validation on the feature/label
+ *    matrices.
+ * 4. **Prediction** — Scores the most recent candle's features and caches the
+ *    result (TTL = 1 hour).
+ *
+ * Returns `null` if there are insufficient data points, non-finite features,
+ * or if the underlying model fails to converge.
+ *
+ * @param data       - Full OHLCV history (chronological, oldest first)
+ * @param symbol     - Ticker/symbol identifier used as the model cache key
+ * @param minSamples - Minimum number of valid training samples required (default 70)
+ * @returns The trained {@link AdaptiveModelResult} on success, or `null` on failure
  */
 export function trainAdaptiveModel(data: OHLCV[], symbol: string, minSamples = 70): AdaptiveModelResult | null {
   const FORWARD_DAYS = 5;
@@ -393,12 +450,40 @@ export function trainAdaptiveModel(data: OHLCV[], symbol: string, minSamples = 7
 // ─── Calculate bullConsensus with ML Weights (Layer 3) ──────────────────────
 
 /**
- * Calculate bullConsensus using ML weights.
- * Falls back to default weights if ML model is not trained.
+ * Calculate the ML-weighted bull consensus from the 16 VDSS features.
  *
- * @param features - 16 VDSS features for the current candle
- * @param mlResult - Adaptive model result (or null for fallback)
- * @param hasVolume - Whether MFI feature is valid
+ * ### ML Path (when `mlResult` is trained)
+ * Computes a weighted average: `Σ(w_j × f_j) / Σ(w_j)`, skipping the MFI
+ * feature (index 1) when `hasVolume` is false. The raw consensus is then
+ * blended with the ML direct prediction probability, with the blend weight
+ * proportional to `recentAccuracy × 0.30` (capped at 0.30).
+ *
+ * ### Fallback Heuristic (when ML is unavailable)
+ * Uses fixed default weights and the same weighted-average formula:
+ * ```
+ * DEFAULT_WEIGHTS = [
+ *   0.15, 0.12, 0.10, 0.08,  // rsi, mfi, cci, adx
+ *   0.14, 0.10, 0.08,         // macd, stoch, bb
+ *   0.10, 0.08, 0.10,         // ma21, ma100, ema
+ *   0.05, 0.10, 0.05,         // atr, trend, sr
+ *   0.06, 0.06, 0.08,         // stochCross, macdCross, div
+ * ]
+ * ```
+ *
+ * The fallback heuristic can also be expressed as a sigmoid of a raw bull
+ * score derived from individual indicator contributions:
+ * ```
+ * bullScore = (rsi<40 ? 0.3 : rsi>60 ? -0.1 : 0)
+ *           + (adx>25 && diPlus>diMinus ? 0.3 : 0)
+ *           + (macdHist>0 ? 0.2 : -0.2)
+ *           + (bbPos<0.3 ? 0.2 : bbPos>0.7 ? -0.2 : 0)
+ * bullConsensus = sigmoid(bullScore)
+ * ```
+ *
+ * @param features  - Array of 16 VDSS feature values for the current candle
+ * @param mlResult  - Trained adaptive model result, or `null` to use fallback weights
+ * @param hasVolume - Whether volume data is valid (disables MFI feature at index 1)
+ * @returns Object with `bullConsensus` clamped to [0,1] and `usedML` flag
  */
 export function calculateBullConsensus(
   features: number[],
@@ -453,6 +538,7 @@ export function calculateBullConsensus(
 
 const ML_SERVICE_URL = '/?XTransformPort=3040';
 
+/** Result from the external ML prediction service (price forecasts + confidence). */
 interface MLPredictionResult {
   predictions: number[];
   confidence: number;
@@ -460,6 +546,7 @@ interface MLPredictionResult {
   predicted_return_5d: number;
 }
 
+/** Result from the ML regime classification service. */
 interface MLRegimeResult {
   regime: string;
   probabilities: Record<string, number>;
@@ -518,6 +605,11 @@ export async function fetchMLWeights(
 //   and P(Edge) is the conditional probability per edge formula.
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Full market context for the decision-graph scenario probability calculation.
+ * Aggregates all indicator values, ML outputs, and structural levels needed
+ * by the 3-branch DAG.
+ */
 export interface DecisionGraphContext {
   bullConsensus: number;
   price: number;
@@ -547,16 +639,57 @@ export interface DecisionGraphContext {
 }
 
 /**
- * Calculate 9-scenario probabilities using the 3-branch decision graph.
- * Each branch (Trend Following, Breakout, Reversal) emits conditional probabilities
- * for each scenario. Final probability is the EMV-weighted combination.
+ * Calculate 9-scenario probabilities using the **3-branch decision DAG**.
  *
- * Per TechnicalAnalysisDssGraph.txt:
- *   P_Bull_Final = α × P_Bull_Current + (1-α) × P_Bull_Forecast
- *   P_Bear_Final = α × P_Bear_Current + (1-α) × P_Bear_Forecast
- *   P_Neutral_Final = 1 - (P_Bull_Final + P_Bear_Final)
+ * The DAG structure (per TechnicalAnalysisDssGraph.txt):
+ * - **Root** → 3 branches: Trend Following (A), Breakout (B), Reversal (C)
+ * - Each branch emits 9 conditional probabilities → 9 leaf scenarios
+ * - `P(Scenario_S) = Σ_branch P(Branch) × P(Edge_S | Branch)`
  *
- *   P(Scenario_S) = P_Bull_Final × CP_S|Bull + P_Bear_Final × CP_S|Bear + P_Neutral_Final × CP_S|Neutral
+ * ### Computation Steps
+ * 1. **P_Bull_Current / P_Bear_Current** — Bayesian-weighted aggregation of
+ *    current indicator signals (RSI, MFI, StochK, MA100 position, ADX, S/R
+ *    proximity) using category priors (trend=0.28, oscillator=0.25,
+ *    volume=0.15, volatility=0.10, leading=0.12, patterns=0.10).
+ * 2. **P_Bull_Forecast** — Uses ML `predictionProb` if available; otherwise
+ *    applies exponential decay toward 0.5 (mean-reversion).
+ * 3. **Final directional probs** — Combines current and forecast:
+ *    ```
+ *    P_Bull_Final  = α × P_Bull_Current  + (1-α) × P_Bull_Forecast
+ *    P_Bear_Final  = α × P_Bear_Current  + (1-α) × P_Bear_Forecast
+ *    P_Neutral_Final = max(0.04, 1 − P_Bull − P_Bear)
+ *    ```
+ * 4. **Conditional distributions** — CP(S_i | Bull/Bear/Neutral) computed
+ *    from ADX trend strength, overbought/oversold, volatility, divergence,
+ *    and ML-adaptive factors. Normalised to sum to 1 per state.
+ * 5. **Final probabilities** — Weighted sum across states, normalised to 100.
+ *
+ * ### The 9 Scenarios
+ * | i | Name              | Description                            |
+ * |---|-------------------|----------------------------------------|
+ * | 1 | Strong Bull       | ADX > 40, strong uptrend               |
+ * | 2 | Accelerating Bull | High momentum + volatility expansion   |
+ * | 3 | Cautious Bull     | Bullish but overbought risk            |
+ * | 4 | Strong Bear       | ADX > 40, strong downtrend             |
+ * | 5 | Accelerating Bear | High momentum + volatility expansion   |
+ * | 6 | Cautious Bear     | Bearish but oversold risk              |
+ * | 7 | Low-Vol Range     | ATR low, ADX < 20 → sideways           |
+ * | 8 | High-Vol Range    | ATR high, ADX < 30 → choppy            |
+ * | 9 | Shock             | Black-swan tail risk (2-5%)            |
+ *
+ * @param bullConsensus - Overall bull consensus ∈ [0,1]
+ * @param price        - Current close price
+ * @param SC1          - R1 resistance level
+ * @param S1           - S1 support level
+ * @param MA100        - 100-period simple moving average
+ * @param rsi          - Current RSI value (0-100)
+ * @param mfi          - Current MFI value (0-100)
+ * @param stochK       - Current Stochastic %K value
+ * @param hasVolume    - Whether volume data is valid
+ * @param mlResult     - Trained adaptive model result (or null)
+ * @param adx          - Current ADX value (default 25)
+ * @param atr          - Current ATR value (default 0)
+ * @returns Object with `pSC1`–`pSC9` (integers summing to 100) and adaptive `factors`
  */
 export function calculateScenarioProbabilities(
   bullConsensus: number,
@@ -839,6 +972,31 @@ export function calculateScenarioProbabilities(
   return { pSC1, pSC2, pSC3, pSC4, pSC5, pSC6, pSC7, pSC8, pSC9, factors };
 }
 
+/**
+ * Compute edge weights for the DAG (Directed Acyclic Graph) used in the
+ * decision-graph scoring model.
+ *
+ * The four edge weights represent the transition probabilities and risk
+ * parameters that govern how the DAG propagates scenario outcomes:
+ * - **up**        — Probability-weighted upside edge, driven by bull consensus
+ *                    and ML momentum coefficient.
+ * - **down**      — Probability-weighted downside edge, driven by bear consensus
+ *                    and ML trend coefficient.
+ * - **pullback**  — Mean-reversion pullback magnitude, modulated by the ML
+ *                    volatility coefficient.
+ * - **risk**      — Position-sizing risk parameter; inversely scaled by ADX
+ *                    strength and adjusted by the ML trend coefficient.
+ *
+ * When `mlResult` is trained, the coefficients for features at indices
+ * `[11]=Trend, [0]=RSI, [10]=ATR_pct` are used to derive ML-driven
+ * `{trendCoef, momentumCoef, volatilityCoef}` (normalised to sum to 1).
+ * Otherwise, all three coefficients default to 1/3 (equal weighting).
+ *
+ * @param bullConsensus - Overall bull consensus ∈ [0,1]
+ * @param adx          - Current ADX value (higher = stronger trend)
+ * @param mlResult     - Trained adaptive model result, or `null` for equal weights
+ * @returns Object with `{ up, down, pullback, risk }` — each clamped to a safe range
+ */
 export function calculateEdgeWeights(
   bullConsensus: number,
   adx: number,
@@ -879,6 +1037,10 @@ export function calculateEdgeWeights(
 
 // ─── Backward-Compatible Exports (for any code still using old API) ─────────
 
+/**
+ * Legacy weight format for backward compatibility with the old ML API.
+ * Maps feature names to their raw and normalised weights.
+ */
 export interface MLWeights {
   weights: Record<string, number>;
   normalizedWeights: Record<string, number>;
@@ -886,6 +1048,17 @@ export interface MLWeights {
   sampleCount: number;
 }
 
+/**
+ * Backward-compatible wrapper around {@link trainAdaptiveModel}.
+ *
+ * Trains the adaptive model with a legacy symbol key (`'_legacy'`) and
+ * converts the result to the old {@link MLWeights} format, mapping
+ * `coefficients` → `weights` and `weights` → `normalizedWeights`.
+ *
+ * @param data       - Full OHLCV history (chronological, oldest first)
+ * @param minSamples - Minimum training samples required (default 60)
+ * @returns {@link MLWeights} in the legacy format, or `null` if training fails
+ */
 export function trainIndicatorWeights(data: OHLCV[], minSamples = 60): MLWeights | null {
   // Bridge: use the new adaptive model but return old format
   const result = trainAdaptiveModel(data, '_legacy', minSamples);
@@ -941,6 +1114,10 @@ export function setCachedWeights(symbol: string, w: MLWeights): void {
 
 // ─── Price Prediction (kept for backward compat) ──────────────────────────
 
+/**
+ * Backward-compatible price prediction result.
+ * Contains 5-day forward price estimates, confidence, and directional label.
+ */
 export interface PricePrediction {
   predictedPrices: number[];
   predictedReturn5d: number;
@@ -948,6 +1125,26 @@ export interface PricePrediction {
   trendDirection: 'up' | 'down' | 'flat';
 }
 
+/**
+ * Backward-compatible price prediction using a simple linear-regression-based
+ * trend + mean-reversion + momentum model.
+ *
+ * ### Prediction Method
+ * 1. Computes 20-bar daily returns and derives short (3-bar) and medium
+ *    (10-bar) momentum averages.
+ * 2. Fits a linear regression on the last 20 closes to extract slope and R².
+ * 3. Calculates ATR-based daily volatility.
+ * 4. Combines three daily-return components with adaptive weights:
+ *    - **Trend** (weight = R² × 0.6): regression slope / price
+ *    - **Mean-reversion** (weight = min(|deviation|×5, 0.4)): −deviation × 0.05
+ *    - **Momentum** (weight = 0.2): 0.4 × mom3 + 0.1 × mom10
+ * 5. Projects 5 daily prices with exponential decay (λ = 0.1).
+ *
+ * @param data - Full OHLCV history (chronological, oldest first). Needs ≥ 40 bars.
+ * @returns {@link PricePrediction} with 5 predicted prices, 5-day return,
+ *          confidence ∈ [0.1, 0.9], and trend direction, or `null` if
+ *          insufficient data or zero price.
+ */
 export function predictPrices(data: OHLCV[]): PricePrediction | null {
   if (data.length < 40) return null;
   const PREDICT_DAYS = 5;

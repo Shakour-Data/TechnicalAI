@@ -1,3 +1,17 @@
+/**
+ * @module API /api/vdes-analysis
+ * @description VDES (V7) AI-powered technical analysis narrative generator.
+ *
+ * **LOCKED VERSION — DO NOT MODIFY.** All future changes must go to
+ * `/api/v8-analysis/route.ts`.
+ *
+ * V7 Features: Deterministic Narrative Engine
+ * Uses `ml-narrative.ts` for School × Style × Tone selection
+ * (10 × 10 × 15 = 1,500 combinations), then generates a Persian analysis
+ * via ZAI LLM tuned to the selected combination.
+ *
+ * Flow: narrative selection → prompt building → cache check → LLM call → response
+ */
 // ═══════════════════════════════════════════════════════════════════════════════
 // VDES Analysis API v7 — LOCKED VERSION — DO NOT MODIFY
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -15,13 +29,25 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { selectNarrativeCombination, buildNarrativeInput } from '@/lib/ml-narrative';
 import type { NarrativeCombination } from '@/lib/ml-narrative';
 
+/** Force dynamic rendering — never cache at the Next.js edge. */
 export const dynamic = 'force-dynamic';
 
 // ─── Version & Cache ────────────────────────────────────────────────
+/** Current VDES analysis schema version — bumped when prompt/response format changes. */
 const ANALYSIS_VERSION = 7;
+/** In-memory LRU-style cache: key → { version, analysis text, timestamp }. */
 const cache = new Map<string, { v: number; text: string; ts: number }>();
+/** Cache time-to-live: 10 minutes. Entries past this age are evicted on next write. */
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+/**
+ * Build a deterministic cache key from request fields so that identical
+ * technical data always maps to the same cached analysis.
+ * Includes version number to invalidate cache on schema upgrades.
+ *
+ * @param body - The VDES request payload.
+ * @returns String key of the form `v:symbolName:currentPrice:trendDirection:rsi:adx`
+ */
 function cacheKey(body: VdesRequest): string {
   // Include the narrative selection dimensions so different combos don't collide
   const c = `${ANALYSIS_VERSION}:${body.symbolName}:${body.currentPrice}:${body.trendDirection}:${body.rsi}:${body.adx}`;
@@ -29,13 +55,26 @@ function cacheKey(body: VdesRequest): string {
 }
 
 // ─── Shared ZAI instance (lazy init) ─────────────────────────────────
+/** Singleton ZAI SDK instance, lazily initialised on first call. */
 let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+/**
+ * Get or create the singleton ZAI SDK client.
+ * @returns The initialised ZAI instance.
+ */
 async function getZAI() {
   if (!_zai) _zai = await ZAI.create();
   return _zai;
 }
 
-// ─── 429 Retry with exponential backoff ─────────────────────────────
+/**
+ * Retry wrapper with exponential backoff for ZAI 429 (rate-limit) responses.
+ * Delays: 20s → 40s → 80s → 160s with random jitter up to 500ms.
+ *
+ * @typeParam T - Return type of the wrapped function.
+ * @param fn - Async function to execute (typically a ZAI chat completion call).
+ * @returns The result of `fn()` on success.
+ * @throws Rethrows non-429 errors or after all retry attempts exhausted.
+ */
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   const delays = [20000, 40000, 80000, 160000];
   for (let attempt = 0; attempt <= delays.length; attempt++) {
@@ -56,18 +95,37 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw new Error('unreachable');
 }
 
-// ─── Helper: format number for Persian display ───────────────────────
+/**
+ * Format a number with fixed decimal places for Persian display.
+ * Falls back to '0' for non-finite values.
+ *
+ * @param n - Number to format.
+ * @param d - Decimal places (default 0).
+ * @returns Formatted string.
+ */
 function fmt(n: number, d = 0): string {
   if (!isFinite(n) || isNaN(n)) return '0';
   return n.toFixed(d);
 }
 
+/**
+ * Format a number with Persian (fa-IR) locale grouping and rounding.
+ * Falls back to '0' for non-finite values.
+ *
+ * @param n - Number to format.
+ * @returns Locale-formatted string, e.g. "۱٬۲۳۴٬۵۶۷".
+ */
 function fmtGrouped(n: number): string {
   if (!isFinite(n) || isNaN(n)) return '0';
   return Math.round(n).toLocaleString('fa-IR');
 }
 
-// ─── Support/Resistance strength description ────────────────────────
+/**
+ * Map a support/resistance strength score to a Persian grade label.
+ *
+ * @param strength - Numeric strength value (typically 0–10).
+ * @returns Persian grade: 'بسیار قوی' | 'قوی' | 'متوسط' | 'ضعیف' | 'بسیار ضعیف'
+ */
 function srGrade(strength: number): string {
   if (strength >= 8.5) return 'بسیار قوی';
   if (strength >= 7) return 'قوی';
@@ -77,6 +135,15 @@ function srGrade(strength: number): string {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────
+/**
+ * A named price scenario with probability and target range.
+ * @property name      - Persian scenario name.
+ * @property nameEn    - English scenario name.
+ * @property probability - Probability percentage (0–100).
+ * @property targetMin - Lower bound of the price target range.
+ * @property targetMax - Upper bound of the price target range.
+ * @property description - Persian description of the scenario.
+ */
 interface Scenario {
   name: string;
   nameEn: string;
@@ -86,6 +153,35 @@ interface Scenario {
   description: string;
 }
 
+/**
+ * Request payload for VDES AI analysis.
+ * Contains all technical indicators, scenarios, and S/R levels needed to
+ * build the LLM prompt.
+ *
+ * @property symbolName       - Persian symbol name (e.g. "فولاد").
+ * @property currentPrice     - Latest close price.
+ * @property ma21 / ma100     - Moving averages.
+ * @property rsi / mfi / cci / adx - Oscillators and momentum indicators.
+ * @property stochK / stochD  - Stochastic oscillator values.
+ * @property macdLine / macdSignal / macdHist - MACD components.
+ * @property diPlus / diMinus - Directional indicators.
+ * @property sar              - Parabolic SAR value.
+ * @property atr              - Average True Range.
+ * @property obv              - On-Balance Volume.
+ * @property hasVolume        - Whether volume data is available.
+ * @property bollingerUpper/Middle/Lower - Bollinger Band values.
+ * @property trendDirection    - 'up' | 'down' | 'neutral'.
+ * @property trendAngle       - Linear regression slope angle (degrees).
+ * @property trendR2          - R² goodness-of-fit for trend line.
+ * @property overallSignal    - 'bullish' | 'bearish' | 'neutral'.
+ * @property scenarios        - Map of scenario keys (SC1–SC5) to Scenario objects.
+ * @property resistances / supports - Arrays of price levels.
+ * @property resistanceStrengths / supportStrengths - Optional strength metadata.
+ * @property priceTargets     - Optional tagged price targets.
+ * @property isIndex          - True if the symbol is a market index.
+ * @property isTgju           - True if the symbol is from TGJU data source.
+ * @property currencyUnit     - Display currency unit (default 'ریال').
+ */
 interface VdesRequest {
   symbolName: string;
   currentPrice: number;
@@ -124,7 +220,16 @@ interface VdesRequest {
   currencyUnit?: string;
 }
 
-// ─── Build the v7 data section (shared between prompt builder & debug) ─
+/**
+ * Build the V7 data section of the LLM prompt — a Persian-language markdown
+ * block containing all technical indicators, S/R levels, scenarios, and
+ * trend information formatted for the AI to consume.
+ *
+ * This function is shared between the prompt builder and debug output.
+ *
+ * @param body - The VDES request payload with all technical data.
+ * @returns A Persian markdown string with the complete data section.
+ */
 function buildDataSection(body: VdesRequest): string {
   const {
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -216,7 +321,15 @@ ${S2 ? `- حمایت **S2** در ${fmtGrouped(S2)} ${unit}${supportStrengths?.[1
 `;
 }
 
-// ─── Build the v7 narrative prompt ───────────────────────────────────
+/**
+ * Build the full V7 narrative prompt for the LLM.
+ * Combines the data section, the selected narrative combination
+ * (School + Style + Tone), and strict output rules.
+ *
+ * @param body  - The VDES request payload.
+ * @param combo - The selected NarrativeCombination from ml-narrative.
+ * @returns The complete user prompt string for the ZAI LLM.
+ */
 function buildV7Prompt(body: VdesRequest, combo: NarrativeCombination): string {
   const dataSection = buildDataSection(body);
 
@@ -284,7 +397,13 @@ ${dataSection}
 شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.`;
 }
 
-// ─── SYSTEM_PROMPT (v7 — refined rules) ────────────────────────────
+/**
+ * System prompt for the ZAI LLM — enforces Persian-only output, no emojis,
+ * no internal headings, long paragraphs, technical references, and a
+ * concise actionable summary at the end.
+ *
+ * This prompt is sent as the `assistant` role message to prime the model.
+ */
 const SYSTEM_PROMPT = `
 شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید.
 
@@ -301,7 +420,33 @@ const SYSTEM_PROMPT = `
 - جمع‌بندی جزئی در پایان هر پاراگراف.
 - از پررنگ ** فقط برای تأکید استفاده شود.`;
 
-// ─── POST Handler ─────────────────────────────────────────────────────
+/**
+ * POST /api/vdes-analysis — Generate a VDES AI-powered technical analysis narrative.
+ *
+ * @description
+ * Processing flow:
+ *   1. **Parse & validate** request body — requires `symbolName`, `currentPrice`,
+ *      `scenarios`, `resistances`, `supports`.
+ *   2. **Narrative selection** — call `buildNarrativeInput()` → `selectNarrativeCombination()`
+ *      to deterministically choose a School × Style × Tone combo based on the
+ *      technical data (1,500 possible combinations).
+ *   3. **Prompt building** — construct the full LLM prompt via `buildV7Prompt()`.
+ *   4. **Cache check** — if an identical request (same version + key fields) was
+ *      cached within the last 10 minutes, return the cached analysis immediately.
+ *   5. **LLM call** — invoke ZAI chat completions with `SYSTEM_PROMPT` + user prompt.
+ *      Automatic retry with exponential backoff on HTTP 429 responses.
+ *   6. **Cache & respond** — store the result in the in-memory cache, evict stale
+ *      entries, and return the analysis text with debug metadata.
+ *
+ * @param req - Next.js incoming request with JSON body matching {@link VdesRequest}.
+ *
+ * @requestBody {@link VdesRequest}
+ *
+ * @returns JSON response:
+ *   - **200** `{ analysis: string, _debug: { school, style, tone, schoolScore, styleScore, toneScore, cached, latencyMs } }`
+ *   - **400** `{ error: string }` — missing required fields.
+ *   - **500** `{ error: string }` — LLM produced empty response or internal error.
+ */
 export async function POST(req: NextRequest) {
   const t0 = Date.now();
 

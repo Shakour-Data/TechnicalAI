@@ -1,0 +1,604 @@
+     1→/**
+     2→ * Yahoo Finance API Integration
+     3→ *
+     4→ * Uses yahoo-finance2 library to fetch live quotes and historical data
+     5→ * for global stocks, indices, energy, metals, commodities, forex, crypto, and ETFs.
+     6→ */
+     7→
+     8→import YahooFinance from 'yahoo-finance2';
+     9→
+    10→const yahooFinance = new YahooFinance({ 
+    11→  suppressNotices: ['yahooSurvey'],
+    12→  validation: { logErrors: true },
+    13→});
+    14→
+    15→/* ─── Types ────────────────────────────────────────────── */
+    16→
+    17→export type YahooCategory =
+    18→  | 'yahoo_stock'
+    19→  | 'yahoo_index'
+    20→  | 'yahoo_energy'
+    21→  | 'yahoo_metal'
+    22→  | 'yahoo_commodity'
+    23→  | 'yahoo_forex'
+    24→  | 'yahoo_crypto'
+    25→  | 'yahoo_etf';
+    26→
+    27→export interface YahooInstrument {
+    28→  symbol: string;
+    29→  name: string;
+    30→  nameEn: string;
+    31→  country: string;
+    32→  countryEn: string;
+    33→  exchange: string;
+    34→  groupTitle: string;
+    35→  category: YahooCategory;
+    36→  sector?: string;
+    37→}
+    38→
+    39→/** @deprecated Use YahooInstrument instead */
+    40→export type YahooStock = YahooInstrument;
+    41→
+    42→export interface YahooQuote {
+    43→  symbol: string;
+    44→  name: string;
+    45→  nameEn: string;
+    46→  country: string;
+    47→  countryEn: string;
+    48→  exchange: string;
+    49→  groupTitle: string;
+    50→  category: YahooCategory;
+    51→  unit: string;
+    52→  price: number;
+    53→  change: number;
+    54→  changePercent: number;
+    55→  previousClose: number;
+    56→  open: number;
+    57→  high: number;
+    58→  low: number;
+    59→  volume: number;
+    60→  marketCap: number;
+    61→  currency: string;
+    62→}
+    63→
+    64→export interface YahooOHLC {
+    65→  date: string;
+    66→  open: number;
+    67→  high: number;
+    68→  low: number;
+    69→  close: number;
+    70→  volume: number;
+    71→}
+    72→
+    73→/* ─── Static Stock Definitions ────────────────────── */
+    74→
+    75→export const YAHOO_STOCKS: YahooInstrument[] = [
+    76→  /* ── US — Technology ──────────────────────────────────── */
+    77→  { symbol: 'AAPL', name: 'اپل', nameEn: 'Apple', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    78→  { symbol: 'MSFT', name: 'مایکروسافت', nameEn: 'Microsoft', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    79→  { symbol: 'NVDA', name: 'انویدیا', nameEn: 'NVIDIA', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    80→  { symbol: 'GOOGL', name: 'آلفابت (گوگل)', nameEn: 'Alphabet', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    81→  { symbol: 'META', name: 'متا (فیسبوک)', nameEn: 'Meta', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    82→  { symbol: 'AMZN', name: 'آمازون', nameEn: 'Amazon', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    83→  { symbol: 'TSLA', name: 'تسلا', nameEn: 'Tesla', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    84→  { symbol: 'NFLX', name: 'نتفلیکس', nameEn: 'Netflix', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    85→  { symbol: 'AMD', name: 'ای‌ام‌دی', nameEn: 'AMD', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    86→  { symbol: 'AVGO', name: 'برودکام', nameEn: 'Broadcom', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    87→  { symbol: 'CRM', name: 'سیلزفورس', nameEn: 'Salesforce', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    88→  { symbol: 'ORCL', name: 'اوراکل', nameEn: 'Oracle', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    89→  { symbol: 'INTC', name: 'اینتل', nameEn: 'Intel', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    90→  { symbol: 'ADBE', name: 'ادوبی', nameEn: 'Adobe', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    91→  { symbol: 'QCOM', name: 'کوالکام', nameEn: 'Qualcomm', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'آمریکا - تکنولوژی', category: 'yahoo_stock', sector: 'Technology' },
+    92→
+    93→  /* ── US — Finance ──────────────────────────────────── */
+    94→  { symbol: 'JPM', name: 'جی‌پی مورگان', nameEn: 'JPMorgan', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+    95→  { symbol: 'GS', name: 'گلدمن ساکس', nameEn: 'Goldman Sachs', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+    96→  { symbol: 'V', name: 'ویزا', nameEn: 'Visa', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+    97→  { symbol: 'MA', name: 'مسترکارت', nameEn: 'Mastercard', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+    98→  { symbol: 'BLK', name: 'بلک‌راک', nameEn: 'BlackRock', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+    99→  { symbol: 'BAC', name: 'بانک آمریکا', nameEn: 'BofA', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+   100→  { symbol: 'AXP', name: 'امریکن اکسپرس', nameEn: 'Amex', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مالی', category: 'yahoo_stock', sector: 'Finance' },
+   101→
+   102→  /* ── US — Healthcare ────────────────────────────────── */
+   103→  { symbol: 'UNH', name: 'یونایتد هلث', nameEn: 'UnitedHealth', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - بهداشت', category: 'yahoo_stock', sector: 'Healthcare' },
+   104→  { symbol: 'JNJ', name: 'جانسون اند جانسون', nameEn: 'J&J', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - بهداشت', category: 'yahoo_stock', sector: 'Healthcare' },
+   105→  { symbol: 'PFE', name: 'پفایزر', nameEn: 'Pfizer', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - بهداشت', category: 'yahoo_stock', sector: 'Healthcare' },
+   106→  { symbol: 'LLY', name: 'ایلی لیلی', nameEn: 'Eli Lilly', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - بهداشت', category: 'yahoo_stock', sector: 'Healthcare' },
+   107→  { symbol: 'MRK', name: 'مرک', nameEn: 'Merck', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - بهداشت', category: 'yahoo_stock', sector: 'Healthcare' },
+   108→
+   109→  /* ── US — Consumer & Other ──────────────────────────── */
+   110→  { symbol: 'WMT', name: 'والمارت', nameEn: 'Walmart', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مصرفی', category: 'yahoo_stock', sector: 'Consumer' },
+   111→  { symbol: 'KO', name: 'کوکاکولا', nameEn: 'Coca-Cola', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مصرفی', category: 'yahoo_stock', sector: 'Consumer' },
+   112→  { symbol: 'PG', name: 'پراکتر اند گمبل', nameEn: 'P&G', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مصرفی', category: 'yahoo_stock', sector: 'Consumer' },
+   113→  { symbol: 'DIS', name: 'دیزنی', nameEn: 'Disney', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مصرفی', category: 'yahoo_stock', sector: 'Consumer' },
+   114→  { symbol: 'HD', name: 'هوم دیپو', nameEn: 'Home Depot', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - مصرفی', category: 'yahoo_stock', sector: 'Consumer' },
+   115→  { symbol: 'BA', name: 'بوئینگ', nameEn: 'Boeing', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - صنعت', category: 'yahoo_stock', sector: 'Industrial' },
+   116→  { symbol: 'CAT', name: 'کاترپیلار', nameEn: 'Caterpillar', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - صنعت', category: 'yahoo_stock', sector: 'Industrial' },
+   117→  { symbol: 'XOM', name: 'اکسون موبیل', nameEn: 'ExxonMobil', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - انرژی', category: 'yahoo_stock', sector: 'Energy' },
+   118→  { symbol: 'CVX', name: 'شورون', nameEn: 'Chevron', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'آمریکا - انرژی', category: 'yahoo_stock', sector: 'Energy' },
+   119→
+   120→  /* ── Europe — UK ──────────────────────────────────────── */
+   121→  { symbol: 'SHEL.L', name: 'شل', nameEn: 'Shell', country: 'انگلستان', countryEn: 'UK', exchange: 'LSE', groupTitle: 'اروپا - انگلستان', category: 'yahoo_stock', sector: 'Energy' },
+   122→  { symbol: 'BP.L', name: 'بی‌پی', nameEn: 'BP', country: 'انگلستان', countryEn: 'UK', exchange: 'LSE', groupTitle: 'اروپا - انگلستان', category: 'yahoo_stock', sector: 'Energy' },
+   123→  { symbol: 'AZN.L', name: 'آسترازنکا', nameEn: 'AstraZeneca', country: 'انگلستان', countryEn: 'UK', exchange: 'LSE', groupTitle: 'اروپا - انگلستان', category: 'yahoo_stock', sector: 'Healthcare' },
+   124→  { symbol: 'HSBA.L', name: 'اچ‌اس‌بی‌سی', nameEn: 'HSBC', country: 'انگلستان', countryEn: 'UK', exchange: 'LSE', groupTitle: 'اروپا - انگلستان', category: 'yahoo_stock', sector: 'Finance' },
+   125→  { symbol: 'ULVR.L', name: 'یونی‌لیور', nameEn: 'Unilever', country: 'انگلستان', countryEn: 'UK', exchange: 'LSE', groupTitle: 'اروپا - انگلستان', category: 'yahoo_stock', sector: 'Consumer' },
+   126→  { symbol: 'RIO.L', name: 'ریو تینتو', nameEn: 'Rio Tinto', country: 'انگلستان', countryEn: 'UK', exchange: 'LSE', groupTitle: 'اروپا - انگلستان', category: 'yahoo_stock', sector: 'Mining' },
+   127→
+   128→  /* ── Europe — Germany ─────────────────────────────────── */
+   129→  { symbol: 'SAP.DE', name: 'اس‌ای‌پی', nameEn: 'SAP', country: 'آلمان', countryEn: 'DE', exchange: 'XETRA', groupTitle: 'اروپا - آلمان', category: 'yahoo_stock', sector: 'Technology' },
+   130→  { symbol: 'SIE.DE', name: 'زیمنس', nameEn: 'Siemens', country: 'آلمان', countryEn: 'DE', exchange: 'XETRA', groupTitle: 'اروپا - آلمان', category: 'yahoo_stock', sector: 'Industrial' },
+   131→  { symbol: 'ALV.DE', name: 'آلیانتس', nameEn: 'Allianz', country: 'آلمان', countryEn: 'DE', exchange: 'XETRA', groupTitle: 'اروپا - آلمان', category: 'yahoo_stock', sector: 'Finance' },
+   132→  { symbol: 'DTE.DE', name: 'دویچه تلکوم', nameEn: 'Deutsche Telekom', country: 'آلمان', countryEn: 'DE', exchange: 'XETRA', groupTitle: 'اروپا - آلمان', category: 'yahoo_stock', sector: 'Technology' },
+   133→  { symbol: 'BAS.DE', name: 'باسف', nameEn: 'BASF', country: 'آلمان', countryEn: 'DE', exchange: 'XETRA', groupTitle: 'اروپا - آلمان', category: 'yahoo_stock', sector: 'Chemical' },
+   134→
+   135→  /* ── Europe — France ──────────────────────────────────── */
+   136→  { symbol: 'MC.PA', name: 'لورئال', nameEn: "L'Oréal", country: 'فرانسه', countryEn: 'FR', exchange: 'Euronext', groupTitle: 'اروپا - فرانسه', category: 'yahoo_stock', sector: 'Consumer' },
+   137→  { symbol: 'OR.PA', name: 'لورانسی', nameEn: 'LVMH', country: 'فرانسه', countryEn: 'FR', exchange: 'Euronext', groupTitle: 'اروپا - فرانسه', category: 'yahoo_stock', sector: 'Consumer' },
+   138→  { symbol: 'SAN.PA', name: 'سانوفی', nameEn: 'Sanofi', country: 'فرانسه', countryEn: 'FR', exchange: 'Euronext', groupTitle: 'اروپا - فرانسه', category: 'yahoo_stock', sector: 'Healthcare' },
+   139→  { symbol: 'AI.PA', name: 'ایر بوس', nameEn: 'Airbus', country: 'فرانسه', countryEn: 'FR', exchange: 'Euronext', groupTitle: 'اروپا - فرانسه', category: 'yahoo_stock', sector: 'Industrial' },
+   140→  { symbol: 'BNP.PA', name: 'بی‌ان‌پی پاریبا', nameEn: 'BNP Paribas', country: 'فرانسه', countryEn: 'FR', exchange: 'Euronext', groupTitle: 'اروپا - فرانسه', category: 'yahoo_stock', sector: 'Finance' },
+   141→  { symbol: 'SU.PA', name: 'شلف', nameEn: 'Schneider', country: 'فرانسه', countryEn: 'FR', exchange: 'Euronext', groupTitle: 'اروپا - فرانسه', category: 'yahoo_stock', sector: 'Industrial' },
+   142→
+   143→  /* ── Europe — Netherlands ─────────────────────────────── */
+   144→  { symbol: 'ASML.AS', name: 'اس‌ام‌ال', nameEn: 'ASML', country: 'هلند', countryEn: 'NL', exchange: 'Euronext', groupTitle: 'اروپا - هلند', category: 'yahoo_stock', sector: 'Technology' },
+   145→
+   146→  /* ── Europe — Switzerland ─────────────────────────────── */
+   147→  { symbol: 'NESN.SW', name: 'نستله', nameEn: 'Nestlé', country: 'سوئیس', countryEn: 'CH', exchange: 'SIX', groupTitle: 'اروپا - سوئیس', category: 'yahoo_stock', sector: 'Consumer' },
+   148→  { symbol: 'ROG.SW', name: 'روچ', nameEn: 'Roche', country: 'سوئیس', countryEn: 'CH', exchange: 'SIX', groupTitle: 'اروپا - سوئیس', category: 'yahoo_stock', sector: 'Healthcare' },
+   149→  { symbol: 'NOVN.SW', name: 'نوارتیس', nameEn: 'Novartis', country: 'سوئیس', countryEn: 'CH', exchange: 'SIX', groupTitle: 'اروپا - سوئیس', category: 'yahoo_stock', sector: 'Healthcare' },
+   150→
+   151→  /* ── Europe — Spain ───────────────────────────────────── */
+   152→  { symbol: 'ITX.MC', name: 'ایندیتکس', nameEn: 'Inditex', country: 'اسپانیا', countryEn: 'ES', exchange: 'BME', groupTitle: 'اروپا - اسپانیا', category: 'yahoo_stock', sector: 'Consumer' },
+   153→  { symbol: 'SAN.MC', name: 'سانتاندر', nameEn: 'Santander', country: 'اسپانیا', countryEn: 'ES', exchange: 'BME', groupTitle: 'اروپا - اسپانیا', category: 'yahoo_stock', sector: 'Finance' },
+   154→
+   155→  /* ── Europe — Italy ───────────────────────────────────── */
+   156→  { symbol: 'ISP.MI', name: 'اینتسا سن‌پائولو', nameEn: 'Intesa Sanpaolo', country: 'ایتالیا', countryEn: 'IT', exchange: 'Borsa Italiana', groupTitle: 'اروپا - ایتالیا', category: 'yahoo_stock', sector: 'Finance' },
+   157→  { symbol: 'ENI.MI', name: 'انی', nameEn: 'Eni', country: 'ایتالیا', countryEn: 'IT', exchange: 'Borsa Italiana', groupTitle: 'اروپا - ایتالیا', category: 'yahoo_stock', sector: 'Energy' },
+   158→
+   159→  /* ── Asia — Japan ─────────────────────────────────────── */
+   160→  { symbol: '7203.T', name: 'تویوتا', nameEn: 'Toyota', country: 'ژاپن', countryEn: 'JP', exchange: 'TSE', groupTitle: 'آسیا - ژاپن', category: 'yahoo_stock', sector: 'Automotive' },
+   161→  { symbol: '6758.T', name: 'سونی', nameEn: 'Sony', country: 'ژاپن', countryEn: 'JP', exchange: 'TSE', groupTitle: 'آسیا - ژاپن', category: 'yahoo_stock', sector: 'Technology' },
+   162→  { symbol: '9984.T', name: 'سافت‌بانک', nameEn: 'SoftBank', country: 'ژاپن', countryEn: 'JP', exchange: 'TSE', groupTitle: 'آسیا - ژاپن', category: 'yahoo_stock', sector: 'Technology' },
+   163→  { symbol: '6861.T', name: 'کیونسی', nameEn: 'Keyence', country: 'ژاپن', countryEn: 'JP', exchange: 'TSE', groupTitle: 'آسیا - ژاپن', category: 'yahoo_stock', sector: 'Technology' },
+   164→  { symbol: '7974.T', name: 'نینتندو', nameEn: 'Nintendo', country: 'ژاپن', countryEn: 'JP', exchange: 'TSE', groupTitle: 'آسیا - ژاپن', category: 'yahoo_stock', sector: 'Technology' },
+   165→
+   166→  /* ── Asia — China (ADR & HK) ─────────────────────────── */
+   167→  { symbol: 'BABA', name: 'علی‌بابا', nameEn: 'Alibaba', country: 'چین', countryEn: 'CN', exchange: 'NYSE', groupTitle: 'آسیا - چین', category: 'yahoo_stock', sector: 'Technology' },
+   168→  { symbol: 'PDD', name: 'پیندودو', nameEn: 'PDD', country: 'چین', countryEn: 'CN', exchange: 'NASDAQ', groupTitle: 'آسیا - چین', category: 'yahoo_stock', sector: 'Technology' },
+   169→  { symbol: 'JD', name: 'جی‌دی کام', nameEn: 'JD.com', country: 'چین', countryEn: 'CN', exchange: 'NASDAQ', groupTitle: 'آسیا - چین', category: 'yahoo_stock', sector: 'Technology' },
+   170→  { symbol: 'BIDU', name: 'بایدو', nameEn: 'Baidu', country: 'چین', countryEn: 'CN', exchange: 'NASDAQ', groupTitle: 'آسیا - چین', category: 'yahoo_stock', sector: 'Technology' },
+   171→  { symbol: 'NIO', name: 'نیو', nameEn: 'NIO', country: 'چین', countryEn: 'CN', exchange: 'NYSE', groupTitle: 'آسیا - چین', category: 'yahoo_stock', sector: 'Automotive' },
+   172→
+   173→  /* ── Asia — South Korea ──────────────────────────────── */
+   174→  { symbol: '005930.KS', name: 'سامسونگ', nameEn: 'Samsung', country: 'کره جنوبی', countryEn: 'KR', exchange: 'KRX', groupTitle: 'آسیا - کره جنوبی', category: 'yahoo_stock', sector: 'Technology' },
+   175→  { symbol: '000660.KS', name: 'اس‌کی هینیکس', nameEn: 'SK Hynix', country: 'کره جنوبی', countryEn: 'KR', exchange: 'KRX', groupTitle: 'آسیا - کره جنوبی', category: 'yahoo_stock', sector: 'Technology' },
+   176→  { symbol: '373220.KS', name: 'ال‌جی انرژی', nameEn: 'LG Energy', country: 'کره جنوبی', countryEn: 'KR', exchange: 'KRX', groupTitle: 'آسیا - کره جنوبی', category: 'yahoo_stock', sector: 'Technology' },
+   177→
+   178→  /* ── Asia — India ─────────────────────────────────────── */
+   179→  { symbol: 'RELIANCE.NS', name: 'رلاینس', nameEn: 'Reliance', country: 'هند', countryEn: 'IN', exchange: 'NSE', groupTitle: 'آسیا - هند', category: 'yahoo_stock', sector: 'Conglomerate' },
+   180→  { symbol: 'TCS.NS', name: 'تی‌سی‌اس', nameEn: 'TCS', country: 'هند', countryEn: 'IN', exchange: 'NSE', groupTitle: 'آسیا - هند', category: 'yahoo_stock', sector: 'Technology' },
+   181→  { symbol: 'INFY.NS', name: 'اینفوسیس', nameEn: 'Infosys', country: 'هند', countryEn: 'IN', exchange: 'NSE', groupTitle: 'آسیا - هند', category: 'yahoo_stock', sector: 'Technology' },
+   182→  { symbol: 'HDFCBANK.NS', name: 'اچ‌دی‌اف‌سی بانک', nameEn: 'HDFC Bank', country: 'هند', countryEn: 'IN', exchange: 'NSE', groupTitle: 'آسیا - هند', category: 'yahoo_stock', sector: 'Finance' },
+   183→  { symbol: 'ICICIBANK.NS', name: 'آی‌سی‌آی‌سی‌آی بانک', nameEn: 'ICICI Bank', country: 'هند', countryEn: 'IN', exchange: 'NSE', groupTitle: 'آسیا - هند', category: 'yahoo_stock', sector: 'Finance' },
+   184→
+   185→  /* ── Asia — Taiwan ────────────────────────────────────── */
+   186→  { symbol: '2330.TW', name: 'تی‌اس‌ام‌سی', nameEn: 'TSMC', country: 'تایوان', countryEn: 'TW', exchange: 'TWSE', groupTitle: 'آسیا - تایوان', category: 'yahoo_stock', sector: 'Semiconductor' },
+   187→  { symbol: '2317.TW', name: 'فاکسکان', nameEn: 'Foxconn', country: 'تایوان', countryEn: 'TW', exchange: 'TWSE', groupTitle: 'آسیا - تایوان', category: 'yahoo_stock', sector: 'Technology' },
+   188→
+   189→  /* ── Asia — Australia ─────────────────────────────────── */
+   190→  { symbol: 'BHP.AX', name: 'بی‌اچ‌پی', nameEn: 'BHP', country: 'استرالیا', countryEn: 'AU', exchange: 'ASX', groupTitle: 'آسیا - استرالیا', category: 'yahoo_stock', sector: 'Mining' },
+   191→  { symbol: 'CSL.AX', name: 'سی‌اس‌ال', nameEn: 'CSL', country: 'استرالیا', countryEn: 'AU', exchange: 'ASX', groupTitle: 'آسیا - استرالیا', category: 'yahoo_stock', sector: 'Healthcare' },
+   192→  { symbol: 'CBA.AX', name: 'کامن‌ولث بانک', nameEn: 'CBA', country: 'استرالیا', countryEn: 'AU', exchange: 'ASX', groupTitle: 'آسیا - استرالیا', category: 'yahoo_stock', sector: 'Finance' },
+   193→
+   194→  /* ── Middle East — Saudi Arabia ──────────────────────── */
+   195→  { symbol: '2222.SR', name: 'آرامکو', nameEn: 'Aramco', country: 'عربستان', countryEn: 'SA', exchange: 'Tadawul', groupTitle: 'خاورمیانه - عربستان', category: 'yahoo_stock', sector: 'Energy' },
+   196→  { symbol: '7010.SR', name: 'سابیک', nameEn: 'SABIC', country: 'عربستان', countryEn: 'SA', exchange: 'Tadawul', groupTitle: 'خاورمیانه - عربستان', category: 'yahoo_stock', sector: 'Chemical' },
+   197→  { symbol: '1180.SR', name: 'الراجحی بانک', nameEn: 'Al Rajhi', country: 'عربستان', countryEn: 'SA', exchange: 'Tadawul', groupTitle: 'خاورمیانه - عربستان', category: 'yahoo_stock', sector: 'Finance' },
+   198→
+   199→  /* ── Middle East — UAE ────────────────────────────────── */
+   200→  { symbol: 'DFM.DU', name: 'دبی فیننشل مارکت', nameEn: 'DFM', country: 'امارات', countryEn: 'AE', exchange: 'DFM', groupTitle: 'خاورمیانه - امارات', category: 'yahoo_stock', sector: 'Finance' },
+   201→  { symbol: 'EMIRATESNB.DU', name: 'ام‌ان‌بی', nameEn: 'Emirates NBD', country: 'امارات', countryEn: 'AE', exchange: 'DFM', groupTitle: 'خاورمیانه - امارات', category: 'yahoo_stock', sector: 'Finance' },
+   202→
+   203→  /* ── Middle East — Turkey ─────────────────────────────── */
+   204→  { symbol: 'THYAO.IS', name: 'ترکیش ایرلاینز', nameEn: 'Turkish Airlines', country: 'ترکیه', countryEn: 'TR', exchange: 'BIST', groupTitle: 'خاورمیانه - ترکیه', category: 'yahoo_stock', sector: 'Transport' },
+   205→  { symbol: 'GARAN.IS', name: 'گارانتی', nameEn: 'Garanti', country: 'ترکیه', countryEn: 'TR', exchange: 'BIST', groupTitle: 'خاورمیانه - ترکیه', category: 'yahoo_stock', sector: 'Finance' },
+   206→  { symbol: 'SAHOL.IS', name: 'شیشه', nameEn: 'Sisecam', country: 'ترکیه', countryEn: 'TR', exchange: 'BIST', groupTitle: 'خاورمیانه - ترکیه', category: 'yahoo_stock', sector: 'Industrial' },
+   207→
+   208→  /* ── Latin America ────────────────────────────────────── */
+   209→  { symbol: 'VALE3.SA', name: 'واله', nameEn: 'Vale', country: 'برزیل', countryEn: 'BR', exchange: 'B3', groupTitle: 'آمریکای لاتین - برزیل', category: 'yahoo_stock', sector: 'Mining' },
+   210→  { symbol: 'PETR4.SA', name: 'پتروبراس', nameEn: 'Petrobras', country: 'برزیل', countryEn: 'BR', exchange: 'B3', groupTitle: 'آمریکای لاتین - برزیل', category: 'yahoo_stock', sector: 'Energy' },
+   211→  { symbol: 'AMX.MX', name: 'آمریکا موویل', nameEn: 'América Móvil', country: 'مکزیک', countryEn: 'MX', exchange: 'BMV', groupTitle: 'آمریکای لاتین - مکزیک', category: 'yahoo_stock', sector: 'Telecom' },
+   212→];
+   213→
+   214→/* ─── Market Indices ────────────────────────────────── */
+   215→
+   216→export const YAHOO_INDICES: YahooInstrument[] = [
+   217→  /* ── US Indices ────────────────────────────────────────── */
+   218→  { symbol: '^GSPC', name: 'اس اند پی ۵۰۰', nameEn: 'S&P 500', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   219→  { symbol: '^DJI', name: 'داو جونز', nameEn: 'Dow Jones', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   220→  { symbol: '^IXIC', name: 'نزدک کامپوزیت', nameEn: 'Nasdaq Composite', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   221→  { symbol: '^RUT', name: 'راسل ۲۰۰۰', nameEn: 'Russell 2000', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   222→  { symbol: '^VIX', name: 'ویکس', nameEn: 'VIX', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   223→  { symbol: '^NDX', name: 'نزدک ۱۰۰', nameEn: 'Nasdaq 100', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   224→  { symbol: '^SPX', name: 'اس اند پی ۵۰۰ ایندکس', nameEn: 'S&P 500 Index', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   225→  { symbol: '^MID', name: 'اس اند پی میدکپ ۴۰۰', nameEn: 'S&P MidCap 400', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   226→  { symbol: '^OEX', name: 'اس اند پی ۱۰۰', nameEn: 'S&P 100', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   227→  { symbol: '^TNX', name: 'بازده اوراق خزانه ۱۰ ساله', nameEn: 'Treasury Yield 10Y', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   228→  { symbol: '^TYX', name: 'بازده اوراق خزانه ۳۰ ساله', nameEn: 'Treasury Yield 30Y', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   229→  { symbol: '^IRX', name: 'بازده اوراق خزانه ۱۳ هفته‌ای', nameEn: 'Treasury Yield 13W', country: 'آمریکا', countryEn: 'US', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   230→
+   231→  /* ── Europe Indices ────────────────────────────────────── */
+   232→  { symbol: '^FTSE', name: 'اف‌تی‌اس‌ایی ۱۰۰', nameEn: 'FTSE 100', country: 'انگلستان', countryEn: 'UK', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   233→  { symbol: '^GDAXI', name: 'دکس', nameEn: 'DAX', country: 'آلمان', countryEn: 'DE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   234→  { symbol: '^FCHI', name: 'کاک ۴۰', nameEn: 'CAC 40', country: 'فرانسه', countryEn: 'FR', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   235→  { symbol: '^IBEX', name: 'ایبکس ۳۵', nameEn: 'IBEX 35', country: 'اسپانیا', countryEn: 'ES', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   236→  { symbol: '^MIB', name: 'ام‌آی‌بی', nameEn: 'MIB', country: 'ایتالیا', countryEn: 'IT', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   237→  { symbol: '^SSMI', name: 'اس‌ام‌آی', nameEn: 'SMI', country: 'سوئیس', countryEn: 'CH', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   238→  { symbol: '^AEX', name: 'ای‌ای‌ایکس', nameEn: 'AEX', country: 'هلند', countryEn: 'NL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   239→  { symbol: '^STOXX50E', name: 'یورواستاکس ۵۰', nameEn: 'Euro Stoxx 50', country: 'اروپا', countryEn: 'INTL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   240→  { symbol: '^STOXX', name: 'استوکس ۶۰۰', nameEn: 'STOXX 600', country: 'اروپا', countryEn: 'INTL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   241→  { symbol: '^N100', name: 'یورونکست ۱۰۰', nameEn: 'Euronext 100', country: 'اروپا', countryEn: 'INTL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   242→  { symbol: '^OMX', name: 'او‌ام‌ایکس', nameEn: 'OMX Stockholm', country: 'سوئد', countryEn: 'SE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   243→  { symbol: '^BFX', name: 'بل ۲۰', nameEn: 'BEL 20', country: 'بلژیک', countryEn: 'BE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   244→  { symbol: '^ATX', name: 'ای‌تی‌ایکس', nameEn: 'ATX', country: 'اتریش', countryEn: 'AT', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   245→  { symbol: '^WIG', name: 'ویگ', nameEn: 'WIG', country: 'لهستان', countryEn: 'PL', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   246→  { symbol: '^ISEQ', name: 'ای‌سیک', nameEn: 'ISEQ', country: 'ایرلند', countryEn: 'IE', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   247→
+   248→  /* ── Asia-Pacific Indices ──────────────────────────────── */
+   249→  { symbol: '^N225', name: 'نیکی ۲۲۵', nameEn: 'Nikkei 225', country: 'ژاپن', countryEn: 'JP', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   250→  { symbol: '^HSI', name: 'هنگ سنگ', nameEn: 'Hang Seng', country: 'هنگ کنگ', countryEn: 'HK', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   251→  { symbol: '^000001.SS', name: 'شانگهای کامپوزیت', nameEn: 'SSE Composite', country: 'چین', countryEn: 'CN', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   252→  { symbol: '^399001.SZ', name: 'شنجن کامپوننت', nameEn: 'SZSE Component', country: 'چین', countryEn: 'CN', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   253→  { symbol: '^BSI', name: 'سنسکس', nameEn: 'Sensex', country: 'هند', countryEn: 'IN', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   254→  { symbol: '^NSEI', name: 'نیفتی ۵۰', nameEn: 'Nifty 50', country: 'هند', countryEn: 'IN', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   255→  { symbol: '^KS11', name: 'کوسپی', nameEn: 'KOSPI', country: 'کره جنوبی', countryEn: 'KR', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   256→  { symbol: '^TWII', name: 'تایکس', nameEn: 'TAIEX', country: 'تایوان', countryEn: 'TW', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   257→  { symbol: '^AXJO', name: 'آ اس ایکس', nameEn: 'ASX All Ordinaries', country: 'استرالیا', countryEn: 'AU', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   258→
+   259→  /* ── Americas (Non-US) Indices ────────────────────────── */
+   260→  { symbol: '^GSPTSE', name: 'اس اند پی تی‌اس‌ایکس', nameEn: 'S&P/TSX', country: 'کانادا', countryEn: 'CA', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   261→  { symbol: '^BVSP', name: 'بوسپا', nameEn: 'Bovespa', country: 'برزیل', countryEn: 'BR', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   262→  { symbol: '^MXX', name: 'آی‌پی‌سی', nameEn: 'IPC', country: 'مکزیک', countryEn: 'MX', exchange: 'INDEX', groupTitle: 'شاخص - آمریکا', category: 'yahoo_index' },
+   263→
+   264→  /* ── Middle East & Africa & Emerging Indices ──────────── */
+   265→  { symbol: '^TASI', name: 'تداول', nameEn: 'Tadawul', country: 'عربستان', countryEn: 'SA', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
+   266→  { symbol: '^DFMGI', name: 'دبی جی‌آی', nameEn: 'DFMGI', country: 'امارات', countryEn: 'AE', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
+   267→  { symbol: '^XU100', name: 'بیست ۱۰۰', nameEn: 'BIST 100', country: 'ترکیه', countryEn: 'TR', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
+   268→  { symbol: '^TA125', name: 'تا-۱۲۵', nameEn: 'TA-125', country: 'اسرائیل', countryEn: 'IL', exchange: 'INDEX', groupTitle: 'شاخص - خاورمیانه', category: 'yahoo_index' },
+   269→  { symbol: '^IMOEX', name: 'موسکس', nameEn: 'MOEX', country: 'روسیه', countryEn: 'RU', exchange: 'INDEX', groupTitle: 'شاخص - اروپا', category: 'yahoo_index' },
+   270→
+   271→  /* ── Southeast Asia Indices ───────────────────────────── */
+   272→  { symbol: '^STI', name: 'اس‌تی‌آی', nameEn: 'STI', country: 'سنگاپور', countryEn: 'SG', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   273→  { symbol: '^KLSE', name: 'کی‌ال‌اس‌ایی', nameEn: 'KLSE', country: 'مالزی', countryEn: 'MY', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   274→  { symbol: '^SET', name: 'ست', nameEn: 'SET', country: 'تایلند', countryEn: 'TH', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   275→  { symbol: '^JKSE', name: 'جی‌سی‌آی', nameEn: 'JCI', country: 'اندونزی', countryEn: 'ID', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   276→  { symbol: 'XINA50.F', name: 'چین ای۵۰', nameEn: 'China A50', country: 'چین', countryEn: 'CN', exchange: 'INDEX', groupTitle: 'شاخص - آسیا', category: 'yahoo_index' },
+   277→];
+   278→
+   279→/* ─── Energy ────────────────────────────────────────── */
+   280→
+   281→export const YAHOO_ENERGY: YahooInstrument[] = [
+   282→  /* ── Crude Oil ─────────────────────────────────────────── */
+   283→  { symbol: 'CL=F', name: 'نفت دبلیوتی‌آی', nameEn: 'Crude Oil WTI', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'نفت و انرژی - نفت', category: 'yahoo_energy' },
+   284→  { symbol: 'BZ=F', name: 'نفت برنت', nameEn: 'Brent Crude', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'نفت و انرژی - نفت', category: 'yahoo_energy' },
+   285→  { symbol: 'QM=F', name: 'نفت مینی دبلیوتی‌آی', nameEn: 'Mini Crude Oil', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'نفت و انرژی - نفت', category: 'yahoo_energy' },
+   286→
+   287→  /* ── Gas & Refined Products ────────────────────────────── */
+   288→  { symbol: 'NG=F', name: 'گاز طبیعی', nameEn: 'Natural Gas', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'نفت و انرژی - گاز و فرآورده', category: 'yahoo_energy' },
+   289→  { symbol: 'RB=F', name: 'بنزین آر‌بی‌او‌بی', nameEn: 'RBOB Gasoline', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'نفت و انرژی - گاز و فرآورده', category: 'yahoo_energy' },
+   290→  { symbol: 'HO=F', name: 'نفت گرمایشی', nameEn: 'Heating Oil', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'نفت و انرژی - گاز و فرآورده', category: 'yahoo_energy' },
+   291→];
+   292→
+   293→/* ─── Metals ────────────────────────────────────────── */
+   294→
+   295→export const YAHOO_METALS: YahooInstrument[] = [
+   296→  /* ── Precious Metals ───────────────────────────────────── */
+   297→  { symbol: 'GC=F', name: 'طلا', nameEn: 'Gold Futures', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'فلزات گران‌بها', category: 'yahoo_metal' },
+   298→  { symbol: 'SI=F', name: 'نقره', nameEn: 'Silver Futures', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'فلزات گران‌بها', category: 'yahoo_metal' },
+   299→  { symbol: 'PL=F', name: 'پلاتینیوم', nameEn: 'Platinum', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'فلزات گران‌بها', category: 'yahoo_metal' },
+   300→  { symbol: 'PA=F', name: 'پالادیوم', nameEn: 'Palladium', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'فلزات گران‌بها', category: 'yahoo_metal' },
+   301→
+   302→  /* ── Base Metals ───────────────────────────────────────── */
+   303→  { symbol: 'HG=F', name: 'مس', nameEn: 'Copper', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'فلزات پایه', category: 'yahoo_metal' },
+   304→  { symbol: 'ZI=F', name: 'روی', nameEn: 'Zinc', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'فلزات پایه', category: 'yahoo_metal' },
+   305→  { symbol: 'ALI.L', name: 'آلومینیوم', nameEn: 'Aluminum', country: 'انگلستان', countryEn: 'UK', exchange: 'LME', groupTitle: 'فلزات پایه', category: 'yahoo_metal' },
+   306→  { symbol: 'NICKEL.L', name: 'نیکل', nameEn: 'Nickel', country: 'انگلستان', countryEn: 'UK', exchange: 'LME', groupTitle: 'فلزات پایه', category: 'yahoo_metal' },
+   307→
+   308→  /* ── Spot Metals ───────────────────────────────────────── */
+   309→  { symbol: 'XAUUSD=X', name: 'طلا اسپات', nameEn: 'Gold Spot', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'فلزات اسپات', category: 'yahoo_metal' },
+   310→  { symbol: 'XAGUSD=X', name: 'نقره اسپات', nameEn: 'Silver Spot', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'فلزات اسپات', category: 'yahoo_metal' },
+   311→];
+   312→
+   313→/* ─── Agricultural Commodities ──────────────────────── */
+   314→
+   315→export const YAHOO_COMMODITIES: YahooInstrument[] = [
+   316→  { symbol: 'ZW=F', name: 'گندم', nameEn: 'Wheat', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   317→  { symbol: 'ZC=F', name: 'ذرت', nameEn: 'Corn', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   318→  { symbol: 'ZS=F', name: 'سویا', nameEn: 'Soybeans', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   319→  { symbol: 'ZL=F', name: 'روغن سویا', nameEn: 'Soybean Oil', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   320→  { symbol: 'ZM=F', name: 'کنجاله سویا', nameEn: 'Soybean Meal', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   321→  { symbol: 'KC=F', name: 'قهوه', nameEn: 'Coffee', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   322→  { symbol: 'SB=F', name: 'شکر', nameEn: 'Sugar', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   323→  { symbol: 'CC=F', name: 'کاکائو', nameEn: 'Cocoa', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   324→  { symbol: 'CT=F', name: 'پنبه', nameEn: 'Cotton', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   325→  { symbol: 'LC=F', name: 'گاو زنده', nameEn: 'Live Cattle', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   326→  { symbol: 'GF=F', name: 'گاو پرواری', nameEn: 'Feeder Cattle', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   327→  { symbol: 'LE=F', name: 'گوشت خوک', nameEn: 'Lean Hogs', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   328→  { symbol: 'OJ=F', name: 'آب پرتقال', nameEn: 'Orange Juice', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   329→  { symbol: 'LBS=F', name: 'چوب', nameEn: 'Lumber', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   330→  { symbol: 'ZR=F', name: 'برنج', nameEn: 'Rough Rice', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CME', groupTitle: 'کالاهای کشاورزی', category: 'yahoo_commodity' },
+   331→];
+   332→
+   333→/* ─── Forex ────────────────────────────────────────── */
+   334→
+   335→export const YAHOO_FOREX: YahooInstrument[] = [
+   336→  /* ── Major Pairs ───────────────────────────────────────── */
+   337→  { symbol: 'EURUSD=X', name: 'یورو/دلار', nameEn: 'EUR/USD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   338→  { symbol: 'GBPUSD=X', name: 'پوند/دلار', nameEn: 'GBP/USD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   339→  { symbol: 'USDJPY=X', name: 'دلار/ین', nameEn: 'USD/JPY', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   340→  { symbol: 'USDCHF=X', name: 'دلار/فرانک', nameEn: 'USD/CHF', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   341→  { symbol: 'AUDUSD=X', name: 'دلار استرالیا/دلار', nameEn: 'AUD/USD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   342→  { symbol: 'USDCAD=X', name: 'دلار/دلار کانادا', nameEn: 'USD/CAD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   343→  { symbol: 'NZDUSD=X', name: 'دلار نیوزیلند/دلار', nameEn: 'NZD/USD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اصلی', category: 'yahoo_forex' },
+   344→
+   345→  /* ── Cross Pairs ───────────────────────────────────────── */
+   346→  { symbol: 'EURGBP=X', name: 'یورو/پوند', nameEn: 'EUR/GBP', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - کراس', category: 'yahoo_forex' },
+   347→  { symbol: 'EURJPY=X', name: 'یورو/ین', nameEn: 'EUR/JPY', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - کراس', category: 'yahoo_forex' },
+   348→  { symbol: 'GBPJPY=X', name: 'پوند/ین', nameEn: 'GBP/JPY', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - کراس', category: 'yahoo_forex' },
+   349→  { symbol: 'AUDJPY=X', name: 'دلار استرالیا/ین', nameEn: 'AUD/JPY', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - کراس', category: 'yahoo_forex' },
+   350→  { symbol: 'EURCHF=X', name: 'یورو/فرانک', nameEn: 'EUR/CHF', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - کراس', category: 'yahoo_forex' },
+   351→  { symbol: 'GBPCHF=X', name: 'پوند/فرانک', nameEn: 'GBP/CHF', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - کراس', category: 'yahoo_forex' },
+   352→
+   353→  /* ── Exotic Pairs ──────────────────────────────────────── */
+   354→  { symbol: 'USDTRY=X', name: 'دلار/لیر', nameEn: 'USD/TRY', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   355→  { symbol: 'USDSEK=X', name: 'دلار/کرون سوئد', nameEn: 'USD/SEK', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   356→  { symbol: 'USDNOK=X', name: 'دلار/کرون نروژ', nameEn: 'USD/NOK', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   357→  { symbol: 'USDDKK=X', name: 'دلار/کرون دانمارک', nameEn: 'USD/DKK', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   358→  { symbol: 'USDZAR=X', name: 'دلار/راند', nameEn: 'USD/ZAR', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   359→  { symbol: 'USDMXN=X', name: 'دلار/پزو', nameEn: 'USD/MXN', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   360→  { symbol: 'USDSGD=X', name: 'دلار/دلار سنگاپور', nameEn: 'USD/SGD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   361→  { symbol: 'USDHKD=X', name: 'دلار/دلار هنگ کنگ', nameEn: 'USD/HKD', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   362→  { symbol: 'USDINR=X', name: 'دلار/روپیه هند', nameEn: 'USD/INR', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   363→  { symbol: 'USDCNH=X', name: 'دلار/یوان آفشور', nameEn: 'USD/CNH', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   364→  { symbol: 'USDRUB=X', name: 'دلار/روبل', nameEn: 'USD/RUB', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   365→  { symbol: 'USDAED=X', name: 'دلار/درهم', nameEn: 'USD/AED', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'FOREX', groupTitle: 'جفت ارز - اگزوتیک', category: 'yahoo_forex' },
+   366→];
+   367→
+   368→/* ─── Crypto ───────────────────────────────────────── */
+   369→
+   370→export const YAHOO_CRYPTO: YahooInstrument[] = [
+   371→  /* ── Top Market Cap ────────────────────────────────────── */
+   372→  { symbol: 'BTC-USD', name: 'بیت‌کوین', nameEn: 'Bitcoin', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   373→  { symbol: 'ETH-USD', name: 'اتریوم', nameEn: 'Ethereum', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   374→  { symbol: 'XRP-USD', name: 'ریپل', nameEn: 'XRP', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   375→  { symbol: 'BNB-USD', name: 'بایننس کوین', nameEn: 'Binance Coin', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   376→  { symbol: 'SOL-USD', name: 'سولانا', nameEn: 'Solana', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   377→  { symbol: 'ADA-USD', name: 'کاردانو', nameEn: 'Cardano', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   378→  { symbol: 'DOGE-USD', name: 'دوج‌کوین', nameEn: 'Dogecoin', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   379→  { symbol: 'DOT-USD', name: 'پولکادات', nameEn: 'Polkadot', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   380→  { symbol: 'AVAX-USD', name: 'آوالانچ', nameEn: 'Avalanche', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   381→  { symbol: 'MATIC-USD', name: 'پالیگان', nameEn: 'Polygon', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - مارکت‌کپ بالا', category: 'yahoo_crypto' },
+   382→
+   383→  /* ── Altcoins ──────────────────────────────────────────── */
+   384→  { symbol: 'LINK-USD', name: 'چین‌لینک', nameEn: 'Chainlink', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   385→  { symbol: 'UNI-USD', name: 'یونی‌سواپ', nameEn: 'Uniswap', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   386→  { symbol: 'ATOM-USD', name: 'کازماس', nameEn: 'Cosmos', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   387→  { symbol: 'LTC-USD', name: 'لایت‌کوین', nameEn: 'Litecoin', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   388→  { symbol: 'SHIB-USD', name: 'شیب اینو', nameEn: 'Shiba Inu', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   389→  { symbol: 'XLM-USD', name: 'استلار', nameEn: 'Stellar', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   390→  { symbol: 'ALGO-USD', name: 'آلگوراند', nameEn: 'Algorand', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   391→  { symbol: 'FIL-USD', name: 'فایل‌کوین', nameEn: 'Filecoin', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   392→  { symbol: 'TRX-USD', name: 'ترون', nameEn: 'TRON', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   393→  { symbol: 'NEAR-USD', name: 'نیر پروتکل', nameEn: 'NEAR Protocol', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   394→  { symbol: 'APT-USD', name: 'آپتوس', nameEn: 'Aptos', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   395→  { symbol: 'ARB-USD', name: 'آربیتروم', nameEn: 'Arbitrum', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   396→  { symbol: 'OP-USD', name: 'آپتیمیزم', nameEn: 'Optimism', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   397→  { symbol: 'INJ-USD', name: 'اینجکتیو', nameEn: 'Injective', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   398→  { symbol: 'SUI-USD', name: 'سویی', nameEn: 'Sui', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   399→  { symbol: 'SEI-USD', name: 'سئی', nameEn: 'Sei', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   400→  { symbol: 'TON-USD', name: 'تون‌کوین', nameEn: 'Toncoin', country: 'بین‌المللی', countryEn: 'INTL', exchange: 'CRYPTO', groupTitle: 'کریپتو - آلت‌کوین‌ها', category: 'yahoo_crypto' },
+   401→];
+   402→
+   403→/* ─── ETFs ────────────────────────────────────────── */
+   404→
+   405→export const YAHOO_ETFS: YahooInstrument[] = [
+   406→  /* ── Index ETFs ────────────────────────────────────────── */
+   407→  { symbol: 'SPY', name: 'اس‌پی‌وای اس اند پی ۵۰۰', nameEn: 'SPY S&P 500', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   408→  { symbol: 'QQQ', name: 'کیوکیوکیو نزدک ۱۰۰', nameEn: 'QQQ Nasdaq 100', country: 'آمریکا', countryEn: 'US', exchange: 'NASDAQ', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   409→  { symbol: 'VTI', name: 'وی‌تی‌آی کل بازار', nameEn: 'VTI Total Market', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   410→  { symbol: 'VOO', name: 'وی‌او‌او اس اند پی ۵۰۰ وانگارد', nameEn: 'VOO S&P 500 Vanguard', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   411→  { symbol: 'IWM', name: 'آی‌دبلیوام راسل ۲۰۰۰', nameEn: 'IWM Russell 2000', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   412→  { symbol: 'EEM', name: 'ای‌ای‌ام بازارهای نوظهور', nameEn: 'EEM Emerging Markets', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   413→  { symbol: 'VEA', name: 'وی‌ای‌ای بازارهای توسعه‌یافته', nameEn: 'VEA Developed Markets', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   414→
+   415→  /* ── Commodity ETFs ─────────────────────────────────────── */
+   416→  { symbol: 'GLD', name: 'جی‌ال‌دی طلا', nameEn: 'GLD Gold ETF', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - کالایی', category: 'yahoo_etf' },
+   417→  { symbol: 'SLV', name: 'اس‌ال‌وی نقره', nameEn: 'SLV Silver ETF', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - کالایی', category: 'yahoo_etf' },
+   418→  { symbol: 'USO', name: 'یواس‌او نفت', nameEn: 'USO Oil ETF', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - کالایی', category: 'yahoo_etf' },
+   419→
+   420→  /* ── Bond ETFs ─────────────────────────────────────────── */
+   421→  { symbol: 'TLT', name: 'تی‌ال‌تی اوراق خزانه', nameEn: 'TLT Treasury Bond', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   422→  { symbol: 'HYG', name: 'اچ‌وای‌جی اوراق با بازده بالا', nameEn: 'HYG High Yield Corp Bond', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   423→  { symbol: 'LQD', name: 'ال‌کیو‌دی اوراق سرمایه‌گذاری', nameEn: 'LQD Investment Grade Corp Bond', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - شاخصی', category: 'yahoo_etf' },
+   424→
+   425→  /* ── Sector ETFs ───────────────────────────────────────── */
+   426→  { symbol: 'XLK', name: 'ایکس‌ال‌کی تکنولوژی', nameEn: 'XLK Technology Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   427→  { symbol: 'XLF', name: 'ایکس‌ال‌اف مالی', nameEn: 'XLF Financial Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   428→  { symbol: 'XLE', name: 'ایکس‌ال‌ای انرژی', nameEn: 'XLE Energy Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   429→  { symbol: 'XLV', name: 'ایکس‌ال‌وی بهداشت', nameEn: 'XLV Health Care Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   430→  { symbol: 'XLY', name: 'ایکس‌ال‌وای مصرفی چرخشی', nameEn: 'XLY Consumer Discretionary', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   431→  { symbol: 'XLP', name: 'ایکس‌ال‌پی مصرفی پایه', nameEn: 'XLP Consumer Staples', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   432→  { symbol: 'XLI', name: 'ایکس‌ال‌آی صنعتی', nameEn: 'XLI Industrial Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   433→  { symbol: 'XLU', name: 'ایکس‌ال‌یو ابزار', nameEn: 'XLU Utilities Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   434→  { symbol: 'XLB', name: 'ایکس‌ال‌بی مواد', nameEn: 'XLB Materials Select', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   435→  { symbol: 'XLRE', name: 'ایکس‌ال‌آر‌ایی املاک', nameEn: 'XLRE Real Estate', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   436→  { symbol: 'XLC', name: 'ایکس‌ال‌سی ارتباطات', nameEn: 'XLC Communication Services', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - بخشی', category: 'yahoo_etf' },
+   437→
+   438→  /* ── Volatility ETFs ───────────────────────────────────── */
+   439→  { symbol: 'ARKK', name: 'آر‌کی‌کی اینوویشن', nameEn: 'ARK Innovation', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - نوسانی', category: 'yahoo_etf' },
+   440→  { symbol: 'VIXM', name: 'ویکس‌ام میان‌مدت', nameEn: 'VIX Mid-Term Futures', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - نوسانی', category: 'yahoo_etf' },
+   441→  { symbol: 'VIXY', name: 'ویکس‌وای کوتاه‌مدت', nameEn: 'VIX Short-Term Futures', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - نوسانی', category: 'yahoo_etf' },
+   442→  { symbol: 'UVXY', name: 'یووی‌اکس‌وای اولترا ویکس', nameEn: 'UVXY Ultra VIX Short-Term', country: 'آمریکا', countryEn: 'US', exchange: 'NYSE', groupTitle: 'صندوق - نوسانی', category: 'yahoo_etf' },
+   443→];
+   444→
+   445→/* ─── All Instruments Combined ─────────────────────── */
+   446→
+   447→export const ALL_YAHOO_INSTRUMENTS: YahooInstrument[] = [
+   448→  ...YAHOO_STOCKS,
+   449→  ...YAHOO_INDICES,
+   450→  ...YAHOO_ENERGY,
+   451→  ...YAHOO_METALS,
+   452→  ...YAHOO_COMMODITIES,
+   453→  ...YAHOO_FOREX,
+   454→  ...YAHOO_CRYPTO,
+   455→  ...YAHOO_ETFS,
+   456→];
+   457→
+   458→/* ─── In-memory cache ────────────────────────────────── */
+   459→
+   460→let quotesCache: YahooQuote[] | null = null;
+   461→let quotesCacheTime = 0;
+   462→const CACHE_TTL = 120_000; // 2 minutes
+   463→
+   464→/* ─── Fetch live quotes ──────────────────────────────── */
+   465→
+   466→export async function fetchYahooQuotes(): Promise<YahooQuote[]> {
+   467→  const now = Date.now();
+   468→  if (quotesCache && now - quotesCacheTime < CACHE_TTL) {
+   469→    return quotesCache;
+   470→  }
+   471→
+   472→  const symbols = ALL_YAHOO_INSTRUMENTS.map((s) => s.symbol);
+   473→  const quotes: YahooQuote[] = [];
+   474→
+   475→  // Fetch in batches of 20 (Yahoo API limit)
+   476→  const BATCH_SIZE = 20;
+   477→  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+   478→    const batch = symbols.slice(i, i + BATCH_SIZE);
+   479→    try {
+   480→      const results = await yahooFinance.quote(batch, {
+   481→        fields: [
+   482→          'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   483→          'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   484→          'regularMarketDayLow', 'regularMarketVolume', 'marketCap', 'currency',
+   485→          'shortName', 'longName',
+   486→        ],
+   487→      });
+   488→
+   489→      for (const r of results) {
+   490→        const def = ALL_YAHOO_INSTRUMENTS.find((s) => s.symbol === r.symbol);
+   491→        if (!def) continue;
+   492→        const unit = r.currency || 'USD';
+   493→        quotes.push({
+   494→          symbol: r.symbol,
+   495→          name: def.name,
+   496→          nameEn: def.nameEn,
+   497→          country: def.country,
+   498→          countryEn: def.countryEn,
+   499→          exchange: def.exchange,
+   500→          groupTitle: def.groupTitle,
+   501→          category: def.category,
+   502→          unit,
+   503→          price: r.regularMarketPrice ?? 0,
+   504→          change: r.regularMarketChange ?? 0,
+   505→          changePercent: r.regularMarketChangePercent ?? 0,
+   506→          previousClose: r.regularMarketPreviousClose ?? 0,
+   507→          open: r.regularMarketOpen ?? 0,
+   508→          high: r.regularMarketDayHigh ?? 0,
+   509→          low: r.regularMarketDayLow ?? 0,
+   510→          volume: r.regularMarketVolume ?? 0,
+   511→          marketCap: r.marketCap ?? 0,
+   512→          currency: r.currency || 'USD',
+   513→        });
+   514→      }
+   515→    } catch (err) {
+   516→      const errMsg = err instanceof Error ? err.message : String(err);
+   517→      if (errMsg.includes('FailedYahooValidationError') || errMsg.includes('validation')) {
+   518→        // Batch failed due to schema validation — retry individually to salvage valid symbols
+   519→        console.warn(`[Yahoo Finance] Batch ${Math.floor(i / BATCH_SIZE) + 1} validation error, retrying individually...`);
+   520→        for (const symbol of batch) {
+   521→          try {
+   522→            const singleResults = await yahooFinance.quote([symbol], {
+   523→              fields: [
+   524→                'symbol', 'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+   525→                'regularMarketPreviousClose', 'regularMarketOpen', 'regularMarketDayHigh',
+   526→                'regularMarketDayLow', 'regularMarketVolume', 'marketCap', 'currency',
+   527→              ],
+   528→            });
+   529→            for (const r of singleResults) {
+   530→              const def = ALL_YAHOO_INSTRUMENTS.find((s) => s.symbol === r.symbol);
+   531→              if (!def) continue;
+   532→              const unit = r.currency || 'USD';
+   533→              quotes.push({
+   534→                symbol: r.symbol, name: def.name, nameEn: def.nameEn,
+   535→                country: def.country, countryEn: def.countryEn,
+   536→                exchange: def.exchange, groupTitle: def.groupTitle, category: def.category,
+   537→                unit, price: r.regularMarketPrice ?? 0, change: r.regularMarketChange ?? 0,
+   538→                changePercent: r.regularMarketChangePercent ?? 0, previousClose: r.regularMarketPreviousClose ?? 0,
+   539→                open: r.regularMarketOpen ?? 0, high: r.regularMarketDayHigh ?? 0,
+   540→                low: r.regularMarketDayLow ?? 0, volume: r.regularMarketVolume ?? 0,
+   541→                marketCap: r.marketCap ?? 0, currency: r.currency || 'USD',
+   542→              });
+   543→            }
+   544→          } catch {
+   545→            // Skip individual symbol errors
+   546→          }
+   547→        }
+   548→      } else {
+   549→        console.error(`[Yahoo Finance] Error fetching batch ${Math.floor(i / BATCH_SIZE) + 1}:`, err);
+   550→      }
+   551→    }
+   552→  }
+   553→
+   554→  quotesCache = quotes;
+   555→  quotesCacheTime = now;
+   556→  return quotes;
+   557→}
+   558→
+   559→/* ─── Fetch historical data ──────────────────────────── */
+   560→
+   561→export async function fetchYahooHistory(symbol: string, days: number = 365): Promise<YahooOHLC[]> {
+   562→  const end = new Date();
+   563→  const start = new Date();
+   564→  start.setDate(end.getDate() - days);
+   565→
+   566→  const result = await yahooFinance.chart(symbol, {
+   567→    period1: start,
+   568→    period2: end,
+   569→    interval: '1d',
+   570→  });
+   571→
+   572→  if (!result.quotes || result.quotes.length === 0) {
+   573→    return [];
+   574→  }
+   575→
+   576→  return result.quotes
+   577→    .filter((q) => q.close != null && q.open != null)
+   578→    .map((q) => ({
+   579→      date: q.date?.toISOString().split('T')[0] || '',
+   580→      open: q.open!,
+   581→      high: q.high || q.close!,
+   582→      low: q.low || q.close!,
+   583→      close: q.close!,
+   584→      volume: q.volume || 0,
+   585→    }));
+   586→}
+   587→
+   588→/* ─── Get instrument definition by symbol ────────────── */
+   589→
+   590→export function getYahooInstrumentDef(symbol: string): YahooInstrument | undefined {
+   591→  return ALL_YAHOO_INSTRUMENTS.find((s) => s.symbol === symbol);
+   592→}
+   593→
+   594→/** @deprecated Use getYahooInstrumentDef instead */
+   595→export function getYahooStockDef(symbol: string): YahooInstrument | undefined {
+   596→  return getYahooInstrumentDef(symbol);
+   597→}
+   598→
+   599→/* ─── Get instruments by category ──────────────────────── */
+   600→
+   601→export function getYahooInstrumentsByCategory(cat: YahooCategory): YahooInstrument[] {
+   602→  return ALL_YAHOO_INSTRUMENTS.filter((s) => s.category === cat);
+   603→}
+   604→
