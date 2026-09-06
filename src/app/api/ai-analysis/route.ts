@@ -12,6 +12,7 @@ import {
   buildMSLV4PromptSection,
   type MSLV4Context,
 } from '@/lib/msl-v4';
+import { toMSLRegime, type RegimeState } from '@/lib/regime-engine';
 import { postProcessAIOutput, buildPriceReferences } from '@/lib/ai-postprocess';
 
 export const dynamic = 'force-dynamic';
@@ -125,11 +126,18 @@ function buildMSLV4Context(body: Record<string, unknown>): MSLV4Context {
   const adx = (body.adx as number) || 0;
   const trendStrength = adx > 40 ? 0.9 : adx > 25 ? 0.7 : adx > 15 ? 0.4 : 0.15;
 
+  // Use regime engine result if available from ta-engine, otherwise fallback to heuristic
+  const regimeResultFromEngine = body.regimeResult as { regime: RegimeState; confidence: number } | undefined;
   let regime: MSLV4Context['regime'] = 'Range';
-  if (isBull && trendStrength > 0.6) regime = 'Strong Bull';
-  else if (isBull) regime = 'Weak Bull';
-  else if (isBear && trendStrength > 0.6) regime = 'Strong Bear';
-  else if (isBear) regime = 'Weak Bear';
+  if (regimeResultFromEngine?.regime) {
+    regime = toMSLRegime(regimeResultFromEngine.regime, regimeResultFromEngine.confidence);
+  } else {
+    // Legacy fallback: basic heuristic from ADX + direction
+    if (isBull && trendStrength > 0.6) regime = 'Strong Bull';
+    else if (isBull) regime = 'Weak Bull';
+    else if (isBear && trendStrength > 0.6) regime = 'Strong Bear';
+    else if (isBear) regime = 'Weak Bear';
+  }
 
   const instrumentType = (body.instrumentType as string) || (body.symbolName as string) || 'stock';
   const ta = body.technicalAnalysis as {

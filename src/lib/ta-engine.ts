@@ -11,6 +11,7 @@ import {
   type FeatureKey,
 } from './ml-model';
 import { buildDecisionGraph, type GraphData } from './decision-graph';
+import { detectRegime, type RegimeResult, type RegimeState } from './regime-engine';
 
 export interface OHLCV {
   date: string;
@@ -173,6 +174,8 @@ export interface TAResult {
     stdDev: number;
     hv: number;
   };
+  // ── Regime Detection (rule-based + Markov + weighted voting) ──
+  regimeResult: RegimeResult | null;
 }
 
 // ─── Helper: SMA ──────────────────────────────────────────────────────────────
@@ -2441,6 +2444,7 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
         envelopes: { upper: 0, middle: 0, lower: 0 },
         stdDev: 0, hv: 0,
       },
+      regimeResult: null,
     };
   }
 
@@ -2850,6 +2854,17 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
       stdDev: calcStdDev(closes, 20),
       hv: calcHV(closes, 20),
     },
+    // ── Regime Detection (rule-based + Markov + weighted voting) ──
+    regimeResult: data.length >= 20 ? detectRegime(data, {
+      adx: adxResult.adx, diPlus: adxResult.diPlus, diMinus: adxResult.diMinus,
+      rsi, mfi,
+      macdLine: macd.line, macdSignal: macd.signal, macdHist: macd.histogram,
+      stochK: stoch.k, stochD: stoch.d,
+      obv, atr,
+      bbUpper: bb.upper, bbMiddle: bb.middle, bbLower: bb.lower,
+      ema20: emaResult.ema20, ema50: emaResult.ema50,
+      price,
+    }) : null,
   };
 }
 

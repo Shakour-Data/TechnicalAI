@@ -1,8 +1,11 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // Composite Scores — Trend Strength (6 components) & SR Strength (7 components)
 // ═════════════════════════════════════════════════════════════════════════════════
+// Enhanced with Volume Profile (volume-profile.ts) and Regime Detection (regime-engine.ts)
 
 import type { OHLCV, LevelStrength } from './ta-engine';
+import { approximateVolumeProfile, countTouch, volumeAtLevel, type VolumeProfileResult, type TouchCountResult } from './volume-profile';
+import { calculateTrendStrengthRB, type RuleBasedRegimeInput } from './regime-engine';
 
 export interface TrendStrengthResult {
   overall: number;           // 0-1
@@ -202,5 +205,85 @@ export function calcSRStrength(
     volatilityAdjustment, historicalSignificance, fibonacciConfluence,
     patternSupport,
     description: `سطح ${desc} (${(overall * 100).toFixed(0)}%) با ${touchCount} برخورد و ${fibCount} تلاقی فیبوناچی`,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════
+// ENHANCED SR STRENGTH with Volume Profile & Touch Count
+// ═════════════════════════════════════════════════════════════════════════════════
+// Uses approximateVolumeProfile (no Level-2 data needed) and countTouch
+// for more accurate S/R level strength assessment.
+
+export interface EnhancedSRStrengthFullResult extends SRStrengthResult {
+  /** Volume profile POC relative to this level */
+  volumePOCDistance: number;
+  /** Is the level inside the Value Area? */
+  inValueArea: boolean;
+  /** Touch count with 0.2% tolerance (from volume-profile.ts) */
+  enhancedTouchCount: TouchCountResult;
+  /** Volume concentration at this level (from volume profile) */
+  volumeConcentration: number;
+}
+
+/**
+ * Compute volume profile for the given data (cached per call site).
+ * Returns a VolumeProfileResult that can be reused for multiple levels.
+ */
+export function computeVolumeProfile(data: OHLCV[], numBins: number = 100): VolumeProfileResult {
+  const recentData = data.slice(-Math.min(60, data.length)); // 60 bars for volume profile
+  return approximateVolumeProfile(recentData, numBins);
+}
+
+/**
+ * Enhanced SR Strength calculation using volume profile and touch count.
+ * Augments the original 7-component calcSRStrength with:
+ *   - Volume Profile concentration (POC proximity, Value Area membership)
+ *   - Precise touch count with configurable tolerance
+ *   - Combined scoring with adaptive weights
+ */
+export function calcSRStrengthEnhanced(
+  levelPrice: number,
+  levelStrength: LevelStrength | undefined,
+  data: OHLCV[],
+  price: number,
+  atr: number,
+  allLevels: LevelStrength[],
+  volumeProfile?: VolumeProfileResult,
+): EnhancedSRStrengthFullResult {
+  // Run original 7-component calculation
+  const base = calcSRStrength(levelPrice, levelStrength, data, price, atr, allLevels);
+
+  // Compute volume profile if not provided
+  const vp = volumeProfile ?? computeVolumeProfile(data);
+
+  // Volume Profile metrics
+  const volConc = volumeAtLevel(vp, levelPrice);
+  const pocDistance = vp.poc > 0 ? Math.abs(levelPrice - vp.poc) / vp.poc : 1;
+  const inValueArea = levelPrice >= vp.valueAreaLow && levelPrice <= vp.valueAreaHigh;
+
+  // Enhanced touch count with tighter tolerance (0.2% instead of ATR-based)
+  const recentData = data.slice(-50);
+  const enhancedTouch = countTouch(levelPrice, recentData, 0.2);
+
+  // Combine: boost base score with volume profile and enhanced touch
+  const volBoost = clamp01(volConc * 3); // concentration boost
+  const pocBoost = clamp01(1 - pocDistance * 5); // proximity to POC boost
+  const valueAreaBoost = inValueArea ? 0.1 : 0;
+  const touchBoost = clamp01(enhancedTouch.touchCount / 8); // enhanced touch boost
+
+  // Final enhanced overall (blend 70% base + 30% enhancements)
+  const enhancedOverall = clamp01(
+    base.overall * 0.7 +
+    (volBoost * 0.4 + pocBoost * 0.3 + touchBoost * 0.2 + valueAreaBoost * 0.1) * 0.3
+  );
+
+  return {
+    ...base,
+    overall: enhancedOverall,
+    description: `${base.description} | حجم: ${inValueArea ? 'داخل ناحیه ارزش' : 'خارج ناحیه'}، POC: ${(pocDistance * 100).toFixed(1)}٪`,
+    volumePOCDistance: pocDistance,
+    inValueArea,
+    enhancedTouchCount: enhancedTouch,
+    volumeConcentration: volConc,
   };
 }

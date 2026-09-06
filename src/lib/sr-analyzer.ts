@@ -11,6 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import type { OHLCV } from './ta-engine';
+import { approximateVolumeProfile, countTouch, type VolumeProfileResult } from './volume-profile';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -637,21 +638,40 @@ export function analyzeSupportResistance(
   // Step 1: Discover all potential levels from multiple sources
   const allLevels = discoverAllLevels(data, currentPrice);
 
+  // Step 1.5: Compute volume profile for enhanced volume scoring (no Level-2 data needed)
+  const volumeProfile = approximateVolumeProfile(data.slice(-60), 80);
+
   // Step 2: Train ML weights using bounce detection
   const mlWeights = trainMLWeights(data, allLevels);
 
   // Step 3: Extract features and calculate scores for each level
+  // Enhanced with volume profile concentration and precise touch count
   const scoredLevels: SRLevel[] = allLevels.map(level => {
     const feats = extractFeatures(level.price, allLevels, data, currentPrice);
-    const score = calculatePowerScore(feats, mlWeights);
+
+    // Volume profile enhancement: boost volume score using VP concentration
+    const vpBin = volumeProfile.bins.find(b => level.price >= b.priceLow && level.price < b.priceHigh);
+    const maxVolPct = Math.max(...volumeProfile.bins.map(b => b.volumePercent), 0.001);
+    const vpConcentration = vpBin ? vpBin.volumePercent / maxVolPct : 0;
+    const inValueArea = level.price >= volumeProfile.valueAreaLow && level.price <= volumeProfile.valueAreaHigh;
+
+    // Enhanced volume ratio: blend original with VP concentration
+    const enhancedVolumeRatio = feats.volumeRatio * 0.6 + (1 + vpConcentration * 2) * 0.4;
+    const enhancedFeats = { ...feats, volumeRatio: inValueArea ? enhancedVolumeRatio * 1.2 : enhancedVolumeRatio };
+
+    // Precise touch count using 0.2% tolerance (from volume-profile.ts)
+    const touchResult = countTouch(level.price, data.slice(-50), 0.2);
+    const enhancedTouchCount = Math.max(feats.touchCount, touchResult.touchCount);
+
+    const score = calculatePowerScore({ ...enhancedFeats, touchCount: enhancedTouchCount }, mlWeights);
     return {
       price: level.price,
       score,
       grade: getGrade(score),
       overlapCount: feats.overlapCount,
       isTarget: false,
-      touchCount: feats.touchCount,
-      volumeRatio: feats.volumeRatio,
+      touchCount: enhancedTouchCount,
+      volumeRatio: enhancedFeats.volumeRatio,
       daysSinceLastTouch: Math.round((1 - feats.freshness) * data.length),
       distancePercent: feats.distancePercent,
     };

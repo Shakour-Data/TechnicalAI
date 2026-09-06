@@ -238,6 +238,12 @@ function resolveTimeframe(raw: string): TimeframeType {
 }
 
 function resolveRegime(raw: string): RegimeType {
+  // Support new 5-state regime from regime-engine.ts
+  if (raw === 'TRENDING_UP') return 'Strong Bull';
+  if (raw === 'TRENDING_DOWN') return 'Strong Bear';
+  if (raw === 'RANGING' || raw === 'VOLATILE') return 'Range';
+  if (raw === 'BREAKOUT') return 'Strong Bull'; // breakout assumed bullish by default
+  // Legacy support
   if (raw.includes('Strong Bull') || raw.includes('strong_bull')) return 'Strong Bull';
   if (raw.includes('Weak Bull') || raw.includes('weak_bull')) return 'Weak Bull';
   if (raw.includes('Strong Bear') || raw.includes('strong_bear')) return 'Strong Bear';

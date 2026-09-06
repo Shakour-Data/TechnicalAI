@@ -777,6 +777,7 @@ export default function Home() {
                     priceDecimals={decimals}
                     probabilityTrend={data.probabilityTrend}
                     decisionGraph={data.ta.decisionGraph}
+                    regimeResult={data.ta.regimeResult}
                   />
                 </div>
               )}

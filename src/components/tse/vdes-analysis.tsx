@@ -192,6 +192,13 @@ export interface VdesAnalysisProps {
     scenarioProbabilities: Record<string, number>;
     pathContributions: Record<string, { trend: number; breakout: number; reversal: number }>;
   };
+  // Regime detection result (from regime-engine.ts: rule-based + Markov + weighted voting)
+  regimeResult?: {
+    regime: string;
+    confidence: number;
+    memberships: Record<string, number>;
+    description: string;
+  } | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -327,6 +334,7 @@ interface AnalysisContext {
   instrumentCategory?: string;
   currencyUnit?: string;
   priceDecimals?: number;
+  regimeResult?: VdesAnalysisProps['regimeResult'];
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -340,6 +348,7 @@ function generateAnalysisText(ctx: AnalysisContext) {
     hasVolume, resistanceStrengths, supportStrengths,
     v11Result, currencyUnit: ctxCurrencyUnit,
     instrumentCategory, priceDecimals: ctxPriceDecimals,
+    regimeResult,
   } = ctx;
   const unit = ctxCurrencyUnit || 'ریال';
   // Dynamic price formatter using data-source-derived decimals
@@ -422,6 +431,15 @@ function generateAnalysisText(ctx: AnalysisContext) {
       }
       {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده <b className={adxText}>{adxText}</b> می‌باشد.
       {' '}{diSignal}.
+      {regimeResult && (
+        <> {' '}رژیم بازار: <b className={
+          regimeResult.regime === 'TRENDING_UP' ? 'text-emerald-700' :
+          regimeResult.regime === 'TRENDING_DOWN' ? 'text-red-700' :
+          regimeResult.regime === 'VOLATILE' ? 'text-amber-800' :
+          regimeResult.regime === 'BREAKOUT' ? 'text-purple-700' :
+          'text-[#6b7280]'
+        }>{regimeResult.description}</b> (اطمینان: {toFa(Math.round(regimeResult.confidence * 100))}٪).</>
+      )}
     </>
   );
 
@@ -625,7 +643,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     supportStrengths, resistanceStrengths, priceTargets, hasVolume, instrumentType,
     instrumentCategory,
     currencyUnit: propCurrencyUnit, priceDecimals: propPriceDecimals,
-    probabilityTrend, decisionGraph,
+    probabilityTrend, decisionGraph, regimeResult,
   } = props;
   const unit = propCurrencyUnit || 'ریال';
   const decimals = propPriceDecimals ?? 0;
@@ -722,6 +740,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       currencyUnit: propCurrencyUnit,
       instrumentCategory,
       priceDecimals: decimals,
+      regimeResult,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -732,7 +751,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     highestKey, highestProb, scenarios,
     S1_level, R1_level, R2_level, hasVolume,
     resistanceStrengths, supportStrengths, v11Result, propCurrencyUnit,
-    instrumentCategory, decimals,
+    instrumentCategory, decimals, regimeResult,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────

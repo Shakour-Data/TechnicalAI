@@ -487,8 +487,15 @@ export async function fetchMLPrediction(prices: number[], volume: number[] | nul
   });
 }
 
+/**
+ * @deprecated Use getRuleBasedRegime() from regime-engine.ts instead.
+ * This stub called an external Python ML service that is no longer needed.
+ * Kept for backward compatibility — redirects to the native rule-based regime.
+ */
 export async function fetchMLRegime(prices: number[]): Promise<MLRegimeResult | null> {
-  return callMLService<MLRegimeResult>('/regime', { prices: prices.slice(-120) });
+  // No longer calls external Python service — use native regime engine instead
+  // This function is retained only for type compatibility
+  return null;
 }
 
 export async function fetchMLWeights(
