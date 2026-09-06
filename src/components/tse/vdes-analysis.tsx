@@ -111,6 +111,12 @@ function renderAIText(text: string): string {
   return htmlParts.join('');
 }
 
+// Helper: format price in compact form for cache indicator
+function formatPriceShort(price: number): string {
+  if (!price || !isFinite(price)) return '—';
+  return price.toLocaleString('fa-IR', { maximumFractionDigits: 0 });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════
@@ -751,6 +757,9 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiRetryKey, setAiRetryKey] = useState(0);
   const [aiIsFallback, setAiIsFallback] = useState(false);
+  const [aiForceRefresh, setAiForceRefresh] = useState(false);
+  const [aiCachedAge, setAiCachedAge] = useState<number | null>(null);
+  const [aiPriceAtGen, setAiPriceAtGen] = useState<number | null>(null);
   const aiAutoRetryRef = useRef(0);
 
   // Listen for retry events from the retry button
@@ -760,36 +769,43 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     return () => window.removeEventListener('ai-retry', handler);
   }, []);
 
-  // ── localStorage helpers for AI text caching ──
+  // ── Short-duration localStorage cache (5 min, price-validated) ──
+  const LOCAL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  // On mount: show cached text as placeholder ONLY if price matches (within 2%)
+  // On mount: show cached text as placeholder ONLY if price matches and cache is fresh
   useEffect(() => {
     if (!currentPrice) return;
     try {
-      const todayKey = `ai-${symbolName}-${new Date().toISOString().slice(0, 10)}`;
-      const cached = localStorage.getItem(todayKey);
+      const cacheKey = `ai-${symbolName}-short`;
+      const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed.text && parsed.text.length > 50) {
-          // Price validation: skip cached text if price differs >2%
+          const age = Date.now() - (parsed.ts || 0);
+          const isExpired = age > LOCAL_CACHE_TTL;
+          // Price validation: skip cached text if price differs >1%
           if (parsed.price && currentPrice > 0) {
             const diff = Math.abs(parsed.price - currentPrice) / currentPrice;
-            if (diff > 0.02) {
-              // Price changed too much, don't show stale cached text
-              localStorage.removeItem(todayKey);
+            if (diff > 0.01 || isExpired) {
+              localStorage.removeItem(cacheKey);
               return;
             }
+          } else if (isExpired) {
+            localStorage.removeItem(cacheKey);
+            return;
           }
           setAiText(parsed.text);
-          setAiIsFallback(!!parsed.isFallback);
+          setAiIsFallback(false);
+          setAiCachedAge(Math.round(age / 1000));
+          setAiPriceAtGen(parsed.price || null);
           // Do NOT set aiLoading=false — always fetch fresh data in background
         }
       }
     } catch { /* ignore */ }
   }, [symbolName, currentPrice]);
 
-  // Stable key: only re-fetch when symbol changes (not on every indicator update)
-  const aiFetchKey = symbolName;
+  // Stable key: re-fetch when symbol changes or forceRefresh is triggered
+  const aiFetchKey = symbolName + (aiForceRefresh ? '-force' : '');
 
   // Fetch from API when symbol changes or retry is triggered
   useEffect(() => {
@@ -804,6 +820,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         setAiLoading(true);
         setAiError(null);
         setAiIsFallback(false);
+        setAiCachedAge(null);
 
         const res = await fetch('/api/ai-analysis', {
           method: 'POST',
@@ -820,6 +837,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             instrumentType,
             instrumentCategory,
             currencyUnit: propCurrencyUnit,
+            forceRefresh: aiForceRefresh,
             probabilityTrend: probabilityTrend ? {
               scenarios: probabilityTrend.scenarios.map(s => ({
                 scenarioKey: s.scenarioKey, label: s.label, group: s.group,
@@ -845,7 +863,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
             else if (res.status === 503) errMsg = 'سرور موقتاً در دسترس نیست.';
           }
           // On error, try to show any previous localStorage text as fallback
-          const prevText = getAnyLocalCache(symbolName);
+          const prevText = getShortCache(symbolName);
           if (prevText) {
             setAiText(prevText);
             setAiIsFallback(true);
@@ -875,11 +893,13 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           setAiText(data.text);
           setAiIsFallback(!!data.isFallback);
           setAiError(null);
+          setAiCachedAge(data.cachedAge ?? null);
+          setAiPriceAtGen(data.priceAtGeneration ?? currentPrice);
           aiAutoRetryRef.current = 0; // Reset retry counter on success
-          // Save to localStorage
-          saveLocalCache(symbolName, data.text, !!data.isFallback);
+          // Save to short-duration localStorage cache
+          saveShortCache(symbolName, data.text, currentPrice);
         } else if (data.error) {
-          const prevText = getAnyLocalCache(symbolName);
+          const prevText = getShortCache(symbolName);
           if (prevText) {
             setAiText(prevText);
             setAiIsFallback(true);
@@ -904,7 +924,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === 'cancelled' || msg === 'aborted' || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel')) return;
         // On network error, show localStorage fallback if available
-        const prevText = getAnyLocalCache(symbolName);
+        const prevText = getShortCache(symbolName);
         if (prevText) {
           setAiText(prevText);
           setAiIsFallback(true);
@@ -921,7 +941,10 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
           }
         }
       } finally {
-        if (!cancelled) setAiLoading(false);
+        if (!cancelled) {
+          setAiLoading(false);
+          setAiForceRefresh(false); // Reset forceRefresh after fetch completes
+        }
       }
     })();
 
@@ -932,42 +955,27 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     };
   }, [aiFetchKey, aiRetryKey]);
 
-  // Helper: save AI text to localStorage (per-day key) with price for validation
-  function saveLocalCache(sym: string, text: string, isFallback: boolean) {
+  // Helper: save AI text to short-duration localStorage (5 min TTL, price-validated)
+  function saveShortCache(sym: string, text: string, price: number) {
     try {
-      const key = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
-      localStorage.setItem(key, JSON.stringify({ text, isFallback, price: currentPrice, ts: Date.now() }));
-      // Also keep a "latest" key for any-day fallback
-      localStorage.setItem(`ai-${sym}-latest`, JSON.stringify({ text, date: new Date().toISOString().slice(0, 10), price: currentPrice, ts: Date.now() }));
+      const key = `ai-${sym}-short`;
+      localStorage.setItem(key, JSON.stringify({ text, price, ts: Date.now() }));
     } catch { /* quota exceeded — ignore */ }
   }
 
-  // Helper: get any previous cached text from localStorage (any day) with price validation
-  function getAnyLocalCache(sym: string): string | null {
+  // Helper: get short-duration cached text from localStorage (within 5 min and 1% price)
+  function getShortCache(sym: string): string | null {
     try {
-      // First try today
-      const todayKey = `ai-${sym}-${new Date().toISOString().slice(0, 10)}`;
-      const todayCached = localStorage.getItem(todayKey);
-      if (todayCached) {
-        const parsed = JSON.parse(todayCached);
+      const key = `ai-${sym}-short`;
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const parsed = JSON.parse(cached);
         if (parsed.text && parsed.text.length > 50) {
-          // Validate price match (within 5%)
+          const age = Date.now() - (parsed.ts || 0);
+          if (age > LOCAL_CACHE_TTL) return null;
           if (parsed.price && currentPrice > 0) {
             const diff = Math.abs(parsed.price - currentPrice) / currentPrice;
-            if (diff <= 0.05) return parsed.text;
-          } else {
-            return parsed.text;
-          }
-        }
-      }
-      // Then try "latest" from any day (only if price within 2%)
-      const latestCached = localStorage.getItem(`ai-${sym}-latest`);
-      if (latestCached) {
-        const parsed = JSON.parse(latestCached);
-        if (parsed.text && parsed.text.length > 50) {
-          if (parsed.price && currentPrice > 0) {
-            const diff = Math.abs(parsed.price - currentPrice) / currentPrice;
-            if (diff <= 0.02) return parsed.text;
+            if (diff <= 0.01) return parsed.text;
           }
         }
       }
@@ -1707,9 +1715,35 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
             <div>
               {aiIsFallback && (
                 <div style={{ fontSize: '0.7rem', color: C.cardSubFg, marginBottom: '8px', opacity: 0.7 }}>
-                  ⚠️ این تحلیل از روزهای قبل بازیابی شده است. برای تولید تحلیل جدید دکمه «تلاش مجدد» را بزنید.
+                  ⚠️ این تحلیل از کش بازیابی شده است. برای تولید تحلیل جدید دکمه «تحلیل جدید» را بزنید.
                 </div>
               )}
+              {/* Cache age indicator and new analysis button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', direction: 'rtl' }}>
+                <div style={{ fontSize: '0.7rem', color: C.cardSubFg, opacity: 0.8 }}>
+                  {aiCachedAge !== null && aiCachedAge > 0 && (
+                    <span>⏱ تحلیل بر اساس قیمت {formatPriceShort(aiPriceAtGen ?? currentPrice)} ({toFa(Math.round(aiCachedAge / 60))} دقیقه پیش)</span>
+                  )}
+                  {aiCachedAge !== null && aiCachedAge === 0 && (
+                    <span>✅ تحلیل بر اساس قیمت لحظه‌ای</span>
+                  )}
+                  {aiCachedAge === null && aiPriceAtGen !== null && (
+                    <span>📊 قیمت تحلیل: {formatPriceShort(aiPriceAtGen)}</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    aiAutoRetryRef.current = 0;
+                    setAiForceRefresh(true);
+                  }}
+                  style={{
+                    fontSize: '0.7rem', fontWeight: 600, color: C.primary,
+                    background: C.primaryBg, border: `1px solid ${C.primary}`,
+                    borderRadius: '8px', padding: '3px 10px', cursor: 'pointer',
+                    lineHeight: 1.5, whiteSpace: 'nowrap',
+                  }}
+                >🔄 تحلیل جدید</button>
+              </div>
               <div dangerouslySetInnerHTML={{ __html: renderAIText(aiText) }} />
             </div>
           )}

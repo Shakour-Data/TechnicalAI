@@ -34,26 +34,32 @@ model Post {
 model AiAnalysisCache {
   id        String   @id @default(cuid())
   symbol    String
-  date      String   // YYYY-MM-DD
+  date      String   // YYYY-MM-DD (for grouping/browsing)
   text      String
   ml        String   // JSON string of ML selection metadata
   price     Float
+  priceHash String   @default("0") // Rounded price bucket (e.g. price rounded to 0.5%) for cache key
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([symbol, date])
+  @@unique([symbol, priceHash])
   @@index([symbol])
   @@index([date])
+  @@index([createdAt])
 }
 
 model DecisionGraphAiCache {
   id        String   @id @default(cuid())
   symbol    String
-  date      String   // YYYY-MM-DD
+  date      String   // YYYY-MM-DD (for grouping/browsing)
   text      String
   price     Float
+  priceHash String   @default("0") // Rounded price bucket for cache key
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([symbol, date])
+  @@unique([symbol, priceHash])
   @@index([symbol])
   @@index([date])
+  @@index([createdAt])
 }

@@ -17,6 +17,15 @@ function getTodayDateStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+// ─── Price Hash for Cache Key ─────────────────────────────────────
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL for cache entries
+
+function computePriceHash(price: number): string {
+  if (!price || price <= 0 || !isFinite(price)) return '0';
+  const bucket = Math.round(price * 2) / 2;
+  return bucket.toString();
+}
+
 // ─── System Prompt (Decision Graph Specific) ─────────────────────
 const DG_SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای مالی ایرانی هستید که تخصص ویژه در تحلیل گراف‌های تصمیم و احتمالات سناریویی دارد.
 
@@ -209,49 +218,39 @@ export async function POST(req: NextRequest) {
     const symbolName = String(body.symbolName || 'unknown');
     const currentPrice = Number(body.currentPrice) || 0;
     const today = getTodayDateStr();
+    const priceHash = computePriceHash(currentPrice);
+    const forceRefresh = Boolean(body.forceRefresh);
 
     if (!currentPrice) {
       return NextResponse.json({ error: 'currentPrice is required' }, { status: 400 });
     }
 
-    // 1. Check daily cache
-    try {
-      const cached = await db.decisionGraphAiCache.findUnique({
-        where: { symbol_date: { symbol: symbolName, date: today } },
-      });
-      if (cached && cached.text) {
-        const cachedPrice = Number(cached.price) || 0;
-        if (cachedPrice > 0 && currentPrice > 0) {
-          const priceDiff = Math.abs(cachedPrice - currentPrice) / currentPrice;
-          if (priceDiff <= 0.05) {
-            console.log(`[DG-AI] Cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
-            return NextResponse.json({ text: cached.text, cached: true, cachedDate: cached.date });
+    // 1. Check time-based cache — key is (symbol, priceHash), expires after CACHE_TTL_MS
+    if (!forceRefresh) {
+      try {
+        const cached = await db.decisionGraphAiCache.findUnique({
+          where: { symbol_priceHash: { symbol: symbolName, priceHash } },
+        });
+        if (cached && cached.text) {
+          const ageMs = Date.now() - cached.updatedAt.getTime();
+          const isExpired = ageMs > CACHE_TTL_MS;
+          if (!isExpired) {
+            console.log(`[DG-AI] Cache HIT for ${symbolName} (priceHash=${priceHash}, age=${Math.round(ageMs / 1000)}s) [${Date.now() - startTime}ms]`);
+            return NextResponse.json({
+              text: cached.text,
+              cached: true,
+              cachedAge: Math.round(ageMs / 1000),
+              priceAtGeneration: cached.price,
+            });
           } else {
-            console.log(`[DG-AI] Cache INVALIDATED for ${symbolName} (price diff ${(priceDiff * 100).toFixed(1)}% > 5%)`);
+            console.log(`[DG-AI] Cache EXPIRED for ${symbolName} (age=${Math.round(ageMs / 1000)}s > ${CACHE_TTL_MS / 1000}s), re-generating`);
           }
         }
+      } catch (dbErr) {
+        console.warn('[DG-AI] DB cache read failed:', dbErr instanceof Error ? dbErr.message : dbErr);
       }
-    } catch (dbErr) {
-      console.warn('[DG-AI] DB cache read failed:', dbErr instanceof Error ? dbErr.message : dbErr);
-    }
-
-    // 1b. Fallback: previous day cache if price within 2%
-    try {
-      const prevCached = await db.decisionGraphAiCache.findFirst({
-        where: { symbol: symbolName, date: { not: today } },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (prevCached && prevCached.text && prevCached.price > 0 && currentPrice > 0) {
-        const priceDiff = Math.abs(prevCached.price - currentPrice) / currentPrice;
-        if (priceDiff < 0.02) {
-          console.log(`[DG-AI] Previous cache fallback HIT for ${symbolName} (${prevCached.date}, price diff ${((priceDiff) * 100).toFixed(1)}%) [${Date.now() - startTime}ms]`);
-          return NextResponse.json({
-            text: prevCached.text, cached: true, cachedDate: prevCached.date, isFallback: true,
-          });
-        }
-      }
-    } catch (dbErr) {
-      console.warn('[DG-AI] Previous cache fallback read failed:', dbErr instanceof Error ? dbErr.message : dbErr);
+    } else {
+      console.log(`[DG-AI] Force refresh requested for ${symbolName}, skipping cache`);
     }
 
     // 2. Build prompt
@@ -276,19 +275,32 @@ export async function POST(req: NextRequest) {
       console.warn(`[DG-AI] Price hallucination detected for ${symbolName}: ${hallucinationCount} bad prices. NOT caching.`);
     }
 
-    // 5. Save to cache (only if price valid)
+    // 5. Save to cache (only if price valid) — key is (symbol, priceHash)
     if (priceValid) {
       try {
         await db.decisionGraphAiCache.upsert({
-          where: { symbol_date: { symbol: symbolName, date: today } },
-          create: { symbol: symbolName, date: today, text: cleaned, price: currentPrice },
-          update: { text: cleaned, price: currentPrice },
+          where: { symbol_priceHash: { symbol: symbolName, priceHash } },
+          create: { symbol: symbolName, date: today, text: cleaned, price: currentPrice, priceHash },
+          update: { date: today, text: cleaned, price: currentPrice },
         });
-        console.log(`[DG-AI] Saved to cache: ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+        console.log(`[DG-AI] Saved to cache: ${symbolName} (priceHash=${priceHash}) [${Date.now() - startTime}ms]`);
       } catch (dbErr) {
         console.warn('[DG-AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
       }
     }
+
+    // 6. Clean up old cache entries (keep only last 3 per symbol)
+    try {
+      const allEntries = await db.decisionGraphAiCache.findMany({
+        where: { symbol: symbolName },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+      if (allEntries.length > 3) {
+        const idsToDelete = allEntries.slice(3).map(e => e.id);
+        await db.decisionGraphAiCache.deleteMany({ where: { id: { in: idsToDelete } } });
+      }
+    } catch { /* ignore cleanup failure */ }
 
     console.log(`[DG-AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
     return NextResponse.json({ text: cleaned });

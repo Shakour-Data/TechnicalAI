@@ -346,3 +346,31 @@ Stage Summary:
 - Category moved from "بازار ایران" (TGJU) to "بورس تهران" (TSE) in search UI
 - Data source badge now shows "بورس" instead of "TGJU" for gold ETFs
 - No browser errors, analysis page loads correctly with full TA
+---
+Task ID: 1
+Agent: main
+Task: تحلیل متنی در بخش تصویری و گراف باید کاملا با هم منطبق و بر اساس آخرین قیمت ها باشد. هر بار تحلیل بر اساس قیمت لحظه‌ای نوشته شود.
+
+Work Log:
+- بررسی کامل سیستم کش تحلیل AI (دیتابیس و localStorage)
+- تغییر Prisma schema: از کش روزانه (symbol+date) به کش زمانی (symbol+priceHash) با TTL 5 دقیقه
+- اضافه کردن فیلدهای priceHash و updatedAt به AiAnalysisCache و DecisionGraphAiCache
+- اضافه کردن تابع computePriceHash() برای bucket کردن قیمت به بازه‌های 0.5%
+- تغییر /api/ai-analysis: حذف کش روزانه، اضافه کردن cache TTL 5 دقیقه، پشتیبانی forceRefresh، حذف previous-day fallback
+- تغییر /api/ai-decision-graph: مشابه تغییرات ai-analysis
+- اضافه کردن cache cleanup: نگهداری آخرین 3 ورودی کش برای هر نماد
+- تغییر فرانت‌اند vdes-analysis.tsx: حذف کش روزانه localStorage، اضافه کردن کش 5 دقیقه‌ای با آستانه قیمت 1%
+- اضافه کردن stateهای aiForceRefresh، aiCachedAge، aiPriceAtGen به کامپوننت
+- اضافه کردن دکمه "🔄 تحلیل جدید" برای force refresh
+- اضافه کردن نشانگر سن کش (مثلاً "تحلیل بر اساس قیمت لحظه‌ای" یا "X دقیقه پیش")
+- تست با Agent Browser: صفحه فولاد بارگذاری شد، دکمه تحلیل جدید کار کرد، کش TTL و priceHash درست کار کرد
+- لاگ سرور: "Force refresh requested" → "cache miss" → "Saved to cache (priceHash=2666)" → "Cache HIT (age=0s)"
+
+Stage Summary:
+- سیستم کش از روزانه به زمانی (5 دقیقه TTL) تغییر کرد
+- کلید کش از (symbol, date) به (symbol, priceHash) تغییر شد
+- چندین تحلیل در روز برای یک نماد ممکن شد (وقتی قیمت تغییر کند)
+- forceRefresh از فرانت‌اند و API پشتیبانی می‌شود
+- دکمه "تحلیل جدید" به UI اضافه شد
+- نشانگر سن کش به UI اضافه شد
+- تشخیص hallucination قیمت کار می‌کند و از کش داده نادرست جلوگیری می‌شود

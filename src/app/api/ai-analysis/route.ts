@@ -46,6 +46,19 @@ function getTodayDateStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+// ─── Price Hash for Cache Key ─────────────────────────────────────
+// Rounds price into 0.5% buckets so that small price movements
+// (< 0.5%) reuse the same cache, but meaningful moves create a new entry.
+// This enables multiple analyses per day when price changes significantly.
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL for cache entries
+
+function computePriceHash(price: number): string {
+  if (!price || price <= 0 || !isFinite(price)) return '0';
+  // Round to nearest 0.5% bucket
+  const bucket = Math.round(price * 2) / 2; // Round to nearest 0.5%
+  return bucket.toString();
+}
+
 
 
 // ─── Build ML Selector Input ──────────────────────────────────────
@@ -456,69 +469,39 @@ export async function POST(req: NextRequest) {
 
     const symbolName = String(body.symbolName || 'unknown');
     const today = getTodayDateStr();
+    const currentPrice = Number(body.currentPrice) || 0;
+    const priceHash = computePriceHash(currentPrice);
+    const forceRefresh = Boolean(body.forceRefresh);
 
-    // 1. Check daily persistent cache (Prisma/SQLite)
-    // Also validate price match — if cached price is wildly different, re-generate
-    try {
-      const currentPrice = Number(body.currentPrice) || 0;
-      const cached = await db.aiAnalysisCache.findUnique({
-        where: { symbol_date: { symbol: symbolName, date: today } },
-      });
-      if (cached && cached.text) {
-        // Price sanity check: if cached price differs by >5%, the cached analysis
-        // was likely generated with wrong/stale data (e.g. 1392-era chart data)
-        const cachedPrice = Number(cached.price) || 0;
-        if (cachedPrice > 0 && currentPrice > 0) {
-          const priceDiff = Math.abs(cachedPrice - currentPrice) / currentPrice;
-          if (priceDiff > 0.05) {
-            console.log(`[AI] Daily cache INVALIDATED for ${symbolName} (cached price diff ${(priceDiff * 100).toFixed(1)}% > 5%), re-generating`);
-          } else {
-            console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+    // 1. Check time-based cache (Prisma/SQLite)
+    // Cache key is (symbol, priceHash) — allows multiple analyses per day
+    // when price moves significantly. Cache expires after CACHE_TTL_MS (5 min).
+    if (!forceRefresh) {
+      try {
+        const cached = await db.aiAnalysisCache.findUnique({
+          where: { symbol_priceHash: { symbol: symbolName, priceHash } },
+        });
+        if (cached && cached.text) {
+          const ageMs = Date.now() - cached.updatedAt.getTime();
+          const isExpired = ageMs > CACHE_TTL_MS;
+          if (!isExpired) {
+            console.log(`[AI] Cache HIT for ${symbolName} (priceHash=${priceHash}, age=${Math.round(ageMs / 1000)}s) [${Date.now() - startTime}ms]`);
             return NextResponse.json({
               text: cached.text,
               ml: cached.ml ? JSON.parse(cached.ml) : undefined,
               cached: true,
-              cachedDate: cached.date,
+              cachedAge: Math.round(ageMs / 1000),
+              priceAtGeneration: cached.price,
             });
+          } else {
+            console.log(`[AI] Cache EXPIRED for ${symbolName} (priceHash=${priceHash}, age=${Math.round(ageMs / 1000)}s > ${CACHE_TTL_MS / 1000}s), re-generating`);
           }
-        } else {
-          console.log(`[AI] Daily cache HIT for ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
-          return NextResponse.json({
-            text: cached.text,
-            ml: cached.ml ? JSON.parse(cached.ml) : undefined,
-            cached: true,
-            cachedDate: cached.date,
-          });
         }
+      } catch (dbErr) {
+        console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
       }
-    } catch (dbErr) {
-      console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
-    }
-
-    // 1b. Check for previous day's cache (fallback only if price is within 2%)
-    try {
-      const currentPrice = Number(body.currentPrice) || 0;
-      const prevCached = await db.aiAnalysisCache.findFirst({
-        where: { symbol: symbolName, date: { not: today } },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (prevCached && prevCached.text && prevCached.price > 0 && currentPrice > 0) {
-        const priceDiff = Math.abs(prevCached.price - currentPrice) / currentPrice;
-        if (priceDiff < 0.02) { // Less than 2% price difference
-          console.log(`[AI] Previous cache fallback HIT for ${symbolName} (${prevCached.date}, price diff ${((priceDiff)*100).toFixed(1)}%) [${Date.now() - startTime}ms]`);
-          return NextResponse.json({
-            text: prevCached.text,
-            ml: prevCached.ml ? JSON.parse(prevCached.ml) : undefined,
-            cached: true,
-            cachedDate: prevCached.date,
-            isFallback: true,
-          });
-        } else {
-          console.log(`[AI] Previous cache SKIP for ${symbolName} (price diff ${((priceDiff)*100).toFixed(1)}% > 2%)`);
-        }
-      }
-    } catch (dbErr) {
-      console.warn('[AI] Previous cache fallback read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
+    } else {
+      console.log(`[AI] Force refresh requested for ${symbolName}, skipping cache`);
     }
 
     // 2. ML selection
@@ -565,31 +548,47 @@ export async function POST(req: NextRequest) {
     }
     const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
 
-    // 7. Save to daily persistent cache — ONLY if prices are valid
+    // 7. Save to time-based cache — ONLY if prices are valid
+    // Cache key is (symbol, priceHash) — allows multiple entries per day
     if (priceValid) {
       try {
         await db.aiAnalysisCache.upsert({
-          where: { symbol_date: { symbol: symbolName, date: today } },
+          where: { symbol_priceHash: { symbol: symbolName, priceHash } },
           create: {
             symbol: symbolName,
             date: today,
             text: cleaned,
             ml: JSON.stringify(mlData),
-            price: Number(body.currentPrice) || 0,
+            price: currentPrice,
+            priceHash,
           },
           update: {
+            date: today,
             text: cleaned,
             ml: JSON.stringify(mlData),
-            price: Number(body.currentPrice) || 0,
+            price: currentPrice,
           },
         });
-        console.log(`[AI] Saved to daily cache: ${symbolName} (${today}) [${Date.now() - startTime}ms]`);
+        console.log(`[AI] Saved to cache: ${symbolName} (priceHash=${priceHash}, price=${currentPrice}) [${Date.now() - startTime}ms]`);
       } catch (dbErr) {
         console.warn('[AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
       }
     } else {
       console.log(`[AI] Skipped cache save for ${symbolName} due to price hallucination`);
     }
+
+    // 8. Clean up old cache entries for this symbol (keep only last 3 per symbol)
+    try {
+      const allEntries = await db.aiAnalysisCache.findMany({
+        where: { symbol: symbolName },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+      if (allEntries.length > 3) {
+        const idsToDelete = allEntries.slice(3).map(e => e.id);
+        await db.aiAnalysisCache.deleteMany({ where: { id: { in: idsToDelete } } });
+      }
+    } catch { /* ignore cleanup failure */ }
 
     console.log(`[AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
     return NextResponse.json({ text: cleaned, ml: mlData });
