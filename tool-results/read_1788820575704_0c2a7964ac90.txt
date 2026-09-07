@@ -1,0 +1,1605 @@
+     1→     1→' ============================================================================
+     2→     2→' سامانه تحلیل تکنیکال مالی ایران - Persian Financial Technical Analysis System
+     3→     3→' UML 2.5 BEHAVIORAL & INTERACTION Diagrams (7 types × 3 levels = 21 diagrams)
+     4→     4→' ============================================================================
+     5→     5→
+     6→     6→
+     7→     7→' ╔════════════════════════════════════════════════════════════════════════════╗
+     8→     8→' ║  DIAGRAM TYPE 8: USE CASE DIAGRAM (3 levels)                              ║
+     9→     9→' ╚════════════════════════════════════════════════════════════════════════════╝
+    10→    10→
+    11→    11→
+    12→    12→===DIAGRAM_START===
+    13→    13→id: UC-L1
+    14→    14→title: نمودار کاربرد - سطح ۱: بازیگران و کاربردهای اصلی
+    15→    15→description:
+    16→    16→  این نمودار سطح اول، بازیگران اصلی سامانه تحلیل تکنیکال مالی ایران و
+    17→    17→  کاربردهای کلیدی هر بازیگر را نشان می‌دهد. کاربر نهایی می‌تواند نماد را
+    18→    18→  تحلیل کند، شاخص‌ها را مشاهده کند و گزارش هوش مصنوعی تولید کند.
+    19→    19→  مدیر سامانه مسئول مدیریت شاخص‌ها و پیکربندی منابع داده است.
+    20→    20→  منابع داده به‌عنوان بازیگر خارجی داده‌های بازار را تأمین می‌کنند.
+    21→    21→  هر کاربرد نمایانگر یک قابلیت اصلی سامانه از دید کاربر است.
+    22→    22→level: 1
+    23→    23→code:
+    24→    24→@startuml
+    25→    25→left to right direction
+    26→    26→skinparam packageStyle rectangle
+    27→    27→skinparam actorStyle awesome
+    28→    28→
+    29→    29→actor "کاربر\n(User)" as User
+    30→    30→actor "مدیر سامانه\n(SystemAdmin)" as Admin
+    31→    31→actor "منبع داده\n(DataSource)" as DataSource
+    32→    32→
+    33→    33→rectangle "سامانه تحلیل تکنیکال مالی ایران" {
+    34→    34→  usecase "تحلیل نماد\n(Analyze Symbol)" as UC1
+    35→    35→  usecase "مشاهده شاخص‌ها\n(View Indicators)" as UC2
+    36→    36→  usecase "تولید گزارش هوش مصنوعی\n(Generate AI Report)" as UC3
+    37→    37→  usecase "مدیریت شاخص‌ها\n(Manage Indices)" as UC4
+    38→    38→  usecase "واکشی داده‌های بازار\n(Fetch Market Data)" as UC5
+    39→    39→  usecase "پیکربندی سامانه\n(System Configuration)" as UC6
+    40→    40→}
+    41→    41→
+    42→    42→User --> UC1
+    43→    43→User --> UC2
+    44→    44→User --> UC3
+    45→    45→Admin --> UC4
+    46→    46→Admin --> UC6
+    47→    47→DataSource --> UC5
+    48→    48→
+    49→    49→UC1 ..> UC5 : «نیاز»
+    50→    50→UC3 ..> UC5 : «نیاز»
+    51→    51→
+    52→    52→note right of UC1
+    53→    53→  تحلیل تکنیکال کامل نماد
+    54→    54→  شامل: RSI, MACD, BB,
+    55→    55→  Ichimoku, Stochastic
+    56→    56→end note
+    57→    57→
+    58→    58→note right of UC3
+    59→    59→  تولید تحلیل متنی
+    60→    60→  توسط هوش مصنوعی
+    61→    61→  با مدل MSLV4
+    62→    62→end note
+    63→    63→
+    64→    64→@enduml
+    65→    65→===DIAGRAM_END===
+    66→    66→
+    67→    67→
+    68→    68→===DIAGRAM_START===
+    69→    69→id: UC-L2
+    70→    70→title: نمودار کاربرد - سطح ۲: روابط include و extend
+    71→    71→description:
+    72→    72→  در سطح دوم، روابط «شامل» و «گسترش» بین کاربردها مشخص می‌شود.
+    73→    73→  تحلیل نماد شامل واکشی داده، محاسبه شاخص‌ها و تشخیص رژیم است.
+    74→    74→  تولید گزارش هوش مصنوعی شامل پیش‌پردازش و پس‌پردازش است.
+    75→    75→  در صورت نرخ‌محدودی (429)، تحلیل جایگزین گسترش می‌یابد.
+    76→    76→  مشاهده شاخص‌ها شامل انتخاب بازه زمانی و کش‌بازخوانی است.
+    77→    77→  هر رابطه شامل نشان‌دهنده وابستگی اجباری است.
+    78→    78→level: 2
+    79→    79→code:
+    80→    80→@startuml
+    81→    81→left to right direction
+    82→    82→skinparam actorStyle awesome
+    83→    83→
+    84→    84→actor "کاربر\n(User)" as User
+    85→    85→actor "مدیر سامانه\n(SystemAdmin)" as Admin
+    86→    86→actor "منبع داده\n(DataSource)" as DataSource
+    87→    87→
+    88→    88→rectangle "سامانه تحلیل تکنیکال مالی ایران" {
+    89→    89→  usecase "تحلیل نماد\n(Analyze Symbol)" as UC1
+    90→    90→  usecase "مشاهده شاخص‌ها\n(View Indicators)" as UC2
+    91→    91→  usecase "تولید گزارش AI\n(Generate AI Report)" as UC3
+    92→    92→  usecase "مدیریت شاخص‌ها\n(Manage Indices)" as UC4
+    93→    93→
+    94→    94→  usecase "واکشی داده\n(Fetch Data)" as UC_Fetch
+    95→    95→  usecase "محاسبه شاخص‌ها\n(Compute Indicators)" as UC_Compute
+    96→    96→  usecase "تشخیص رژیم\n(Detect Regime)" as UC_Regime
+    97→    97→  usecase "پیش‌پردازش AI\n(AI Preprocess)" as UC_PreAI
+    98→    98→  usecase "پس‌پردازش AI\n(AI Postprocess)" as UC_PostAI
+    99→    99→  usecase "تحلیل جایگزین\n(Fallback Analysis)" as UC_Fallback
+   100→   100→  usecase "انتخاب بازه زمانی\n(Select Timeframe)" as UC_Timeframe
+   101→   101→  usecase "کش‌بازخوانی\n(Cache Lookup)" as UC_Cache
+   102→   102→  usecase "پیکربندی منابع\n(Configure Sources)" as UC_Config
+   103→   103→}
+   104→   104→
+   105→   105→User --> UC1
+   106→   106→User --> UC2
+   107→   107→User --> UC3
+   108→   108→Admin --> UC4
+   109→   109→DataSource --> UC_Fetch
+   110→   110→
+   111→   111→UC1 .> UC_Fetch : <<include>>
+   112→   112→UC1 .> UC_Compute : <<include>>
+   113→   113→UC1 .> UC_Regime : <<include>>
+   114→   114→UC3 .> UC_PreAI : <<include>>
+   115→   115→UC3 .> UC_PostAI : <<include>>
+   116→   116→UC3 .> UC_Fallback : <<extend>>
+   117→   117→UC2 .> UC_Timeframe : <<include>>
+   118→   118→UC2 .> UC_Cache : <<include>>
+   119→   119→UC4 .> UC_Config : <<include>>
+   120→   120→
+   121→   121→note bottom of UC_Fallback
+   122→   122→  در صورت خطای 429 یا
+   123→   123→  نرخ‌محدودی AI
+   124→   124→end note
+   125→   125→
+   126→   126→@enduml
+   127→   127→===DIAGRAM_END===
+   128→   128→
+   129→   129→
+   130→   130→===DIAGRAM_START===
+   131→   131→id: UC-L3
+   132→   132→title: نمودار کاربرد - سطح ۳: سناریوهای جایگزین و استثنا
+   133→   133→description:
+   134→   134→  سطح سوم تمام سناریوهای استثنا و جایگزین را برای هر کاربرد نشان می‌دهد.
+   135→   135→  واکشی داده ممکن است از منابع مختلف انجام شود با اولویت متفاوت.
+   136→   136→  در صورت خطای تایم‌اوت، منبع جایگزین فعال می‌شود.
+   137→   137→  تحلیل AI در صورت خطای 429 به تحلیل مبتنی بر قاعده بازمی‌گردد.
+   138→   138→  محاسبه شاخص‌ها در صورت ناکافی بودن داده کاشل می‌شود.
+   139→   139→  تشخیص رژیم در صورت نبود رژیم واضح، رژیم «نامشخص» برمی‌گرداند.
+   140→   140→  پس‌پردازش AI در صورت نامعتبر بودن خروجی، بازتولید انجام می‌دهد.
+   141→   141→level: 3
+   142→   142→code:
+   143→   143→@startuml
+   144→   144→left to right direction
+   145→   145→skinparam actorStyle awesome
+   146→   146→
+   147→   147→actor "کاربر\n(User)" as User
+   148→   148→
+   149→   149→rectangle "سامانه تحلیل تکنیکال مالی ایران" {
+   150→   150→  usecase "تحلیل نماد\n(Analyze Symbol)" as UC1
+   151→   151→  usecase "واکشی داده\n(Fetch Data)" as UC_Fetch
+   152→   152→  usecase "واکشی از TSE\n(Fetch TSE)" as UC_TSE
+   153→   153→  usecase "واکشی از TGJU\n(Fetch TGJU)" as UC_TGJU
+   154→   154→  usecase "واکشی از Yahoo\n(Fetch Yahoo)" as UC_Yahoo
+   155→   155→
+   156→   156→  usecase "تولید گزارش AI\n(Generate AI Report)" as UC3
+   157→   157→  usecase "ارسال به MSLV4\n(Send to MSLV4)" as UC_MSLV4
+   158→   158→  usecase "ارسال به ZaiSDK\n(Send to ZaiSDK)" as UC_ZaiSDK
+   159→   159→
+   160→   160→  usecase "تحلیل قاعده‌محور\n(Rule-based Analysis)" as UC_Rule
+   161→   161→  usecase "تحلیل جایگزین\n(Fallback Analysis)" as UC_Fallback
+   162→   162→
+   163→   163→  usecase "محاسبه شاخص‌ها\n(Compute Indicators)" as UC_Compute
+   164→   164→  usecase "کشل شاخص‌ها\n(Cached Indicators)" as UC_CacheCompute
+   165→   165→
+   166→   166→  usecase "تشخیص رژیم\n(Detect Regime)" as UC_Regime
+   167→   167→  usecase "رژیم نامشخص\n(Unknown Regime)" as UC_UnknownRegime
+   168→   168→
+   169→   169→  usecase "پس‌پردازش AI\n(AI Postprocess)" as UC_PostAI
+   170→   170→  usecase "بازتولید AI\n(AI Regeneration)" as UC_RegenAI
+   171→   171→  usecase "مدیریت خطای 429\n(Handle Rate Limit)" as UC_429
+   172→   172→  usecase "مدیریت تایم‌اوت\n(Handle Timeout)" as UC_Timeout
+   173→   173→  usecase "داده ناکافی\n(Insufficient Data)" as UC_Insuff
+   174→   174→}
+   175→   175→
+   176→   176→User --> UC1
+   177→   177→User --> UC3
+   178→   178→
+   179→   179→UC1 .> UC_Fetch : <<include>>
+   180→   180→UC1 .> UC_Compute : <<include>>
+   181→   181→UC1 .> UC_Regime : <<include>>
+   182→   182→UC3 .> UC_MSLV4 : <<include>>
+   183→   183→UC3 .> UC_PostAI : <<include>>
+   184→   184→
+   185→   185→UC_Fetch .> UC_TSE : <<include>>
+   186→   186→UC_TSE .> UC_TGJU : <<extend>>
+   187→   187→UC_TGJU .> UC_Yahoo : <<extend>>
+   188→   188→UC_Fetch .> UC_Timeout : <<extend>>
+   189→   189→UC_Fetch .> UC_Insuff : <<extend>>
+   190→   190→
+   191→   191→UC3 .> UC_Fallback : <<extend>>
+   192→   192→UC_Fallback .> UC_Rule : <<include>>
+   193→   193→UC3 .> UC_429 : <<extend>>
+   194→   194→UC_429 .> UC_Rule : <<include>>
+   195→   195→
+   196→   196→UC_Compute .> UC_CacheCompute : <<extend>>
+   197→   197→UC_Regime .> UC_UnknownRegime : <<extend>>
+   198→   198→UC_PostAI .> UC_RegenAI : <<extend>>
+   199→   199→
+   200→   200→UC_MSLV4 .> UC_ZaiSDK : <<include>>
+   201→   201→
+   202→   202→note right of UC_429
+   203→   203→  خطای HTTP 429:
+   204→   204→  Too Many Requests
+   205→   205→  → تحلیل قاعده‌محور
+   206→   206→end note
+   207→   207→
+   208→   208→note right of UC_Timeout
+   209→   209→  تایم‌اوت واکشی:
+   210→   210→  → تلاش از منبع بعدی
+   211→   211→end note
+   212→   212→
+   213→   213→note right of UC_Insuff
+   214→   214→  داده ناکافی:
+   215→   215→  → محاسبه کشل شده
+   216→   216→  → هشدار به کاربر
+   217→   217→end note
+   218→   218→
+   219→   219→@enduml
+   220→   220→===DIAGRAM_END===
+   221→   221→
+   222→   222→
+   223→   223→' ╔════════════════════════════════════════════════════════════════════════════╗
+   224→   224→' ║  DIAGRAM TYPE 9: ACTIVITY DIAGRAM (3 levels)                              ║
+   225→   225→' ╚════════════════════════════════════════════════════════════════════════════╝
+   226→   226→
+   227→   227→
+   228→   228→===DIAGRAM_START===
+   229→   229→id: ACT-L1
+   230→   230→title: نمودار فعالیت - سطح ۱: جریان اصلی «انتخاب و تحلیل نماد»
+   231→   231→description:
+   232→   232→  این نمودار جریان اصلی فرآیند انتخاب و تحلیل یک نماد بورسی را
+   233→   233→  از ابتدا تا انتها نشان می‌دهد. کاربر نماد را انتخاب می‌کند،
+   234→   234→  سپس سامانه داده‌ها را واکشی می‌کند، شاخص‌های تکنیکال را محاسبه
+   235→   235→  می‌کند، رژیم بازار را تشخیص می‌دهد، گراف تصمیم را می‌سازد،
+   236→   236→  پیش‌بینی ML را انجام می‌دهد، متن AI را تولید می‌کند
+   237→   237→  و در نهایت نتایج را نمایش می‌دهد. این سطح فورک/جوین ندارد.
+   238→   238→level: 1
+   239→   239→code:
+   240→   240→@startuml
+   241→   241→skinparam activityStyle rectangle
+   242→   242→
+   243→   243→title جریان اصلی: انتخاب و تحلیل نماد
+   244→   244→
+   245→   245→start
+   246→   246→:انتخاب نماد توسط کاربر\n(Select Symbol);
+   247→   247→:واکشی داده‌های بازار\n(Fetch Market Data);
+   248→   248→note right: از TSE, TGJU, Yahoo
+   249→   249→:محاسبه شاخص‌های تکنیکال\n(Compute TA Indicators);
+   250→   250→note right: RSI, MACD, BB, Ichimoku
+   251→   251→:تشخیص رژیم بازار\n(Detect Market Regime);
+   252→   252→note right: صعودی/نزولی/رنج
+   253→   253→:ساخت گراف تصمیم\n(Build Decision Graph);
+   254→   254→:پیش‌بینی یادگیری ماشین\n(ML Prediction);
+   255→   255→note right: MSLV4, ProbabilityTrend
+   256→   256→:تولید متن تحلیل AI\n(Generate AI Analysis Text);
+   257→   257→note right: ZaiSDK → AIPostProcessor
+   258→   258→:نمایش نتایج\n(Display Results);
+   259→   259→stop
+   260→   260→
+   261→   261→@enduml
+   262→   262→===DIAGRAM_END===
+   263→   263→
+   264→   264→
+   265→   265→===DIAGRAM_START===
+   266→   266→id: ACT-L2
+   267→   267→title: نمودار فعالیت - سطح ۲: جریان‌های موازی و شرطی
+   268→   268→description:
+   269→   269→  سطح دوم شامل فورک/جوین برای واکشی موازی داده از منابع مختلف،
+   270→   270→  و شاخه‌های شرطی برای موفقیت/شکست واکشی داده است.
+   271→   271→  پس از واکشی، رژیم بازار تشخیص داده می‌شود و بر اساس نوع رژیم
+   272→   272→  (صعودی، نزولی، رنج) تحلیل متفاوتی انجام می‌شود.
+   273→   273→  تولید AI نیز در صورت موفقیت و در صورت نرخ‌محدودی (429)
+   274→   274→  مسیرهای متفاوتی دارد. این سطح منطق شرطی کامل را نشان می‌دهد.
+   275→   275→level: 2
+   276→   276→code:
+   277→   277→@startuml
+   278→   278→skinparam activityStyle rectangle
+   279→   279→
+   280→   280→title جریان‌های موازی و شرطی: تحلیل نماد
+   281→   281→
+   282→   282→start
+   283→   283→:انتخاب نماد\n(Select Symbol);
+   284→   284→
+   285→   285→fork
+   286→   286→  :واکشی از TSE API\n(Fetch TSE);
+   287→   287→fork again
+   288→   288→  :واکشی از TGJU API\n(Fetch TGJU);
+   289→   289→fork again
+   290→   290→  :واکشی از Yahoo API\n(Fetch Yahoo);
+   291→   291→end fork
+   292→   292→
+   293→   293→if (واکشی موفق؟) then (بله)
+   294→   294→  :ادغام داده‌ها\n(Merge Data);
+   295→   295→else (خیر - شکست)
+   296→   296→  :تلاش از منبع جایگزین\n(Try Fallback Source);
+   297→   297→  if (منبع جایگزین موفق؟) then (بله)
+   298→   298→    :ادغام داده‌ها\n(Merge Data);
+   299→   299→  else (خیر)
+   300→   300→    :نمایش خطا به کاربر\n(Show Error);
+   301→   301→    stop
+   302→   302→  endif
+   303→   303→endif
+   304→   304→
+   305→   305→:محاسبه شاخص‌های TA\n(Compute TA Indicators);
+   306→   306→
+   307→   307→:تشخیص رژیم بازار\n(Detect Regime);
+   308→   308→
+   309→   309→switch (نوع رژیم؟)
+   310→   310→case (صعودی - Bullish)
+   311→   311→  :تحلیل صعودی\n(Bullish Analysis);
+   312→   312→  :پیش‌بینی روند صعودی\n(Bullish Trend Prediction);
+   313→   313→case (نزولی - Bearish)
+   314→   314→  :تحلیل نزولی\n(Bearish Analysis);
+   315→   315→  :پیش‌بینی روند نزولی\n(Bearish Trend Prediction);
+   316→   316→case (رنج - Range)
+   317→   317→  :تحلیل رنج\n(Range Analysis);
+   318→   318→  :پیش‌بینی روند خنثی\n(Neutral Trend Prediction);
+   319→   319→endswitch
+   320→   320→
+   321→   321→:ساخت گراف تصمیم\n(Build Decision Graph);
+   322→   322→
+   323→   323→:ارسال درخواست AI\n(Send AI Request);
+   324→   324→
+   325→   325→if (پاسخ AI موفق؟) then (بله)
+   326→   326→  :پس‌پردازش AI\n(AI Postprocess);
+   327→   327→else (خیر - نرخ‌محدودی 429)
+   328→   328→  :تحلیل قاعده‌محور جایگزین\n(Rule-based Fallback);
+   329→   329→  note right: بدون AI
+   330→   330→endif
+   331→   331→
+   332→   332→:نمایش نتایج\n(Display Results);
+   333→   333→stop
+   334→   334→
+   335→   335→@enduml
+   336→   336→===DIAGRAM_END===
+   337→   337→
+   338→   338→
+   339→   339→===DIAGRAM_START===
+   340→   340→id: ACT-L3
+   341→   341→title: نمودار فعالیت - سطح ۳: جریان تفکیک‌شده با خط شناور
+   342→   342→description:
+   343→   343→  سطح سوم نمودار فعالیت را با خطوط شناور (Swimlanes) تفکیک می‌کند.
+   344→   344→  هر خط شناور نمایانگر یک لایه سامانه است: Frontend, API Routes,
+   345→   345→  TA Engine, ML Engine, AI Engine, Data Sources.
+   346→   346→  تمام نقاط تصمیم شامل تایم‌اوت، کش، اعتبارسنجی و مدیریت خطا
+   347→   347→  نشان داده می‌شود. فرآیند تلاش مجدد (retry) برای واکشی داده
+   348→   348→  و تولید AI مشخص است. این سطح کامل‌ترین نمودار فرآیند است.
+   349→   349→level: 3
+   350→   350→code:
+   351→   351→@startuml
+   352→   352→skinparam activityStyle rectangle
+   353→   353→
+   354→   354→title جریان تفکیک‌شده با خط شناور: تحلیل کامل نماد
+   355→   355→
+   356→   356→|Frontend|
+   357→   357→start
+   358→   358→:کاربر نماد را انتخاب می‌کند\n(User Selects Symbol);
+   359→   359→:ارسال درخواست به API\n(Send Request to API);
+   360→   360→
+   361→   361→|API Routes|
+   362→   362→:دریافت درخواست\n(Receive Request);
+   363→   363→:اعتبارسنجی پارامترها\n(Validate Parameters);
+   364→   364→if (پارامترها معتبر؟) then (بله)
+   365→   365→else (خیر)
+   366→   366→  |Frontend|
+   367→   367→  :نمایش خطای اعتبارسنجی\n(Show Validation Error);
+   368→   368→  stop
+   369→   369→endif
+   370→   370→
+   371→   371→|API Routes|
+   372→   372→:بررسی کش\n(Check Cache);
+   373→   373→if (نتیجه کش موجود؟) then (بله)
+   374→   374→  |Frontend|
+   375→   375→  :نمایش نتایج کش‌شده\n(Display Cached Results);
+   376→   376→  stop
+   377→   377→else (خیر)
+   378→   378→endif
+   379→   379→
+   380→   380→|Data Sources|
+   381→   381→:واکشی داده‌های بازار\n(Fetch Market Data);
+   382→   382→note right: TSE → TGJU → Yahoo (اولویت)
+   383→   383→if (واکشی موفق؟) then (خیر)
+   384→   384→  :تلاش مجدد (Retry)\n(Retry Fetch);
+   385→   385→  if (تلاش دوم موفق؟) then (خیر)
+   386→   386→    |API Routes|
+   387→   387→    :خطای واکشی داده\n(Data Fetch Error);
+   388→   388→    |Frontend|
+   389→   389→    :نمایش خطا\n(Show Error);
+   390→   390→    stop
+   391→   391→  endif
+   392→   392→endif
+   393→   393→
+   394→   394→|TA Engine|
+   395→   395→:محاسبه شاخص‌های تکنیکال\n(Compute TA Indicators);
+   396→   396→note right
+   397→   397→  RSI, MACD, Bollinger Bands,
+   398→   398→  Ichimoku, Stochastic, ADX,
+   399→   399→  ATR, Volume Profile
+   400→   400→end note
+   401→   401→
+   402→   402→:تشخیص رژیم بازار\n(Detect Market Regime);
+   403→   403→note right
+   404→   404→  بررسی: ADX, روند MA,
+   405→   405→  الگوی حجم
+   406→   406→end note
+   407→   407→
+   408→   408→switch (رژیم تشخیص‌داده‌شده)
+   409→   409→case (صعودی)
+   410→   410→  :تحلیل صعودی\n(Bullish Analysis);
+   411→   411→case (نزولی)
+   412→   412→  :تحلیل نزولی\n(Bearish Analysis);
+   413→   413→case (رنج)
+   414→   414→  :تحلیل رنج\n(Range Analysis);
+   415→   415→case (نامشخص)
+   416→   416→  :تحلیل عمومی\n(Generic Analysis);
+   417→   417→endswitch
+   418→   418→
+   419→   419→|API Routes|
+   420→   420→:ساخت گراف تصمیم\n(Build Decision Graph);
+   421→   421→
+   422→   422→|ML Engine|
+   423→   423→:انتخاب مدل ML\n(Select ML Model);
+   424→   424→note right: AnalysisMLSelector
+   425→   425→:پیش‌بینی احتمالی\n(Probability Prediction);
+   426→   426→note right: ProbabilityTrend, MSLV4
+   427→   427→
+   428→   428→|AI Engine|
+   429→   429→:بررسی نرخ‌محدودی\n(Check Rate Limit);
+   430→   430→if (نرخ مجاز؟) then (بله)
+   431→   431→  :ساخت پرامپت AI\n(Build AI Prompt);
+   432→   432→  :ارسال به ZaiSDK\n(Send to ZaiSDK);
+   433→   433→  if (پاسخ موفق؟) then (بله)
+   434→   434→    :پس‌پردازش AI\n(AIPostProcessor);
+   435→   435→    if (خروجی معتبر؟) then (بله)
+   436→   436→      :ذخیره در کش\n(Save to Cache);
+   437→   437→    else (خیر)
+   438→   438→      :بازتولید AI\n(Regenerate AI);
+   439→   439→    endif
+   440→   440→  else (خیر - 429/تایم‌اوت)
+   441→   441→    :تحلیل قاعده‌محور\n(Rule-based Fallback);
+   442→   442→    note right: بدون هوش مصنوعی
+   443→   443→  endif
+   444→   444→else (خیر - نرخ‌محدود)
+   445→   445→  :تحلیل قاعده‌محور\n(Rule-based Fallback);
+   446→   446→endif
+   447→   447→
+   448→   448→|API Routes|
+   449→   449→:تجمیع نتایج\n(Aggregate Results);
+   450→   450→:ارسال به فرانت‌اند\n(Send to Frontend);
+   451→   451→
+   452→   452→|Frontend|
+   453→   453→:رندر نتایج تحلیل\n(Render Analysis Results);
+   454→   454→:نمایش نمودارها و متن AI\n(Display Charts & AI Text);
+   455→   455→stop
+   456→   456→
+   457→   457→@enduml
+   458→   458→===DIAGRAM_END===
+   459→   459→
+   460→   460→
+   461→   461→' ╔════════════════════════════════════════════════════════════════════════════╗
+   462→   462→' ║  DIAGRAM TYPE 10: STATE MACHINE DIAGRAM (3 levels)                        ║
+   463→   463→' ╚════════════════════════════════════════════════════════════════════════════╝
+   464→   464→
+   465→   465→
+   466→   466→===DIAGRAM_START===
+   467→   467→id: SM-L1
+   468→   468→title: نمودار ماشین حالت - سطح ۱: حالات نشست تحلیل
+   469→   469→description:
+   470→   470→  این نمودار حالات اصلی یک نشست تحلیل را از دید کلان نشان می‌دهد.
+   471→   471→  نشست از حالت بیکار شروع می‌شود و به‌ترتیب به حالات
+   472→   472→  واکشی، محاسبه، تولید و نمایش گذر می‌کند.
+   473→   473→  هر حالت نمایانگر یک مرحله اصلی پایپ‌لاین تحلیل است.
+   474→   474→  گذارها ساده و بدون شرط نگه‌دار در این سطح هستند.
+   475→   475→  نشست پس از نمایش نتایج دوباره بیکار می‌شود.
+   476→   476→level: 1
+   477→   477→code:
+   478→   478→@startuml
+   479→   479→title حالات نشست تحلیل - سطح کلان
+   480→   480→
+   481→   481→[*] -> Idle : شروع نشست
+   482→   482→
+   483→   483→Idle --> Fetching : انتخاب نماد
+   484→   484→Fetching --> Computing : داده واکشی شد
+   485→   485→Computing --> Generating : شاخص‌ها محاسبه شد
+   486→   486→Generating --> Displaying : تحلیل AI تولید شد
+   487→   487→Displaying --> Idle : نتایج نمایش داده شد
+   488→   488→
+   489→   489→note right of Idle : آماده دریافت درخواست
+   490→   490→note right of Fetching : واکشی از TSE/TGJU/Yahoo
+   491→   491→note right of Computing : محاسبه TA + تشخیص رژیم
+   492→   492→note right of Generating : تولید AI + پیش‌بینی ML
+   493→   493→note right of Displaying : نمایش نتایج به کاربر
+   494→   494→
+   495→   495→@enduml
+   496→   496→===DIAGRAM_END===
+   497→   497→
+   498→   498→
+   499→   499→===DIAGRAM_START===
+   500→   500→id: SM-L2
+   501→   501→title: نمودار ماشین حالت - سطح ۲: محرک‌ها و شرط‌های نگه‌دار
+   502→   502→description:
+   503→   503→  سطح دوم محرک‌ها (triggers) و شرط‌های نگه‌دار (guard conditions)
+   504→   504→  را برای هر گذار مشخص می‌کند. واکشی داده با شرط موفقیت/شکست
+   505→   505→  مسیرهای متفاوتی دارد. محاسبه شاخص‌ها با شرط کفایت داده انجام می‌شود.
+   506→   506→  تولید AI با شرط نرخ‌محدودی بررسی می‌شود. در صورت خطا در هر مرحله
+   507→   507→  به حالت خطا گذار می‌یابیم. حالت خطا امکان بازگشت به بیکار را دارد.
+   508→   508→  هر محرک و شرط دقیقاً مشخص شده است.
+   509→   509→level: 2
+   510→   510→code:
+   511→   511→@startuml
+   512→   512→title حالات نشست تحلیل - با محرک‌ها و شرط‌ها
+   513→   513→
+   514→   514→[*] -> Idle
+   515→   515→
+   516→   516→Idle --> Fetching : selectSymbol(symbol) / [symbol != null]
+   517→   517→
+   518→   518→Fetching --> Computing : onDataFetched(data) / [data.isValid == true]
+   519→   519→Fetching --> Fetching : onRetry() / [retryCount < 3]
+   520→   520→Fetching --> Error : onFetchFailed(err) / [retryCount >= 3]
+   521→   521→
+   522→   522→Computing --> RegimeDetection : onIndicatorsComputed() / [data.length >= minLength]
+   523→   523→Computing --> Error : onInsufficientData() / [data.length < minLength]
+   524→   524→
+   525→   525→RegimeDetection --> AIGeneration : onRegimeDetected(regime) / [regime != null]
+   526→   526→RegimeDetection --> AIGeneration : onUnknownRegime() / [regime == null]
+   527→   527→
+   528→   528→AIGeneration --> Displaying : onAISuccess(response) / [response.isValid == true]
+   529→   529→AIGeneration --> AIGeneration : onRateLimited() / [canRetry == true]
+   530→   530→AIGeneration --> FallbackAnalysis : onAIFailed() / [canRetry == false]
+   531→   531→
+   532→   532→FallbackAnalysis --> Displaying : onFallbackComplete()
+   533→   533→
+   534→   534→Displaying --> Idle : onUserDismiss() / resetSession
+   535→   535→Displaying --> Idle : onNewSymbolSelected(symbol) / [symbol != null]
+   536→   536→
+   537→   537→Error --> Idle : onUserRetry()
+   538→   538→
+   539→   539→state Error {
+   540→   540→  [*] --> ErrorActive
+   541→   541→  ErrorActive --> [*] : onReset()
+   542→   542→}
+   543→   543→
+   544→   544→note right of Fetching
+   545→   545→  محرک: onDataFetched, onRetry, onFetchFailed
+   546→   546→  شرط: اعتبارسنجی داده و تعداد تلاش
+   547→   547→end note
+   548→   548→
+   549→   549→note right of AIGeneration
+   550→   550→  محرک: onAISuccess, onRateLimited, onAIFailed
+   551→   551→  شرط: بررسی نرخ‌محدودی و اعتبار پاسخ
+   552→   552→end note
+   553→   553→
+   554→   554→@enduml
+   555→   555→===DIAGRAM_END===
+   556→   556→
+   557→   557→
+   558→   558→===DIAGRAM_START===
+   559→   559→id: SM-L3
+   560→   560→title: نمودار ماشین حالت - سطح ۳: حالات مرکب برای تولید AI
+   561→   561→description:
+   562→   562→  سطح سوم حالات مرکب (composite states) را برای فرآیند تولید AI
+   563→   563→  نشان می‌دهد. حالت AIGeneration شامل زیرحالات: بررسی نرخ‌محدود،
+   564→   564→  ارسال درخواست، دریافت پاسخ و پس‌پردازش است.
+   565→   565→  هر زیرحالت خود دارای گذارهای داخلی است.
+   566→   566→  فرآیند واکشی داده نیز به‌عنوان حالت مرکب با زیرحالات منابع
+   567→   567→  مختلف (TSE, TSETMC, TGJU, Yahoo) مدل شده است.
+   568→   568→  تایم‌اوت و تلاش مجدد در هر زیرحالت مشخص شده‌اند.
+   569→   569→level: 3
+   570→   570→code:
+   571→   571→@startuml
+   572→   572→title حالات مرکب: نشست تحلیل با زیرحالات
+   573→   573→
+   574→   574→[*] -> Idle
+   575→   575→
+   576→   576→Idle --> FetchingData : selectSymbol(symbol)
+   577→   577→
+   578→   578→state FetchingData {
+   579→   579→  [*] --> FetchFromTSE
+   580→   580→  FetchFromTSE --> FetchFromTSETMC : onTSEComplete() / [tseSuccess]
+   581→   581→  FetchFromTSE --> FetchFromTGJU : onTSEFailed() / [!tseSuccess]
+   582→   582→  FetchFromTSETMC --> MergeData : onTSETMCComplete()
+   583→   583→  FetchFromTGJU --> FetchFromYahoo : onTGJUFailed()
+   584→   584→  FetchFromYahoo --> MergeData : onYahooComplete()
+   585→   585→  FetchFromYahoo --> FetchFailed : onYahooFailed()
+   586→   586→  MergeData --> [*] : onDataReady(data)
+   587→   587→  FetchFailed --> [*] : onAllSourcesFailed()
+   588→   588→}
+   589→   589→
+   590→   590→FetchingData --> Computing : dataReady(data) / [data.valid]
+   591→   591→FetchingData --> Error : allSourcesFailed()
+   592→   592→
+   593→   593→Computing --> RegimeDetection : indicatorsReady()
+   594→   594→RegimeDetection --> AIGeneration : regimeDetected(regime)
+   595→   595→
+   596→   596→state AIGeneration {
+   597→   597→  [*] --> CheckingRateLimit
+   598→   598→  CheckingRateLimit --> BuildingPrompt : onRateAllowed() / [!rateLimited]
+   599→   599→  CheckingRateLimit --> WaitingForRateWindow : onRateLimited() / [rateLimited]
+   600→   600→  WaitingForRateWindow --> CheckingRateLimit : onRateWindowAvailable() / [waitTime > 0]
+   601→   601→
+   602→   602→  BuildingPrompt --> SendingRequest : onPromptBuilt()
+   603→   603→  SendingRequest --> ReceivingResponse : onRequestSent()
+   604→   604→  SendingRequest --> RequestTimeout : onTimeout() / [elapsed > 90s]
+   605→   605→  RequestTimeout --> RetryDecision : onTimeoutHandled()
+   606→   606→
+   607→   607→  ReceivingResponse --> PostProcessing : onResponseReceived(response) / [response.valid]
+   608→   608→  ReceivingResponse --> InvalidResponse : onResponseReceived(response) / [!response.valid]
+   609→   609→  InvalidResponse --> RetryDecision : onInvalidHandled()
+   610→   610→
+   611→   611→  RetryDecision --> BuildingPrompt : onRetryAllowed() / [retryCount < 3]
+   612→   612→  RetryDecision --> [*] : onRetryExhausted() / [retryCount >= 3]
+   613→   613→
+   614→   614→  PostProcessing --> ValidatingOutput : onPostProcessed()
+   615→   615→  ValidatingOutput --> [*] : onOutputValid()
+   616→   616→  ValidatingOutput --> RetryDecision : onOutputInvalid()
+   617→   617→}
+   618→   618→
+   619→   619→AIGeneration --> Displaying : aIResultReady(result)
+   620→   620→AIGeneration --> FallbackAnalysis : aIFailed() / [allRetriesExhausted]
+   621→   621→
+   622→   622→FallbackAnalysis --> Displaying : fallbackComplete()
+   623→   623→
+   624→   624→Displaying --> Idle : newSymbolOrDismiss()
+   625→   625→
+   626→   626→state Error {
+   627→   627→  [*] --> ErrorLogged
+   628→   628→  ErrorLogged --> [*] : onUserRetry()
+   629→   629→}
+   630→   630→
+   631→   631→note right of FetchingData
+   632→   632→  حالات مرکب واکشی داده:
+   633→   633→  TSE → TSETMC → TGJU → Yahoo
+   634→   634→  با اولویت نزولی
+   635→   635→end note
+   636→   636→
+   637→   637→note right of AIGeneration
+   638→   638→  حالات مرکب تولید AI:
+   639→   639→  ۱. بررسی نرخ‌محدود
+   640→   640→  ۲. ساخت پرامپت
+   641→   641→  ۳. ارسال درخواست
+   642→   642→  ۴. دریافت پاسخ
+   643→   643→  ۵. پس‌پردازش
+   644→   644→  ۶. اعتبارسنجی خروجی
+   645→   645→end note
+   646→   646→
+   647→   647→@enduml
+   648→   648→===DIAGRAM_END===
+   649→   649→
+   650→   650→
+   651→   651→' ╔════════════════════════════════════════════════════════════════════════════╗
+   652→   652→' ║  DIAGRAM TYPE 11: SEQUENCE DIAGRAM (3 levels)                             ║
+   653→   653→' ╚════════════════════════════════════════════════════════════════════════════╝
+   654→   654→
+   655→   655→
+   656→   656→===DIAGRAM_START===
+   657→   657→id: SEQ-L1
+   658→   658→title: نمودار دنباله - سطح ۱: تعامل لایه‌ها برای «مشاهده تحلیل»
+   659→   659→description:
+   660→   660→  این نمودار تعامل بین لایه‌های اصلی سامانه برای کاربرد
+   661→   661→  «مشاهده تحلیل» را نشان می‌دهد. از فرانت‌اند شروع شده
+   662→   662→  و به API Routes، موتور تحلیل تکنیکال و منابع داده می‌رسد.
+   663→   663→  پاسخ به‌ترتیب معکوس برمی‌گردد. این سطح بدون جزئیات
+   664→   664→  داخلی هر لایه است و فقط پیام‌های اصلی را نشان می‌دهد.
+   665→   665→  تعامل ساده و همگام فرض شده است.
+   666→   666→level: 1
+   667→   667→code:
+   668→   668→@startuml
+   669→   669→title تعامل لایه‌ها: مشاهده تحلیل نماد
+   670→   670→
+   671→   671→actor "کاربر" as User
+   672→   672→participant "Frontend\n(Next.js)" as FE
+   673→   673→participant "API Routes" as API
+   674→   674→participant "TA Engine" as TA
+   675→   675→participant "Data Sources" as DS
+   676→   676→participant "ML Engine" as ML
+   677→   677→participant "AI Engine" as AI
+   678→   678→
+   679→   679→User -> FE : انتخاب نماد (symbol)
+   680→   680→FE -> API : GET /api/analysis/{symbol}
+   681→   681→API -> DS : fetchMarketData(symbol)
+   682→   682→DS --> API : marketData
+   683→   683→API -> TA : computeIndicators(marketData)
+   684→   684→TA --> API : indicators
+   685→   685→API -> ML : predict(indicators)
+   686→   686→ML --> API : prediction
+   687→   687→API -> AI : generateAnalysis(indicators, prediction)
+   688→   688→AI --> API : analysisText
+   689→   689→API --> FE : {indicators, prediction, analysis}
+   690→   690→FE --> User : نمایش نتایج تحلیل
+   691→   691→
+   692→   692→@enduml
+   693→   693→===DIAGRAM_END===
+   694→   694→
+   695→   695→
+   696→   696→===DIAGRAM_START===
+   697→   697→id: SEQ-L2
+   698→   698→title: نمودار دنباله - سطح ۲: تعامل جزئی «تولید تحلیل AI»
+   699→   699→description:
+   700→   700→  سطح دوم تعامل دقیق برای تولید تحلیل هوش مصنوعی را نشان می‌دهد.
+   701→   701→  فرانت‌اند درخواست را به API ارسال می‌کند، API تحلیل را به MSLV4
+   702→   702→  می‌سپارد، MSLV4 پرامپت را می‌سازد و به ZaiSDK ارسال می‌کند.
+   703→   703→  ZaiSDK پاسخ خام را برمی‌گرداند و AIPostProcessor آن را
+   704→   704→  پردازش می‌کند. AnalysisMLSelector مدل مناسب را انتخاب می‌کند.
+   705→   705→  ProbabilityTrend احتمال‌ها را محاسبه می‌کند.
+   706→   706→  این سطح بدون مدیریت خطا است.
+   707→   707→level: 2
+   708→   708→code:
+   709→   709→@startuml
+   710→   710→title تعامل جزئی: تولید تحلیل AI
+   711→   711→
+   712→   712→autonumber
+   713→   713→
+   714→   714→actor "کاربر" as User
+   715→   715→participant "Frontend" as FE
+   716→   716→participant "API Route\n/analysis" as API
+   717→   717→participant "Analysis\nMLSelector" as MLSel
+   718→   718→participant "MSLV4\nModel" as MSLV4
+   719→   719→participant "Probability\nTrend" as ProbTrend
+   720→   720→participant "ZaiSDK" as Zai
+   721→   721→participant "AI\nPostProcessor" as AIPP
+   722→   722→
+   723→   723→User -> FE : requestAnalysis(symbol)
+   724→   724→FE -> API : POST /api/ai-analysis\n{symbol, indicators, regime}
+   725→   725→API -> MLSel : selectModel(indicators, regime)
+   726→   726→MLSel --> API : selectedModel = "MSLV4"
+   727→   727→
+   728→   728→API -> MSLV4 : analyze(model, indicators, marketData)
+   729→   729→MSLV4 -> MSLV4 : buildPrompt(indicators, regime)
+   730→   730→MSLV4 -> Zai : sendPrompt(prompt, config)
+   731→   731→Zai --> MSLV4 : rawAIResponse
+   732→   732→MSLV4 -> AIPP : postProcess(rawAIResponse)
+   733→   733→AIPP -> AIPP : cleanMarkdown()
+   734→   734→AIPP -> AIPP : validateStructure()
+   735→   735→AIPP -> AIPP : extractSignals()
+   736→   736→AIPP --> MSLV4 : processedAnalysis
+   737→   737→
+   738→   738→MSLV4 -> ProbTrend : computeProbability(indicators, regime)
+   739→   739→ProbTrend --> MSLV4 : probabilityResult
+   740→   740→
+   741→   741→MSLV4 --> API : {analysis, probability, signals}
+   742→   742→API --> FE : {aiText, probability, confidence}
+   743→   743→FE --> User : نمایش تحلیل AI
+   744→   744→
+   745→   745→@enduml
+   746→   746→===DIAGRAM_END===
+   747→   747→
+   748→   748→
+   749→   749→===DIAGRAM_START===
+   750→   750→id: SEQ-L3
+   751→   751→title: نمودار دنباله - سطح ۳: تعامل کامل با async، استثنا و تلاش مجدد
+   752→   752→description:
+   753→   753→  سطح سوم تعامل کامل با فراخوانی‌های ناهمگام (async)، مدیریت
+   754→   754→  استثنا و حلقه‌های تلاش مجدد (retry) را نشان می‌دهد.
+   755→   755→  واکشی داده از منابع مختلف ناهمگام انجام می‌شود.
+   756→   756→  در صورت خطای 429 از ZaiSDK، تلاش مجدد با تأخیر نمایی انجام می‌شود.
+   757→   757→  تایم‌اوت برای هر فراخوانی تنظیم شده است.
+   758→   758→  AIPostProcessor در صورت نامعتبر بودن خروجی، بازتولید درخواست می‌کند.
+   759→   759→  این سطح کامل‌ترین نمودار دنباله با تمام جزئیات خطا و تلاش مجدد است.
+   760→   760→level: 3
+   761→   761→code:
+   762→   762→@startuml
+   763→   763→title تعامل کامل: تحلیل با async، استثنا و تلاش مجدد
+   764→   764→
+   765→   765→autonumber
+   766→   766→
+   767→   767→actor "کاربر" as User
+   768→   768→participant "Frontend" as FE
+   769→   769→participant "API Route" as API
+   770→   770→participant "TSE Api" as TSE
+   771→   771→participant "TGJU Api" as TGJU
+   772→   772→participant "Yahoo Api" as Yahoo
+   773→   773→participant "TA Engine" as TA
+   774→   774→participant "Regime\nEngine" as RE
+   775→   775→participant "Decision\nGraph" as DG
+   776→   776→participant "MSLV4" as MSL
+   777→   777→participant "ZaiSDK" as Zai
+   778→   778→participant "AI Post\nProcessor" as AIPP
+   779→   779→participant "Prob\nTrend" as PT
+   780→   780→
+   781→   781→== واکشی ناهمگام داده ==
+   782→   782→User -> FE : selectSymbol("فولاد")
+   783→   783→FE -> API : GET /api/analysis/فولاد
+   784→   784→
+   785→   785→par واکشی موازی داده
+   786→   786→  API -> TSE : async fetchTSE("فولاد")
+   787→   787→  TSE --> API : tseData [بعد از 2s]
+   788→   788→and
+   789→   789→  API -> TGJU : async fetchTGJU("فولاد")
+   790→   790→  TGJU --> API : tgjuData [بعد از 3s]
+   791→   791→and
+   792→   792→  API -> Yahoo : async fetchYahoo("فولاد")
+   793→   793→  Yahoo --> API : yahooData [بعد از 1.5s]
+   794→   794→end
+   795→   795→
+   796→   796→API -> API : mergeData(tse, tgju, yahoo)
+   797→   797→
+   798→   798→alt داده ناکافی
+   799→   799→  API --> FE : 400 Insufficient Data
+   800→   800→  FE --> User : هشدار: داده ناکافی
+   801→   801→else داده کافی
+   802→   802→end
+   803→   803→
+   804→   804→== محاسبه تحلیل تکنیکال ==
+   805→   805→API -> TA : computeAll(marketData)
+   806→   806→TA --> API : indicators{RSI, MACD, BB, ...}
+   807→   807→
+   808→   808→API -> RE : detectRegime(indicators)
+   809→   809→RE --> RE : classifyADX()
+   810→   810→RE --> RE : classifyTrend()
+   811→   811→RE --> API : regime = "صعودی"
+   812→   812→
+   813→   813→API -> DG : buildGraph(indicators, regime)
+   814→   814→DG --> API : decisionGraph
+   815→   815→
+   816→   816→== پیش‌بینی ML ==
+   817→   817→API -> PT : computeProbability(indicators, regime)
+   818→   818→PT --> API : probability = 0.72
+   819→   819→
+   820→   820→== تولید AI با تلاش مجدد ==
+   821→   821→loop [تا ۳ تلاش]
+   822→   822→  API -> MSL : analyze(indicators, regime)
+   823→   823→  MSL -> MSL : buildPrompt()
+   824→   824→
+   825→   825→  opt بررسی نرخ‌محدود
+   826→   826→    MSL -> Zai : checkRateLimit()
+   827→   827→    alt نرخ‌محدود (429)
+   828→   828→      Zai --> MSL : 429 Too Many Requests
+   829→   829→      MSL -> MSL : exponentialBackoff(retryCount)
+   830→   830→      note right of MSL
+   831→   831→        تأخیر نمایی:
+   832→   832→        2^n ثانیه
+   833→   833→      end note
+   834→   834→    else نرخ مجاز
+   835→   835→    end
+   836→   836→  end
+   837→   837→
+   838→   838→  MSL -> Zai : generateText(prompt, config) [timeout: 90s]
+   839→   839→
+   840→   840→  alt پاسخ موفق
+   841→   841→    Zai --> MSL : rawResponse
+   842→   842→    MSL -> AIPP : postProcess(rawResponse)
+   843→   843→    AIPP -> AIPP : validateStructure()
+   844→   844→    alt خروجی معتبر
+   845→   845→      AIPP --> MSL : processedAnalysis
+   846→   846→      MSL --> API : finalResult
+   847→   847→    else خروجی نامعتبر
+   848→   848→      AIPP --> MSL : invalidOutput
+   849→   849→      note right of AIPP : بازتولید درخواست
+   850→   850→    end
+   851→   851→  else تایم‌اوت
+   852→   852→    Zai --> MSL : TimeoutException
+   853→   853→    MSL -> MSL : logTimeout()
+   854→   854→  else خطای 429
+   855→   855→    Zai --> MSL : RateLimitException
+   856→   856→    MSL -> MSL : incrementRetryCount()
+   857→   857→  end
+   858→   858→end
+   859→   859→
+   860→   860→alt AI موفق
+   861→   861→  API --> FE : 200 {analysis, probability, signals}
+   862→   862→  FE --> User : نمایش کامل تحلیل
+   863→   863→else AI شکست خورد
+   864→   864→  API -> API : ruleBasedFallback(indicators, regime)
+   865→   865→  API --> FE : 200 {ruleBasedAnalysis}
+   866→   866→  FE --> User : نمایش تحلیل قاعده‌محور
+   867→   867→  note right of FE : بدون AI - تحلیل جایگزین
+   868→   868→end
+   869→   869→
+   870→   870→@enduml
+   871→   871→===DIAGRAM_END===
+   872→   872→
+   873→   873→
+   874→   874→' ╔════════════════════════════════════════════════════════════════════════════╗
+   875→   875→' ║  DIAGRAM TYPE 12: COMMUNICATION DIAGRAM (3 levels)                        ║
+   876→   876→' ╚════════════════════════════════════════════════════════════════════════════╝
+   877→   877→
+   878→   878→
+   879→   879→===DIAGRAM_START===
+   880→   880→id: COMM-L1
+   881→   881→title: نمودار ارتباط - سطح ۱: پیوندهای اصلی معماری تحلیل
+   882→   882→description:
+   883→   883→  این نمودار پیوندهای ارتباطی اصلی بین اشیاء معماری تحلیل را
+   884→   884→  نشان می‌دهد. Frontend با API Routes، API با موتورهای مختلف
+   885→   885→  و موتورها با منابع داده و AI ارتباط دارند.
+   886→   886→  هر پیوند نشان‌دهنده یک رابط ارتباطی بین دو شیء است.
+   887→   887→  این سطح بدون شماره‌گذاری پیام‌ها است.
+   888→   888→  پیوندها معماری کلی سامانه را نشان می‌دهند.
+   889→   889→level: 1
+   890→   890→code:
+   891→   891→@startuml
+   892→   892→title معماری ارتباطات سامانه تحلیل
+   893→   893→
+   894→   894→object "Frontend" as FE
+   895→   895→object "API Routes" as API
+   896→   896→object "TA Engine" as TA
+   897→   897→object "Regime Engine" as RE
+   898→   898→object "Decision Graph" as DG
+   899→   899→object "ML Engine" as ML
+   900→   900→object "AI Engine" as AI
+   901→   901→object "Data Sources" as DS
+   902→   902→object "ZaiSDK" as Zai
+   903→   903→
+   904→   904→FE -- API : HTTP Request/Response
+   905→   905→API -- TA : computeIndicators()
+   906→   906→API -- RE : detectRegime()
+   907→   907→API -- DG : buildGraph()
+   908→   908→API -- ML : predict()
+   909→   909→API -- AI : generateAnalysis()
+   910→   910→AI -- Zai : AI Generation
+   911→   911→API -- DS : fetchData()
+   912→   912→
+   913→   913→note top of FE : رابط کاربر (Next.js)
+   914→   914→note bottom of DS : TSE, TGJU, Yahoo
+   915→   915→note bottom of Zai : کانال هوش مصنوعی
+   916→   916→
+   917→   917→@enduml
+   918→   918→===DIAGRAM_END===
+   919→   919→
+   920→   920→
+   921→   921→===DIAGRAM_START===
+   922→   922→id: COMM-L2
+   923→   923→title: نمودار ارتباط - سطح ۲: ترتیب پیام‌ها در محاسبه احتمال
+   924→   924→description:
+   925→   925→  سطح دوم ترتیب پیام‌ها بین زیرسامانه‌ها را در فرآیند محاسبه
+   926→   926→  احتمال روند نشان می‌دهد. API ابتدا شاخص‌ها را محاسبه می‌کند،
+   927→   927→  سپس رژیم را تشخیص می‌دهد، مدل ML را انتخاب می‌کند،
+   928→   928→  پیش‌بینی احتمال را محاسبه می‌کند و در نهایت گراف تصمیم را
+   929→   929→  می‌سازد. هر پیام شماره‌گذاری شده است.
+   930→   930→  ترتیب شماره‌ها نشان‌دهنده توالی اجرا است.
+   931→   931→level: 2
+   932→   932→code:
+   933→   933→@startuml
+   934→   934→title ترتیب پیام‌ها: محاسبه احتمال روند
+   935→   935→
+   936→   936→object "API Route" as API
+   937→   937→object "TA Engine" as TA
+   938→   938→object "Regime Engine" as RE
+   939→   939→object "AnalysisMLSelector" as MLSel
+   940→   940→object "MSLV4" as MSL
+   941→   941→object "ProbabilityTrend" as PT
+   942→   942→object "Decision Graph" as DG
+   943→   943→
+   944→   944→API -- TA
+   945→   945→API -- RE
+   946→   946→API -- MLSel
+   947→   947→API -- MSL
+   948→   948→API -- PT
+   949→   949→API -- DG
+   950→   950→MSL -- PT
+   951→   951→
+   952→   952→' شماره‌گذاری پیام‌ها
+   953→   953→API -> TA : 1. computeAll(marketData)
+   954→   954→TA -> API : 2. return indicators
+   955→   955→API -> RE : 3. detectRegime(indicators)
+   956→   956→RE -> API : 4. return regime
+   957→   957→API -> MLSel : 5. selectModel(indicators, regime)
+   958→   958→MLSel -> API : 6. return "MSLV4"
+   959→   959→API -> MSL : 7. analyze(model, indicators)
+   960→   960→MSL -> PT : 8. computeProbability(indicators, regime)
+   961→   961→PT -> MSL : 9. return probability
+   962→   962→MSL -> API : 10. return prediction
+   963→   963→API -> DG : 11. buildGraph(indicators, regime, prediction)
+   964→   964→DG -> API : 12. return decisionGraph
+   965→   965→
+   966→   966→@enduml
+   967→   967→===DIAGRAM_END===
+   968→   968→
+   969→   969→
+   970→   970→===DIAGRAM_START===
+   971→   971→id: COMM-L3
+   972→   972→title: نمودار ارتباط - سطح ۳: پیام‌های شماره‌گذاری‌شده واکشی چندمنبعی
+   973→   973→description:
+   974→   974→  سطح سوم پیام‌های شماره‌گذاری‌شده را برای سناریو پیچیده واکشی
+   975→   975→  داده از چند منبع نشان می‌دهد. API به‌ترتیب از TSE, TSETMC,
+   976→   976→  TGJU و Yahoo واکشی می‌کند. در صورت شکست هر منبع،
+   977→   977→  منبع بعدی امتحان می‌شود. پس از واکشی موفق، ادغام داده،
+   978→   978→  کش‌نوشتن و اعتبارسنجی انجام می‌شود. تمام پیام‌های داخلی
+   979→   979→  و خارجی شماره‌گذاری شده‌اند.
+   980→   980→level: 3
+   981→   981→code:
+   982→   982→@startuml
+   983→   983→title واکشی چندمنبعی: پیام‌های شماره‌گذاری‌شده
+   984→   984→
+   985→   985→object "API Route" as API
+   986→   986→object "TSE Api" as TSE
+   987→   987→object "TSETMC Index" as TSETMC
+   988→   988→object "TGJU Api" as TGJU
+   989→   989→object "Yahoo Api" as Yahoo
+   990→   990→object "Cache" as Cache
+   991→   991→object "Validator" as Val
+   992→   992→
+   993→   993→API -- TSE
+   994→   994→API -- TSETMC
+   995→   995→API -- TGJU
+   996→   996→API -- Yahoo
+   997→   997→API -- Cache
+   998→   998→API -- Val
+   999→   999→TSE -- TSETMC
+  1000→  1000→
+  1001→  1001→API -> Cache : 1. checkCache(symbol)
+  1002→  1002→Cache -> API : 2. cacheMiss
+  1003→  1003→API -> TSE : 3. fetchTSE(symbol)
+  1004→  1004→TSE -> TSETMC : 4. fetchIndexData(symbol)
+  1005→  1005→TSETMC -> TSE : 5. indexData
+  1006→  1006→TSE -> API : 6. tseData [موفق]
+  1007→  1007→API -> Val : 7. validate(tseData)
+  1008→  1008→Val -> API : 8. valid=true
+  1009→  1009→
+  1010→  1010→API -> TGJU : 9. fetchTGJU(symbol) [داده تکمیلی]
+  1011→  1011→TGJU -> API : 10. tgjuData
+  1012→  1012→API -> Val : 11. validate(tgjuData)
+  1013→  1013→Val -> API : 12. valid=true
+  1014→  1014→
+  1015→  1015→API -> Yahoo : 13. fetchYahoo(symbol) [داده بین‌المللی]
+  1016→  1016→Yahoo -> API : 14. yahooData
+  1017→  1017→API -> Val : 15. validate(yahooData)
+  1018→  1018→Val -> API : 16. valid=true
+  1019→  1019→
+  1020→  1020→API -> API : 17. mergeData(tse, tgju, yahoo)
+  1021→  1021→API -> Cache : 18. saveCache(symbol, mergedData)
+  1022→  1022→Cache -> API : 19. saved
+  1023→  1023→API -> API : 20. return mergedData
+  1024→  1024→
+  1025→  1025→note left of API
+  1026→  1026→  در صورت شکست هر منبع:
+  1027→  1027→  → منبع بعدی امتحان می‌شود
+  1028→  1028→  → اگر همه شکست خوردند: خطا
+  1029→  1029→end note
+  1030→  1030→
+  1031→  1031→@enduml
+  1032→  1032→===DIAGRAM_END===
+  1033→  1033→
+  1034→  1034→
+  1035→  1035→' ╔════════════════════════════════════════════════════════════════════════════╗
+  1036→  1036→' ║  DIAGRAM TYPE 13: INTERACTION OVERVIEW DIAGRAM (3 levels)                  ║
+  1037→  1037→' ╚════════════════════════════════════════════════════════════════════════════╝
+  1038→  1038→
+  1039→  1039→
+  1040→  1040→===DIAGRAM_START===
+  1041→  1041→id: IO-L1
+  1042→  1042→title: نمودار کلان تعامل - سطح ۱: فلوچارت ترکیب دنباله‌ها
+  1043→  1043→description:
+  1044→  1044→  این نمودار فلوچارت سطح بالایی است که دنباله‌های اصلی سامانه
+  1045→  1045→  را به‌عنوان بلوک‌های تعاملی ترکیب می‌کند. هر بلوک مرجع به یک
+  1046→  1046→  نمودار دنباله مشخص است. جریان از انتخاب نماد شروع شده
+  1047→  1047→  و به‌ترتیب از واکشی، تحلیل، پیش‌بینی و نمایش می‌گذرد.
+  1048→  1048→  PlantUML از نمودار Interaction Overview پشتیبانی محدودی دارد
+  1049→  1049→  لذا این نمودار با activity diagram با ref ها مدل شده است.
+  1050→  1050→level: 1
+  1051→  1051→code:
+  1052→  1052→@startuml
+  1053→  1053→title فلوچارت کلان تعاملات سامانه
+  1054→  1054→
+  1055→  1055→start
+  1056→  1056→
+  1057→  1057→:انتخاب نماد توسط کاربر;
+  1058→  1058→
+  1059→  1059→ref over "Frontend → API"
+  1060→  1060→  دنباله: انتخاب نماد
+  1061→  1061→  (SEQ-SelectSymbol)
+  1062→  1062→end ref
+  1063→  1063→
+  1064→  1064→if (داده کش‌شده موجود؟) then (بله)
+  1065→  1065→  :بازگرداندن نتایج کش;
+  1066→  1066→else (خیر)
+  1067→  1067→  ref over "API → DataSources"
+  1068→  1068→    دنباله: واکشی داده
+  1069→  1069→    (SEQ-FetchData)
+  1070→  1070→  end ref
+  1071→  1071→
+  1072→  1072→  ref over "API → TA Engine → Regime Engine"
+  1073→  1073→    دنباله: تحلیل تکنیکال
+  1074→  1074→    (SEQ-TAAnalysis)
+  1075→  1075→  end ref
+  1076→  1076→
+  1077→  1077→  ref over "API → ML Engine → AI Engine"
+  1078→  1078→    دنباله: پیش‌بینی و تولید AI
+  1079→  1079→    (SEQ-MLAIPrediction)
+  1080→  1080→  end ref
+  1081→  1081→endif
+  1082→  1082→
+  1083→  1083→ref over "API → Frontend"
+  1084→  1084→  دنباله: نمایش نتایج
+  1085→  1085→  (SEQ-DisplayResults)
+  1086→  1086→end ref
+  1087→  1087→
+  1088→  1088→stop
+  1089→  1089→
+  1090→  1090→@enduml
+  1091→  1091→===DIAGRAM_END===
+  1092→  1092→
+  1093→  1093→
+  1094→  1094→===DIAGRAM_START===
+  1095→  1095→id: IO-L2
+  1096→  1096→title: نمودار کلان تعامل - سطح ۲: نقاط تصمیم با ارجاع به دنباله‌ها
+  1097→  1097→description:
+  1098→  1098→  سطح دوم نقاط تصمیم را با ارجاع به نمودارهای دنباله مشخص
+  1099→  1099→  نشان می‌دهد. پس از واکشی داده، تصمیم موفقیت/شکست گرفته می‌شود.
+  1100→  1100→  بر اساس نوع رژیم، دنباله تحلیل متفاوتی فراخوانی می‌شود.
+  1101→  1101→  در صورت نرخ‌محدودی AI، دنباله جایگزین اجرا می‌شود.
+  1102→  1102→  هر بلوک تعاملی مرجع دقیق به نمودار دنباله مربوطه دارد.
+  1103→  1103→level: 2
+  1104→  1104→code:
+  1105→  1105→@startuml
+  1106→  1106→title نقاط تصمیم با ارجاع به دنباله‌ها
+  1107→  1107→
+  1108→  1108→start
+  1109→  1109→
+  1110→  1110→:دریافت درخواست تحلیل;
+  1111→  1111→
+  1112→  1112→ref over "API → Cache"
+  1113→  1113→  دنباله: بررسی کش
+  1114→  1114→  (SEQ-CacheLookup)
+  1115→  1115→end ref
+  1116→  1116→
+  1117→  1117→if (کش HIT؟) then (بله)
+  1118→  1118→  :بازگرداندن کش;
+  1119→  1119→  stop
+  1120→  1120→endif
+  1121→  1121→
+  1122→  1122→ref over "API → TSE → TGJU → Yahoo"
+  1123→  1123→  دنباله: واکشی چندمنبعی
+  1124→  1124→  (SEQ-MultiSourceFetch)
+  1125→  1125→end ref
+  1126→  1126→
+  1127→  1127→if (واکشی موفق؟) then (خیر)
+  1128→  1128→  ref over "API → Fallback"
+  1129→  1129→    دنباله: واکشی جایگزین
+  1130→  1130→    (SEQ-FallbackFetch)
+  1131→  1131→  end ref
+  1132→  1132→  if (جایگزین موفق؟) then (خیر)
+  1133→  1133→    :خطا;
+  1134→  1134→    stop
+  1135→  1135→  endif
+  1136→  1136→endif
+  1137→  1137→
+  1138→  1138→ref over "API → TA Engine"
+  1139→  1139→  دنباله: محاسبه شاخص‌ها
+  1140→  1140→  (SEQ-ComputeIndicators)
+  1141→  1141→end ref
+  1142→  1142→
+  1143→  1143→ref over "API → Regime Engine"
+  1144→  1144→  دنباله: تشخیص رژیم
+  1145→  1145→  (SEQ-DetectRegime)
+  1146→  1146→end ref
+  1147→  1147→
+  1148→  1148→switch (نوع رژیم)
+  1149→  1149→case (صعودی)
+  1150→  1150→  ref over "TA → DecisionGraph"
+  1151→  1151→    دنباله: تحلیل صعودی
+  1152→  1152→    (SEQ-BullishAnalysis)
+  1153→  1153→  end ref
+  1154→  1154→case (نزولی)
+  1155→  1155→  ref over "TA → DecisionGraph"
+  1156→  1156→    دنباله: تحلیل نزولی
+  1157→  1157→    (SEQ-BearishAnalysis)
+  1158→  1158→  end ref
+  1159→  1159→case (رنج)
+  1160→  1160→  ref over "TA → DecisionGraph"
+  1161→  1161→    دنباله: تحلیل رنج
+  1162→  1162→    (SEQ-RangeAnalysis)
+  1163→  1163→  end ref
+  1164→  1164→endswitch
+  1165→  1165→
+  1166→  1166→ref over "API → MSLV4 → ZaiSDK"
+  1167→  1167→  دنباله: تولید AI
+  1168→  1168→  (SEQ-AIGeneration)
+  1169→  1169→end ref
+  1170→  1170→
+  1171→  1171→if (AI موفق؟) then (خیر - 429)
+  1172→  1172→  ref over "API → RuleEngine"
+  1173→  1173→    دنباله: تحلیل قاعده‌محور
+  1174→  1174→    (SEQ-RuleBasedFallback)
+  1175→  1175→  end ref
+  1176→  1176→endif
+  1177→  1177→
+  1178→  1178→:تجمیع و نمایش نتایج;
+  1179→  1179→stop
+  1180→  1180→
+  1181→  1181→@enduml
+  1182→  1182→===DIAGRAM_END===
+  1183→  1183→
+  1184→  1184→
+  1185→  1185→===DIAGRAM_START===
+  1186→  1186→id: IO-L3
+  1187→  1187→title: نمودار کلان تعامل - سطح ۳: حلقه‌ها و دروازه‌های موازی
+  1188→  1188→description:
+  1189→  1189→  سطح سوم حلقه‌های تلاش مجدد و دروازه‌های موازی (parallel gates)
+  1190→  1190→  را با ارجاع به دنباله‌های جزئی نشان می‌دهد. واکشی موازی داده
+  1191→  1191→  در فورک/جوین مدل شده است. حلقه تلاش مجدد برای AI با
+  1192→  1192→  تأخیر نمودی نشان داده شده است. دروازه همگام‌سازی (sync)
+  1193→  1193→  برای ترکیب نتایج موازی استفاده شده است.
+  1194→  1194→  این سطح کامل‌ترین نمودار کلان تعامل است.
+  1195→  1195→level: 3
+  1196→  1196→code:
+  1197→  1197→@startuml
+  1198→  1198→title حلقه‌ها و دروازه‌های موازی: تعاملات کامل
+  1199→  1199→
+  1200→  1200→start
+  1201→  1201→
+  1202→  1202→:دریافت درخواست تحلیل نماد;
+  1203→  1203→
+  1204→  1204→ref over "FE → API → Cache"
+  1205→  1205→  دنباله: بررسی کش
+  1206→  1206→  (SEQ-L1-CacheLookup)
+  1207→  1207→end ref
+  1208→  1208→
+  1209→  1209→if (کش HIT) then (بله)
+  1210→  1210→  :بازگرداندن نتایج کش;
+  1211→  1211→  stop
+  1212→  1212→endif
+  1213→  1213→
+  1214→  1214→== واکشی موازی داده ==
+  1215→  1215→
+  1216→  1216→fork
+  1217→  1217→  ref over "API → TSE"
+  1218→  1218→    دنباله: واکشی TSE
+  1219→  1219→    (SEQ-FetchTSE)
+  1220→  1220→  end ref
+  1221→  1221→fork again
+  1222→  1222→  ref over "API → TGJU"
+  1223→  1223→    دنباله: واکشی TGJU
+  1224→  1224→    (SEQ-FetchTGJU)
+  1225→  1225→  end ref
+  1226→  1226→fork again
+  1227→  1227→  ref over "API → Yahoo"
+  1228→  1228→    دنباله: واکشی Yahoo
+  1229→  1229→    (SEQ-FetchYahoo)
+  1230→  1230→  end ref
+  1231→  1231→end fork
+  1232→  1232→
+  1233→  1233→if (همه منابع شکست؟) then (بله)
+  1234→  1234→  loop [تا ۲ تلاش]
+  1235→  1235→    ref over "API → FallbackSources"
+  1236→  1236→      دنباله: واکشی جایگزین
+  1237→  1237→      (SEQ-FallbackFetch)
+  1238→  1238→    end ref
+  1239→  1239→  end
+  1240→  1240→  if (هنوز شکست) then (بله)
+  1241→  1241→    :خطا;
+  1242→  1242→    stop
+  1243→  1243→  endif
+  1244→  1244→endif
+  1245→  1245→
+  1246→  1246→ref over "API → TA"
+  1247→  1247→  دنباله: محاسبه شاخص‌ها
+  1248→  1248→  (SEQ-ComputeAllIndicators)
+  1249→  1249→end ref
+  1250→  1250→
+  1251→  1251→ref over "API → Regime"
+  1252→  1252→  دنبانه: تشخیص رژیم
+  1253→  1253→  (SEQ-DetectRegime)
+  1254→  1254→end ref
+  1255→  1255→
+  1256→  1256→ref over "API → DecisionGraph"
+  1257→  1257→  دنباله: ساخت گراف تصمیم
+  1258→  1258→  (SEQ-BuildDecisionGraph)
+  1259→  1259→end ref
+  1260→  1260→
+  1261→  1261→== پیش‌بینی ML موازی ==
+  1262→  1262→
+  1263→  1263→fork
+  1264→  1264→  ref over "API → MSLV4"
+  1265→  1265→    دنباله: پیش‌بینی MSLV4
+  1266→  1266→    (SEQ-MSLV4Predict)
+  1267→  1267→  end ref
+  1268→  1268→fork again
+  1269→  1269→  ref over "API → ProbabilityTrend"
+  1270→  1270→    دنباله: محاسبه احتمال
+  1271→  1271→    (SEQ-ProbTrendCompute)
+  1272→  1272→  end ref
+  1273→  1273→end fork
+  1274→  1274→
+  1275→  1275→== تولید AI با تلاش مجدد ==
+  1276→  1276→
+  1277→  1277→loop [تا ۳ تلاش با تأخیر نمایی]
+  1278→  1278→  ref over "API → MSLV4 → ZaiSDK → AIPP"
+  1279→  1279→    دنباله: تولید و پس‌پردازش AI
+  1280→  1280→    (SEQ-AIGenerationWithPostProcess)
+  1281→  1281→  end ref
+  1282→  1282→
+  1283→  1283→  if (AI موفق و خروجی معتبر؟) then (بله)
+  1284→  1284→    break
+  1285→  1285→  else (429 یا تایم‌اوت)
+  1286→  1286→    :تأخیر نمایی: 2^n ثانیه;
+  1287→  1287→    note right
+  1288→  1288→      n = شماره تلاش
+  1289→  1289→      تأخیر: 2, 4, 8 ثانیه
+  1290→  1290→    end note
+  1291→  1291→  endif
+  1292→  1292→end
+  1293→  1293→
+  1294→  1294→if (AI شکست خورد) then (بله)
+  1295→  1295→  ref over "API → RuleEngine"
+  1296→  1296→    دنباله: تحلیل قاعده‌محور
+  1297→  1297→    (SEQ-RuleBasedFallback)
+  1298→  1298→  end ref
+  1299→  1299→endif
+  1300→  1300→
+  1301→  1301→ref over "API → Cache"
+  1302→  1302→  دنباله: ذخیره در کش
+  1303→  1303→  (SEQ-SaveCache)
+  1304→  1304→end ref
+  1305→  1305→
+  1306→  1306→ref over "API → Frontend"
+  1307→  1307→  دنباله: ارسال و نمایش نتایج
+  1308→  1308→  (SEQ-DisplayResults)
+  1309→  1309→end ref
+  1310→  1310→
+  1311→  1311→stop
+  1312→  1312→
+  1313→  1313→@enduml
+  1314→  1314→===DIAGRAM_END===
+  1315→  1315→
+  1316→  1316→
+  1317→  1317→' ╔════════════════════════════════════════════════════════════════════════════╗
+  1318→  1318→' ║  DIAGRAM TYPE 14: TIMING DIAGRAM (3 levels)                               ║
+  1319→  1319→' ╚════════════════════════════════════════════════════════════════════════════╝
+  1320→  1320→
+  1321→  1321→
+  1322→  1322→===DIAGRAM_START===
+  1323→  1323→id: TIM-L1
+  1324→  1324→title: نمودار زمان‌بندی - سطح ۱: تغییر حالات واکشی داده در زمان
+  1325→  1325→description:
+  1326→  1326→  این نمودار تغییر حالات فرآیند واکشی داده از منابع مختلف را
+  1327→  1327→  در طول زمان نشان می‌دهد. هر منبع (TSE, TSETMC, TGJU, Yahoo)
+  1328→  1328→  از حالت «آماده» به «درخواست» سپس «دریافت» و در نهایت
+  1329→  1329→  «تکمیل» گذر می‌کند. ترتیب واکشی و مدت زمان هر مرحله
+  1330→  1330→  مشخص است. PlantUML پشتیبانی محدودی از timing diagram دارد
+  1331→  1331→  لذا توصیف ساختاریافته نیز ارائه شده است.
+  1332→  1332→level: 1
+  1333→  1333→code:
+  1334→  1334→@startuml
+  1335→  1335→title زمان‌بندی واکشی داده از منابع مختلف
+  1336→  1336→
+  1337→  1337→robust "TSE API" as TSE
+  1338→  1338→robust "TSETMC Index" as TSETMC
+  1339→  1339→robust "TGJU API" as TGJU
+  1340→  1340→robust "Yahoo API" as Yahoo
+  1341→  1341→
+  1342→  1342→@0
+  1343→  1343→TSE is "آماده"
+  1344→  1344→TSETMC is "آماده"
+  1345→  1345→TGJU is "آماده"
+  1346→  1346→Yahoo is "آماده"
+  1347→  1347→
+  1348→  1348→@100
+  1349→  1349→TSE is "درخواست"
+  1350→  1350→note bottom: ارسال درخواست HTTP
+  1351→  1351→
+  1352→  1352→@200
+  1353→  1353→TSETMC is "درخواست"
+  1354→  1354→
+  1355→  1355→@500
+  1356→  1356→TSE is "دریافت"
+  1357→  1357→note bottom: شروع دریافت داده
+  1358→  1358→
+  1359→  1359→@800
+  1360→  1360→TSETMC is "دریافت"
+  1361→  1361→
+  1362→  1362→@1000
+  1363→  1363→TSE is "تکمیل"
+  1364→  1364→note bottom: داده کامل شد (1s)
+  1365→  1365→
+  1366→  1366→@1100
+  1367→  1367→TGJU is "درخواست"
+  1368→  1368→
+  1369→  1369→@1500
+  1370→  1370→TSETMC is "تکمیل"
+  1371→  1371→note bottom: داده کامل شد (1.3s)
+  1372→  1372→
+  1373→  1373→@1600
+  1374→  1374→Yahoo is "درخواست"
+  1375→  1375→
+  1376→  1376→@1800
+  1377→  1377→TGJU is "دریافت"
+  1378→  1378→
+  1379→  1379→@2100
+  1380→  1380→Yahoo is "دریافت"
+  1381→  1381→
+  1382→  1382→@2400
+  1383→  1383→TGJU is "تکمیل"
+  1384→  1384→note bottom: داده کامل شد (1.3s)
+  1385→  1385→
+  1386→  1386→@2700
+  1387→  1387→Yahoo is "تکمیل"
+  1388→  1388→note bottom: داده کامل شد (1.1s)
+  1389→  1389→
+  1390→  1390→@enduml
+  1391→  1391→===DIAGRAM_END===
+  1392→  1392→
+  1393→  1393→
+  1394→  1394→===DIAGRAM_START===
+  1395→  1395→id: TIM-L2
+  1396→  1396→title: نمودار زمان‌بندی - سطح ۲: تغییر حالات پس از رویدادهای خاص
+  1397→  1397→description:
+  1398→  1398→  سطح دوم تغییر حالات سامانه را پس از رویدادهای خاص نشان می‌دهد:
+  1399→  1399→  به‌روزرسانی قیمت → محاسبه مجدد تحلیل → بازتولید AI.
+  1400→  1400→  هر رویداد موجب تغییر حالت در چند شیء می‌شود.
+  1401→  1401→  به‌روزرسانی قیمت ابتدا واکشی را فعال می‌کند، سپس محاسبه
+  1402→  1402→  شاخص‌ها شروع می‌شود و در صورت تغییر رژیم، AI بازتولید می‌شود.
+  1403→  1403→  تأخیر هر مرحله مشخص شده است.
+  1404→  1404→level: 2
+  1405→  1405→code:
+  1406→  1406→@startuml
+  1407→  1407→title زمان‌بندی: به‌روزرسانی قیمت → محاسبه مجدد → بازتولید AI
+  1408→  1408→
+  1409→  1409→robust "DataFetcher" as DF
+  1410→  1410→robust "TAEngine" as TA
+  1411→  1411→robust "RegimeEngine" as RE
+  1412→  1412→robust "AIEngine" as AI
+  1413→  1413→robust "Display" as DISP
+  1414→  1414→
+  1415→  1415→@0
+  1416→  1416→DF is "بیکار"
+  1417→  1417→TA is "بیکار"
+  1418→  1418→RE is "بیکار"
+  1419→  1419→AI is "بیکار"
+  1420→  1420→DISP is "بیکار"
+  1421→  1421→
+  1422→  1422→note bottom of DF
+  1423→  1423→  رویداد: به‌روزرسانی قیمت
+  1424→  1424→  (Price Update Event)
+  1425→  1425→end note
+  1426→  1426→
+  1427→  1427→@0
+  1428→  1428→DF is "واکشی"
+  1429→  1429→
+  1430→  1430→@3000
+  1431→  1431→DF is "آماده"
+  1432→  1432→TA is "محاسبه"
+  1433→  1433→note bottom of TA: محاسبه شاخص‌ها شروع
+  1434→  1434→
+  1435→  1435→@5000
+  1436→  1436→TA is "تکمیل"
+  1437→  1437→RE is "تشخیص"
+  1438→  1438→note bottom of RE: تشخیص رژیم
+  1439→  1439→
+  1440→  1440→@5500
+  1441→  1441→RE is "تکمیل"
+  1442→  1442→
+  1443→  1443→@5600
+  1444→  1444→AI is "درخواست"
+  1445→  1445→note bottom of AI
+  1446→  1446→  ارسال به ZaiSDK
+  1447→  1447→  (رژیم تغییر کرده)
+  1448→  1448→end note
+  1449→  1449→
+  1450→  1450→@9000
+  1451→  1451→AI is "تکمیل"
+  1452→  1452→DISP is "رندر"
+  1453→  1453→note bottom of DISP: رندر نتایج جدید
+  1454→  1454→
+  1455→  1455→@9200
+  1456→  1456→DISP is "بیکار"
+  1457→  1457→DF is "بیکار"
+  1458→  1458→TA is "بیکار"
+  1459→  1459→RE is "بیکار"
+  1460→  1460→AI is "بیکار"
+  1461→  1461→
+  1462→  1462→@enduml
+  1463→  1463→===DIAGRAM_END===
+  1464→  1464→
+  1465→  1465→
+  1466→  1466→===DIAGRAM_START===
+  1467→  1467→id: TIM-L3
+  1468→  1468→title: نمودار زمان‌بندی - سطح ۳: محدودیت‌های مدت زمان
+  1469→  1469→description:
+  1470→  1470→  سطح سوم محدودیت‌های مدت زمان (duration constraints) را برای
+  1471→  1471→  هر مرحله مشخص می‌کند. واکشی داده < 8s، محاسبه TA < 2s،
+  1472→  1472→  تولید AI < 90s، و کل فرآیند < 120s. هر محدودیت به‌عنوان
+  1473→  1473→  constraint روی نمودار نشان داده شده است.
+  1474→  1474→  در صورت تجاوز محدودیت، تایم‌اوت فعال می‌شود.
+  1475→  1475→  این سطح برای تحلیل عملکرد و SLA سامانه حیاتی است.
+  1476→  1476→level: 3
+  1477→  1477→code:
+  1478→  1478→@startuml
+  1479→  1479→title محدودیت‌های مدت زمان: SLA سامانه تحلیل
+  1480→  1480→
+  1481→  1481→robust "DataFetch\n[max 8s]" as DF
+  1482→  1482→robust "TA Compute\n[max 2s]" as TA
+  1483→  1483→robust "Regime Detect\n[max 1s]" as RE
+  1484→  1484→robust "ML Predict\n[max 5s]" as ML
+  1485→  1485→robust "AI Generate\n[max 90s]" as AI
+  1486→  1486→robust "PostProcess\n[max 3s]" as PP
+  1487→  1487→robust "Total Pipeline\n[max 120s]" as TOTAL
+  1488→  1488→
+  1489→  1489→@0
+  1490→  1490→DF is "آماده"
+  1491→  1491→TA is "آماده"
+  1492→  1492→RE is "آماده"
+  1493→  1493→ML is "آماده"
+  1494→  1494→AI is "آماده"
+  1495→  1495→PP is "آماده"
+  1496→  1496→TOTAL is "آماده"
+  1497→  1497→
+  1498→  1498→' مرحله ۱: واکشی داده (0-8s)
+  1499→  1499→@0
+  1500→  1500→DF is "واکشی"
+  1501→  1501→TOTAL is "درحال‌اجرا"
+  1502→  1502→
+  1503→  1503→@4000
+  1504→  1504→DF is "تکمیل"
+  1505→  1505→note bottom
+  1506→  1506→  مدت: ~4s
+  1507→  1507→  محدودیت: < 8s ✓
+  1508→  1508→  {DF.duration < 8s}
+  1509→  1509→end note
+  1510→  1510→
+  1511→  1511→' مرحله ۲: محاسبه TA (4-6s)
+  1512→  1512→@4000
+  1513→  1513→TA is "محاسبه"
+  1514→  1514→
+  1515→  1515→@5500
+  1516→  1516→TA is "تکمیل"
+  1517→  1517→note bottom
+  1518→  1518→  مدت: ~1.5s
+  1519→  1519→  محدودیت: < 2s ✓
+  1520→  1520→  {TA.duration < 2s}
+  1521→  1521→end note
+  1522→  1522→
+  1523→  1523→' مرحله ۳: تشخیص رژیم (5.5-6.5s)
+  1524→  1524→@5500
+  1525→  1525→RE is "تشخیص"
+  1526→  1526→
+  1527→  1527→@6000
+  1528→  1528→RE is "تکمیل"
+  1529→  1529→note bottom
+  1530→  1530→  مدت: ~0.5s
+  1531→  1531→  محدودیت: < 1s ✓
+  1532→  1532→  {RE.duration < 1s}
+  1533→  1533→end note
+  1534→  1534→
+  1535→  1535→' مرحله ۴: پیش‌بینی ML (6-11s)
+  1536→  1536→@6000
+  1537→  1537→ML is "پیش‌بینی"
+  1538→  1538→
+  1539→  1539→@9000
+  1540→  1540→ML is "تکمیل"
+  1541→  1541→note bottom
+  1542→  1542→  مدت: ~3s
+  1543→  1543→  محدودیت: < 5s ✓
+  1544→  1544→  {ML.duration < 5s}
+  1545→  1545→end note
+  1546→  1546→
+  1547→  1547→' مرحله ۵: تولید AI (9-99s)
+  1548→  1548→@9000
+  1549→  1549→AI is "تولید"
+  1550→  1550→
+  1551→  1551→@45000
+  1552→  1552→AI is "تکمیل"
+  1553→  1553→note bottom
+  1554→  1554→  مدت: ~36s
+  1555→  1555→  محدودیت: < 90s ✓
+  1556→  1556→  {AI.duration < 90s}
+  1557→  1557→end note
+  1558→  1558→
+  1559→  1559→' مرحله ۶: پس‌پردازش (45-48s)
+  1560→  1560→@45000
+  1561→  1561→PP is "پردازش"
+  1562→  1562→
+  1563→  1563→@47000
+  1564→  1564→PP is "تکمیل"
+  1565→  1565→note bottom
+  1566→  1566→  مدت: ~2s
+  1567→  1567→  محدودیت: < 3s ✓
+  1568→  1568→  {PP.duration < 3s}
+  1569→  1569→end note
+  1570→  1570→
+  1571→  1571→@47000
+  1572→  1572→TOTAL is "تکمیل"
+  1573→  1573→note bottom
+  1574→  1574→  مدت کل: ~47s
+  1575→  1575→  محدودیت: < 120s ✓
+  1576→  1576→  {Total.duration < 120s}
+  1577→  1577→  
+  1578→  1578→  جمع محدودیت‌ها:
+  1579→  1579→  DF(8) + TA(2) + RE(1) +
+  1580→  1580→  ML(5) + AI(90) + PP(3)
+  1581→  1581→  = 109s < 120s ✓
+  1582→  1582→end note
+  1583→  1583→
+  1584→  1584→@enduml
+  1585→  1585→===DIAGRAM_END===
+  1586→  1586→
+  1587→  1587→
+  1588→  1588→' ============================================================================
+  1589→  1589→' خلاصه نمودارها
+  1590→  1590→' ============================================================================
+  1591→  1591→'
+  1592→  1592→' نمودارهای رفتی (Behavioral):
+  1593→  1593→'   8.  Use Case:        UC-L1, UC-L2, UC-L3
+  1594→  1594→'   9.  Activity:        ACT-L1, ACT-L2, ACT-L3
+  1595→  1595→'   10. State Machine:   SM-L1, SM-L2, SM-L3
+  1596→  1596→'
+  1597→  1597→' نمودارهای تعاملی (Interaction):
+  1598→  1598→'   11. Sequence:        SEQ-L1, SEQ-L2, SEQ-L3
+  1599→  1599→'   12. Communication:   COMM-L1, COMM-L2, COMM-L3
+  1600→  1600→'   13. Interaction Overview: IO-L1, IO-L2, IO-L3
+  1601→  1601→'   14. Timing:          TIM-L1, TIM-L2, TIM-L3
+  1602→  1602→'
+  1603→  1603→' مجموع: 7 نوع × 3 سطح = 21 نمودار
+  1604→  1604→' ============================================================================
+  1605→  1605→

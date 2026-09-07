@@ -1,0 +1,1880 @@
+' ============================================================================
+' سامانه تحلیل تکنیکال مالی ایران - Persian Financial Technical Analysis System
+' UML 2.5 Structural Diagrams (7 types × 3 levels = 21 diagrams)
+' ============================================================================
+
+===DIAGRAM_START===
+id: uml-class-l1
+title: نمودار کلاس - سطح دامنه
+description:
+  این نمودار ساختار دامنه اصلی سامانه تحلیل تکنیکال مالی ایران را نمایش می‌دهد.
+  هفت کلاس اصلی دامنه با مسئولیت‌های کلیدی خود نشان داده شده‌اند.
+  TAEngine هسته تحلیل تکنیکال با بیش از ۶۰ اندیکاتور است.
+  RegimeEngine تشخیص رژیم بازار را با منطق فازی و مارکوف انجام می‌دهد.
+  DecisionGraph گراف تصمیم‌گیری با ۳۴ گره و ۵۵ یال را مدیریت می‌کند.
+  MLEngine مدل یادگیری ماشین لجستیک‌رجression را آموزش و اجرا می‌کند.
+  SRAnalyzer سطوح حمایت و مقاومت را شناسایی و بهینه‌سازی می‌کند.
+  AIPostProcessor خروجی متنی هوش مصنوعی را پردازش و اصلاح می‌کند.
+  ZaiShared خدمات مشترک هوش مصنوعی و محدودکننده نرخ را فراهم می‌کند.
+level: 1
+code:
+@startuml
+' نمودار کلاس سطح ۱ - مدل دامنه
+skinparam classAttributeIconSize 0
+skinparam monochrome false
+skinparam shadowing true
+
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار کلاس - سطح ۱: مدل دامنه
+
+note as N1
+  این نمودار کلاس‌های اصلی دامنه
+  و مسئولیت‌های کلیدی آن‌ها را
+  نمایش می‌دهد. هر کلاس نقش
+  محوری در سامانه دارد.
+end note
+
+class TAEngine <<Core>> {
+  +analyze()
+  +calcTrend()
+  +linearRegression()
+}
+
+class RegimeEngine <<Core>> {
+  +detectRegime()
+  +fuzzyMembership()
+  +markovTransition()
+  +weightedVote()
+}
+
+class DecisionGraph <<Core>> {
+  +buildGraph()
+  +computePaths()
+  +normalizeWeights()
+}
+
+class MLEngine <<ML>> {
+  +trainAdaptive()
+  +predict()
+  +getCachedWeights()
+}
+
+class SRAnalyzer <<Analysis>> {
+  +detectLevels()
+  +mlOptimize()
+  +computeStrength()
+}
+
+class AIPostProcessor <<AI>> {
+  +stripCodes()
+  +fixPersian()
+  +validatePrices()
+  +fixDirection()
+}
+
+class ZaiShared <<Infra>> {
+  +dedicatedAIChatCompletion()
+  +rateLimitedPageReader()
+  +getZai()
+}
+
+TAEngine --> RegimeEngine : استفاده
+TAEngine --> SRAnalyzer : تحلیل سطح
+DecisionGraph --> RegimeEngine : رژیم‌ها
+MLEngine --> TAEngine : اندیکاتورها
+AIPostProcessor --> ZaiShared : فراخوانی AI
+DecisionGraph --> MLEngine : پیش‌بینی
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-class-l2
+title: نمودار کلاس - سطح طراحی
+description:
+  نمودار سطح طراحی با ارتباطات دقیق، تجمیع، ترکیب و چندگانگی.
+  TAEngine به‌صورت ترکیب شامل RegimeEngine و SRAnalyzer است.
+  DecisionGraph به‌صورت تجمیع شامل MLEngine و ProbabilityTrend است.
+  MLEngine با BayesianWeights ارتباط ترکیب دارد.
+  CompositeScores از چند موتور نمرات مرکب محاسبه می‌کند.
+  AnalysisMLSelector ترکیب روش‌های تحلیلی را انتخاب می‌کند.
+  VolumeProfile و CandlestickPatterns بخش‌های تحلیلی هستند.
+  چندگانگی و جهت ارتباطات به‌دقت مشخص شده‌اند.
+level: 2
+code:
+@startuml
+' نمودار کلاس سطح ۲ - طراحی با ارتباطات
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار کلاس - سطح ۲: طراحی
+
+class TAEngine {
+  +analyze()
+  +calcTrend()
+  +linearRegression()
+  -indicators: Map<string, Function>
+  -candlesticks: Candlestick[]
+}
+
+class RegimeEngine {
+  +detectRegime()
+  +fuzzyMembership()
+  +markovTransition()
+  +weightedVote()
+  -regimes: Regime[]
+  -transitionMatrix: number[][]
+}
+
+class DecisionGraph {
+  +buildGraph()
+  +computePaths()
+  +normalizeWeights()
+  -nodes: GraphNode[34]
+  -edges: GraphEdge[55]
+}
+
+class MLEngine {
+  +trainAdaptive()
+  +predict()
+  +getCachedWeights()
+  -model: LogisticRegression
+  -cache: WeightsCache
+}
+
+class SRAnalyzer {
+  +detectLevels()
+  +mlOptimize()
+  +computeStrength()
+  -levels: SRLevel[]
+  -strengthThreshold: number
+}
+
+class AIPostProcessor {
+  +stripCodes()
+  +fixPersian()
+  +validatePrices()
+  +fixDirection()
+}
+
+class ZaiShared {
+  +dedicatedAIChatCompletion()
+  +rateLimitedPageReader()
+  +getZai()
+}
+
+class ProbabilityTrend {
+  +calculateCDF()
+  +buildTrend()
+  +getInterpretation()
+}
+
+class CompositeScores {
+  +calcTrendStrength()
+  +calcSRStrength()
+}
+
+class AnalysisMLSelector {
+  +selectCombination()
+  +selectMethods()
+}
+
+class BayesianWeights {
+  +updateWeights()
+  +prior()
+  +posterior()
+}
+
+class VolumeProfile {
+  +approximate()
+  +countTouch()
+  +poc()
+}
+
+class CandlestickPatterns {
+  +detectClassic()
+  +detectHarmonic()
+  +detectElliott()
+}
+
+' ترکیب - TAEngine مالک RegimeEngine و SRAnalyzer است
+TAEngine *-- "1" RegimeEngine : <<composition>>
+TAEngine *-- "1" SRAnalyzer : <<composition>>
+TAEngine *-- "1" VolumeProfile : <<composition>>
+TAEngine *-- "1" CandlestickPatterns : <<composition>>
+
+' تجمیع - DecisionGraph استفاده می‌کند اما مالک نیست
+DecisionGraph o-- "1" MLEngine : <<aggregation>>
+DecisionGraph o-- "1..*" ProbabilityTrend : <<aggregation>>
+DecisionGraph --> "1" CompositeScores : محاسبه نمرات
+
+MLEngine *-- "1" BayesianWeights : <<composition>>
+MLEngine --> "1" AnalysisMLSelector : انتخاب روش
+
+CompositeScores --> "1" TAEngine : اندیکاتورها
+CompositeScores --> "1" SRAnalyzer : سطوح
+
+AIPostProcessor --> "1" ZaiShared : فراخوانی AI
+TAEngine --> "0..1" ProbabilityTrend : روند احتمالی
+
+note right of TAEngine
+  هسته اصلی تحلیل تکنیکال
+  شامل بیش از ۶۰ اندیکاتور
+  و زیرسیستم‌های تحلیلی
+end note
+
+note right of DecisionGraph
+  گراف تصمیم‌گیری با
+  ۳۴ گره و ۵۵ یال
+  مسیرهای تصمیم را محاسبه می‌کند
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-class-l3
+title: نمودار کلاس - سطح پیاده‌سازی
+description:
+  نمودار سطح پیاده‌سازی با تمام متدها، پارامترها، انواع بازگشتی و نماد دید.
+  هر کلاس با امضای کامل متدها و فیلدها نمایش داده شده است.
+  نوع‌های generics، اینترفیس‌ها و abstract classها مشخص هستند.
+  وابستگی تزریق و الگوی طراحی استفاده شده قابل مشاهده است.
+  تمام فیلدها با نوع و modifier نمایش داده شده‌اند.
+  این سطح برای پیاده‌سازی مستقیم کد قابل استفاده است.
+level: 3
+code:
+@startuml
+' نمودار کلاس سطح ۳ - پیاده‌سازی کامل
+skinparam classAttributeIconSize 0
+
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار کلاس - سطح ۳: پیاده‌سازی
+
+abstract class BaseEngine {
+  #logger: Logger
+  #config: EngineConfig
+  +{abstract} initialize(config: EngineConfig): Promise<void>
+  +{abstract} shutdown(): Promise<void>
+  #validateInput(data: MarketData): boolean
+}
+
+class TAEngine {
+  -_indicators: Map<string, IndicatorFn>
+  -_candlesticks: Candlestick[]
+  -_results: AnalysisResult[]
+  -_regimeEngine: RegimeEngine
+  -_srAnalyzer: SRAnalyzer
+  -_volumeProfile: VolumeProfile
+  -_patterns: CandlestickPatterns
+  +constructor(config: EngineConfig)
+  +analyze(symbol: string, period: Period): Promise<AnalysisResult>
+  +calcTrend(data: number[]): TrendDirection
+  +linearRegression(x: number[], y: number[]): RegressionResult
+  +getIndicator(name: string): IndicatorFn | null
+  +listIndicators(): string[]
+  +computeRSI(candles: Candlestick[], period: number): number[]
+  +computeMACD(candles: Candlestick[], fast: number, slow: number, signal: number): MACDResult
+  +computeBollinger(candles: Candlestick[], period: number, stdDev: number): BollingerResult
+  +computeStochastic(candles: Candlestick[], kPeriod: number, dPeriod: number): StochasticResult
+  +computeADX(candles: Candlestick[], period: number): number
+  +computeATR(candles: Candlestick[], period: number): number
+  -preprocessData(raw: RawData): Candlestick[]
+  -cacheResult(key: string, result: AnalysisResult): void
+}
+
+class RegimeEngine {
+  -_regimes: Regime[]
+  -_transitionMatrix: number[][]
+  -_fuzzySets: FuzzySet[]
+  -_currentRegime: Regime | null
+  +constructor(config: RegimeConfig)
+  +detectRegime(marketData: MarketData): Promise<RegimeResult>
+  +fuzzyMembership(value: number, set: FuzzySet): number
+  +markovTransition(current: Regime, next: Regime): number
+  +weightedVote(regimes: RegimeResult[]): RegimeResult
+  +getCurrentRegime(): Regime | null
+  +getTransitionMatrix(): number[][]
+  -initializeFuzzySets(): FuzzySet[]
+  -computeTransitionProb(history: Regime[]): number[][]
+}
+
+class DecisionGraph {
+  -_nodes: Map<string, GraphNode>
+  -_edges: GraphEdge[]
+  -_adjacency: Map<string, Set<string>>
+  -_weights: Map<string, number>
+  +constructor()
+  +buildGraph(regime: RegimeResult, analysis: AnalysisResult): void
+  +computePaths(start: string, end: string): Path[]
+  +normalizeWeights(): void
+  +addNode(node: GraphNode): void
+  +addEdge(from: string, to: string, weight: number): void
+  +getNode(id: string): GraphNode | undefined
+  +getEdge(from: string, to: string): GraphEdge | undefined
+  +topologicalSort(): string[]
+  +shortestPath(source: string, target: string): Path
+  -validateAcyclic(): boolean
+  -propagateWeights(): void
+}
+
+class MLEngine {
+  -_model: LogisticRegression
+  -_cache: WeightsCache
+  -_featureNames: string[]
+  -_bayesianWeights: BayesianWeights
+  +constructor(modelPath: string)
+  +trainAdaptive(features: Feature[][], labels: number[]): TrainingResult
+  +predict(features: Feature[]): PredictionResult
+  +getCachedWeights(modelId: string): Weights | null
+  +updateModel(data: TrainingData): Promise<void>
+  +evaluate(testData: TestData[]): EvaluationMetrics
+  +featureImportance(): Map<string, number>
+  -preprocessFeatures(raw: Feature[][]): Feature[][]
+  -splitTrainTest(data: Data[], ratio: number): SplitResult
+  -saveModel(path: string): Promise<void>
+  -loadModel(path: string): Promise<void>
+}
+
+class SRAnalyzer {
+  -_levels: SRLevel[]
+  -_strengthThreshold: number
+  -_mlOptimizer: MLEngine
+  +constructor(threshold: number)
+  +detectLevels(candles: Candlestick[], method: SRMethod): SRLevel[]
+  +mlOptimize(levels: SRLevel[], features: Feature[]): SRLevel[]
+  +computeStrength(level: SRLevel, candles: Candlestick[]): number
+  +mergeLevels(levels: SRLevel[], tolerance: number): SRLevel[]
+  +classifyLevels(levels: SRLevel[]): ClassifiedSR
+  +getNearestLevels(price: number, count: number): SRLevel[]
+  -calculateTouchCount(level: number, candles: Candlestick[]): number
+  -computeVolumeAtLevel(level: number, profile: VolumeProfile): number
+}
+
+class AIPostProcessor {
+  -_codePatterns: RegExp[]
+  -_persianRules: PersianFixRule[]
+  +constructor()
+  +stripCodes(text: string): string
+  +fixPersian(text: string): string
+  +validatePrices(text: string, currentPrice: number): ValidationResult
+  +fixDirection(text: string, trend: TrendDirection): string
+  +process(text: string, context: AIContext): string
+  -applyPersianTypographics(text: string): string
+  -normalizeNumbers(text: string): string
+  -fixZwnj(text: string): string
+}
+
+class ZaiShared {
+  -_client: ZAIClient
+  -_rateLimiter: RateLimiter
+  -_cache: ResponseCache
+  +constructor(apiKey: string)
+  +dedicatedAIChatCompletion(params: ChatParams): Promise<ChatResponse>
+  +rateLimitedPageReader(url: string, opts?: ReaderOpts): Promise<PageContent>
+  +getZai(): ZAIClient
+  +setRateLimit(rps: number): void
+  +clearCache(): void
+  -enforceRateLimit(): Promise<void>
+  -cacheResponse(key: string, response: ChatResponse): void
+  -handleError(error: APIError): never
+}
+
+class ProbabilityTrend {
+  -_cdf: Map<number, number>
+  -_trend: TrendResult
+  +constructor()
+  +calculateCDF(data: number[]): Map<number, number>
+  +buildTrend(cdf: Map<number, number>): TrendResult
+  +getInterpretation(trend: TrendResult): PersianInterpretation
+  +getConfidence(): number
+  -fitDistribution(data: number[]): DistributionFit
+}
+
+class BayesianWeights {
+  -_prior: Map<string, number>
+  -_posterior: Map<string, number>
+  -_likelihood: Map<string, number>
+  +constructor(prior: Map<string, number>)
+  +updateWeights(evidence: Evidence): Map<string, number>
+  +prior(): Map<string, number>
+  +posterior(): Map<string, number>
+  -computeLikelihood(evidence: Evidence): Map<string, number>
+  -normalize(weights: Map<string, number>): Map<string, number>
+}
+
+class VolumeProfile {
+  -_bins: VolumeBin[]
+  -_pocPrice: number
+  +constructor(binSize: number)
+  +approximate(candles: Candlestick[]): VolumeBin[]
+  +countTouch(price: number, tolerance: number): number
+  +poc(): number
+  +getVA(high: boolean): number
+  -binCandles(candles: Candlestick[]): VolumeBin[]
+}
+
+class CandlestickPatterns {
+  -_detected: PatternResult[]
+  +constructor()
+  +detectClassic(candles: Candlestick[]): PatternResult[]
+  +detectHarmonic(candles: Candlestick[], minLen: number): PatternResult[]
+  +detectElliott(candles: Candlestick[]): PatternResult[]
+  +getPattern(name: string): PatternResult | undefined
+  -matchDoji(candle: Candlestick): boolean
+  -matchEngulfing(prev: Candlestick, curr: Candlestick): boolean
+  -matchHammer(candle: Candlestick): boolean
+}
+
+BaseEngine <|-- TAEngine
+BaseEngine <|-- RegimeEngine
+BaseEngine <|-- MLEngine
+
+TAEngine *-- "1" RegimeEngine : _regimeEngine
+TAEngine *-- "1" SRAnalyzer : _srAnalyzer
+TAEngine *-- "1" VolumeProfile : _volumeProfile
+TAEngine *-- "1" CandlestickPatterns : _patterns
+
+DecisionGraph o-- "1" MLEngine
+DecisionGraph o-- "0..*" ProbabilityTrend
+
+MLEngine *-- "1" BayesianWeights : _bayesianWeights
+SRAnalyzer --> "0..1" MLEngine : _mlOptimizer
+
+AIPostProcessor --> "1" ZaiShared
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-object-l1
+title: نمودار شیء - نشست تحلیل نمونه
+description:
+  این نمودار یک نشست تحلیل نمونه را با نمونه‌های واقعی نمایش می‌دهد.
+  کاربر نماد «فولاد» را برای بازه روزانه تحلیل می‌کند.
+  TAEngine با پارامترهای مشخص شده فعال است.
+  RegimeEngine رژیم «روند صعودی» را تشخیص می‌دهد.
+  DecisionGraph با ۳۴ گره و ۵۵ یال ساخته شده است.
+  SRAnalyzer سطوح ۸,۵۰۰ و ۹,۲۰۰ را شناسایی کرده است.
+  MLEngine مدل لجستیک‌رجression را با وزن‌های کش‌شده اجرا می‌کند.
+level: 1
+code:
+@startuml
+' نمودار شیء سطح ۱ - نشست تحلیل نمونه
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار شیء - سطح ۱: نشست تحلیل نمونه
+
+object session {
+  symbol = "فولاد"
+  period = "daily"
+  startTime = "1403/12/15 09:00"
+  status = "completed"
+}
+
+object taEngine {
+  indicators = 63
+  candlestickCount = 250
+  lastAnalysis = "1403/12/15"
+}
+
+object regimeEngine {
+  currentRegime = "روند صعودی"
+  confidence = 0.78
+  fuzzyMembership = 0.82
+}
+
+object decisionGraph {
+  nodeCount = 34
+  edgeCount = 55
+  bestPath = "N1→N5→N12→N28→N34"
+  pathWeight = 0.85
+}
+
+object mlEngine {
+  modelType = "LogisticRegression"
+  accuracy = 0.74
+  cachedWeightsId = "w_v4_2024"
+}
+
+object srAnalyzer {
+  supportLevels = [8500, 8200, 7900]
+  resistanceLevels = [9200, 9500, 9800]
+  nearestSupport = 8500
+  nearestResistance = 9200
+}
+
+object result {
+  trend = "صعودی"
+  strength = 0.72
+  recommendation = "خرید"
+  confidence = 0.81
+}
+
+session --> taEngine : استفاده
+taEngine --> regimeEngine : تشخیص رژیم
+taEngine --> srAnalyzer : شناسایی سطوح
+taEngine --> decisionGraph : ساخت گراف
+decisionGraph --> mlEngine : پیش‌بینی
+taEngine --> result : تولید نتیجه
+
+note right of session
+  نشست تحلیل نماد فولاد
+  در تاریخ ۱۵ اسفند ۱۴۰۳
+  با نتیجه نهایی «خرید»
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-object-l2
+title: نمودار شیء - محاسبه احتمال
+description:
+  نمودار نمونه‌ها در حین محاسبه روند احتمالی.
+  ProbabilityTrend توزیع تجمعی را محاسبه می‌کند.
+  BayesianWeights وزن‌های پیشین و پسین را نگهداری می‌کند.
+  CompositeScores نمرات مرکب از چند موتور محاسبه می‌کند.
+  AnalysisMLSelector ترکیب بهینه روش‌ها را انتخاب می‌کند.
+  مقادیر واقعی هر شیء در لحظه محاسبه نمایش داده شده است.
+level: 2
+code:
+@startuml
+' نمودار شیء سطح ۲ - محاسبه احتمال
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار شیء - سطح ۲: محاسبه احتمال
+
+object probTrend {
+  cdfPoints = 50
+  distribution = "normal"
+  trendValue = 0.68
+  interpretation = "احتمال روند صعودی متوسط"
+}
+
+object bayesianWeights {
+  prior = {RSI: 0.15, MACD: 0.20, ADX: 0.12, SR: 0.18, Volume: 0.10, Pattern: 0.25}
+  posterior = {RSI: 0.18, MACD: 0.22, ADX: 0.10, SR: 0.20, Volume: 0.08, Pattern: 0.22}
+  evidence = "last_30_candles"
+}
+
+object compositeScores {
+  trendStrength = 0.72
+  srStrength = 0.65
+  volumeStrength = 0.58
+  patternStrength = 0.81
+  overallScore = 0.69
+}
+
+object mlSelector {
+  selectedCombination = "RSI+MACD+SR+Pattern"
+  selectedMethods = ["classic", "ml_hybrid"]
+  score = 0.88
+}
+
+object cdfData {
+  x = [-2.0, -1.5, -1.0, -0.5, 0, 0.5, 1.0, 1.5, 2.0]
+  y = [0.02, 0.07, 0.16, 0.31, 0.50, 0.69, 0.84, 0.93, 0.98]
+}
+
+probTrend --> cdfData : داده‌های CDF
+bayesianWeights --> compositeScores : وزن‌دهی
+mlSelector --> compositeScores : روش‌های انتخابی
+compositeScores --> probTrend : نمرات ورودی
+
+note bottom of bayesianWeights
+  وزن‌های بیزی پسین پس از
+  مشاهده ۳۰ کندل آخر به‌روز شده
+  الگوی SR و Pattern بیشترین وزن را دارند
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-object-l3
+title: نمودار شیء - وضعیت تولید متن هوش مصنوعی
+description:
+  نمودار وضعیت دقیق اشیاء در حین تولید متن تحلیل هوش مصنوعی.
+  MSLV4 با ترکیب مکتب×سبک×لحن = ۶×۵×۶ = ۱۸۰ حالت انتخاب می‌کند.
+  AIPostProcessor متن خام خروجی AI را پردازش می‌کند.
+  ZaiShared فراخوانی API را با محدودکننده نرخ مدیریت می‌کند.
+  وضعیت هر شیء شامل مقادیر فیلدها در لحظه اجراست.
+  توالی پردازش از انتخاب سبک تا خروجی نهایی قابل ردیابی است.
+level: 3
+code:
+@startuml
+' نمودار شیء سطح ۳ - وضعیت تولید متن AI
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار شیء - سطح ۳: وضعیت تولید متن AI
+
+object mslv4 {
+  school = "کلاسیک_تکنیکال"
+  style = "رسمی_بازار"
+  tone = "محافظه‌کار"
+  schoolIdx = 2
+  styleIdx = 1
+  toneIdx = 4
+  combinationId = "2-1-4"
+  totalCombinations = 180
+}
+
+object aiPostProcessor {
+  rawInput = "## تحلیل ## نماد فولاد روند **صعودی** دارد"
+  afterStripCodes = "تحلیل نماد فولاد روند صعودی دارد"
+  afterFixPersian = "تحلیل نماد فولاد روند صعودی دارد"
+  afterValidate = "قیمت ۸۹۰۰ در محدوده معتبر"
+  afterFixDirection = "روند صعودی با حرکت رو به بالا"
+  codePatterns = 5
+  persianRules = 12
+}
+
+object zaiShared {
+  apiKey = "sk-***...***"
+  rateLimit = 10
+  currentRPS = 3.2
+  cacheSize = 256
+  lastCallTime = "1403/12/15 10:32:15"
+  pendingRequests = 0
+}
+
+object chatParams {
+  model = "gpt-4o-mini"
+  temperature = 0.7
+  maxTokens = 2048
+  systemPrompt = "شما تحلیلگر تکنیکال هستید..."
+  userMessage = "تحلیل فولاد با رژیم صعودی..."
+}
+
+object chatResponse {
+  id = "chatcmpl-abc123"
+  content = "## تحلیل ## نماد فولاد..."
+  tokensUsed = 487
+  finishReason = "stop"
+  latency = 1240
+}
+
+mslv4 --> chatParams : تنظیم پرامپت
+chatParams --> zaiShared : فراخوانی API
+zaiShared --> chatResponse : پاسخ خام
+chatResponse --> aiPostProcessor : پردازش خروجی
+
+note right of mslv4
+  ترکیب مکتب×سبک×لحن
+  ۶ × ۵ × ۶ = ۱۸۰ حالت
+  کد ترکیب فعلی: 2-1-4
+end note
+
+note left of aiPostProcessor
+  خط لوله پردازش:
+  ۱. حذف کدهای مارکداون
+  ۲. اصلاح نیم‌فاصله و تایپوگرافی
+  ۳. اعتبارسنجی قیمت‌ها
+  ۴. اصلاح جهت روند
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-component-l1
+title: نمودار مؤلفه - لایه‌های اصلی
+description:
+  این نمودار شش مؤلفه اصلی سامانه را در لایه‌های منطقی نمایش می‌دهد.
+  لایه ارائه شامل رابط کاربری وب و نمودارها است.
+  لایه API اندپوینت‌های REST را فراهم می‌کند.
+  لایه تحلیل هسته تحلیل تکنیکال و گراف تصمیم را شامل می‌شود.
+  لایه یادگیری ماشین مدل‌های ML و بیزی را مدیریت می‌کند.
+  لایه داده منابع داده بورس تهران را جمع‌آوری می‌کند.
+  لایه زیرساخت خدمات مشترک و هوش مصنوعی را فراهم می‌کند.
+level: 1
+code:
+@startuml
+' نمودار مؤلفه سطح ۱ - لایه‌های اصلی
+skinparam componentStyle uml2
+
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار مؤلفه - سطح ۱: لایه‌های اصلی
+
+package "لایه ارائه\nPresentation" {
+  component [رابط کاربری وب\nWeb UI] as UI
+  component [نمودارها و گراف‌ها\nCharts & Graphs] as Charts
+}
+
+package "لایه API" {
+  component [اندپوینت‌های REST\nREST Endpoints] as API
+}
+
+package "لایه تحلیل\nAnalysis" {
+  component [موتور تحلیل تکنیکال\nTA Engine] as TA
+  component [گراف تصمیم‌گیری\nDecision Graph] as DG
+  component [شناسایی S/R\nSR Analyzer] as SR
+}
+
+package "لایه یادگیری ماشین\nML" {
+  component [موتور ML\nML Engine] as ML
+  component [وزن‌دهی بیزی\nBayesian Weights] as BW
+}
+
+package "لایه داده\nData" {
+  component [منابع داده بورس\nMarket Data Sources] as Data
+}
+
+package "لایه زیرساخت\nInfrastructure" {
+  component [هوش مصنوعی مشترک\nShared AI] as AI
+  component [پردازش‌گر متن\nPost Processor] as PP
+}
+
+UI --> API : درخواست HTTP
+Charts --> API : داده نمودار
+API --> TA : تحلیل
+API --> DG : تصمیم
+API --> SR : سطوح
+TA --> ML : پیش‌بینی
+DG --> ML : وزن‌ها
+ML --> BW : به‌روزرسانی
+TA --> Data : کندل‌ها
+SR --> Data : قیمت‌ها
+API --> AI : تولید متن
+AI --> PP : پردازش
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-component-l2
+title: نمودار مؤلفه - زیرمؤلفه‌ها
+description:
+  نمودار زیرمؤلفه‌های هر لایه با ارتباطات داخلی و خارجی.
+  رابط کاربری شامل داشبورد، صفحه تحلیل و صفحه راهنما است.
+  API شامل اندپوینت‌های تحلیل، نمادها و شاخص‌ها است.
+  لایه تحلیل شامل موتورها، شناسایی الگو و حجم معاملات است.
+  منابع داده شامل TSE، TSETMC، TGJU و Yahoo است.
+  زیرساخت شامل محدودکننده نرخ، کش و لاگ است.
+level: 2
+code:
+@startuml
+' نمودار مؤلفه سطح ۲ - زیرمؤلفه‌ها
+skinparam componentStyle uml2
+
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار مؤلفه - سطح ۲: زیرمؤلفه‌ها
+
+package "رابط کاربری" {
+  component [داشبورد\nDashboard] as Dash
+  component [صفحه تحلیل\nAnalysis Page] as AnaPage
+  component [صفحه راهنما\nHelp Page] as HelpPage
+  component [نمودار شمعی\nCandlestick Chart] as Chart
+  component [گراف تصمیم\nDecision Viz] as GraphViz
+}
+
+package "API" {
+  component [/api/analysis] as ApiAnalysis
+  component [/api/instruments] as ApiInstr
+  component [/api/indices] as ApiIndices
+  component [/api/ai] as ApiAI
+}
+
+package "تحلیل" {
+  component [TAEngine] as TA
+  component [RegimeEngine] as RE
+  component [DecisionGraph] as DG
+  component [SRAnalyzer] as SR
+  component [CandlestickPatterns] as CP
+  component [VolumeProfile] as VP
+  component [ProbabilityTrend] as PT
+  component [CompositeScores] as CS
+}
+
+package "یادگیری ماشین" {
+  component [MLEngine] as ML
+  component [BayesianWeights] as BW
+  component [AnalysisMLSelector] as MLS
+}
+
+package "منابع داده" {
+  component [TSEApi] as TSE
+  component [TsetmcIndexApi] as TSETMC
+  component [TgjuApi] as TGJU
+  component [YahooApi] as YAHOO
+}
+
+package "زیرساخت" {
+  component [ZaiShared] as ZAI
+  component [AIPostProcessor] as PP
+  component [MSLV4] as MSL
+  component [RateLimiter] as RL
+  component [Cache] as Cache
+  component [Logger] as Log
+}
+
+Dash --> ApiAnalysis
+AnaPage --> ApiAnalysis
+AnaPage --> ApiInstr
+HelpPage --> ApiInstr
+Chart --> ApiAnalysis
+GraphViz --> ApiAnalysis
+
+ApiAnalysis --> TA
+ApiAnalysis --> DG
+ApiAnalysis --> CS
+ApiInstr --> TSE
+ApiIndices --> TSETMC
+ApiAI --> ZAI
+
+TA --> RE
+TA --> SR
+TA --> CP
+TA --> VP
+TA --> PT
+DG --> ML
+CS --> TA
+CS --> SR
+
+ML --> BW
+ML --> MLS
+
+TSE --> RL
+TSETMC --> RL
+TGJU --> RL
+YAHOO --> RL
+
+TSE --> Cache
+TSETMC --> Cache
+
+ZAI --> PP
+ZAI --> MSL
+ZAI --> RL
+
+RL --> Log
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-component-l3
+title: نمودار مؤلفه - اینترفیس‌ها
+description:
+  نمودار اینترفیس‌های فراهم‌شده و موردنیاز با امضای متدها.
+  هر مؤلفه اینترفیس‌هایی که فراهم و نیاز دارد مشخص شده است.
+  IAnalysisService تحلیل کامل و جزئی را فراهم می‌کند.
+  IDataProvider داده بازار را از منابع مختلف می‌خواند.
+  IAIService تکمیل چت هوش مصنوعی را فراهم می‌کند.
+  IMLService آموزش و پیش‌بینی مدل را فراهم می‌کند.
+  وابستگی‌ها فقط از طریق اینترفیس‌ها برقرار می‌شود.
+level: 3
+code:
+@startuml
+' نمودار مؤلفه سطح ۳ - اینترفیس‌ها
+skinparam componentStyle uml2
+
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار مؤلفه - سطح ۳: اینترفیس‌ها
+
+interface IAnalysisService <<provided>> {
+  +analyze(symbol: string, period: Period): Promise<AnalysisResult>
+  +getIndicators(symbol: string): Promise<IndicatorResult[]>
+  +getTrend(symbol: string): Promise<TrendResult>
+}
+
+interface IRegimeService <<provided>> {
+  +detectRegime(data: MarketData): Promise<RegimeResult>
+  +getCurrentRegime(): Regime | null
+}
+
+interface IGraphService <<provided>> {
+  +buildGraph(regime: RegimeResult): DecisionGraph
+  +computePaths(): Path[]
+}
+
+interface ISRService <<provided>> {
+  +detectLevels(symbol: string): Promise<SRLevel[]>
+  +computeStrength(level: SRLevel): number
+}
+
+interface IMLService <<provided>> {
+  +trainAdaptive(features: Feature[][], labels: number[]): TrainingResult
+  +predict(features: Feature[]): PredictionResult
+}
+
+interface IDataProvider <<provided>> {
+  +fetchCandlesticks(symbol: string, period: Period): Promise<Candlestick[]>
+  +fetchSymbols(): Promise<Symbol[]>
+  +fetchIndices(): Promise<Index[]>
+}
+
+interface IAIService <<provided>> {
+  +chatCompletion(params: ChatParams): Promise<ChatResponse>
+  +processText(text: string, context: AIContext): Promise<string>
+}
+
+interface ICacheService <<required>> {
+  +get(key: string): Promise<T | null>
+  +set(key: string, value: T, ttl?: number): Promise<void>
+  +invalidate(pattern: string): Promise<void>
+}
+
+interface IRateLimiter <<required>> {
+  +acquire(): Promise<void>
+  +release(): void
+  +getRemaining(): number
+}
+
+component [TAEngine] as TA
+component [RegimeEngine] as RE
+component [DecisionGraph] as DG
+component [SRAnalyzer] as SR
+component [MLEngine] as ML
+component [TSEApi] as TSE
+component [ZaiShared] as ZAI
+component [CacheManager] as CM
+component [RateLimiterService] as RLS
+
+TA -up- IAnalysisService
+TA ..> IDataProvider
+TA ..> ICacheService
+
+RE -up- IRegimeService
+
+DG -up- IGraphService
+DG ..> IMLService
+
+SR -up- ISRService
+SR ..> IMLService
+
+ML -up- IMLService
+ML ..> ICacheService
+
+TSE -up- IDataProvider
+TSE ..> IRateLimiter
+
+ZAI -up- IAIService
+ZAI ..> IRateLimiter
+
+CM -up- ICacheService
+RLS -up- IRateLimiter
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-deployment-l1
+title: نمودار استقرار - گره‌های فیزیکی
+description:
+  نمودار گره‌های فیزیکی سامانه و ارتباطات بین آن‌ها.
+  مرورگر کاربر نقطه ورود به سامانه است.
+  سرور Next.js میزبان برنامه و API است.
+  سرور PlantUML برای رندر نمودارها استفاده می‌شود.
+  منابع داده بورس تهران خارج از سامانه هستند.
+  ارتباطات با پروتکل‌های مشخص شده‌اند.
+level: 1
+code:
+@startuml
+' نمودار استقرار سطح ۱ - گره‌های فیزیکی
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار استقرار - سطح ۱: گره‌های فیزیکی
+
+node "مرورگر کاربر\nBrowser" as browser {
+  artifact [SPA Client]
+}
+
+node "سرور Next.js\nApplication Server" as appserver {
+  artifact [Next.js App]
+}
+
+node "سرور PlantUML\nDiagram Renderer" as plantuml {
+  artifact [PlantUML Server]
+}
+
+node "منابع داده بورس\nMarket Data Sources" as datasource {
+  artifact [TSE API]
+  artifact [TSETMC API]
+  artifact [TGJU API]
+  artifact [Yahoo API]
+}
+
+node "سرویس هوش مصنوعی\nAI Service" as aiservice {
+  artifact [ZAI API]
+}
+
+browser --> appserver : HTTPS
+appserver --> plantuml : HTTP
+appserver --> datasource : HTTPS/REST
+appserver --> aiservice : HTTPS/API
+
+note right of browser
+  مرورگر کاربر نقطه ورود
+  به سامانه تحلیلی است
+end note
+
+note left of datasource
+  منابع داده خارجی بورس
+  تهران و بازارهای جهانی
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-deployment-l2
+title: نمودار استقرار - تخصیص مؤلفه‌ها
+description:
+  نمودار تخصیص مؤلفه‌ها به گره‌ها با پروتکل‌های ارتباطی.
+  هر گره مؤلفه‌هایی که روی آن اجرا می‌شوند را شامل می‌شود.
+  سرور Next.js شامل API، تحلیل، ML و زیرساخت است.
+  منابع داده با پروتکل‌های مختلف ارتباط برقرار می‌کنند.
+  مسیر ارتباطی از مرورگر تا منابع داده قابل ردیابی است.
+level: 2
+code:
+@startuml
+' نمودار استقرار سطح ۲ - تخصیص مؤلفه‌ها
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار استقرار - سطح ۲: تخصیص مؤلفه‌ها
+
+node "مرورگر کاربر\nBrowser" as browser {
+  artifact [React SPA] as SPA
+  artifact [Recharts] as Recharts
+  artifact [D3.js Visuals] as D3
+}
+
+node "سرور Next.js\n:3000" as nextjs {
+  artifact [API Routes] as API
+  artifact [TAEngine] as TA
+  artifact [RegimeEngine] as RE
+  artifact [DecisionGraph] as DG
+  artifact [SRAnalyzer] as SR
+  artifact [MLEngine] as ML
+  artifact [AIPostProcessor] as PP
+  artifact [MSLV4] as MSL
+  artifact [ZaiShared] as ZAI
+}
+
+node "سرور PlantUML\n:8080" as plantuml {
+  artifact [PlantUML Jar] as PumlJar
+}
+
+node "TSE Server\ntsetmc.com" as tse {
+  artifact [TSE REST API] as TSEApi
+}
+
+node "TSETMC Server\ntsetmc.com" as tsetmc {
+  artifact [TSETMC API] as TSETMCApi
+}
+
+node "TGJU Server\ntgju.org" as tgju {
+  artifact [TGJU API] as TGJUApi
+}
+
+node "Yahoo Server\nquery1.finance.yahoo.com" as yahoo {
+  artifact [Yahoo API] as YahooApi
+}
+
+node "ZAI Server\napi.z-ai.com" as zai {
+  artifact [ZAI API] as ZAIApi
+}
+
+browser "1" -down-> "1" nextjs : HTTPS/JSON\nport 443→3000
+nextjs "1" -down-> "1" plantuml : HTTP\nport 3000→8080
+nextjs "1" -down-> "1" tse : HTTPS/REST\nrate: 1 req/s
+nextjs "1" -down-> "1" tsetmc : HTTPS/REST\nrate: 2 req/s
+nextjs "1" -down-> "1" tgju : HTTPS/REST\nrate: 1 req/s
+nextjs "1" -down-> "1" yahoo : HTTPS/REST\nrate: 0.5 req/s
+nextjs "1" -down-> "1" zai : HTTPS/REST\nrate: 10 req/s
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-deployment-l3
+title: نمودار استقرار - جزئیات پیکربندی
+description:
+  نمودار با جزئیات کامل پیکربندی شامل پورت، سیستم‌عامل و نسخه.
+  هر گره با مشخصات سخت‌افزاری و نرم‌افزاری نمایش داده شده است.
+  محیط‌های اجرایی با نسخه‌های دقیق مشخص هستند.
+  تنظیمات شبکه شامل پورت‌ها و پروتکل‌ها قابل مشاهده است.
+  این سطح برای مدیران سیستم و DevOps قابل استفاده است.
+level: 3
+code:
+@startuml
+' نمودار استقرار سطح ۳ - جزئیات پیکربندی
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار استقرار - سطح ۳: جزئیات پیکربندی
+
+node "مرورگر کاربر\nChrome 120+ / Firefox 115+ / Safari 17+\nOS: Windows 11 / macOS 14 / Ubuntu 22.04\nRAM: 8GB+ | Screen: 1920×1080+" as browser {
+  artifact "React 19 SPA\nBundle: ~450KB gzipped\nWebpack 5 Turbopack" as SPA
+  artifact "Recharts 2.12\nD3.js 7.9\n@xyflow/react 12" as VizLibs
+}
+
+node "سرور Next.js 16\nUbuntu 22.04 LTS | Node.js 22.x | Bun 1.2\nCPU: 4 vCPU | RAM: 8GB | SSD: 50GB\nIP: 10.0.1.10 | Port: 3000" as nextjs {
+  artifact "Next.js 16 App Router\nTypeScript 5.7\nTailwind CSS 4\nPrisma ORM 6" as AppCore
+  artifact "API Routes (REST)\n/api/analysis → POST\n/api/instruments → GET\n/api/indices → GET\n/api/ai → POST" as APIRoutes
+  artifact "TAEngine v4.2\n63 indicators\nWASM-accelerated" as TA
+  artifact "MLEngine v3.1\nLogisticRegression\nWeights Cache: 256 entries" as ML
+  artifact "ZaiShared v2.8\nRate Limit: 10 RPS\nCache TTL: 300s" as ZAI
+}
+
+node "سرور PlantUML\nUbuntu 22.04 | Java 21 | Jetty 12\nCPU: 2 vCPU | RAM: 4GB\nIP: 10.0.1.20 | Port: 8080" as plantuml {
+  artifact "PlantUML 1.2024.3\nGraphviz 12.0\nMax diagram size: 4096×4096" as PumlSrv
+}
+
+node "TSE Server\ntsetmc.com:443\nREST API | JSON\nRate Limit: 1 req/s\nTimeout: 30s" as tse
+
+node "TSETMC Server\ntsetmc.com:443\nDirect Fetch + API\nRate Limit: 2 req/s\nTimeout: 15s" as tsetmc
+
+node "TGJU Server\ntgju.org:443\nREST + Scraping\nRate Limit: 1 req/s\nTimeout: 20s" as tgju
+
+node "Yahoo Finance\nquery1.finance.yahoo.com:443\nv8 API | JSON\nRate Limit: 0.5 req/s\nTimeout: 10s" as yahoo
+
+node "ZAI API Server\napi.z-ai.com:443\nOpenAI-compatible API\nRate Limit: 10 RPS\nModel: gpt-4o-mini\nMax Tokens: 4096" as zai
+
+browser "HTTPS" -down-> nextjs : "443 → 3000\nH2 with keep-alive\nCORS: enabled"
+nextjs "HTTP" -down-> plantuml : "3000 → 8080\nPlantUML text POST\nPNG/SVG response"
+nextjs "HTTPS" -down-> tse : "REST/JSON\nX-API-Key header\nRetry: 3 with backoff"
+nextjs "HTTPS" -down-> tsetmc : "Direct+API\nCookie-based auth\nRetry: 3"
+nextjs "HTTPS" -down-> tgju : "REST+Scrape\nUser-Agent rotation\nRetry: 2"
+nextjs "HTTPS" -down-> yahoo : "v8 API\ncrumb-based auth\nRetry: 2"
+nextjs "HTTPS" -down-> zai : "Bearer token auth\nStreaming: supported\nRetry: 3 with backoff"
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-package-l1
+title: نمودار بسته - بسته‌های اصلی
+description:
+  نمودار بسته‌های اصلی سامانه با وابستگی‌های بین آن‌ها.
+  بسته app شامل صفحات و لایه‌های برنامه است.
+  بسته lib شامل کتابخانه‌های تحلیلی و ML است.
+  بسته components شامل مؤلفه‌های رابط کاربری است.
+  بسته api شامل اندپوینت‌های سرویس‌دهنده است.
+  وابستگی‌ها از بالا به پایین (از رابط کاربری تا داده) است.
+level: 1
+code:
+@startuml
+' نمودار بسته سطح ۱ - بسته‌های اصلی
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار بسته - سطح ۱: بسته‌های اصلی
+
+package "app" <<application>> {
+  note: صفحات Next.js App Router
+}
+
+package "lib" <<library>> {
+  note: کتابخانه‌های تحلیلی و ML
+}
+
+package "components" <<ui>> {
+  note: مؤلفه‌های رابط کاربری React
+}
+
+package "api" <<service>> {
+  note: اندپوینت‌های REST API
+}
+
+app --> components : استفاده
+app --> api : فراخوانی
+api --> lib : استفاده
+components --> lib : داده تحلیلی
+
+note right of app
+  بسته برنامه اصلی
+  شامل صفحات و لایه‌ها
+  app/analysis, app/help
+end note
+
+note right of lib
+  بسته کتابخانه‌ها
+  شامل تمام موتورهای
+  تحلیلی و یادگیری ماشین
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-package-l2
+title: نمودار بسته - زیربسته‌ها
+description:
+  نمودار زیربسته‌های هر بسته اصلی با وابستگی‌های داخلی.
+  lib/ta شامل موتور تحلیل تکنیکال و شناسایی الگو است.
+  lib/ml شامل موتور ML و وزن‌دهی بیزی است.
+  lib/ai شامل پردازش‌گر متن و انتخاب سبک است.
+  lib/data شامل منابع داده بورس است.
+  api/analysis و api/instruments اندپوینت‌های اصلی هستند.
+level: 2
+code:
+@startuml
+' نمودار بسته سطح ۲ - زیربسته‌ها
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار بسته - سطح ۲: زیربسته‌ها
+
+package "app" {
+  package "app/analysis" {
+    note: صفحه تحلیل نماد
+  }
+  package "app/help" {
+    note: صفحه راهنما
+  }
+  package "app/scenarios" {
+    note: صفحه سناریوها
+  }
+}
+
+package "lib" {
+  package "lib/ta" {
+    note: TAEngine, RegimeEngine\nProbabilityTrend, CompositeScores
+  }
+  package "lib/ml" {
+    note: MLEngine, BayesianWeights\nAnalysisMLSelector
+  }
+  package "lib/ai" {
+    note: AIPostProcessor, MSLV4\nZaiShared
+  }
+  package "lib/data" {
+    note: TSEApi, TsetmcIndexApi\nTgjuApi, YahooApi
+  }
+  package "lib/sr" {
+    note: SRAnalyzer, VolumeProfile
+  }
+  package "lib/graph" {
+    note: DecisionGraph\nCandlestickPatterns
+  }
+}
+
+package "components" {
+  package "components/analysis" {
+    note: کارت تحلیل، نوار اندیکاتور
+  }
+  package "components/charts" {
+    note: نمودار شمعی، گراف تصمیم
+  }
+  package "components/ui" {
+    note: shadcn/ui primitives
+  }
+}
+
+package "api" {
+  package "api/analysis" {
+    note: POST /api/analysis
+  }
+  package "api/instruments" {
+    note: GET /api/instruments
+  }
+  package "api/indices" {
+    note: GET /api/indices
+  }
+  package "api/ai" {
+    note: POST /api/ai
+  }
+}
+
+"app/analysis" --> "api/analysis"
+"app/analysis" --> "api/instruments"
+"app/help" --> "api/instruments"
+"app/scenarios" --> "api/analysis"
+
+"api/analysis" --> "lib/ta"
+"api/analysis" --> "lib/graph"
+"api/analysis" --> "lib/sr"
+"api/analysis" --> "lib/ml"
+"api/instruments" --> "lib/data"
+"api/indices" --> "lib/data"
+"api/ai" --> "lib/ai"
+
+"lib/ta" --> "lib/data"
+"lib/ta" --> "lib/ml"
+"lib/graph" --> "lib/ml"
+"lib/sr" --> "lib/data"
+"lib/sr" --> "lib/ml"
+
+"components/analysis" --> "lib/ta"
+"components/charts" --> "lib/graph"
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-package-l3
+title: نمودار بسته - وابستگی‌های واردات
+description:
+  نمودار وابستگی‌های واردات و ادغام بین کلاس‌های خاص.
+  هر فلش نشان‌دهنده واردات یک کلاس از بسته دیگر است.
+  TAEngine از چندین بسته واردات انجام می‌دهد.
+  DecisionGraph مستقیماً به MLEngine وابسته است.
+  SRAnalyzer برای بهینه‌سازی ML از MLEngine استفاده می‌کند.
+  AIPostProcessor از ZaiShared و MSLV4 استفاده می‌کند.
+level: 3
+code:
+@startuml
+' نمودار بسته سطح ۳ - وابستگی‌های واردات
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار بسته - سطح ۳: وابستگی‌های واردات
+
+package "lib/ta" {
+  class TAEngine
+  class RegimeEngine
+  class ProbabilityTrend
+  class CompositeScores
+  class CandlestickPatterns
+}
+
+package "lib/ml" {
+  class MLEngine
+  class BayesianWeights
+  class AnalysisMLSelector
+}
+
+package "lib/ai" {
+  class AIPostProcessor
+  class MSLV4
+  class ZaiShared
+}
+
+package "lib/sr" {
+  class SRAnalyzer
+  class VolumeProfile
+}
+
+package "lib/graph" {
+  class DecisionGraph
+}
+
+package "lib/data" {
+  class TSEApi
+  class TsetmcIndexApi
+  class TgjuApi
+  class YahooApi
+}
+
+' وابستگی‌های واردات واقعی
+TAEngine ..> RegimeEngine : import
+TAEngine ..> SRAnalyzer : import
+TAEngine ..> VolumeProfile : import
+TAEngine ..> CandlestickPatterns : import
+TAEngine ..> TSEApi : import
+TAEngine ..> MLEngine : import
+
+DecisionGraph ..> MLEngine : import
+DecisionGraph ..> ProbabilityTrend : import
+DecisionGraph ..> RegimeEngine : import
+
+SRAnalyzer ..> MLEngine : import
+SRAnalyzer ..> VolumeProfile : import
+SRAnalyzer ..> TSEApi : import
+
+CompositeScores ..> TAEngine : import
+CompositeScores ..> SRAnalyzer : import
+
+AIPostProcessor ..> ZaiShared : import
+AIPostProcessor ..> MSLV4 : import
+
+MLEngine ..> BayesianWeights : import
+MLEngine ..> AnalysisMLSelector : import
+
+ProbabilityTrend ..> CompositeScores : import
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-composite-l1
+title: نمودار ساختار مرکب - ساختار داخلی TAEngine
+description:
+  نمودار ساختار داخلی مؤلفه TAEngine با بخش‌های همکار.
+  TAEngine شامل RegimeEngine، SRAnalyzer و VolumeProfile به‌صورت ترکیب است.
+  همچنین شامل CandlestickPatterns و ProbabilityTrend است.
+  بخش‌ها از طریق پورت‌های داخلی با هم ارتباط برقرار می‌کنند.
+  پورت marketData داده بازار را دریافت می‌کند.
+  پورت analysisResult نتیجه تحلیل را منتشر می‌کند.
+level: 1
+code:
+@startuml
+' نمودار ساختار مرکب سطح ۱ - ساختار داخلی TAEngine
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار ساختار مرکب - سطح ۱: ساختار داخلی TAEngine
+
+class TAEngine {
+  ' ساختار داخلی
+  -- Ports --
+  +in marketData : MarketData
+  +out analysisResult : AnalysisResult
+  +out trendSignal : TrendDirection
+}
+
+component "RegimeEngine" as RE
+component "SRAnalyzer" as SR
+component "VolumeProfile" as VP
+component "CandlestickPatterns" as CP
+component "ProbabilityTrend" as PT
+component "IndicatorCalculator" as IC
+component "ResultAggregator" as RA
+
+rectangle TAEngine <<component>> {
+  RE -down-> IC : regimeInfo
+  SR -down-> IC : srLevels
+  VP -right-> SR : volumeData
+  CP -down-> IC : patterns
+  IC -down-> PT : indicatorValues
+  PT -down-> RA : trendData
+  RA -down-> RA : aggregate
+}
+
+TAEngine::marketData --> RE
+TAEngine::marketData --> SR
+TAEngine::marketData --> VP
+TAEngine::marketData --> CP
+RA --> TAEngine::analysisResult
+PT --> TAEngine::trendSignal
+
+note right of TAEngine
+  TAEngine به‌صورت ترکیب شامل
+  ۵ بخش همکار است:
+  • RegimeEngine: تشخیص رژیم
+  • SRAnalyzer: سطوح S/R
+  • VolumeProfile: پروفایل حجم
+  • CandlestickPatterns: الگوها
+  • ProbabilityTrend: روند احتمالی
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-composite-l2
+title: نمودار ساختار مرکب - بخش‌های DecisionGraph
+description:
+  نمودار بخش‌های همکار کلاس DecisionGraph.
+  DecisionGraph شامل GraphBuilder، PathComputer و WeightNormalizer است.
+  GraphBuilder گره‌ها و یال‌ها را بر اساس رژیم و تحلیل می‌سازد.
+  PathComputer مسیرهای بهینه را محاسبه می‌کند.
+  WeightNormalizer وزن‌های یال‌ها را نرمال‌سازی می‌کند.
+  MLEngine به‌صورت نقش فراهم‌شده پیش‌بینی می‌کند.
+level: 2
+code:
+@startuml
+' نمودار ساختار مرکب سطح ۲ - بخش‌های DecisionGraph
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار ساختار مرکب - سطح ۲: بخش‌های DecisionGraph
+
+class DecisionGraph <<component>> {
+  -- پورت‌های فراهم‌شده --
+  +in regimeInput : RegimeResult
+  +in analysisInput : AnalysisResult
+  +out decisionOutput : DecisionPath
+  +out confidenceOutput : number
+  -- بخش‌های داخلی --
+}
+
+component "GraphBuilder" as GB {
+  +buildFromRegime(regime: RegimeResult): void
+  +addAnalysisNodes(analysis: AnalysisResult): void
+  -nodeFactory: NodeFactory
+  -edgeFactory: EdgeFactory
+}
+
+component "PathComputer" as PC {
+  +computeAllPaths(): Path[]
+  +shortestPath(source: string, target: string): Path
+  +topologicalSort(): string[]
+  -adjacencyList: Map
+}
+
+component "WeightNormalizer" as WN {
+  +normalizeWeights(): void
+  +applyDecay(factor: number): void
+  +rebalance(): void
+  -totalWeight: number
+}
+
+component "MLEngine\n<<provided role>>" as MLRole {
+  +predict(features: Feature[]): PredictionResult
+}
+
+rectangle DecisionGraph <<component>> {
+  port "regimeInput" as regIn
+  port "analysisInput" as anaIn
+  port "decisionOutput" as decOut
+  port "confidenceOutput" as confOut
+
+  GB -down-> PC : rawGraph
+  PC -down-> WN : weightedPaths
+  WN -right-> MLRole : features
+  MLRole -up-> WN : predictions
+
+  regIn --> GB
+  anaIn --> GB
+  WN --> decOut
+  WN --> confOut
+}
+
+note bottom of GB
+  GraphBuilder گراف را با
+  ۳۴ گره و ۵۵ یال می‌سازد
+  بر اساس رژیم و تحلیل جاری
+end note
+
+note bottom of PC
+  PathComputer مسیرهای
+  تصمیم را محاسبه می‌کند
+  با الگوریتم دیکسترا
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-composite-l3
+title: نمودار ساختار مرکب - اتصالات محاسبه احتمال
+description:
+  نمودار اتصالات و نقش‌ها در حین محاسبه احتمال.
+  ProbabilityTrend از طریق اتصال‌های مشخص با بخش‌های دیگر ارتباط دارد.
+  نقش داده‌ساز بازار داده ورودی فراهم می‌کند.
+  نقش تحلیل‌گر اندیکاتورها را محاسبه می‌کند.
+  نقش پیش‌بینی‌گر ML وزن‌های پیش‌بینی را فراهم می‌کند.
+  نقش تجمیع‌گر نتیجه نهایی را تولید می‌کند.
+  هر اتصال با پروتکل و جهت مشخص شده است.
+level: 3
+code:
+@startuml
+' نمودار ساختار مرکب سطح ۳ - اتصالات محاسبه احتمال
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار ساختار مرکب - سطح ۳: اتصالات محاسبه احتمال
+
+interface IMarketDataProvider <<role>> {
+  +getCandlesticks(symbol: string): Candlestick[]
+}
+
+interface IIndicatorProvider <<role>> {
+  +getIndicatorValues(name: string): number[]
+}
+
+interface IPredictionProvider <<role>> {
+  +getPrediction(symbol: string): PredictionResult
+}
+
+interface IResultConsumer <<role>> {
+  +accept(result: ProbabilityResult): void
+}
+
+component "MarketDataFetcher\n<<dataProvider role>>" as MDF {
+  port "marketDataOut" as mdOut
+}
+
+component "TAEngine\n<<analyzer role>>" as TA {
+  port "marketDataIn" as taMdIn
+  port "indicatorsOut" as taIndOut
+  port "regimeOut" as taRegOut
+}
+
+component "RegimeEngine\n<<regimeDetector role>>" as RE {
+  port "regimeIn" as reRegIn
+  port "regimeResultOut" as reResOut
+}
+
+component "MLEngine\n<<predictor role>>" as ML {
+  port "featuresIn" as mlFeatIn
+  port "predictionsOut" as mlPredOut
+}
+
+component "ProbabilityTrend\n<<aggregator role>>" as PT {
+  port "indicatorsIn" as ptIndIn
+  port "regimeIn" as ptRegIn
+  port "predictionsIn" as ptPredIn
+  port "resultOut" as ptResOut
+}
+
+component "CompositeScores\n<<resultConsumer role>>" as CS {
+  port "probResultIn" as csProbIn
+}
+
+' اتصالات
+mdOut --> taMdIn : "Candlestick[]\nsync call"
+taIndOut --> ptIndIn : "Map<string, number[]>\nasync stream"
+taRegOut --> reRegIn : "MarketData\nsync call"
+reResOut --> ptRegIn : "RegimeResult\nsync return"
+mlPredOut --> ptPredIn : "PredictionResult\nasync callback"
+taIndOut --> mlFeatIn : "Feature[]\nsync call"
+ptResOut --> csProbIn : "ProbabilityResult\nasync event"
+
+note right of PT
+  ProbabilityTrend نقش تجمیع‌گر دارد
+  ورودی‌ها:
+  • اندیکاتورها از TAEngine
+  • رژیم از RegimeEngine
+  • پیش‌بینی از MLEngine
+  خروجی:
+  • نتیجه احتمال با CDF
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-profile-l1
+title: نمودار پروفایل - کلیشه‌های اصلی
+description:
+  نمودار کلیشه‌های UML اصلی تعریف‌شده برای سامانه.
+  کلیشه <<Engine>> برای موتورهای تحلیلی استفاده می‌شود.
+  کلیشه <<API>> برای سرویس‌های داده خارجی استفاده می‌شود.
+  کلیشه <<DataStore>> برای ذخیره‌سازی و کش استفاده می‌شود.
+  کلیشه <<AI>> برای مؤلفه‌های هوش مصنوعی استفاده می‌شود.
+  هر کلیشه از metaclass مشخصی گسترش می‌یابد.
+level: 1
+code:
+@startuml
+' نمودار پروفایل سطح ۱ - کلیشه‌های اصلی
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار پروفایل - سطح ۱: کلیشه‌های اصلی
+
+class Stereotype <<stereotype>>
+class Metaclass <<metaclass>>
+
+class "Engine" as Engine <<stereotype>> {
+  نوع: موتورهای تحلیلی اصلی
+  مثال: TAEngine, RegimeEngine
+}
+class "API" as API <<stereotype>> {
+  نوع: سرویس‌های داده خارجی
+  مثال: TSEApi, YahooApi
+}
+class "DataStore" as DataStore <<stereotype>> {
+  نوع: ذخیره‌سازی و کش
+  مثال: Cache, WeightsCache
+}
+class "AI" as AI <<stereotype>> {
+  نوع: مؤلفه‌های هوش مصنوعی
+  مثال: ZaiShared, MSLV4
+}
+class "Analyzer" as Analyzer <<stereotype>> {
+  نوع: تحلیل‌گرهای تخصصی
+  مثال: SRAnalyzer, VolumeProfile
+}
+class "Processor" as Processor <<stereotype>> {
+  نوع: پردازش‌گرهای خروجی
+  مثال: AIPostProcessor
+}
+
+class "Class" as ClassMeta <<metaclass>>
+class "Component" as CompMeta <<metaclass>>
+
+Engine --|> Stereotype
+API --|> Stereotype
+DataStore --|> Stereotype
+AI --|> Stereotype
+Analyzer --|> Stereotype
+Processor --|> Stereotype
+
+Engine ..> ClassMeta : extends
+API ..> CompMeta : extends
+DataStore ..> CompMeta : extends
+AI ..> CompMeta : extends
+Analyzer ..> ClassMeta : extends
+Processor ..> ClassMeta : extends
+
+note right of Engine
+  کلیشه <<Engine>> برای
+  موتورهای تحلیلی که
+  هسته سامانه هستند
+end note
+
+note right of AI
+  کلیشه <<AI>> برای
+  مؤلفه‌های مبتنی بر
+  هوش مصنوعی
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-profile-l2
+title: نمودار پروفایل - کلیشه‌های گسترش‌یافته
+description:
+  نمودار کلیشه‌های گسترش‌یافته با برچسب‌های تعریف‌شده.
+  {cached} نشان‌دهنده کش‌شدن نتایج است.
+  {rateLimited} نشان‌دهنده محدودیت نرخ فراخوانی است.
+  {noCache} نشان‌دهنده عدم کش‌پذیری است.
+  {streaming} نشان‌دهنده پشتیبانی از جریانی است.
+  {wasm} نشان‌دهنده شتاب‌دهی WASM است.
+  هر برچسب با نوع و مقدار پیش‌فرض مشخص شده است.
+level: 2
+code:
+@startuml
+' نمودار پروفایل سطح ۲ - کلیشه‌های گسترش‌یافته
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار پروفایل - سطح ۲: کلیشه‌های گسترش‌یافته
+
+class "Engine" as Engine <<stereotype>> {
+  +{cached} cacheTTL : int = 300
+  +{wasm} accelerated : boolean = false
+  +{version} engineVersion : string
+}
+
+class "API" as API <<stereotype>> {
+  +{rateLimited} maxRPS : double = 1.0
+  +{noCache} disableCache : boolean = false
+  +{timeout} requestTimeout : int = 30000
+  +{retry} maxRetries : int = 3
+}
+
+class "AI" as AI <<stereotype>> {
+  +{rateLimited} maxRPS : double = 10.0
+  +{streaming} supportsStreaming : boolean = true
+  +{cached} cacheTTL : int = 300
+  +{tokenLimit} maxTokens : int = 4096
+}
+
+class "DataStore" as DataStore <<stereotype>> {
+  +{cached} defaultTTL : int = 300
+  +{maxSize} maxSize : int = 1000
+  +{eviction} evictionPolicy : string = "LRU"
+}
+
+class "Analyzer" as Analyzer <<stereotype>> {
+  +{cached} cacheTTL : int = 600
+  +{threshold} threshold : double = 0.5
+}
+
+Engine --|> Engine
+API --|> API
+AI --|> AI
+DataStore --|> DataStore
+Analyzer --|> Analyzer
+
+note right of Engine
+  کلیشه <<Engine>> با برچسب‌ها:
+  • {cached} - نتایج کش می‌شوند
+  • {wasm} - شتاب‌دهی WASM
+  • {version} - نسخه موتور
+end note
+
+note right of API
+  کلیشه <<API>> با برچسب‌ها:
+  • {rateLimited} - محدود نرخ
+  • {noCache} - بدون کش
+  • {timeout} - مهلت درخواست
+  • {retry} - حداکثر تلاش مجدد
+end note
+
+note right of AI
+  کلیشه <<AI>> با برچسب‌ها:
+  • {rateLimited} - محدود نرخ
+  • {streaming} - پشتیبانی جریانی
+  • {cached} - کش پاسخ‌ها
+  • {tokenLimit} - سقف توکن
+end note
+
+@enduml
+===DIAGRAM_END===
+
+===DIAGRAM_START===
+id: uml-profile-l3
+title: نمودار پروفایل - اعمال کلیشه‌ها با محدودیت‌های OCL
+description:
+  نمودار اعمال کلیشه‌ها به عناصر خاص با محدودیت‌های OCL.
+  هر عنصر با کلیشه و مقادیر برچسب مشخص شده است.
+  محدودیت‌های OCL اعتبار پارامترها را تضمین می‌کنند.
+  TAEngine با کلیشه Engine و شتاب WASM اعمال شده است.
+  TSEApi با کلیشه API و محدودیت نرخ اعمال شده است.
+  ZaiShared با کلیشه AI و پشتیبانی جریانی اعمال شده است.
+level: 3
+code:
+@startuml
+' نمودار پروفایل سطح ۳ - اعمال کلیشه‌ها با OCL
+title سامانه تحلیل تکنیکال مالی ایران\nنمودار پروفایل - سطح ۳: اعمال کلیشه‌ها با OCL
+
+class TAEngine <<Engine>> {
+  +analyze(): AnalysisResult
+  +calcTrend(): TrendDirection
+  {cached} cacheTTL = 300
+  {wasm} accelerated = true
+  {version} engineVersion = "4.2"
+}
+
+class RegimeEngine <<Engine>> {
+  +detectRegime(): RegimeResult
+  +fuzzyMembership(): number
+  {cached} cacheTTL = 600
+  {wasm} accelerated = false
+  {version} engineVersion = "3.0"
+}
+
+class MLEngine <<Engine>> {
+  +trainAdaptive(): TrainingResult
+  +predict(): PredictionResult
+  {cached} cacheTTL = 3600
+  {wasm} accelerated = false
+  {version} engineVersion = "3.1"
+}
+
+class TSEApi <<API>> {
+  +fetchCandlesticks(): Candlestick[]
+  +fetchSymbols(): Symbol[]
+  {rateLimited} maxRPS = 1.0
+  {noCache} disableCache = false
+  {timeout} requestTimeout = 30000
+  {retry} maxRetries = 3
+}
+
+class TsetmcIndexApi <<API>> {
+  +fetchMainIndex(): IndexData
+  {rateLimited} maxRPS = 2.0
+  {noCache} disableCache = true
+  {timeout} requestTimeout = 15000
+}
+
+class TgjuApi <<API>> {
+  +fetchHistory(): HistoricalData
+  {rateLimited} maxRPS = 1.0
+  {timeout} requestTimeout = 20000
+  {retry} maxRetries = 2
+}
+
+class YahooApi <<API>> {
+  +fetchHistory(): HistoricalData
+  {rateLimited} maxRPS = 0.5
+  {timeout} requestTimeout = 10000
+  {retry} maxRetries = 2
+}
+
+class ZaiShared <<AI>> {
+  +dedicatedAIChatCompletion(): ChatResponse
+  +rateLimitedPageReader(): PageContent
+  {rateLimited} maxRPS = 10.0
+  {streaming} supportsStreaming = true
+  {cached} cacheTTL = 300
+  {tokenLimit} maxTokens = 4096
+}
+
+class AIPostProcessor <<Processor>> {
+  +stripCodes(): string
+  +fixPersian(): string
+  +validatePrices(): ValidationResult
+}
+
+class SRAnalyzer <<Analyzer>> {
+  +detectLevels(): SRLevel[]
+  +computeStrength(): number
+  {cached} cacheTTL = 600
+  {threshold} threshold = 0.5
+}
+
+class VolumeProfile <<Analyzer>> {
+  +approximate(): VolumeBin[]
+  +poc(): number
+  {cached} cacheTTL = 300
+}
+
+note bottom of TAEngine
+  OCL: context TAEngine inv:
+  self.cacheTTL > 0 and
+  self.engineVersion.isNotEmpty()
+end note
+
+note bottom of TSEApi
+  OCL: context TSEApi inv:
+  self.maxRPS > 0 and
+  self.requestTimeout > 0 and
+  self.maxRetries >= 0
+end note
+
+note bottom of ZaiShared
+  OCL: context ZaiShared inv:
+  self.maxRPS > 0 and
+  self.maxTokens > 0 and
+  self.cacheTTL > 0
+end note
+
+note bottom of MLEngine
+  OCL: context MLEngine inv:
+  self.cacheTTL >= 300 and
+  self.engineVersion.startsWith("3.")
+end note
+
+note bottom of SRAnalyzer
+  OCL: context SRAnalyzer inv:
+  self.threshold >= 0.0 and
+  self.threshold <= 1.0
+end note
+
+@enduml
+===DIAGRAM_END===

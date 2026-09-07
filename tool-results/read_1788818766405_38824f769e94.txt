@@ -1,0 +1,1047 @@
+     1→'use client';
+     2→
+     3→import { useRef, useState, useCallback, useMemo } from 'react';
+     4→import { Badge } from '@/components/ui/badge';
+     5→import {
+     6→  BookOpen, ChevronLeft,
+     7→  GitBranch, Workflow, FileCode, Boxes, ArrowLeftRight,
+     8→  Layers, Activity, GitMerge, Timer, MessageSquare,
+     9→  Search, Palette, Cpu,
+    10→  BarChart3, Shield, HardDrive, Package,
+    11→  ZoomIn, ZoomOut, Download,
+    12→} from 'lucide-react';
+    13→import { useTheme } from '@/lib/theme-store';
+    14→import MermaidDiagram from './mermaid-diagram';
+    15→import PlantUMLDiagram from './plantuml-diagram';
+    16→
+    17→// ═══════════════════════════════════════════════════════════════
+    18→// Section Tree — all documentation sections
+    19→// ═══════════════════════════════════════════════════════════════
+    20→
+    21→interface Section {
+    22→  id: string;
+    23→  label: string;
+    24→  icon: React.ElementType;
+    25→  children?: Section[];
+    26→  badge?: string;
+    27→  badgeColor?: string;
+    28→}
+    29→
+    30→const SECTIONS: Section[] = [
+    31→  {
+    32→    id: 'dfd', label: 'دیاگرام جریان داده (DFD)', icon: ArrowLeftRight, badge: '12', badgeColor: '#3b82f6',
+    33→    children: [
+    34→      { id: 'dfd-l0', label: 'سطح ۰ — نمودار زمینه', icon: Boxes },
+    35→      { id: 'dfd-l1', label: 'سطح ۱ — فرایندهای اصلی', icon: GitBranch },
+    36→      { id: 'dfd-l2', label: 'سطح ۲ — زیرفرایندها', icon: Layers },
+    37→      { id: 'dfd-l3', label: 'سطح ۳ — جزییات عملیاتی', icon: Activity },
+    38→    ],
+    39→  },
+    40→  {
+    41→    id: 'bpmn', label: 'دیاگرام فرایند (BPMN)', icon: Workflow, badge: '9', badgeColor: '#8b5cf6',
+    42→    children: [
+    43→      { id: 'bpmn-l1', label: 'سطح ۱ — نمای کلان', icon: Boxes },
+    44→      { id: 'bpmn-l2', label: 'سطح ۲ — فرایندهای اجرایی', icon: GitBranch },
+    45→      { id: 'bpmn-l3', label: 'سطح ۳ — زیرفرایندهای جزیی', icon: Activity },
+    46→    ],
+    47→  },
+    48→  {
+    49→    id: 'uml-structural', label: 'UML ساختاری', icon: FileCode, badge: '21', badgeColor: '#059669',
+    50→    children: [
+    51→      { id: 'uml-class', label: 'نمودار کلاس', icon: FileCode },
+    52→      { id: 'uml-object', label: 'نمودار شیء', icon: Boxes },
+    53→      { id: 'uml-component', label: 'نمودار مؤلفه', icon: Cpu },
+    54→      { id: 'uml-deployment', label: 'نمودار استقرار', icon: HardDrive },
+    55→      { id: 'uml-package', label: 'نمودار بسته', icon: Package },
+    56→      { id: 'uml-composite', label: 'نمودار ساختار ترکیبی', icon: Layers },
+    57→      { id: 'uml-profile', label: 'نمودار نمایه', icon: Palette },
+    58→    ],
+    59→  },
+    60→  {
+    61→    id: 'uml-behavioral', label: 'UML رفتاری', icon: Activity, badge: '11', badgeColor: '#d97706',
+    62→    children: [
+    63→      { id: 'uml-usecase', label: 'نمودار موردکاربری', icon: Shield },
+    64→      { id: 'uml-activity', label: 'نمودار فعالیت', icon: Activity },
+    65→      { id: 'uml-state', label: 'نمودار ماشین حالت', icon: GitMerge },
+    66→    ],
+    67→  },
+    68→  {
+    69→    id: 'uml-interaction', label: 'UML تعاملی', icon: MessageSquare, badge: '12', badgeColor: '#dc2626',
+    70→    children: [
+    71→      { id: 'uml-sequence', label: 'نمودار توالی', icon: ArrowLeftRight },
+    72→      { id: 'uml-communication', label: 'نمودار ارتباطی', icon: MessageSquare },
+    73→      { id: 'uml-overview', label: 'نمودار نمای کلی تعامل', icon: BarChart3 },
+    74→      { id: 'uml-timing', label: 'نمودار زمان‌بندی', icon: Timer },
+    75→    ],
+    76→  },
+    77→  {
+    78→    id: 'coherence', label: 'جدول انسجام', icon: GitMerge, badge: '48', badgeColor: '#64748b',
+    79→  },
+    80→  {
+    81→    id: 'appendix', label: 'ضمائم', icon: BookOpen,
+    82→  },
+    83→];
+    84→
+    85→// ═══════════════════════════════════════════════════════════════
+    86→// Diagram Data — all diagram definitions
+    87→// ═══════════════════════════════════════════════════════════════
+    88→
+    89→interface DiagramDef {
+    90→  title: string;
+    91→  description: string;
+    92→  type: 'mermaid' | 'plantuml';
+    93→  code: string;
+    94→  level?: string;
+    95→  farsiNotes: string[];
+    96→}
+    97→
+    98→// ─── DFD Diagrams ──────────────────────────────────────────────
+    99→
+   100→const DFD_DIAGRAMS: Record<string, DiagramDef[]> = {
+   101→  'dfd-l0': [{
+   102→    title: 'نمودار زمینه (Context Diagram) — سطح ۰',
+   103→    description: 'کل سیستم به‌عنوان یک فرایند واحد با تمام موجودیت‌های خارجی',
+   104→    type: 'mermaid',
+   105→    code: `flowchart LR
+   106→    classDef entity fill:#2d6a4f,stroke:#40916c,stroke-width:2px,color:#fff,font-weight:bold
+   107→    classDef process fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff,font-weight:bold
+   108→    classDef store fill:#e76f51,stroke:#f4a261,stroke-width:2px,color:#fff
+   109→
+   110→    User["👤 کاربر / معامله‌گر"]:::entity
+   111→    TSE["📈 TSETMC / BrsApi"]:::entity
+   112→    TGJU["🏦 تاجو"]:::entity
+   113→    Yahoo["🌍 یاهو فایننس"]:::entity
+   114→    ZAI["🤖 Z-AI SDK"]:::entity
+   115→    Finpy["🐍 finpy-tse"]:::entity
+   116→    TsetmcIdx["📊 سرویس شاخص"]:::entity
+   117→
+   118→    P0["سامانه تحلیل تکنیکال\nبورس ایران"]:::process
+   119→
+   120→    User -->|"نماد، درخواست تحلیل"| P0
+   121→    TSE -->|"داده OHLCV سهام"| P0
+   122→    TGJU -->|"داده طلا/ارز/کریپتو"| P0
+   123→    Yahoo -->|"داده بازار جهانی"| P0
+   124→    ZAI -->|"متن تحلیل AI"| P0
+   125→    Finpy -->|"داده جایگزین TSE"| P0
+   126→    TsetmcIdx -->|"داده شاخص بورس"| P0
+   127→
+   128→    P0 -->|"نتایج تحلیل، نمودار، متن"| User`,
+   129→    level: 'سطح ۰',
+   130→    farsiNotes: [
+   131→      '🔹 این نمودار کل سیستم را به‌عنوان یک فرایند واحد (P0) نشان می‌دهد.',
+   132→      '🔹 ۷ موجودیت خارجی با سیستم تعامل دارند: کاربر، TSETMC، تاجو، یاهو، Z-AI، finpy-tse و سرویس شاخص.',
+   133→      '🔹 جریان ورودی شامل درخواست کاربر و داده‌های بازار از منابع مختلف است.',
+   134→      '🔹 جریان خروجی شامل نتایج تحلیل، نمودارها و متن هوشمند است.',
+   135→      '🔹 رنگ سبز = موجودیت خارجی، رنگ سرمه‌ای = فرایند سیستم.',
+   136→    ],
+   137→  }],
+   138→  'dfd-l1': [{
+   139→    title: 'فرایندهای سطح بالا — سطح ۱',
+   140→    description: '۷ فرایند اصلی با مخازن داده و جریان‌های بین‌فرایندی',
+   141→    type: 'mermaid',
+   142→    code: `flowchart TB
+   143→    classDef entity fill:#2d6a4f,stroke:#40916c,stroke-width:2px,color:#fff
+   144→    classDef process fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff
+   145→    classDef store fill:#e76f51,stroke:#f4a261,stroke-width:2px,color:#fff
+   146→
+   147→    E1["👤 کاربر"]:::entity
+   148→    E2["📈 منابع داده"]:::entity
+   149→    E3["🤖 Z-AI"]:::entity
+   150→
+   151→    P1["P1: تحلیل تکنیکال\nta-engine"]:::process
+   152→    P2["P2: تشخیص رژیم\nregime-engine"]:::process
+   153→    P3["P3: یادگیری ML\nml-engine"]:::process
+   154→    P4["P4: تحلیل S/R\nsr-analyzer"]:::process
+   155→    P5["P5: تشخیص الگو\npattern-detection"]:::process
+   156→    P6["P6: تولید متن AI\nvdes-analysis"]:::process
+   157→    P7["P7: بازخورد تطبیقی\nmsl-feedback"]:::process
+   158→
+   159→    D1[("D1: کش OHLCV")]:::store
+   160→    D2[("D2: نتایج TA")]:::store
+   161→    D3[("D3: مدل ML")]:::store
+   162→    D4[("D4: بازخورد")]:::store
+   163→    D5[("D5: پروفایل حجم")]:::store
+   164→    D6[("D6: کش نماد")]:::store
+   165→
+   166→    E2 -->|"OHLCV"| D1
+   167→    D1 --> P1
+   168→    P1 -->|"اندیکاتورها"| D2
+   169→    D2 --> P2
+   170→    D2 --> P3
+   171→    D2 --> P4
+   172→    P4 -->|"نمرات S/R"| D5
+   173→    D2 --> P5
+   174→    D2 --> P6
+   175→    E3 -->|"متن AI"| P6
+   176→    D2 --> P7
+   177→    P7 -->|"وزن‌ها"| D3
+   178→    D3 --> P3
+   179→    P7 --> D4
+   180→    P1 --> E1
+   181→    P6 --> E1`,
+   182→    level: 'سطح ۱',
+   183→    farsiNotes: [
+   184→      '🔹 ۷ فرایند اصلی سیستم: تحلیل تکنیکال، تشخیص رژیم، ML، تحلیل S/R، الگو، متن AI و بازخورد.',
+   185→      '🔹 ۶ مخزن داده: کش OHLCV، نتایج TA، مدل ML، بازخورد، پروفایل حجم و کش نماد.',
+   186→      '🔹 حلقه بازخورد: P7 (بازخورد) → D3 (مدل) → P3 (ML) — سیستم یادگیری تطبیقی.',
+   187→      '🔹 فرایندهای موازی: P2 و P4 و P5 همزمان از D2 (نتایج TA) مصرف می‌کنند.',
+   188→      '🔹 P6 تنها فرایندی است که به منبع خارجی Z-AI وابسته است.',
+   189→    ],
+   190→  }],
+   191→  'dfd-l2': [{
+   192→    title: 'زیرفرایندهای تحلیل تکنیکال — سطح ۲ (P1)',
+   193→    description: 'تفکیک فرایند تحلیل تکنیکال به ۵ زیرفرایند',
+   194→    type: 'mermaid',
+   195→    code: `flowchart LR
+   196→    classDef process fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff
+   197→    classDef store fill:#e76f51,stroke:#f4a261,stroke-width:2px,color:#fff
+   198→
+   199→    P1_1["P1.1: محاسبه اندیکاتورها\nRSI, MACD, ADX..."]:::process
+   200→    P1_2["P1.2: تشخیص ترند\ncalcTrend()"]:::process
+   201→    P1_3["P1.3: سطوح S/R\n۷ منبع"]:::process
+   202→    P1_4["P1.4: ۷ لایه VDss\nمحاسبه سناریوها"]:::process
+   203→    P1_5["P1.5: تعیین سیگنال\noverallSignal"]:::process
+   204→
+   205→    D1[("D1: OHLCV")]:::store
+   206→    D2[("D2: نتایج")]:::store
+   207→
+   208→    D1 --> P1_1
+   209→    P1_1 --> P1_2
+   210→    P1_1 --> P1_3
+   211→    P1_2 --> P1_4
+   212→    P1_3 --> P1_4
+   213→    P1_4 --> P1_5
+   214→    P1_5 --> D2`,
+   215→    level: 'سطح ۲ — P1',
+   216→    farsiNotes: [
+   217→      '🔹 P1.1 تمام اندیکاتورها (۶۰+) را محاسبه می‌کند: RSI, MACD, ADX, Stochastic, Bollinger...',
+   218→      '🔹 P1.2 ترند را با رگرسیون خطی و فرمول زاویه atan((slope/avgPrice)*100) تشخیص می‌دهد.',
+   219→      '🔹 P1.3 سطوح حمایت/مقاومت را از ۷ منبع (Swing, SMA, BB, Fib, VAP, Pivot, Psych) استخراج می‌کند.',
+   220→      '🔹 P1.4 موتور ۷ لایه VDss احتمال ۹ سناریو را محاسبه می‌کند.',
+   221→      '🔹 P1.5 سیگنال کلی (bullish/bearish/neutral) و قدرت آن را تعیین می‌کند.',
+   222→    ],
+   223→  }, {
+   224→    title: 'زیرفرایندهای تشخیص رژیم — سطح ۲ (P2)',
+   225→    description: '۳ موتور مستقل با ترکیب نهایی',
+   226→    type: 'mermaid',
+   227→    code: `flowchart TB
+   228→    classDef process fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff
+   229→    classDef store fill:#e76f51,stroke:#f4a261,stroke-width:2px,color:#fff
+   230→
+   231→    P2_1["P2.1: تشخیص فازی\nfuzzyRegimeDetector()"]:::process
+   232→    P2_2["P2.2: زنجیره مارکوف\npropagateMarkov()"]:::process
+   233→    P2_3["P2.3: رأی‌گیری وزنی\nadaptiveWeightedVote()"]:::process
+   234→    P2_4["P2.4: ترکیب نهایی\n0.5×Markov + 0.3×Fuzzy + 0.2×Vote"]:::process
+   235→
+   236→    D[("وضع مارکوف")]:::store
+   237→
+   238→    P2_1 -->|"μ(up/down/neutral)"| P2_4
+   239→    P2_2 -->|"π[state]"| P2_4
+   240→    P2_3 -->|"vote ∈ [-1,+1]"| P2_4
+   241→    D --> P2_2
+   242→    P2_4 -->|"بروزرسانی"| D
+   243→    P2_4 -->|"RegimeResult"|_OUT["خروجی"]`,
+   244→    level: 'سطح ۲ — P2',
+   245→    farsiNotes: [
+   246→      '🔹 ۳ موتور مستقل: فازی (جایگزین GNN)، مارکوف (جایگزین HMM)، رأی‌گیری (جایگزین Transformer).',
+   247→      '🔹 موتور فازی با توابع عضویت trimf/trapmf روی ADX, RSI, BB عضویت ۰-۱ تولید می‌کند.',
+   248→      '🔹 مارکوف با ماتریس انتقال ۵×۵ و بروزرسانی بیز حالت را انتشار می‌دهد.',
+   249→      '🔹 رأی‌گیری ۷ اندیکاتور با وزن تطبیقی رأی -۱/۰/+۱ می‌دهد.',
+   250→      '🔹 ترکیب: 0.5×Markov + 0.3×Fuzzy + 0.2×Vote — مارکوف بیشترین وزن را دارد.',
+   251→    ],
+   252→  }, {
+   253→    title: 'زیرفرایندهای بازخورد تطبیقی — سطح ۲ (P7)',
+   254→    description: 'چرخه ثبت پیش‌بینی، جمع‌آوری بازخورد و بروزرسانی وزن‌ها',
+   255→    type: 'mermaid',
+   256→    code: `flowchart LR
+   257→    classDef process fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff
+   258→    classDef store fill:#e76f51,stroke:#f4a261,stroke-width:2px,color:#fff
+   259→
+   260→    P7_1["P7.1: ثبت پیش‌بینی\nrecordPrediction()"]:::process
+   261→    P7_2["P7.2: ثبت بازخورد\nrecordFeedback()"]:::process
+   262→    P7_3["P7.3: بروزرسانی وزن\nupdateWeights()"]:::process
+   263→    P7_4["P7.4: آمار\ngetFeedbackStats()"]:::process
+   264→
+   265→    D4[("D4: بازخورد")]:::store
+   266→    D3[("D3: وزن‌ها")]:::store
+   267→
+   268→    P7_1 --> D4
+   269→    D4 --> P7_2
+   270→    P7_2 -->|"isCorrect"| P7_3
+   271→    P7_3 -->|"weight ∈ [0.5, 2.0]"| D3
+   272→    D4 --> P7_4
+   273→    D3 --> P7_4`,
+   274→    level: 'سطح ۲ — P7',
+   275→    farsiNotes: [
+   276→      '🔹 P7.1 هر پیش‌بینی را با شناسه یکتا، سناریو، نماد و جهت ثبت می‌کند.',
+   277→      '🔹 P7.2 بازخورد کاربر (درست/نادرست) را ثبت و بروزرسانی وزن را راه‌اندازی می‌کند.',
+   278→      '🔹 P7.3 وزن‌ها را با نرخ یادگیری تطبیقی بروزرسانی می‌کند: دقت بالا → LR کم، دقت پایین → LR زیاد.',
+   279→      '🔹 P7.4 آمار کلی شامل دقت کلی، دقت بر اساس سناریو و دقت ۲۰ اخیر را محاسبه می‌کند.',
+   280→      '🔹 وزن‌ها در بازه [0.5, 2.0] محدود و در localStorage پایدارسازی می‌شوند.',
+   281→    ],
+   282→  }],
+   283→  'dfd-l3': [{
+   284→    title: '۷ لایه VDss — سطح ۳ (P1.4)',
+   285→    description: 'جزئیات عملیاتی موتور ۷ لایه احتمال',
+   286→    type: 'mermaid',
+   287→    code: `flowchart LR
+   288→    classDef layer fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff
+   289→    classDef data fill:#e76f51,stroke:#f4a261,stroke-width:2px,color:#fff
+   290→
+   291→    L1["لایه ۱: نمره خام\nRaw Scores"]:::layer
+   292→    L2["لایه ۲: اصلاح مومنتوم\nMomentum + Crossover"]:::layer
+   293→    L3["لایه ۳: آموزش ML\nBull Consensus"]:::layer
+   294→    L4["لایه ۴: احتمال سناریو\nNormalization"]:::layer
+   295→    L5["لایه ۵: وزن یال‌ها\nEdge Weights"]:::layer
+   296→    L6["لایه ۶: احتمال مسیر\nDFS Path Probability"]:::layer
+   297→    L7["لایه ۷: بروزرسانی تطبیقی\nAdaptive Update"]:::layer
+   298→
+   299→    D[("مدل ML")]:::data
+   300→
+   301→    L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7
+   302→    D --> L3
+   303→    L7 -->|"feedback"| D`,
+   304→    level: 'سطح ۳ — ۷ لایه VDss',
+   305→    farsiNotes: [
+   306→      '🔹 لایه ۱: نمره خام هر سناریو بر اساس اندیکاتورها محاسبه می‌شود.',
+   307→      '🔹 لایه ۲: مومنتوم و کراس‌اور/داورجنس اعمال می‌شود.',
+   308→      '🔹 لایه ۳: مدل ML آموزش می‌بیند و اجماع صعودی محاسبه می‌شود.',
+   309→      '🔹 لایه ۴: نمرات به احتمال‌های نرمال‌شده تبدیل می‌شوند (مجموع = ۱۰۰).',
+   310→      '🔹 لایه ۵: وزن یال‌های گراف تصمیم بر اساس شرایط بازار تعیین می‌شود.',
+   311→      '🔹 لایه ۶: احتمال هر مسیر با DFS محاسبه می‌شود.',
+   312→      '🔹 لایه ۷: بروزرسانی تطبیقی با داده جدید و بازخورد کاربر.',
+   313→    ],
+   314→  }],
+   315→};
+   316→
+   317→// ─── UML Class Diagrams ────────────────────────────────────────
+   318→
+   319→const UML_CLASS_DIAGRAMS: DiagramDef[] = [
+   320→  {
+   321→    title: 'مدل حوزه (Domain Model) — سطح ۱',
+   322→    description: 'کلاس‌های اصلی سیستم و روابط بین آنها',
+   323→    type: 'plantuml',
+   324→    code: `@startuml
+   325→skinparam classAttributeIconSize 0
+   326→skinparam classFontSize 13
+   327→skinparam defaultFontSize 12
+   328→skinparam shadowing false
+   329→
+   330→class OHLCV {
+   331→  date: string
+   332→  open: number
+   333→  high: number
+   334→  low: number
+   335→  close: number
+   336→  volume: number
+   337→}
+   338→
+   339→class TAResult {
+   340→  currentPrice: number
+   341→  rsi: number
+   342→  adx: number
+   343→  macdLine: number
+   344→  scenarios: Map
+   345→  regimeResult: RegimeResult
+   346→  overallSignal: string
+   347→}
+   348→
+   349→class RegimeResult {
+   350→  primary: RegimeType
+   351→  probabilities: Map
+   352→  confidence: number
+   353→}
+   354→
+   355→class VolumeProfileResult {
+   356→  poc: number
+   357→  valueAreaHigh: number
+   358→  valueAreaLow: number
+   359→  vwap: number
+   360→}
+   361→
+   362→class FeedbackStore {
+   363→  -predictions: PredictionRecord[]
+   364→  -weights: WeightRecord[]
+   365→  +recordPrediction()
+   366→  +recordFeedback()
+   367→  +updateWeights()
+   368→}
+   369→
+   370→OHLCV "1..*" --> "1" TAResult : analyze()
+   371→TAResult --> "1" RegimeResult : detectRegime()
+   372→TAResult --> "0..1" VolumeProfileResult
+   373→FeedbackStore --> TAResult : weights
+   374→@enduml`,
+   375→    level: 'سطح ۱',
+   376→    farsiNotes: [
+   377→      '🔹 ۵ کلاس اصلی حوزه: OHLCV, TAResult, RegimeResult, VolumeProfileResult, FeedbackStore.',
+   378→      '🔹 OHLCV ورودی اصلی و TAResult خروجی اصلی سیستم است.',
+   379→      '🔹 هر تحلیل یک RegimeResult و اختیاری یک VolumeProfileResult تولید می‌کند.',
+   380→      '🔹 FeedbackStore وزن‌های تطبیقی را مدیریت می‌کند.',
+   381→      '🔹 روابط: تحلیل (1..* → 1)، تشخیص رژیم (→ 1)، بازخورد (→ weights).',
+   382→    ],
+   383→  },
+   384→  {
+   385→    title: 'نمودار کلاس طراحی — سطح ۲',
+   386→    description: 'کلاس‌های طراحی با ارتباطات و چندگانگی',
+   387→    type: 'plantuml',
+   388→    code: `@startuml
+   389→skinparam classAttributeIconSize 0
+   390→skinparam shadowing false
+   391→
+   392→class "ta-engine" as TE <<Engine>> {
+   393→  +analyze(data, currencyUnit): TAResult
+   394→  +calcTrend(data, period): TrendResult
+   395→  +computeHistoricalProbabilities()
+   396→}
+   397→
+   398→class "regime-engine" as RE <<Engine>> {
+   399→  +detectRegime(input): RegimeResult
+   400→  +fuzzyRegimeDetector(input): FuzzyOutput
+   401→  +propagateMarkov(chain, obs)
+   402→  +adaptiveWeightedVote(ind, weights)
+   403→}
+   404→
+   405→class "ml-engine" as ML <<Engine>> {
+   406→  +extractVDSSFeatures(): number[]
+   407→  +trainAdaptiveModel(X, y)
+   408→  +calculateBullConsensus(): number
+   409→}
+   410→
+   411→class "sr-analyzer" as SR <<Analyzer>> {
+   412→  +analyzeSupportResistance(): SRResult
+   413→}
+   414→
+   415→class "volume-profile" as VP <<Analyzer>> {
+   416→  +approximateVolumeProfile(): VPResult
+   417→  +countTouch(): TouchResult
+   418→  +calculateEnhancedSRStrength()
+   419→}
+   420→
+   421→class "msl-feedback" as FB <<Store>> {
+   422→  +recordPrediction()
+   423→  +recordFeedback()
+   424→  +updateWeightsFromFeedback()
+   425→}
+   426→
+   427→TE *-- RE : contains
+   428→TE *-- SR : contains
+   429→TE *-- ML : uses
+   430→SR o-- VP : uses
+   431→ML ..> FB : reads weights
+   432→TE ..> FB : writes predictions
+   433→@enduml`,
+   434→    level: 'سطح ۲',
+   435→    farsiNotes: [
+   436→      '🔹 ۶ کلاس طراحی با کلیشه‌های UML: <<Engine>>, <<Analyzer>>, <<Store>>.',
+   437→      '🔹 ترکیب (Composition): ta-engine شامل regime-engine و sr-analyzer است.',
+   438→      '🔹 تجمع (Aggregation): sr-analyzer از volume-profile استفاده می‌کند.',
+   439→      '🔹 وابستگی (Dependency): ml-engine وزن‌ها را از feedback-store می‌خواند.',
+   440→      '🔹 تمام کلاس‌ها مستقیماً به فایل‌های منبع TypeScript نگاشت می‌شوند.',
+   441→    ],
+   442→  },
+   443→];
+   444→
+   445→// ─── UML Component Diagrams ────────────────────────────────────
+   446→
+   447→const UML_COMPONENT_DIAGRAM: DiagramDef = {
+   448→  title: 'معماری مؤلفه‌ها — سطح ۱',
+   449→  description: 'مؤلفه‌های سطح بالا و وابستگی‌های بین آنها',
+   450→  type: 'plantuml',
+   451→  code: `@startuml
+   452→skinparam componentStyle rectangle
+   453→skinparam shadowing false
+   454→
+   455→package "لایه نمایش" {
+   456→  component [SymbolSearch] as SS
+   457→  component [CandlestickChart] as CC
+   458→  component [IndicatorsPanel] as IP
+   459→  component [VdesAnalysis] as VA
+   460→  component [VdssGraph] as VG
+   461→  component [MLForecast] as MF
+   462→}
+   463→
+   464→package "لایه API" {
+   465→  component [/api/analysis] as API1
+   466→  component [/api/vdes-analysis] as API2
+   467→  component [/api/ai-analysis] as API3
+   468→  component [/api/ml-predict] as API4
+   469→}
+   470→
+   471→package "لایه موتور" {
+   472→  component [ta-engine] as TE
+   473→  component [regime-engine] as RE
+   474→  component [ml-engine] as ML
+   475→  component [sr-analyzer] as SR
+   476→  component [pattern-detection] as PD
+   477→  component [volume-profile] as VP
+   478→  component [msl-feedback] as FB
+   479→}
+   480→
+   481→package "لایه داده" {
+   482→  component [tse-api] as TSE
+   483→  component [tgju-api] as TGJU
+   484→  component [yahoo-api] as YH
+   485→  component [zai-shared] as ZAI
+   486→}
+   487→
+   488→SS --> API1
+   489→CC --> API1
+   490→IP --> API1
+   491→VA --> API2
+   492→MF --> API4
+   493→
+   494→API1 --> TE
+   495→API2 --> ZAI
+   496→API3 --> ZAI
+   497→API4 --> ML
+   498→
+   499→TE --> RE
+   500→TE --> SR
+   501→TE --> PD
+   502→SR --> VP
+   503→ML --> FB
+   504→
+   505→API1 --> TSE
+   506→API1 --> TGJU
+   507→API1 --> YH
+   508→@enduml`,
+   509→  level: 'سطح ۱',
+   510→  farsiNotes: [
+   511→    '🔹 ۴ لایه اصلی: نمایش، API، موتور تحلیل و داده.',
+   512→    '🔹 لایه نمایش شامل ۶ کامپوننت React اصلی است.',
+   513→    '🔹 لایه API ۴ endpoint اصلی را ارائه می‌دهد.',
+   514→    '🔹 لایه موتور شامل ۷ ماژول تحلیلی است.',
+   515→    '🔹 لایه داده از ۴ منبع مختلف داده دریافت می‌کند.',
+   516→  ],
+   517→};
+   518→
+   519→// ─── UML Sequence Diagrams ─────────────────────────────────────
+   520→
+   521→const UML_SEQUENCE_L1: DiagramDef = {
+   522→  title: 'تعامل سطح بالا — توالی سطح ۱',
+   523→  description: 'جریان اصلی تحلیل از انتخاب نماد تا نمایش نتایج',
+   524→  type: 'plantuml',
+   525→  code: `@startuml
+   526→skinparam shadowing false
+   527→actor User
+   528→participant "page.tsx" as Page
+   529→participant "/api/analysis" as API
+   530→participant "tse-api" as TSE
+   531→participant "ta-engine" as TA
+   532→participant "regime-engine" as RE
+   533→
+   534→User -> Page: انتخاب نماد "فولاد"
+   535→Page -> API: GET /api/analysis?symbol=فولاد
+   536→API -> TSE: fetchCandlestick("فولاد")
+   537→TSE --> API: OHLCV[]
+   538→API -> TA: analyze(ohlcv, "ریال")
+   539→TA -> RE: detectRegime(input)
+   540→RE --> TA: RegimeResult
+   541→TA --> API: TAResult
+   542→API --> Page: {candles, ta, probabilityTrend}
+   543→Page --> User: نمایش نمودار + اندیکاتورها
+   544→@enduml`,
+   545→  level: 'سطح ۱',
+   546→  farsiNotes: [
+   547→    '🔹 جریان اصلی: کاربر نماد را انتخاب → API داده را دریافت → ta-engine تحلیل می‌کند.',
+   548→    '🔹 regime-engine در داخل ta-engine فراخوانی می‌شود.',
+   549→    '🔹 پاسخ شامل کندل‌ها، نتایج TA و ترند احتمال ۳۰ روزه است.',
+   550→    '🔹 تمام فراخوانی‌ها همگام (sync) و به ترتیب انجام می‌شوند.',
+   551→    '🔹 زمان کل: ~۲-۵ ثانیه بسته به منبع داده.',
+   552→  ],
+   553→};
+   554→
+   555→// ─── State Machine Diagrams ────────────────────────────────────
+   556→
+   557→const STATE_MACHINE_DIAGRAM: DiagramDef = {
+   558→  title: 'ماشین حالت — جلسه تحلیل',
+   559→  description: 'حالت‌های اصلی یک جلسه تحلیل از شروع تا پایان',
+   560→  type: 'mermaid',
+   561→  code: `stateDiagram-v2
+   562→    [*] --> Idle
+   563→    Idle --> Searching : نماد انتخاب شد
+   564→    Searching --> Loading : منبع داده شناسایی شد
+   565→    Searching --> Error : نماد یافت نشد
+   566→    Loading --> Computing_TA : داده OHLCV دریافت شد
+   567→    Loading --> Error : خطا در دریافت داده
+   568→    Computing_TA --> Detecting_Regime : اندیکاتورها محاسبه شد
+   569→    Detecting_Regime --> Generating_Text : رژیم تشخیص داده شد
+   570→    Generating_Text --> Complete : متن AI تولید شد
+   571→    Generating_Text --> Complete : کش HIT (بدون AI)
+   572→    Error --> Idle : تلاش مجدد
+   573→    Complete --> Searching : نماد جدید
+   574→    Complete --> Computing_TA : بروزرسانی خودکار
+   575→
+   576→    state Error {
+   577→        [*] --> NetworkError
+   578→        NetworkError --> TimeoutError
+   579→        TimeoutError --> DataError
+   580→    }`,
+   581→  level: 'سطح ۱',
+   582→  farsiNotes: [
+   583→    '🔹 ۷ حالت اصلی: Idle, Searching, Loading, Computing_TA, Detecting_Regime, Generating_Text, Complete.',
+   584→    '🔹 حالت Error شامل زیرحالت‌های NetworkError, TimeoutError و DataError است.',
+   585→    '🔹 از Complete می‌توان به Searching (نماد جدید) یا Computing_TA (بروزرسانی) رفت.',
+   586→    '🔹 Generating_Text می‌تواند مستقیماً به Complete برود اگر کش HIT باشد.',
+   587→    '🔹 بروزرسانی خودکار هر ۵ دقیقه انجام می‌شود.',
+   588→  ],
+   589→};
+   590→
+   591→// ─── BPMN Overview ─────────────────────────────────────────────
+   592→
+   593→const BPMN_OVERVIEW: DiagramDef = {
+   594→  title: 'نمای کلان فرایند — سطح ۱',
+   595→  description: 'استخرها و خطوط اصلی فرایند تحلیل',
+   596→  type: 'mermaid',
+   597→  code: `flowchart TB
+   598→    classDef pool fill:#1e293b,stroke:#475569,stroke-width:2px,color:#e2e8f0
+   599→    classDef lane fill:#334155,stroke:#475569,stroke-width:1px,color:#94a3b8
+   600→    classDef task fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#fff
+   601→    classDef gateway fill:#d97706,stroke:#f59e0b,stroke-width:2px,color:#fff
+   602→
+   603→    subgraph Pool1["🏊 کاربر"]
+   604→        Start(["● شروع"]):::task
+   605→        Select["🔍 انتخاب نماد"]:::task
+   606→        View["📊 مشاهده نتایج"]:::task
+   607→        Feedback["✍️ ثبت بازخورد"]:::task
+   608→    end
+   609→
+   610→    subgraph Pool2["🏊 موتور تحلیل"]
+   611→        Fetch["📥 دریافت داده"]:::task
+   612→        Analyze["⚙️ تحلیل تکنیکال"]:::task
+   613→        Regime["🔄 تشخیص رژیم"]:::task
+   614→        AI["🤖 تولید متن AI"]:::task
+   615→    end
+   616→
+   617→    subgraph Pool3["🏊 منابع داده"]
+   618→        TSE["📈 TSETMC"]:::lane
+   619→        TGJU["🏦 تاجو"]:::lane
+   620→        Yahoo["🌍 یاهو"]:::lane
+   621→    end
+   622→
+   623→    Start --> Select --> Fetch
+   624→    Fetch --> TSE
+   625→    Fetch --> TGJU
+   626→    Fetch --> Yahoo
+   627→    TSE --> Analyze
+   628→    TGJU --> Analyze
+   629→    Yahoo --> Analyze
+   630→    Analyze --> Regime --> AI --> View
+   631→    View --> Feedback`,
+   632→  level: 'سطح ۱',
+   633→  farsiNotes: [
+   634→    '🔹 ۳ استخر (Pool): کاربر، موتور تحلیل و منابع داده.',
+   635→    '🔹 فرایند از انتخاب نماد شروع و با مشاهده نتایج و ثبت بازخورد پایان می‌یابد.',
+   636→    '🔹 درخواست داده به ۳ منبع (TSETMC, تاجو, یاهو) ارسال می‌شود.',
+   637→    '🔹 تحلیل شامل ۴ مرحله است: دریافت، تحلیل، تشخیص رژیم و تولید متن.',
+   638→    '🔹 بازخورد کاربر به چرخه یادگیری تطبیقی وارد می‌شود.',
+   639→  ],
+   640→};
+   641→
+   642→// ═══════════════════════════════════════════════════════════════
+   643→// Main Component
+   644→// ═══════════════════════════════════════════════════════════════
+   645→
+   646→export default function DocsPage() {
+   647→  const { colors: C, isDark } = useTheme();
+   648→  const containerRef = useRef<HTMLDivElement>(null);
+   649→  const [active, setActive] = useState('dfd-l0');
+   650→  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['dfd']));
+   651→  const [searchQuery, setSearchQuery] = useState('');
+   652→  const [zoom, setZoom] = useState(1);
+   653→
+   654→  const toggleSection = useCallback((id: string) => {
+   655→    setExpandedSections(prev => {
+   656→      const next = new Set(prev);
+   657→      if (next.has(id)) next.delete(id);
+   658→      else next.add(id);
+   659→      return next;
+   660→    });
+   661→  }, []);
+   662→
+   663→  const scrollTo = useCallback((id: string) => {
+   664→    setActive(id);
+   665→    const el = containerRef.current?.querySelector(`[data-section="${id}"]`);
+   666→    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+   667→  }, []);
+   668→
+   669→  // Get all diagrams for current section
+   670→  const currentDiagrams = useMemo((): DiagramDef[] => {
+   671→    // DFD
+   672→    if (DFD_DIAGRAMS[active]) return DFD_DIAGRAMS[active];
+   673→    // UML Class
+   674→    if (active === 'uml-class') return UML_CLASS_DIAGRAMS;
+   675→    // UML Component
+   676→    if (active === 'uml-component') return [UML_COMPONENT_DIAGRAM];
+   677→    // UML Sequence
+   678→    if (active === 'uml-sequence') return [UML_SEQUENCE_L1];
+   679→    // State Machine
+   680→    if (active === 'uml-state') return [STATE_MACHINE_DIAGRAM];
+   681→    // BPMN
+   682→    if (active === 'bpmn-l1') return [BPMN_OVERVIEW];
+   683→    return [];
+   684→  }, [active]);
+   685→
+   686→  // Stats
+   687→  const totalDiagrams = 65;
+   688→
+   689→  return (
+   690→    <div className="flex gap-4 max-h-[calc(100vh-140px)] overflow-hidden" dir="rtl">
+   691→      {/* ═══ Sidebar ═══ */}
+   692→      <nav
+   693→        className="w-72 shrink-0 overflow-y-auto rounded-xl"
+   694→        style={{
+   695→          backgroundColor: C.cardBg,
+   696→          border: `1px solid ${C.cardBorder}`,
+   697→          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.3)' : '0 4px 24px rgba(0,0,0,0.06)',
+   698→        }}
+   699→      >
+   700→        {/* Header */}
+   701→        <div className="p-4 border-b" style={{ borderColor: C.cardBorder }}>
+   702→          <div className="flex items-center gap-2 mb-2" style={{ color: C.primary }}>
+   703→            <BookOpen className="w-5 h-5" />
+   704→            <h2 className="text-sm font-bold">مستندات دیاگرام‌ها</h2>
+   705→          </div>
+   706→          <div className="flex items-center gap-2 text-xs" style={{ color: C.cardSubFg }}>
+   707→            <Badge variant="outline" className="text-[10px]" style={{ borderColor: C.primary, color: C.primary }}>
+   708→              {totalDiagrams} دیاگرام
+   709→            </Badge>
+   710→            <span>DFD + BPMN + UML 2.5</span>
+   711→          </div>
+   712→        </div>
+   713→
+   714→        {/* Search */}
+   715→        <div className="px-3 py-2">
+   716→          <div
+   717→            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+   718→            style={{ backgroundColor: C.inputBg, border: `1px solid ${C.inputBorder}` }}
+   719→          >
+   720→            <Search className="w-3.5 h-3.5" style={{ color: C.cardSubFg }} />
+   721→            <input
+   722→              type="text"
+   723→              placeholder="جستجو..."
+   724→              value={searchQuery}
+   725→              onChange={(e) => setSearchQuery(e.target.value)}
+   726→              className="bg-transparent outline-none flex-1 text-sm"
+   727→              style={{ color: C.cardFg }}
+   728→            />
+   729→          </div>
+   730→        </div>
+   731→
+   732→        {/* Section Tree */}
+   733→        <ul className="px-2 pb-4 space-y-0.5">
+   734→          {SECTIONS.map((section) => {
+   735→            const Icon = section.icon;
+   736→            const isExpanded = expandedSections.has(section.id);
+   737→            const isActive = active === section.id || active.startsWith(section.id + '-');
+   738→            const matchesSearch = !searchQuery || section.label.includes(searchQuery) ||
+   739→              section.children?.some(c => c.label.includes(searchQuery));
+   740→
+   741→            if (!matchesSearch) return null;
+   742→
+   743→            return (
+   744→              <li key={section.id}>
+   745→                <button
+   746→                  onClick={() => {
+   747→                    if (section.children) toggleSection(section.id);
+   748→                    else scrollTo(section.id);
+   749→                  }}
+   750→                  className="w-full text-right flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all"
+   751→                  style={{
+   752→                    backgroundColor: isActive ? C.primaryBg : 'transparent',
+   753→                    color: isActive ? C.primary : C.cardSubFg,
+   754→                    fontWeight: isActive ? 600 : 400,
+   755→                  }}
+   756→                >
+   757→                  {section.children && (
+   758→                    <ChevronLeft
+   759→                      className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+   760→                      style={{ color: C.cardSubFg }}
+   761→                    />
+   762→                  )}
+   763→                  <Icon className="w-4 h-4" />
+   764→                  <span className="flex-1 truncate">{section.label}</span>
+   765→                  {section.badge && (
+   766→                    <span
+   767→                      className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+   768→                      style={{ backgroundColor: section.badgeColor + '20', color: section.badgeColor }}
+   769→                    >
+   770→                      {section.badge}
+   771→                    </span>
+   772→                  )}
+   773→                </button>
+   774→
+   775→                {/* Children */}
+   776→                {isExpanded && section.children && (
+   777→                  <ul className="mr-6 mt-0.5 space-y-0.5">
+   778→                    {section.children.map((child) => {
+   779→                      const ChildIcon = child.icon;
+   780→                      const childActive = active === child.id;
+   781→                      const childMatches = !searchQuery || child.label.includes(searchQuery);
+   782→                      if (!childMatches) return null;
+   783→
+   784→                      return (
+   785→                        <li key={child.id}>
+   786→                          <button
+   787→                            onClick={() => scrollTo(child.id)}
+   788→                            className="w-full text-right flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all"
+   789→                            style={{
+   790→                              backgroundColor: childActive ? C.primaryBg : 'transparent',
+   791→                              color: childActive ? C.primary : C.cardSubFg,
+   792→                              fontWeight: childActive ? 600 : 400,
+   793→                            }}
+   794→                          >
+   795→                            <ChildIcon className="w-3.5 h-3.5" />
+   796→                            <span className="truncate">{child.label}</span>
+   797→                          </button>
+   798→                        </li>
+   799→                      );
+   800→                    })}
+   801→                  </ul>
+   802→                )}
+   803→              </li>
+   804→            );
+   805→          })}
+   806→        </ul>
+   807→      </nav>
+   808→
+   809→      {/* ═══ Main Content ═══ */}
+   810→      <div ref={containerRef} className="flex-1 overflow-y-auto space-y-6 pr-2">
+   811→        {/* Hero Banner */}
+   812→        <div
+   813→          className="rounded-xl p-6 relative overflow-hidden"
+   814→          style={{
+   815→            background: isDark
+   816→              ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+   817→              : 'linear-gradient(135deg, #eff6ff 0%, #f8fafc 50%, #ecfdf5 100%)',
+   818→            border: `1px solid ${C.cardBorder}`,
+   819→          }}
+   820→        >
+   821→          <div className="relative z-10">
+   822→            <div className="flex items-center gap-3 mb-3">
+   823→              <div
+   824→                className="w-12 h-12 rounded-xl flex items-center justify-center"
+   825→                style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.accent})` }}
+   826→              >
+   827→                <GitBranch className="w-6 h-6 text-white" />
+   828→              </div>
+   829→              <div>
+   830→                <h1 className="text-xl font-bold" style={{ color: C.cardFg }}>
+   831→                  مستندات دیاگرام‌های سیستم
+   832→                </h1>
+   833→                <p className="text-sm" style={{ color: C.cardSubFg }}>
+   834→                  تحلیل تکنیکال بورس ایران — DFD + BPMN + UML 2.5
+   835→                </p>
+   836→              </div>
+   837→            </div>
+   838→            <div className="flex flex-wrap gap-2 mt-4">
+   839→              {[
+   840→                { label: 'DFD', count: 12, color: '#3b82f6' },
+   841→                { label: 'BPMN', count: 9, color: '#8b5cf6' },
+   842→                { label: 'UML ساختاری', count: 21, color: '#059669' },
+   843→                { label: 'UML رفتاری', count: 11, color: '#d97706' },
+   844→                { label: 'UML تعاملی', count: 12, color: '#dc2626' },
+   845→              ].map(item => (
+   846→                <div
+   847→                  key={item.label}
+   848→                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm"
+   849→                  style={{ backgroundColor: item.color + '15', border: `1px solid ${item.color}30` }}
+   850→                >
+   851→                  <span className="font-bold" style={{ color: item.color }}>{item.count}</span>
+   852→                  <span style={{ color: C.cardFg }}>{item.label}</span>
+   853→                </div>
+   854→              ))}
+   855→            </div>
+   856→          </div>
+   857→        </div>
+   858→
+   859→        {/* Zoom Controls */}
+   860→        <div className="flex items-center gap-2 sticky top-0 z-10 py-2 px-1">
+   861→          <div
+   862→            className="flex items-center gap-1 px-2 py-1 rounded-lg"
+   863→            style={{ backgroundColor: C.cardBg, border: `1px solid ${C.cardBorder}` }}
+   864→          >
+   865→            <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-1 rounded hover:opacity-80" style={{ color: C.cardSubFg }}>
+   866→              <ZoomOut className="w-4 h-4" />
+   867→            </button>
+   868→            <span className="text-xs font-mono w-10 text-center" style={{ color: C.cardFg }}>
+   869→              {Math.round(zoom * 100)}%
+   870→            </span>
+   871→            <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-1 rounded hover:opacity-80" style={{ color: C.cardSubFg }}>
+   872→              <ZoomIn className="w-4 h-4" />
+   873→            </button>
+   874→          </div>
+   875→        </div>
+   876→
+   877→        {/* Diagrams */}
+   878→        {currentDiagrams.length > 0 ? (
+   879→          currentDiagrams.map((diagram, idx) => (
+   880→            <div
+   881→              key={`${active}-${idx}`}
+   882→              data-section={active}
+   883→              className="rounded-xl overflow-hidden"
+   884→              style={{
+   885→                backgroundColor: C.cardBg,
+   886→                border: `1px solid ${C.cardBorder}`,
+   887→                boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.2)' : '0 2px 12px rgba(0,0,0,0.04)',
+   888→              }}
+   889→            >
+   890→              {/* Card Header */}
+   891→              <div
+   892→                className="px-5 py-3 border-b flex items-center gap-3"
+   893→                style={{
+   894→                  borderColor: C.cardBorder,
+   895→                  background: isDark ? 'linear-gradient(90deg, rgba(59,130,246,0.08), transparent)' : 'linear-gradient(90deg, rgba(59,130,246,0.04), transparent)',
+   896→                }}
+   897→              >
+   898→                <div
+   899→                  className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+   900→                  style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.accent})`, color: '#fff' }}
+   901→                >
+   902→                  {idx + 1}
+   903→                </div>
+   904→                <div className="flex-1">
+   905→                  <h3 className="text-sm font-bold" style={{ color: C.cardFg }}>{diagram.title}</h3>
+   906→                  <p className="text-xs mt-0.5" style={{ color: C.cardSubFg }}>{diagram.description}</p>
+   907→                </div>
+   908→                {diagram.level && (
+   909→                  <Badge variant="outline" className="text-[10px]" style={{ borderColor: C.primary, color: C.primary }}>
+   910→                    {diagram.level}
+   911→                  </Badge>
+   912→                )}
+   913→                <Badge
+   914→                  className="text-[10px]"
+   915→                  style={{
+   916→                    backgroundColor: diagram.type === 'mermaid' ? '#3b82f620' : '#05966920',
+   917→                    color: diagram.type === 'mermaid' ? '#3b82f6' : '#059669',
+   918→                    borderColor: diagram.type === 'mermaid' ? '#3b82f640' : '#05966940',
+   919→                  }}
+   920→                  variant="outline"
+   921→                >
+   922→                  {diagram.type === 'mermaid' ? 'Mermaid' : 'PlantUML'}
+   923→                </Badge>
+   924→              </div>
+   925→
+   926→              {/* Diagram Content */}
+   927→              <div className="p-4">
+   928→                <div
+   929→                  className="rounded-lg p-4 overflow-x-auto"
+   930→                  style={{
+   931→                    backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+   932→                    border: `1px solid ${C.cardBorder}`,
+   933→                    transform: `scale(${zoom})`,
+   934→                    transformOrigin: 'top right',
+   935→                  }}
+   936→                >
+   937→                  {diagram.type === 'mermaid' ? (
+   938→                    <MermaidDiagram chart={diagram.code} id={`${active}-${idx}`} />
+   939→                  ) : (
+   940→                    <PlantUMLDiagram code={diagram.code} alt={diagram.title} />
+   941→                  )}
+   942→                </div>
+   943→              </div>
+   944→
+   945→              {/* Farsi Notes */}
+   946→              {diagram.farsiNotes.length > 0 && (
+   947→                <div className="px-5 pb-4">
+   948→                  <div
+   949→                    className="rounded-lg p-4 space-y-1.5"
+   950→                    style={{
+   951→                      backgroundColor: isDark ? 'rgba(59,130,246,0.05)' : 'rgba(59,130,246,0.03)',
+   952→                      border: `1px solid ${C.primary}20`,
+   953→                    }}
+   954→                  >
+   955→                    <div className="flex items-center gap-2 mb-2">
+   956→                      <BookOpen className="w-4 h-4" style={{ color: C.primary }} />
+   957→                      <span className="text-xs font-bold" style={{ color: C.primary }}>توضیحات</span>
+   958→                    </div>
+   959→                    {diagram.farsiNotes.map((note, i) => (
+   960→                      <p key={i} className="text-xs leading-relaxed" style={{ color: C.cardSubFg }}>
+   961→                        {note}
+   962→                      </p>
+   963→                    ))}
+   964→                  </div>
+   965→                </div>
+   966→              )}
+   967→            </div>
+   968→          ))
+   969→        ) : (
+   970→          /* Placeholder for sections without inline diagrams */
+   971→          <div
+   972→            className="rounded-xl p-8 text-center"
+   973→            style={{ backgroundColor: C.cardBg, border: `1px solid ${C.cardBorder}` }}
+   974→          >
+   975→            <div className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4"
+   976→              style={{ backgroundColor: C.primaryBg }}>
+   977→              <BookOpen className="w-8 h-8" style={{ color: C.primary }} />
+   978→            </div>
+   979→            <h3 className="text-lg font-bold mb-2" style={{ color: C.cardFg }}>
+   980→              {SECTIONS.find(s => s.id === active || s.children?.some(c => c.id === active))?.label || 'مستندات'}
+   981→            </h3>
+   982→            <p className="text-sm mb-4" style={{ color: C.cardSubFg }}>
+   983→              دیاگرام‌های این بخش در فایل DIAGRAM_DOCS.md موجود هستند.
+   984→            </p>
+   985→            <div className="flex flex-wrap justify-center gap-2">
+   986→              <Badge variant="outline" style={{ borderColor: C.primary, color: C.primary }}>
+   987→                <a href="/DIAGRAM_DOCS.md" target="_blank" className="flex items-center gap-1">
+   988→                  <Download className="w-3 h-3" /> مشاهده فایل کامل
+   989→                </a>
+   990→              </Badge>
+   991→            </div>
+   992→          </div>
+   993→        )}
+   994→
+   995→        {/* Coherence Table */}
+   996→        {active === 'coherence' && (
+   997→          <div
+   998→            className="rounded-xl overflow-hidden"
+   999→            style={{ backgroundColor: C.cardBg, border: `1px solid ${C.cardBorder}` }}
+  1000→          >
+  1001→            <div className="px-5 py-3 border-b" style={{ borderColor: C.cardBorder }}>
+  1002→              <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: C.primary }}>
+  1003→                <GitMerge className="w-4 h-4" /> جدول انسجام بین دیاگرام‌ها
+  1004→              </h3>
+  1005→            </div>
+  1006→            <div className="p-4 overflow-x-auto">
+  1007→              <table className="w-full text-xs" style={{ color: C.cardFg }}>
+  1008→                <thead>
+  1009→                  <tr style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+  1010→                    <th className="text-right py-2 px-3 font-bold" style={{ color: C.primary }}>عنصر DFD</th>
+  1011→                    <th className="text-right py-2 px-3 font-bold" style={{ color: C.primary }}>فعالیت BPMN</th>
+  1012→                    <th className="text-right py-2 px-3 font-bold" style={{ color: C.primary }}>کلاس UML</th>
+  1013→                    <th className="text-right py-2 px-3 font-bold" style={{ color: C.primary }}>متد/تابع</th>
+  1014→                    <th className="text-right py-2 px-3 font-bold" style={{ color: C.primary }}>فایل منبع</th>
+  1015→                  </tr>
+  1016→                </thead>
+  1017→                <tbody>
+  1018→                  {[
+  1019→                    ['P1: تحلیل تکنیکال', 'محاسبه اندیکاتورها', 'TAEngine', 'analyze()', 'ta-engine.ts'],
+  1020→                    ['P2: تشخیص رژیم', 'تشخیص رژیم ترکیبی', 'RegimeEngine', 'detectRegime()', 'regime-engine.ts'],
+  1021→                    ['P3: یادگیری ML', 'آموزش مدل تطبیقی', 'AdaptiveWeightModel', 'train()', 'ml-logistic.ts'],
+  1022→                    ['P4: تحلیل S/R', 'تحلیل سطوح کلیدی', 'SRAnalyzer', 'analyzeSupportResistance()', 'sr-analyzer.ts'],
+  1023→                    ['P5: تشخیص الگو', 'شناسایی الگوها', 'PatternDetector', 'detectAllPatterns()', 'pattern-detection.ts'],
+  1024→                    ['P6: تولید متن AI', 'تولید تحلیل هوشمند', 'VDESAnalysis', 'POST /api/vdes-analysis', 'vdes-analysis route'],
+  1025→                    ['P7: بازخورد تطبیقی', 'بروزرسانی وزن‌ها', 'FeedbackStore', 'updateWeights()', 'msl-feedback.ts'],
+  1026→                    ['D1: کش OHLCV', 'ذخیره داده بازار', '—', 'localStorage', 'tse-api.ts'],
+  1027→                    ['D3: مدل ML', 'ذخیره مدل آموزش‌دیده', 'AdaptiveWeightModel', 'predictScore()', 'ml-engine.ts'],
+  1028→                    ['D4: بازخورد', 'ذخیره بازخورد کاربر', 'FeedbackStore', 'recordFeedback()', 'msl-feedback.ts'],
+  1029→                  ].map((row, i) => (
+  1030→                    <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}40` }}>
+  1031→                      {row.map((cell, j) => (
+  1032→                        <td key={j} className="py-2 px-3" style={{ color: j === 4 ? C.primary : C.cardFg }}>
+  1033→                          {j === 4 ? <code className="text-[10px] px-1 py-0.5 rounded" style={{ backgroundColor: C.primaryBg }}>{cell}</code> : cell}
+  1034→                        </td>
+  1035→                      ))}
+  1036→                    </tr>
+  1037→                  ))}
+  1038→                </tbody>
+  1039→              </table>
+  1040→            </div>
+  1041→          </div>
+  1042→        )}
+  1043→      </div>
+  1044→    </div>
+  1045→  );
+  1046→}
+  1047→
