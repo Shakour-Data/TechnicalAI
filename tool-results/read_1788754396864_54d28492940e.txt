@@ -1,0 +1,1104 @@
+     1→# UML 2.5 Interaction Diagrams — Iranian Stock Market Technical Analysis System
+     2→
+     3→> **Section Reference:** UML 2.5 Superstructure §17 — Interaction Diagrams  
+     4→> **System:** بورس تهران — سامانه تحلیل تکنیکال (Tehran Stock Exchange — Technical Analysis System)  
+     5→> **Diagram Types:** Sequence (§17.2), Communication (§17.3), Interaction Overview (§17.4), Timing (§17.5)  
+     6→> **Levels:** L1 — High-level overview · L2 — Detailed subsystem interaction · L3 — Full specification with exception handling, parallelism, and timing constraints
+     7→
+     8→---
+     9→
+    10→## Participants & Key Objects
+    11→
+    12→| Stereotype | Object | Responsibility |
+    13→|---|---|---|
+    14→| `«actor»` | **User** | End-user selecting symbols, viewing analysis |
+    15→| `«boundary»` | **page.tsx** | Next.js client page — UI rendering & event handling |
+    16→| `«control»` | **analysis_api** | API route orchestrating full analysis pipeline |
+    17→| `«control»` | **ta_engine** | Technical analysis engine — indicators, trend, S/R |
+    18→| `«control»` | **regime_engine** | Market regime detection (fuzzy + Markov + vote) |
+    19→| `«entity»` | **sr_analyzer** | Support/Resistance level analyzer |
+    20→| `«entity»` | **volume_profile** | Volume profile approximation & VPOC/VLAB calculation |
+    21→| `«control»` | **ml_engine** | Adaptive ML model training & prediction |
+    22→| `«entity»` | **ml_logistic** | Logistic regression sub-model |
+    23→| `«control»` | **msl_v4** | MSL v4 prompt builder & AI orchestrator |
+    24→| `«boundary»` | **vdes_api** | VDES AI analysis API endpoint |
+    25→| `«entity»` | **zai_shared** | ZAI shared utilities — AI chat completion with retry |
+    26→| `«control»` | **ai_postprocess** | AI output post-processor (Farsi, formatting, validation) |
+    27→| `«entity»` | **msl_feedback** | MSL feedback store & weight adjustment |
+    28→| `«entity»` | **bayesian_weights** | Bayesian weight computation & prior updates |
+    29→| `«control»` | **decision_graph** | Decision graph traversal & path scoring |
+    30→| `«entity»` | **tse_api** | TSE data fetcher (candlestick, daily snapshots) |
+    31→| `«entity»` | **safe_storage** | Safe async storage with versioned persistence |
+    32→
+    33→---
+    34→
+    35→## 11. Sequence Diagram (UML §17.2)
+    36→
+    37→> **نمودار دنباله‌ای (Sequence Diagram)** یکی از مهم‌ترین نمودارهای رفتاری UML است که ترتیب زمانی تبادل پیام‌ها بین اشیاء را نشان می‌دهد. در سامانه تحلیل تکنیکال بورس تهران، این نمودار چگونگی تعامل کاربر، رابط کاربری، موتور تحلیل، و سرویس‌های هوش مصنوعی را در جریان تحلیل یک نماد بورسی مشخص می‌کند.
+    38→
+    39→---
+    40→
+    41→### 11.1 Level 1 — High-Level Successful Analysis Flow
+    42→
+    43→> **سطح اول:** جریان اصلی موفق تحلیل از انتخاب نماد توسط کاربر تا نمایش نتایج در صفحه. این نمودار نگاهی سطح‌بالا به تعاملات اصلی سیستم ارائه می‌دهد و مسیر پردازش داده از TSE API تا پاسخ نهایی را نشان می‌دهد.
+    44→
+    45→```plantuml
+    46→@startuml
+    47→title Level 1: High-Level Successful Analysis Flow\nبورس تهران — جریان تحلیل موفق
+    48→
+    49→actor User
+    50→participant "page.tsx" as page <<boundary>>
+    51→participant "analysis_api" as api <<control>>
+    52→participant "tse_api" as tse <<entity>>
+    53→participant "ta_engine" as ta <<control>>
+    54→
+    55→User -> page : selectSymbol(symbol)
+    56→activate page
+    57→
+    58→page -> api : GET /api/analysis?symbol={symbol}
+    59→activate api
+    60→
+    61→api -> tse : fetchCandlestick(symbol, range)
+    62→activate tse
+    63→tse --> api : CandlestickData[]
+    64→deactivate tse
+    65→
+    66→api -> ta : analyze(CandlestickData[])
+    67→activate ta
+    68→ta --> api : TAResult
+    69→deactivate ta
+    70→
+    71→api --> page : { taResult, meta }
+    72→deactivate api
+    73→
+    74→page --> User : renderAnalysis(TAResult)
+    75→deactivate page
+    76→
+    77→@enduml
+    78→```
+    79→
+    80→| Step | Message | From → To | Semantics |
+    81→|---|---|---|---|
+    82→| 1 | `selectSymbol(symbol)` | User → page.tsx | User initiates analysis |
+    83→| 2 | `GET /api/analysis?symbol=` | page.tsx → analysis_api | HTTP request to API route |
+    84→| 3 | `fetchCandlestick(symbol, range)` | analysis_api → tse_api | Fetch market data from TSE |
+    85→| 4 | return `CandlestickData[]` | tse_api → analysis_api | OHLCV data returned |
+    86→| 5 | `analyze(CandlestickData[])` | analysis_api → ta_engine | Run technical analysis |
+    87→| 6 | return `TAResult` | ta_engine → analysis_api | Indicators, trend, S/R results |
+    88→| 7 | return `{ taResult, meta }` | analysis_api → page.tsx | JSON response to client |
+    89→| 8 | `renderAnalysis(TAResult)` | page.tsx → User | UI renders analysis |
+    90→
+    91→---
+    92→
+    93→### 11.2 Level 2 — Detailed Technical Analysis with Regime Detection
+    94→
+    95→> **سطح دوم:** جزئیات تعاملات داخلی موتور تحلیل تکنیکال شامل محاسبه اندیکاتورها، تشخیص رژیم بازار، و تحلیل سطوح حمایت/مقاومت. در این سطح، فراخوانی‌های داخلی ta_engine و regime_engine با ترتیب دقیق نشان داده می‌شوند و نحوه ترکیب نتایج توسط تصمیم‌گیرنده بیزی مشخص می‌گردد.
+    96→
+    97→```plantuml
+    98→@startuml
+    99→title Level 2: Technical Analysis with Regime Detection\nتحلیل تکنیکال با تشخیص رژیم
+   100→
+   101→actor User
+   102→participant "page.tsx" as page <<boundary>>
+   103→participant "analysis_api" as api <<control>>
+   104→participant "tse_api" as tse <<entity>>
+   105→participant "ta_engine" as ta <<control>>
+   106→participant "sr_analyzer" as sr <<entity>>
+   107→participant "regime_engine" as regime <<control>>
+   108→participant "volume_profile" as vp <<entity>>
+   109→participant "bayesian_weights" as bw <<entity>>
+   110→
+   111→User -> page : selectSymbol(symbol)
+   112→activate page
+   113→
+   114→page -> api : GET /api/analysis?symbol={symbol}
+   115→activate api
+   116→
+   117→api -> tse : fetchCandlestick(symbol, range)
+   118→activate tse
+   119→tse --> api : candles[]
+   120→deactivate tse
+   121→
+   122→api -> tse : fetchDailySnapshots(symbol)
+   123→activate tse
+   124→tse --> api : snapshots[]
+   125→deactivate tse
+   126→
+   127→== Technical Analysis Engine ==
+   128→
+   129→api -> ta : analyze(candles[], snapshots[])
+   130→activate ta
+   131→
+   132→ta -> ta : calcIndicators(candles[])
+   133→note right: RSI, MACD, Stochastic,\nBB, ATR, ADX, OBV, MFI
+   134→
+   135→ta -> ta : calcTrend(indicators)
+   136→note right: TrendDirection,\nTrendStrength
+   137→
+   138→ta -> sr : analyzeSupportResistance(candles[], indicators)
+   139→activate sr
+   140→sr -> vp : approximateVolumeProfile(candles[])
+   141→activate vp
+   142→vp --> sr : VolumeProfile{vpoc, vlab, pocNodes}
+   143→deactivate vp
+   144→sr --> ta : SRLevels{supports, resistances, strengths}
+   145→deactivate sr
+   146→
+   147→== Regime Detection ==
+   148→
+   149→api -> regime : detectRegime(candles[], indicators)
+   150→activate regime
+   151→
+   152→regime -> regime : fuzzyRegimeDetector(indicators)
+   153→note right: Fuzzy memberships:\nbullish, bearish, sideways
+   154→
+   155→regime -> regime : propagateMarkov(prevState)
+   156→note right: Markov chain transition\nprobabilities
+   157→
+   158→regime -> regime : adaptiveWeightedVote(fuzzy, markov)
+   159→note right: Weighted ensemble vote\nwith adaptive λ
+   160→
+   161→regime --> api : RegimeResult{label, confidence, transition}
+   162→deactivate regime
+   163→
+   164→regime -> bw : computeHistoricalProbabilities(regime)
+   165→activate bw
+   166→bw -> bw : buildTrendFromDailySnapshots(snapshots[])
+   167→bw --> regime : HistoricalProbs{bull, bear, neutral}
+   168→deactivate bw
+   169→
+   170→== Compile Result ==
+   171→
+   172→ta --> api : TAResult{indicators, trend, sr, signals}
+   173→deactivate ta
+   174→
+   175→api --> page : { taResult, regimeResult, meta }
+   176→deactivate api
+   177→
+   178→page --> User : renderFullAnalysis()
+   179→deactivate page
+   180→
+   181→@enduml
+   182→```
+   183→
+   184→| Phase | Internal Calls | Output |
+   185→|---|---|---|
+   186→| **Indicator Calculation** | `calcIndicators()` → RSI, MACD, Stoch, BB, ATR, ADX, OBV, MFI | `IndicatorMap` |
+   187→| **Trend Calculation** | `calcTrend(indicators)` | `TrendDirection + TrendStrength` |
+   188→| **S/R Analysis** | `analyzeSupportResistance()` → `approximateVolumeProfile()` | `SRLevels + VolumeProfile` |
+   189→| **Regime Detection** | `fuzzyRegimeDetector()` + `propagateMarkov()` + `adaptiveWeightedVote()` | `RegimeResult{label, confidence}` |
+   190→| **Historical Probabilities** | `computeHistoricalProbabilities()` → `buildTrendFromDailySnapshots()` | `HistoricalProbs` |
+   191→
+   192→---
+   193→
+   194→### 11.3 Level 3 — Full Interaction with Async, Exceptions, and Parallelization
+   195→
+   196→> **سطح سوم:** کامل‌ترین نمودار دنباله‌ای شامل بلوک‌های همزمان (par)، جایگزین (alt)، اختیاری (opt)، و مدیریت استثناها. این سطح شامل تولید متن هوش مصنوعی با منطق تلاش مجدد (retry)، پیش‌بینی یادگیری ماشین با بازگشت به روش اکتشافی در صورت شکست، و همه تعاملات سیستم برای یک تحلیل کامل است.
+   197→
+   198→```plantuml
+   199→@startuml
+   200→title Level 3: Full Interaction — Async, Exceptions, Parallelism\nتعامل کامل با مدیریت خطا و موازی‌سازی
+   201→
+   202→actor User
+   203→participant "page.tsx" as page <<boundary>>
+   204→participant "analysis_api" as api <<control>>
+   205→participant "tse_api" as tse <<entity>>
+   206→participant "ta_engine" as ta <<control>>
+   207→participant "sr_analyzer" as sr <<entity>>
+   208→participant "volume_profile" as vp <<entity>>
+   209→participant "regime_engine" as regime <<control>>
+   210→participant "ml_engine" as ml <<control>>
+   211→participant "ml_logistic" as lr <<entity>>
+   212→participant "msl_v4" as msl <<control>>
+   213→participant "vdes_api" as vdes <<boundary>>
+   214→participant "zai_shared" as zai <<entity>>
+   215→participant "ai_postprocess" as aip <<control>>
+   216→participant "msl_feedback" as fb <<entity>>
+   217→participant "bayesian_weights" as bw <<entity>>
+   218→participant "decision_graph" as dg <<control>>
+   219→participant "safe_storage" as store <<entity>>
+   220→
+   221→User -> page : selectSymbol(symbol)
+   222→activate page
+   223→
+   224→page -> api : POST /api/analysis { symbol }
+   225→activate api
+   226→
+   227→api -> store : acquireLock(analysisKey)
+   228→activate store
+   229→store --> api : lockGranted
+   230→deactivate store
+   231→
+   232→== Parallel Data Fetching ==
+   233→
+   234→par [Fetch Market Data]
+   235→  api -> tse : fetchCandlestick(symbol, range)
+   236→  activate tse
+   237→  tse --> api : candles[]
+   238→  deactivate tse
+   239→else [Fetch Snapshots]
+   240→  api -> tse : fetchDailySnapshots(symbol)
+   241→  activate tse
+   242→  tse --> api : snapshots[]
+   243→  deactivate tse
+   244→end
+   245→
+   246→== Technical Analysis (Core) ==
+   247→
+   248→api -> ta : analyze(candles[], snapshots[])
+   249→activate ta
+   250→
+   251→ta -> ta : calcIndicators(candles[])
+   252→
+   253→ta -> ta : calcTrend(indicators)
+   254→
+   255→ta -> sr : analyzeSupportResistance(candles[], indicators)
+   256→activate sr
+   257→
+   258→sr -> vp : approximateVolumeProfile(candles[])
+   259→activate vp
+   260→vp --> sr : VolumeProfile{vpoc, vlab}
+   261→deactivate vp
+   262→
+   263→sr --> ta : SRLevels
+   264→deactivate sr
+   265→
+   266→ta --> api : TAResult
+   267→deactivate ta
+   268→
+   269→== Regime Detection ==
+   270→
+   271→api -> regime : detectRegime(candles[], indicators)
+   272→activate regime
+   273→
+   274→regime -> regime : fuzzyRegimeDetector(indicators)
+   275→regime -> regime : propagateMarkov(prevState)
+   276→regime -> regime : adaptiveWeightedVote(fuzzy, markov)
+   277→
+   278→regime -> bw : computeHistoricalProbabilities(regime)
+   279→activate bw
+   280→bw -> bw : buildTrendFromDailySnapshots(snapshots[])
+   281→bw --> regime : HistoricalProbs
+   282→deactivate bw
+   283→
+   284→regime --> api : RegimeResult
+   285→deactivate regime
+   286→
+   287→== ML Prediction with Fallback ==
+   288→
+   289→api -> ml : trainAndPredict(candles[], regime, indicators)
+   290→activate ml
+   291→
+   292→opt [Model exists in cache]
+   293→  ml -> store : getCachedModel(symbol)
+   294→  activate store
+   295→  store --> ml : cachedModel | null
+   296→  deactivate store
+   297→end
+   298→
+   299→alt [Training succeeds]
+   300→  ml -> ml : trainAdaptiveModel(candles[], regime)
+   301→  ml -> lr : fitLogistic(features, labels)
+   302→  activate lr
+   303→  lr --> ml : LogisticModel
+   304→  deactivate lr
+   305→  ml -> ml : predictScore(model, currentFeatures)
+   306→  ml --> api : Prediction{up, down}  confidence
+   307→else [Training fails — fallback heuristic]
+   308→  ml -> ml : heuristicPredict(indicators, regime)
+   309→  note right: Fallback: rule-based\nscoring from indicators
+   310→  ml --> api : Prediction{up:0.5, down:0.5}  lowConf
+   311→end
+   312→
+   313→deactivate ml
+   314→
+   315→== AI Text Generation (VDES) ==
+   316→
+   317→api -> vdes : requestVdesAnalysis(symbol, taResult, regime, prediction)
+   318→activate vdes
+   319→
+   320→vdes -> msl : selectMSLV4(symbol, regime, indicators)
+   321→activate msl
+   322→
+   323→msl -> msl : buildPrompt(taResult, regime, prediction)
+   324→msl -> fb : loadFeedbackWeights(symbol)
+   325→activate fb
+   326→fb --> msl : feedbackWeights
+   327→deactivate fb
+   328→
+   329→msl --> vdes : { prompt, config }
+   330→deactivate msl
+   331→
+   332→vdes -> zai : dedicatedAIChatCompletion(prompt, config)
+   333→activate zai
+   334→
+   335→loop [Retry on 429 / network error — max 3 attempts]
+   336→  zai -> zai : attemptChatCompletion(prompt)
+   337→  alt [Success — HTTP 200]
+   338→    zai --> vdes : AIResponse{content, usage}
+   339→  else [Rate Limited — HTTP 429]
+   340→    zai -> zai : wait(exponentialBackoff)
+   341→    note right: backoff = baseDelay * 2^attempt\njitter ±200ms
+   342→  else [Other Error]
+   343→    zai --> vdes : AIError
+   344→  end
+   345→end
+   346→
+   347→deactivate zai
+   348→
+   349→opt [AI succeeded]
+   350→  vdes -> aip : postProcessAIOutput(rawContent, symbol)
+   351→  activate aip
+   352→  aip -> aip : validateFarsiContent(content)
+   353→  aip -> aip : formatStructuredOutput(content)
+   354→  aip --> vdes : ProcessedAIOutput{summary, details, signals}
+   355→  deactivate aip
+   356→
+   357→  vdes -> fb : storeFeedback(symbol, output, userCtx)
+   358→  activate fb
+   359→  fb --> vdes : stored
+   360→  deactivate fb
+   361→else [AI failed]
+   362→  vdes -> aip : generateFallbackSummary(taResult, regime)
+   363→  activate aip
+   364→  aip --> vdes : FallbackSummary
+   365→  deactivate aip
+   366→end
+   367→
+   368→vdes --> api : VdesResult{aiOutput | fallback}
+   369→deactivate vdes
+   370→
+   371→== Decision Graph Aggregation ==
+   372→
+   373→api -> dg : evaluateDecisionGraph(taResult, regime, prediction, vdesResult)
+   374→activate dg
+   375→dg -> bw : getBayesianWeights(symbol)
+   376→activate bw
+   377→bw --> dg : weights
+   378→deactivate bw
+   379→dg -> dg : scorePaths(taResult, regime, prediction)
+   380→dg --> api : DecisionResult{action, confidence, reasons}
+   381→deactivate dg
+   382→
+   383→== Response Assembly ==
+   384→
+   385→api -> store : persistAnalysis(symbol, fullResult)
+   386→activate store
+   387→store --> api : persisted
+   388→deactivate store
+   389→
+   390→api -> store : releaseLock(analysisKey)
+   391→activate store
+   392→store --> api : released
+   393→deactivate store
+   394→
+   395→api --> page : FullAnalysisResult{ta, regime, ml, vdes, decision}
+   396→deactivate api
+   397→
+   398→page --> User : renderFullDashboard()
+   399→deactivate page
+   400→
+   401→@enduml
+   402→```
+   403→
+   404→**Key Interaction Patterns:**
+   405→
+   406→| Pattern | UML Construct | Application |
+   407→|---|---|---|
+   408→| Concurrent data fetching | `par` / `else` | Candlestick + Snapshots fetched simultaneously |
+   409→| ML model fallback | `alt` / `else` | `trainAdaptiveModel()` → success, or `heuristicPredict()` → fallback |
+   410→| AI rate-limit retry | `loop` + `alt` / `else` | 429 → exponential backoff with jitter |
+   411→| Optional caching | `opt` | Cached model lookup before training |
+   412→| AI success/failure | `opt` + `alt` | Post-process on success, fallback summary on failure |
+   413→| Lock management | `acquireLock` / `releaseLock` | Prevents concurrent analysis for same symbol |
+   414→
+   415→---
+   416→
+   417→## 12. Communication Diagram (Collaboration Diagram) (UML §17.3)
+   418→
+   419→> **نمودار ارتباطی (Communication Diagram)** مشابه نمودار دنباله‌ای است اما بر ارتباطات ساختاری بین اشیاء تأکید دارد تا بر ترتیب زمانی. در این سامانه، نمودار ارتباطی نشان می‌دهد که هر شیء با کدام اشیاء دیگر ارتباط دارد و پیام‌ها با شماره‌گذاری مشخص ترتیب اجرا را نشان می‌دهند.
+   420→
+   421→---
+   422→
+   423→### 12.1 Level 1 — Main Architectural Links
+   424→
+   425→> **سطح اول:** ارتباطات اصلی بین اشیاء کلیدی معماری سیستم. این نمودار ساختار اتصال بین لایه‌های مختلف (رابط کاربری، کنترلر، سرویس، و داده) را نشان می‌دهد.
+   426→
+   427→```mermaid
+   428→sequenceDiagram
+   429→    actor User
+   430→    participant page as page.tsx
+   431→    participant api as analysis_api
+   432→    participant tse as tse_api
+   433→    participant ta as ta_engine
+   434→    participant regime as regime_engine
+   435→    participant ml as ml_engine
+   436→    participant vdes as vdes_api
+   437→    participant store as safe_storage
+   438→
+   439→    User--)page: 1: selectSymbol()
+   440→    page--)api: 2: requestAnalysis()
+   441→    api--)tse: 3: fetchMarketData()
+   442→    tse--)api: 4: return data
+   443→    api--)ta: 5: analyze()
+   444→    ta--)api: 6: return TAResult
+   445→    api--)regime: 7: detectRegime()
+   446→    regime--)api: 8: return RegimeResult
+   447→    api--)ml: 9: trainAndPredict()
+   448→    ml--)api: 10: return Prediction
+   449→    api--)vdes: 11: requestVdesAnalysis()
+   450→    vdes--)api: 12: return VdesResult
+   451→    api--)store: 13: persistResult()
+   452→    store--)api: 14: confirmed
+   453→    api--)page: 15: return FullResult
+   454→    page--)User: 16: renderDashboard()
+   455→```
+   456→
+   457→**Link Topology:**
+   458→
+   459→```
+   460→User ────────── page.tsx ────────── analysis_api ─┬── tse_api
+   461→                                                  ├── ta_engine
+   462→                                                  ├── regime_engine
+   463→                                                  ├── ml_engine
+   464→                                                  ├── vdes_api
+   465→                                                  └── safe_storage
+   466→
+   467→ta_engine ──── sr_analyzer ──── volume_profile
+   468→regime_engine ──── bayesian_weights
+   469→ml_engine ──── ml_logistic
+   470→vdes_api ──── msl_v4 ──── zai_shared ──── ai_postprocess
+   471→msl_v4 ──── msl_feedback
+   472→analysis_api ──── decision_graph ──── bayesian_weights
+   473→```
+   474→
+   475→---
+   476→
+   477→### 12.2 Level 2 — Message Ordering During Regime Detection
+   478→
+   479→> **سطح دوم:** ترتیب پیام‌ها بین زیرسیستم‌های تشخیص رژیم بازار. این نمودار نحوه ترکیب نتایج فازی، مارکوف، و رأی‌گیری وزنی تطبیقی را با شماره‌گذاری دقیق پیام‌ها نشان می‌دهد.
+   480→
+   481→```mermaid
+   482→sequenceDiagram
+   483→    participant api as analysis_api
+   484→    participant regime as regime_engine
+   485→    participant ta as ta_engine
+   486→    participant bw as bayesian_weights
+   487→    participant sr as sr_analyzer
+   488→    participant vp as volume_profile
+   489→
+   490→    Note over api,regime: Regime Detection Sub-Interaction
+   491→
+   492→    api-))regime: 1: detectRegime(candles, indicators)
+   493→    regime-))regime: 1.1: fuzzyRegimeDetector(indicators)
+   494→    Note right of regime: 1.1a: compute memberships<br/>μ(bullish), μ(bearish), μ(sideways)
+   495→
+   496→    regime-))regime: 1.2: propagateMarkov(prevState)
+   497→    Note right of regime: 1.2a: transition matrix T<br/>1.2b: P(state_t | state_{t-1})
+   498→
+   499→    regime-))regime: 1.3: adaptiveWeightedVote(fuzzy, markov)
+   500→    Note right of regime: 1.3a: λ_fuzzy * fuzzy + λ_markov * markov<br/>1.3b: argmax → regime label
+   501→
+   502→    regime-))bw: 1.4: computeHistoricalProbabilities(regime)
+   503→    bw-))bw: 1.4.1: buildTrendFromDailySnapshots(snapshots)
+   504→    bw-))bw: 1.4.2: applyBayesianPriors(probs)
+   505→    bw-))regime: 1.4.3: return HistoricalProbs
+   506→
+   507→    regime-))api: 2: RegimeResult{label, confidence, transition, histProbs}
+   508→```
+   509→
+   510→**Numbered Message Summary:**
+   511→
+   512→| # | Message | Link |
+   513→|---|---|---|
+   514→| 1 | `detectRegime()` | api → regime_engine |
+   515→| 1.1 | `fuzzyRegimeDetector()` | regime_engine → self |
+   516→| 1.2 | `propagateMarkov()` | regime_engine → self |
+   517→| 1.3 | `adaptiveWeightedVote()` | regime_engine → self |
+   518→| 1.4 | `computeHistoricalProbabilities()` | regime_engine → bayesian_weights |
+   519→| 1.4.1 | `buildTrendFromDailySnapshots()` | bayesian_weights → self |
+   520→| 1.4.2 | `applyBayesianPriors()` | bayesian_weights → self |
+   521→| 2 | `RegimeResult` | regime_engine → api |
+   522→
+   523→---
+   524→
+   525→### 12.3 Level 3 — Volume Profile Calculation with Precise Links
+   526→
+   527→> **سطح سوم:** پیام‌های شماره‌گذاری شده با لینک‌های دقیق برای محاسبه پروفایل حجم. این نمودار جزئیات فراخوانی‌های داخلی approximateVolumeProfile و نحوه محاسبه VPOC، VLAB و گره‌های POC را با شماره‌گذاری تودرتو نشان می‌دهد.
+   528→
+   529→```mermaid
+   530→sequenceDiagram
+   531→    participant ta as ta_engine
+   532→    participant sr as sr_analyzer
+   533→    participant vp as volume_profile
+   534→    participant store as safe_storage
+   535→
+   536→    Note over ta,store: Volume Profile Sub-Interaction
+   537→
+   538→    ta-))sr: 1: analyzeSupportResistance(candles, indicators)
+   539→
+   540→    sr-))vp: 1.1: approximateVolumeProfile(candles)
+   541→    Note right of vp: Input: OHLCV candle array<br/>Process: TPO + Volume approximation
+   542→
+   543→    vp-))vp: 1.1.1: slicePriceRanges(candles, numBins=50)
+   544→    Note right of vp: Partition price space into<br/>50 equal-width bins
+   545→
+   546→    vp-))vp: 1.1.2: accumulateVolumePerBin(candles, bins)
+   547→    Note right of vp: Sum volume per bin<br/>using linear interpolation<br/>within candle range
+   548→
+   549→    vp-))vp: 1.1.3: calculateTPOs(candles, bins)
+   550→    Note right of vp: Time-Price Opportunity count<br/>per bin (market profile)
+   551→
+   552→    vp-))vp: 1.1.4: findPOC(bins)
+   553→    Note right of vp: POC = bin with max(volume)<br/>→ Point of Control
+   554→
+   555→    vp-))vp: 1.1.5: computeValueArea(pocBin, bins, pct=70)
+   556→    Note right of vp: Expand from POC until<br/>70% volume captured<br/>→ VA_High, VA_Low
+   557→
+   558→    vp-))vp: 1.1.6: identifyVPOCandVLAB(bins)
+   559→    Note right of vp: VPOC = Volume POC<br/>VLAB = Value Area Low/High Bands
+   560→
+   561→    vp-))vp: 1.1.7: buildVolumeProfileResult(bins, poc, va, vpoc, vlab)
+   562→    Note right of vp: Assemble final result object
+   563→
+   564→    vp-))sr: 1.2: VolumeProfile{bins, poc, vpoc, vlab, vaHigh, vaLow}
+   565→
+   566→    sr-))sr: 1.3: mergeSRWithVolumeProfile(srLevels, volumeProfile)
+   567→    Note right of sr: Weight S/R levels by<br/>volume confirmation
+   568→
+   569→    sr-))sr: 1.4: rankSupportResistanceLevels(mergedLevels)
+   570→    Note right of sr: Sort by strength score<br/>(touch count × volume weight)
+   571→
+   572→    sr-))ta: 2: SRLevels{supports, resistances, strengths, volumeProfile}
+   573→
+   574→    ta-))store: 3: cacheVolumeProfile(symbol, volumeProfile)
+   575→    store-))ta: 4: cached
+   576→```
+   577→
+   578→**Detailed Link Specification:**
+   579→
+   580→| Link | From | To | Messages |
+   581→|---|---|---|---|
+   582→| L1 | ta_engine | sr_analyzer | 1, 2(return) |
+   583→| L2 | sr_analyzer | volume_profile | 1.1, 1.2(return) |
+   584→| L3 | volume_profile | self | 1.1.1–1.1.7 (internal) |
+   585→| L4 | sr_analyzer | self | 1.3, 1.4 (internal) |
+   586→| L5 | ta_engine | safe_storage | 3, 4(return) |
+   587→
+   588→---
+   589→
+   590→## 13. Interaction Overview Diagram (UML §17.4)
+   591→
+   592→> **نمودار کلی تعامل (Interaction Overview Diagram)** ترکیبی از نمودار فعالیت و نمودار دنباله‌ای است که جریان کلی تعاملات را با نقاط تصمیم و ارجاع به نمودارهای دنباله‌ای فرعی نشان می‌دهد. در این سامانه، این نمودار جریان تحلیل کامل را با شاخه‌های مختلف (موفق/ناموفق، کش/بدون کش) نشان می‌دهد.
+   593→
+   594→---
+   595→
+   596→### 13.1 Level 1 — High-Level Flow with Sequence References
+   597→
+   598→> **سطح اول:** جریان سطح‌بالا با ارجاع به نمودارهای دنباله‌ای فرعی. هر گره یک تعامل فرعی (sd) را نشان می‌دهد و جریان بین آن‌ها با فلش‌های جریان مشخص شده است.
+   599→
+   600→```
+   601→┌─────────────────────────────────────────────────────────────────────┐
+   602→│              Interaction Overview — Level 1                         │
+   603→│              نمودار کلی تعامل — سطح اول                            │
+   604→├─────────────────────────────────────────────────────────────────────┤
+   605→│                                                                     │
+   606→│   ● Start                                                           │
+   607→│   │                                                                 │
+   608→│   ▼                                                                 │
+   609→│  ┌──────────────────────┐                                           │
+   610→│  │  sd FetchData        │  ← Ref: Seq L1 steps 1-4                  │
+   611→│  │  User→page→api→tse   │                                           │
+   612→│  └──────────┬───────────┘                                           │
+   613→│             │                                                       │
+   614→│             ▼                                                       │
+   615→│  ┌──────────────────────┐                                           │
+   616→│  │  sd AnalyzeTechnical  │  ← Ref: Seq L2 "Technical Analysis"      │
+   617→│  │  ta_engine.analyze()  │                                           │
+   618→│  └──────────┬───────────┘                                           │
+   619→│             │                                                       │
+   620→│             ▼                                                       │
+   621→│  ┌──────────────────────┐                                           │
+   622→│  │  sd DetectRegime     │  ← Ref: Seq L2 "Regime Detection"         │
+   623→│  │  regime_engine       │                                           │
+   624→│  └──────────┬───────────┘                                           │
+   625→│             │                                                       │
+   626→│             ▼                                                       │
+   627→│  ┌──────────────────────┐                                           │
+   628→│  │  sd PredictML        │  ← Ref: Seq L3 "ML Prediction"            │
+   629→│  │  ml_engine           │                                           │
+   630→│  └──────────┬───────────┘                                           │
+   631→│             │                                                       │
+   632→│             ▼                                                       │
+   633→│  ┌──────────────────────┐                                           │
+   634→│  │  sd GenerateAI       │  ← Ref: Seq L3 "AI Text Generation"       │
+   635→│  │  vdes_api → zai      │                                           │
+   636→│  └──────────┬───────────┘                                           │
+   637→│             │                                                       │
+   638→│             ▼                                                       │
+   639→│  ┌──────────────────────┐                                           │
+   640→│  │  sd AggregateResult  │  ← Ref: Seq L3 "Decision Graph"           │
+   641→│  │  decision_graph      │                                           │
+   642→│  └──────────┬───────────┘                                           │
+   643→│             │                                                       │
+   644→│             ▼                                                       │
+   645→│   ◉ End                                                             │
+   646→│                                                                     │
+   647→└─────────────────────────────────────────────────────────────────────┘
+   648→```
+   649→
+   650→**Sequence Reference Mapping:**
+   651→
+   652→| Ref ID | Sequence Fragment | Level | Steps |
+   653→|---|---|---|---|
+   654→| sd FetchData | Data acquisition from TSE | L1 | Steps 1–4 |
+   655→| sd AnalyzeTechnical | Indicator + Trend + S/R calculation | L2 | ta_engine internal |
+   656→| sd DetectRegime | Fuzzy + Markov + Weighted Vote | L2 | regime_engine internal |
+   657→| sd PredictML | ML training + prediction + fallback | L3 | alt block |
+   658→| sd GenerateAI | VDES + MSL v4 + AI completion | L3 | loop + opt block |
+   659→| sd AggregateResult | Decision graph + Bayesian weights | L3 | Final aggregation |
+   660→
+   661→---
+   662→
+   663→### 13.2 Level 2 — Decision Points Referencing Sequence Diagrams
+   664→
+   665→> **سطح دوم:** نقاط تصمیم‌گیری در جریان تعامل که بر اساس شرایط مختلف، نمودارهای دنباله‌ای متفاوتی فراخوانی می‌شوند. شاخه‌های اصلی شامل وضعیت کش مدل ML، موفقیت/شکست فراخوانی AI، و نوع رژیم بازار هستند.
+   666→
+   667→```
+   668→┌─────────────────────────────────────────────────────────────────────────┐
+   669→│              Interaction Overview — Level 2                             │
+   670→│              نمودار کلی تعامل — سطح دوم                                │
+   671→├─────────────────────────────────────────────────────────────────────────┤
+   672→│                                                                         │
+   673→│   ● Start                                                               │
+   674→│   │                                                                     │
+   675→│   ▼                                                                     │
+   676→│  ┌──────────────────────┐                                               │
+   677→│  │  sd FetchData        │                                               │
+   678→│  └──────────┬───────────┘                                               │
+   679→│             │                                                           │
+   680→│             ▼                                                           │
+   681→│         ◇ Data Valid?                                                   │
+   682→│        ╱          ╲                                                     │
+   683→│      Yes           No                                                   │
+   684→│      │              │                                                   │
+   685→│      ▼              ▼                                                   │
+   686→│  ┌──────────┐  ┌───────────────────┐                                    │
+   687→│  │ sd       │  │ sd HandleDataError │                                    │
+   688→│  │ Analyze  │  │ → retry or abort   │                                    │
+   689→│  │ Technical│  └─────────┬─────────┘                                    │
+   690→│  └───┬──────┘            │                                              │
+   691→│      │                   ▼                                              │
+   692→│      ▼                 ◉ End (error)                                    │
+   693→│  ┌──────────────┐                                                       │
+   694→│  │ sd Detect    │                                                       │
+   695→│  │ Regime       │                                                       │
+   696→│  └──────┬───────┘                                                       │
+   697→│         │                                                               │
+   698→│         ▼                                                               │
+   699→│     ◇ Cached ML Model?                                                  │
+   700→│    ╱              ╲                                                      │
+   701→│  Yes               No                                                   │
+   702→│  │                 │                                                    │
+   703→│  ▼                 ▼                                                    │
+   704→│ ┌─────────────┐ ┌──────────────┐                                        │
+   705→│ │ sd Predict  │ │ sd TrainNew  │                                        │
+   706→│ │ WithCache   │ │ MLModel      │                                        │
+   707→│ └──────┬──────┘ └──────┬───────┘                                        │
+   708→│        │               │                                                │
+   709→│        ╲              ╱                                                  │
+   710→│         ▼                                                             │
+   711→│     ◇ Training Success?                                                │
+   712→│    ╱              ╲                                                      │
+   713→│  Yes               No                                                   │
+   714→│  │                 │                                                    │
+   715→│  ▼                 ▼                                                    │
+   716→│ ┌─────────────┐ ┌───────────────────┐                                   │
+   717→│ │ sd Predict  │ │ sd Fallback       │                                   │
+   718→│ │ Normal      │ │ HeuristicPredict  │                                   │
+   719→│ └──────┬──────┘ └─────────┬─────────┘                                   │
+   720→│        │                   │                                             │
+   721→│        ╲                  ╱                                              │
+   722→│         ▼                                                               │
+   723→│  ┌──────────────┐                                                       │
+   724→│  │ sd GenerateAI│                                                       │
+   725→│  └──────┬───────┘                                                       │
+   726→│         │                                                               │
+   727→│         ▼                                                               │
+   728→│     ◇ AI Success?                                                       │
+   729→│    ╱          ╲                                                          │
+   730→│  Yes           No                                                        │
+   731→│  │             │                                                        │
+   732→│  ▼             ▼                                                        │
+   733→│ ┌───────────┐ ┌────────────────────┐                                    │
+   734→│ │ sd Post   │ │ sd FallbackSummary │                                    │
+   735→│ │ ProcessAI │ │ → generateBasic    │                                    │
+   736→│ └─────┬─────┘ └─────────┬──────────┘                                    │
+   737→│       │                  │                                               │
+   738→│       ╲                ╱                                                 │
+   739→│        ▼                                                               │
+   740→│  ┌──────────────────────┐                                               │
+   741→│  │  sd AggregateResult  │                                               │
+   742→│  └──────────┬───────────┘                                               │
+   743→│             │                                                           │
+   744→│             ▼                                                           │
+   745→│   ◉ End                                                                 │
+   746→│                                                                         │
+   747→└─────────────────────────────────────────────────────────────────────────┘
+   748→```
+   749→
+   750→**Decision Point Table:**
+   751→
+   752→| Decision Point | Condition | True Branch | False Branch |
+   753→|---|---|---|---|
+   754→| ◇ Data Valid? | `candles.length > 0 && !error` | → sd AnalyzeTechnical | → sd HandleDataError |
+   755→| ◇ Cached ML Model? | `store.getCachedModel(symbol) !== null` | → sd PredictWithCache | → sd TrainNewMLModel |
+   756→| ◇ Training Success? | `model !== null && loss < threshold` | → sd PredictNormal | → sd FallbackHeuristicPredict |
+   757→| ◇ AI Success? | `aiResponse.status === 200` | → sd PostProcessAI | → sd FallbackSummary |
+   758→
+   759→---
+   760→
+   761→### 13.3 Level 3 — Loop, Parallel, and Conditional Constructs
+   762→
+   763→> **سطح سوم:** ساختارهای حلقه، موازی‌سازی و شرطی با ارجاع به نمودارهای دنباله‌ای سطح سوم. این سطح شامل حلقه تلاش مجدد AI، بلوک موازی برای دریافت داده‌ها، و همه شاخه‌های شرطی با محدودیت‌های زمانی است.
+   764→
+   765→```
+   766→┌──────────────────────────────────────────────────────────────────────────────┐
+   767→│              Interaction Overview — Level 3                                  │
+   768→│              نمودار کلی تعامل — سطح سوم                                     │
+   769→├──────────────────────────────────────────────────────────────────────────────┤
+   770→│                                                                              │
+   771→│   ● Start                                                                    │
+   772→│   │                                                                          │
+   773→│   ▼                                                                          │
+   774→│  ╔══════════════════════════════════════╗                                    │
+   775→│  ║  par — Parallel Data Fetching         ║                                    │
+   776→│  ║  ┌─────────────────────────┐         ║                                    │
+   777→│  ║  │ sd FetchCandlestick     │         ║  ← Seq L3: par block (left)       │
+   778→│  ║  │ tse_api.fetchCandlestick│         ║                                    │
+   779→│  ║  └─────────────────────────┘         ║                                    │
+   780→│  ║  ‖                                  ║                                    │
+   781→│  ║  ┌─────────────────────────┐         ║                                    │
+   782→│  ║  │ sd FetchSnapshots       │         ║  ← Seq L3: par block (right)      │
+   783→│  ║  │ tse_api.fetchDaily      │         ║                                    │
+   784→│  ║  └─────────────────────────┘         ║                                    │
+   785→│  ╚══════════════════════════╤═══════════╝                                    │
+   786→│                              │                                               │
+   787→│                              ▼                                               │
+   788→│  ┌───────────────────────────────────────┐                                   │
+   789→│  │  sd AnalyzeTechnical (L2)             │                                   │
+   790→│  │  {duration ≤ 500ms}                   │                                   │
+   791→│  └───────────────────┬───────────────────┘                                   │
+   792→│                      │                                                       │
+   793→│                      ▼                                                       │
+   794→│  ┌───────────────────────────────────────┐                                   │
+   795→│  │  sd DetectRegime (L2)                 │                                   │
+   796→│  │  {duration ≤ 50ms}                    │                                   │
+   797→│  └───────────────────┬───────────────────┘                                   │
+   798→│                      │                                                       │
+   799→│                      ▼                                                       │
+   800→│                  ◇ Cached?                                                   │
+   801→│                 ╱       ╲                                                    │
+   802→│              Yes         No                                                  │
+   803→│               │          │                                                  │
+   804→│               ▼          ▼                                                  │
+   805→│  ┌──────────────┐  ╔══════════════════════════╗                              │
+   806→│  │ sd UseCache  │  ║ loop [max 3 retries]      ║                              │
+   807→│  └──────┬───────┘  ║ → sd TrainAdaptiveModel   ║  ← Seq L3: loop block      │
+   808→│         │          ║ → if fails: retry/backoff ║                              │
+   809→│         │          ╚══════════════╤═══════════╝                              │
+   810→│         │                       │                                             │
+   811→│         │                       ▼                                             │
+   812→│         │                 ◇ Training OK?                                     │
+   813→│         │                ╱          ╲                                        │
+   814→│         │             Yes           No                                       │
+   815→│         │              │            │                                        │
+   816→│         │              ▼            ▼                                        │
+   817→│         │     ┌────────────┐ ┌───────────────────┐                         │
+   818→│         │     │sd Predict  │ │sd FallbackHeuristic│                         │
+   819→│         │     │Normal      │ │{up:0.5, down:0.5} │                         │
+   820→│         │     └─────┬──────┘ └────────┬──────────┘                         │
+   821→│         │           │                 │                                      │
+   822→│         ╲          ╱                 │                                      │
+   823→│          ▼         ▼                 │                                      │
+   824→│         ╲          ╱                  │                                      │
+   825→│          ▼                            │                                      │
+   826→│  ╔════════════════════════════════════════════╗                            │
+   827→│  ║  loop [Retry AI — max 3 attempts]          ║                            │
+   828→│  ║  ┌────────────────────────────────────┐    ║  ← Seq L3: AI retry loop  │
+   829→│  ║  │ sd CallAICompletion                │    ║                            │
+   830→│  ║  │ zai_shared.dedicatedAIChatCompletion│   ║                            │
+   831→│  ║  │ {duration: 5-30s per attempt}      │    ║                            │
+   832→│  ║  └────────────────────────────────────┘    ║                            │
+   833→│  ╚══════════════════════════╤═════════════════╝                            │
+   834→│                              │                                               │
+   835→│                              ▼                                               │
+   836→│                  ◇ AI Response?                                              │
+   837→│                 ╱          ╲                                                 │
+   838→│            200 OK        429/Error                                           │
+   839→│               │              │                                              │
+   840→│               ▼              ▼                                              │
+   841→│  ┌──────────────────┐ ┌─────────────────────┐                               │
+   842→│  │ sd PostProcessAI │ │ sd AIErrorHandling  │                               │
+   843→│  │ ai_postprocess   │ │ → backoff & retry   │                               │
+   844→│  │ {≤500ms}         │ │ → or fallback       │                               │
+   845→│  └────────┬─────────┘ └─────────┬───────────┘                               │
+   846→│           │                     │                                            │
+   847→│           ╲                   ╱                                              │
+   848→│            ▼                                                               │
+   849→│  ┌───────────────────────────────────────┐                                  │
+   850→│  │  sd AggregateDecision (L3)            │                                  │
+   851→│  │  decision_graph + bayesian_weights    │                                  │
+   852→│  └───────────────────┬───────────────────┘                                  │
+   853→│                      │                                                      │
+   854→│                      ▼                                                      │
+   855→│  ┌───────────────────────────────────────┐                                  │
+   856→│  │  sd PersistAndRespond                 │                                  │
+   857→│  │  safe_storage + page render           │                                  │
+   858→│  └───────────────────┬───────────────────┘                                  │
+   859→│                      │                                                      │
+   860→│                      ▼                                                      │
+   861→│   ◉ End                                                                    │
+   862→│                                                                             │
+   863→└──────────────────────────────────────────────────────────────────────────────┘
+   864→```
+   865→
+   866→**Construct Mapping to Sequence Level 3:**
+   867→
+   868→| Construct | Type | Sequence L3 Reference | Timing |
+   869→|---|---|---|---|
+   870→| `par` FetchCandlestick ∥ FetchSnapshots | Parallel | `par` block | ~200ms each |
+   871→| `loop` TrainAdaptiveModel [max 3] | Loop | ML training with retry | ≤2s per attempt |
+   872→| `loop` AI Completion [max 3] | Loop | 429 retry with backoff | 5-30s per attempt |
+   873→| `◇` Cached? | Conditional | `opt` cache lookup | ≤10ms |
+   874→| `◇` Training OK? | Conditional | `alt` train/fallback | — |
+   875→| `◇` AI Response? | Conditional | `alt` 200/429 handling | — |
+   876→
+   877→---
+   878→
+   879→## 14. Timing Diagram (UML §17.5)
+   880→
+   881→> **نمودار زمان‌بندی (Timing Diagram)** تغییرات وضعیت اشیاء را در طول محور زمان نشان می‌دهد. این نمودار برای تحلیل عملکرد سیستم حیاتی است زیرا محدودیت‌های زمانی بحرانی مثل سرعت تشخیص رژیم و تأخیر فراخوانی هوش مصنوعی را مشخص می‌کند.
+   882→
+   883→---
+   884→
+   885→### 14.1 Level 1 — Analysis Session State Changes (0-30s Timeline)
+   886→
+   887→> **سطح اول:** تغییرات وضعیت نشست تحلیل در بازه زمانی ۰ تا ۳۰ ثانیه. این نمودار وضعیت‌های اصلی نشست (idle، fetching، analyzing، detecting، predicting، generating، aggregating، rendering) را در طول زمان نشان می‌دهد.
+   888→
+   889→| Time (s) | 0 | 2 | 4 | 6 | 8 | 10 | 15 | 20 | 25 | 30 |
+   890→|---|---|---|---|---|---|---|---|---|---|---|
+   891→| **User** | Selecting | Waiting | Waiting | Waiting | Waiting | Waiting | Waiting | Waiting | Viewing | Idle |
+   892→| **page.tsx** | Idle | Loading | Loading | Loading | Loading | Loading | Loading | Loading | Rendering | Idle |
+   893→| **analysis_api** | Idle | Fetching | Analyzing | Detecting | Predicting | Generating | Generating | Aggregating | Responding | Idle |
+   894→| **ta_engine** | Idle | Idle | **Active** | Idle | Idle | Idle | Idle | Idle | Idle | Idle |
+   895→| **regime_engine** | Idle | Idle | Idle | **Active** | Idle | Idle | Idle | Idle | Idle | Idle |
+   896→| **ml_engine** | Idle | Idle | Idle | Idle | **Active** | Idle | Idle | Idle | Idle | Idle |
+   897→| **vdes_api** | Idle | Idle | Idle | Idle | Idle | **Active** | **Active** | Idle | Idle | Idle |
+   898→
+   899→**State Timeline Visualization:**
+   900→
+   901→```
+   902→Time →   0s      2s      4s      6s      8s      10s     15s     20s     25s     30s
+   903→         ├───────┼───────┼───────┼───────┼───────┼───────┼───────┼───────┼───────┤
+   904→
+   905→User     │Select │──── Waiting ───────────────────────────────────│View  │Idle
+   906→         │       │       │       │       │       │       │       │       │       │
+   907→
+   908→page     │Idle   │── Loading ─────────────────────────────────────│Render │Idle
+   909→         │       │       │       │       │       │       │       │       │       │
+   910→
+   911→api      │Idle   │Fetch  │Analyze│Detect │Predict│── Generate ──│Aggreg │Respond
+   912→         │       │       │       │       │       │       │       │       │       │
+   913→
+   914→ta       │Idle   │Idle   │▓▓▓▓▓▓│Idle   │Idle   │Idle   │Idle   │Idle   │Idle
+   915→         │       │       │≤500ms │       │       │       │       │       │       │
+   916→
+   917→regime   │Idle   │Idle   │Idle   │▓▓▓▓▓▓│Idle   │Idle   │Idle   │Idle   │Idle
+   918→         │       │       │       │≤50ms  │       │       │       │       │       │
+   919→
+   920→ml       │Idle   │Idle   │Idle   │Idle   │▓▓▓▓▓▓│Idle   │Idle   │Idle   │Idle
+   921→         │       │       │       │       │≤2s    │       │       │       │       │
+   922→
+   923→vdes     │Idle   │Idle   │Idle   │Idle   │Idle   │▓▓▓▓▓▓▓▓▓▓▓▓│Idle   │Idle
+   924→         │       │       │       │       │       │── 5-30s ──────│       │       │
+   925→```
+   926→
+   927→**Legend:** `▓▓▓` = Active processing, `────` = Waiting/Loading, `│` = State transition
+   928→
+   929→---
+   930→
+   931→### 14.2 Level 2 — ML Model and Regime State Changes on Specific Events
+   932→
+   933→> **سطح دوم:** تغییرات وضعیت مدل یادگیری ماشین و رژیم بازار در پاسخ به رویدادهای مشخص. این نمودار چرخه حیات مدل ML (untrained → training → trained → predicting → stale) و وضعیت رژیم (bullish → bearish → sideways) را نشان می‌دهد.
+   934→
+   935→**ML Model Lifecycle States:**
+   936→
+   937→| State | Description | Entry Event | Exit Event | Duration |
+   938→|---|---|---|---|---|
+   939→| `Untrained` | No model available | System startup | `trainAdaptiveModel()` called | Until first analysis |
+   940→| `Training` | Model being fitted | `trainAdaptiveModel()` start | Training complete/fails | ≤2s (success) / ≤1s (fail) |
+   941→| `Trained` | Model ready for prediction | Training success | `predictScore()` called | Until prediction needed |
+   942→| `Predicting` | Computing prediction | `predictScore()` start | Returns `Prediction` | ≤100ms |
+   943→| `Cached` | Model stored in safe_storage | `cacheModel()` | Symbol changes / TTL expires | TTL = 5 min |
+   944→| `Stale` | Model outdated | TTL exceeded / market shift | `trainAdaptiveModel()` called | Until retraining |
+   945→| `Fallback` | Using heuristic | Training failure | Next successful training | Until recovery |
+   946→
+   947→**ML Model Timeline:**
+   948→
+   949→```
+   950→Event →  Startup   Train     Trained  Predict  Cache   TTL     Stale   Retrain  Trained
+   951→        │         │         │        │        │       │       │       │        │
+   952→State   │Untained │Training │Trained │Predict │Cached │Cached │Stale  │Training │Trained
+   953→        │         │≤2s      │        │≤100ms  │       │5min   │       │≤2s     │
+   954→```
+   955→
+   956→**Regime State Transitions:**
+   957→
+   958→```
+   959→Event →  Open    Indicators  Fuzzy   Markov  Vote    Final   NewDay   Rebuild
+   960→        │       │           │       │       │       │       │        │
+   961→State   │Unknown│Computing   │Fuzzy  │Markov │Voting │Bullish│Bearish │Sideways
+   962→        │       │           │~5ms   │~10ms  │~15ms  │       │        │
+   963→```
+   964→
+   965→| Transition | Trigger | Method | Duration |
+   966→|---|---|---|---|
+   967→| Unknown → Computing | `detectRegime()` called | — | 0ms (immediate) |
+   968→| Computing → Fuzzy | `fuzzyRegimeDetector()` | Indicator membership calc | ~5ms |
+   969→| Fuzzy → Markov | `propagateMarkov()` | State transition probabilities | ~10ms |
+   970→| Markov → Voting | `adaptiveWeightedVote()` | λ_fuzzy·fuzzy + λ_markov·markov | ~15ms |
+   971→| Voting → {Bullish, Bearish, Sideways} | `argmax(voteScores)` | Final regime label | ~2ms |
+   972→| Bullish → Bearish | Market regime shift | Daily close + indicators | Next session |
+   973→| Bearish → Sideways | Volatility decrease | ATR + ADX threshold | Next session |
+   974→
+   975→---
+   976→
+   977→### 14.3 Level 3 — Duration Constraints and Delay Times for Critical Interactions
+   978→
+   979→> **سطح سوم:** محدودیت‌های زمانی دقیق و تأخیرهای بحرانی برای تمام تعاملات مهم سیستم. این اطلاعات برای تأیید عملکرد (performance validation) و شناسایی گلوگاه‌ها حیاتی است. تأخیر فراخوانی هوش مصنوعی بزرگ‌ترین عامل تأخیر کلی سیستم است.
+   980→
+   981→**Critical Path Duration Constraints:**
+   982→
+   983→| Interaction | Caller → Callee | Min Time | Max Time | Typical | Constraint | SLA |
+   984→|---|---|---|---|---|---|---|
+   985→| `ta_engine.analyze()` | analysis_api → ta_engine | 50ms | **500ms** | 200ms | `≤500ms` | ✅ P95 |
+   986→| `detectRegime()` | analysis_api → regime_engine | 5ms | **50ms** | 25ms | `≤50ms` | ✅ P99 |
+   987→| `approximateVolumeProfile()` | sr_analyzer → volume_profile | 10ms | **100ms** | 40ms | `≤100ms` | ✅ P95 |
+   988→| `analyzeSupportResistance()` | ta_engine → sr_analyzer | 20ms | 300ms | 80ms | `≤300ms` | ✅ P95 |
+   989→| `dedicatedAIChatCompletion()` | vdes_api → zai_shared | **5s** | **30s** | 12s | `5-30s` | ⚠️ Variable |
+   990→| `postProcessAIOutput()` | vdes_api → ai_postprocess | 50ms | 500ms | 150ms | `≤500ms` | ✅ P95 |
+   991→| `trainAdaptiveModel()` | ml_engine → self | 500ms | 2s | 1s | `≤2s` | ✅ P95 |
+   992→| `predictScore()` | ml_engine → self | 5ms | 100ms | 20ms | `≤100ms` | ✅ P99 |
+   993→| `evaluateDecisionGraph()` | analysis_api → decision_graph | 5ms | 50ms | 15ms | `≤50ms` | ✅ P99 |
+   994→| `fetchCandlestick()` | analysis_api → tse_api | 100ms | 2s | 400ms | `≤2s` | ✅ P95 |
+   995→| `fetchDailySnapshots()` | analysis_api → tse_api | 100ms | 2s | 500ms | `≤2s` | ✅ P95 |
+   996→| `selectMSLV4()` | vdes_api → msl_v4 | 1ms | 10ms | 3ms | `≤10ms` | ✅ P99 |
+   997→| `buildPrompt()` | msl_v4 → self | 5ms | 50ms | 15ms | `≤50ms` | ✅ P99 |
+   998→| `computeHistoricalProbabilities()` | regime_engine → bayesian_weights | 10ms | 200ms | 50ms | `≤200ms` | ✅ P95 |
+   999→| `getBayesianWeights()` | decision_graph → bayesian_weights | 1ms | 20ms | 5ms | `≤20ms` | ✅ P99 |
+  1000→| `persistAnalysis()` | analysis_api → safe_storage | 10ms | 100ms | 30ms | `≤100ms` | ✅ P99 |
+  1001→
+  1002→**429 Retry Delay Model:**
+  1003→
+  1004→```
+  1005→dedicatedAIChatCompletion() retry timing:
+  1006→
+  1007→  Attempt 1:  t=0s     → HTTP 429 → backoff
+  1008→  Wait:       baseDelay × 2^0 + jitter = 1000ms + rand(0,200ms) ≈ 1.0-1.2s
+  1009→  Attempt 2:  t≈1.1s   → HTTP 429 → backoff
+  1010→  Wait:       baseDelay × 2^1 + jitter = 2000ms + rand(0,200ms) ≈ 2.0-2.2s
+  1011→  Attempt 3:  t≈3.3s   → HTTP 200 → success
+  1012→
+  1013→  Total with retries:  3.3s + AI inference time (5-30s) = 8.3-33.3s
+  1014→  Without retries:     0s + AI inference time (5-30s) = 5-30s
+  1015→```
+  1016→
+  1017→**End-to-End Timing Budget:**
+  1018→
+  1019→| Path | Computation | Time Budget |
+  1020→|---|---|---|
+  1021→| **Fast path** (cache hit, no AI retry) | Fetch(0.4s) + TA(0.2s) + Regime(0.025s) + ML_cache(0.01s) + ML_pred(0.02s) + AI(12s) + Post(0.15s) + Decision(0.015s) + Persist(0.03s) | **≈12.85s** |
+  1022→| **Slow path** (no cache, 2 AI retries) | Fetch(0.5s) + TA(0.5s) + Regime(0.05s) + ML_train(2s) + ML_pred(0.1s) + AI_retry(3.3s+20s) + Post(0.5s) + Decision(0.05s) + Persist(0.1s) | **≈27.1s** |
+  1023→| **Fallback path** (ML fail, AI fail) | Fetch(0.5s) + TA(0.5s) + Regime(0.05s) + ML_fail(1s) + Heuristic(0.01s) + AI_fail(3.3s) + FallbackSummary(0.1s) + Decision(0.05s) + Persist(0.1s) | **≈5.61s** |
+  1024→
+  1025→**Timing Constraint Visualization (Critical Path):**
+  1026→
+  1027→```
+  1028→┌─────────────────────────────────────────────────────────────────────────────┐
+  1029→│  End-to-End Analysis Timing — Fast Path (no retries, cache miss)           │
+  1030→│  ◄────────────────────────────── ~12.85s ──────────────────────────────►   │
+  1031→│                                                                             │
+  1032→│  ├── Fetch ──┤                                                              │
+  1033→│  │  0.4s     │                                                              │
+  1034→│  ├── TA ─────┤                                                              │
+  1035→│  │  0.2s     │                                                              │
+  1036→│  ├── Regime ─┤                                                              │
+  1037→│  │  0.025s   │                                                              │
+  1038→│  ├── ML ─────┤                                                              │
+  1039→│  │  0.03s    │                                                              │
+  1040→│  ├── AI ────────────────────────────────────────┤   ← BOTTLENECK           │
+  1041→│  │  12s (typical)                                │                          │
+  1042→│  ├── Post ──┤                                                              │
+  1043→│  │  0.15s    │                                                              │
+  1044→│  ├── Decision┤                                                              │
+  1045→│  │  0.015s   │                                                              │
+  1046→│  └── Persist┤                                                              │
+  1047→│     0.03s   │                                                              │
+  1048→└─────────────────────────────────────────────────────────────────────────────┘
+  1049→
+  1050→  ██ Fetch    ██ TA       ██ Regime   ██ ML
+  1051→  ██ AI       ██ Post     ██ Decision ██ Persist
+  1052→```
+  1053→
+  1054→---
+  1055→
+  1056→## Cross-Reference: Coherence with Other Diagrams
+  1057→
+  1058→> **انسجام بین نمودارها:** نمودارهای تعاملی بالا باید با نمودارهای جریان داده (DFD)، نمودارهای فرآیند کسب‌وکار (BPMN)، و نمودارهای ساختاری (کلاس و مؤلفه) سازگار باشند. هر شیء در نمودارهای دنباله‌ای باید در نمودار ساختاری وجود داشته باشد و هر جریان داده در DFD باید در نمودار تعاملی متناظر باشد.
+  1059→
+  1060→| This Diagram | DFD Correspondence | BPMN Correspondence | Structural Correspondence |
+  1061→|---|---|---|---|
+  1062→| Seq L1: FetchData | DFD Process 1.0 — Acquire Data | BPMN Task: Fetch Market Data | `tse_api` class methods |
+  1063→| Seq L2: AnalyzeTechnical | DFD Process 2.0 — Analyze | BPMN Sub-Process: Technical Analysis | `ta_engine` + `sr_analyzer` + `volume_profile` |
+  1064→| Seq L2: DetectRegime | DFD Process 3.0 — Detect Regime | BPMN Sub-Process: Regime Detection | `regime_engine` + `bayesian_weights` |
+  1065→| Seq L3: PredictML | DFD Process 4.0 — Predict | BPMN Task: ML Prediction | `ml_engine` + `ml_logistic` |
+  1066→| Seq L3: GenerateAI | DFD Process 5.0 — Generate | BPMN Sub-Process: AI Generation | `msl_v4` + `zai_shared` + `ai_postprocess` |
+  1067→| Seq L3: AggregateResult | DFD Process 6.0 — Aggregate | BPMN Task: Decision Aggregation | `decision_graph` + `bayesian_weights` |
+  1068→| Timing: 429 retry | — | BPMN: Error Boundary Event | `zai_shared` retry logic |
+  1069→| Timing: ML fallback | DFD: 4.0a — Heuristic | BPMN: Compensation Handler | `ml_engine.heuristicPredict()` |
+  1070→
+  1071→**Data Flow Verification:**
+  1072→
+  1073→| Data Store (DFD) | Producing Interaction | Consuming Interaction | Storage Object |
+  1074→|---|---|---|---|
+  1075→| D1: CandlestickData | FetchData (Seq L1) | AnalyzeTechnical (Seq L2) | `tse_api` → `ta_engine` |
+  1076→| D2: DailySnapshots | FetchData (Seq L1) | DetectRegime (Seq L2) | `tse_api` → `regime_engine` |
+  1077→| D3: TAResult | AnalyzeTechnical (Seq L2) | AggregateResult (Seq L3) | `ta_engine` → `analysis_api` |
+  1078→| D4: RegimeResult | DetectRegime (Seq L2) | PredictML, AggregateResult | `regime_engine` → `analysis_api` |
+  1079→| D5: Prediction | PredictML (Seq L3) | GenerateAI, AggregateResult | `ml_engine` → `analysis_api` |
+  1080→| D6: VdesResult | GenerateAI (Seq L3) | AggregateResult (Seq L3) | `vdes_api` → `analysis_api` |
+  1081→| D7: CachedModel | PredictML (cache write) | PredictML (cache read) | `safe_storage` |
+  1082→| D8: FeedbackWeights | MSL Feedback (Seq L3) | MSL Prompt Build (Seq L3) | `msl_feedback` → `msl_v4` |
+  1083→
+  1084→---
+  1085→
+  1086→## Summary
+  1087→
+  1088→| Diagram Type | Level | Primary Purpose | Key UML Constructs |
+  1089→|---|---|---|---|
+  1090→| **Sequence** | L1 | Happy-path analysis flow | `→`, `activate`, `deactivate` |
+  1091→| **Sequence** | L2 | Internal TA + Regime details | Nested calls, `note` |
+  1092→| **Sequence** | L3 | Full flow with exceptions | `par`, `alt`, `opt`, `loop` |
+  1093→| **Communication** | L1 | Architecture links topology | Numbered messages, links |
+  1094→| **Communication** | L2 | Regime detection ordering | Nested numbering (1.1, 1.2…) |
+  1095→| **Communication** | L3 | Volume profile precise links | Deep numbering (1.1.1–1.1.7) |
+  1096→| **Interaction Overview** | L1 | Sequence diagram references | `sd` fragments, sequential flow |
+  1097→| **Interaction Overview** | L2 | Decision points + branches | `◇` decision, conditional `sd` |
+  1098→| **Interaction Overview** | L3 | Loop + parallel constructs | `par`, `loop`, timing constraints |
+  1099→| **Timing** | L1 | Session states over 0-30s | State timeline table |
+  1100→| **Timing** | L2 | ML/Regime lifecycle | State transition table |
+  1101→| **Timing** | L3 | Duration constraints + budget | Timing budget, retry model |
+  1102→
+  1103→> **نتیجه‌گیری:** مجموعه نمودارهای تعاملی فوق، رفتار پویای سامانه تحلیل تکنیکال بورس تهران را از سه سطح انتزاع توصیف می‌کند. نمودارهای دنباله‌ای ترتیب پیام‌ها، نمودارهای ارتباطی ساختار اتصال، نمودارهای کلی تعامل جریان شرطی و موازی، و نمودارهای زمان‌بندی محدودیت‌های عملکرد را مشخص می‌کنند. ترکیب این چهار نوع نمودار، تصویر کاملی از رفتار سیستم ارائه می‌دهد که با نمودارهای ساختاری و جریان داده نیز سازگار است.
+  1104→

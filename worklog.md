@@ -93,3 +93,49 @@ Stage Summary:
 - Zero code logic changes — only comments added
 - All documented algorithms, formulas, and weights match actual code implementation
 - Dev server running successfully, pre-existing lint errors unchanged
+
+---
+Task ID: 7
+Agent: Main
+Task: Create comprehensive DFD, BPMN, and UML 2.5 diagram documentation at 3 levels
+
+Work Log:
+- Created DFD section (569 lines, 12 Mermaid diagrams):
+  - Level 0: Context diagram with 7 external entities
+  - Level 1: 7 main processes (P1-P7) with 6 data stores
+  - Level 2: 7 sub-diagrams (P1.1-P1.5 through P7.1-P7.4)
+  - Level 3: 3 atomic diagrams (7-layer VDss, Markov chain, Volume Profile)
+- Created BPMN section (651 lines, 9 Mermaid diagrams):
+  - Level 1: 5 pools with 3 lanes and 3 gateways
+  - Level 2: 5 executable process diagrams with Happy Path + Exception tables
+  - Level 3: 3 detailed sub-processes (regime detection, volume profile, feedback)
+- Created UML Structural section (1,466 lines, 18 PlantUML + 3 tables):
+  - Class Diagram (3 levels): Domain → Design → Implementation
+  - Object Diagram (3 levels): Instance scenarios
+  - Component Diagram (3 levels): Top-level → Sub-components → Interfaces
+  - Deployment Diagram (3 levels): Nodes → Allocation → Config
+  - Package Diagram (3 levels): Main → Sub → Class dependencies
+  - Composite Structure (3 levels): TA Engine → ML collaboration → Connectors
+  - Profile Diagram (3 levels): Stereotypes → Tags → OCL constraints
+- Created UML Behavioral section (696 lines, 6 PlantUML + 5 Mermaid):
+  - Use Case (3 levels): 9 UCs with include/extend relationships
+  - Activity (3 levels): Linear → Fork/Decision → Swimlane
+  - State Machine (5 diagrams): Simple → Guarded → Composite/History
+- Created UML Interaction section (1,103 lines, 6 PlantUML + 3 Mermaid + 6 tables):
+  - Sequence (3 levels): High-level → Detailed → Full with par/alt/loop
+  - Communication (3 levels): Architecture → Regime → Volume Profile
+  - Interaction Overview (3 levels): sd references → Decision → par/loop
+  - Timing (3 levels): Timeline → Lifecycle → Duration constraints
+- Assembled final DIAGRAM_DOCS.md (4,700 lines, 243 KB):
+  - 5 main sections (DFD + BPMN + UML Structural + UML Behavioral + UML Interaction)
+  - Coherence table: 48 rows mapping DFD↔BPMN↔UML↔source files
+  - Appendix: 56-diagram catalog, 35-term glossary, 7 standard references
+- Total: 65 diagrams across 3 modeling languages × 3 abstraction levels
+
+Stage Summary:
+- DIAGRAM_DOCS.md: 4,700 lines, 243 KB comprehensive diagram documentation
+- 65 diagrams total: 12 DFD + 9 BPMN + 21 UML Structural + 11 UML Behavioral + 12 UML Interaction
+- All 14 UML 2.5 diagram types covered
+- Full coherence: DFD processes ↔ BPMN activities ↔ UML classes/methods ↔ source files
+- All diagram code in Mermaid/PlantUML syntax (renderable)
+- Dev server running successfully
