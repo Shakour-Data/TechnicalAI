@@ -139,3 +139,25 @@ Stage Summary:
 - Full coherence: DFD processes ↔ BPMN activities ↔ UML classes/methods ↔ source files
 - All diagram code in Mermaid/PlantUML syntax (renderable)
 - Dev server running successfully
+
+---
+Task ID: 8
+Agent: Main
+Task: Render documentation diagrams beautifully in the Docs page
+
+Work Log:
+- Installed mermaid@11.17.2 for client-side diagram rendering
+- Created MermaidDiagram component with light/dark theme, error handling, loading state
+- Created PlantUMLDiagram component with deflate encoding, plantuml.com server rendering
+- Completely rewrote DocsPage component:
+  - Sidebar with expandable section tree (7 top-level, 25+ sub-items) + search
+  - 12+ embedded diagrams: DFD (Level 0-3), BPMN, UML Class (3 levels), Component, Sequence, State Machine
+  - Mermaid + PlantUML rendering with type badges and level badges
+  - Zoom controls (50%-200%), Farsi notes, coherence table
+  - Hero banner with statistics, full RTL + theme support
+- Browser verification: All elements render correctly (Mermaid SVG, PlantUML images, sidebar, search, zoom, coherence table)
+
+Stage Summary:
+- Beautiful interactive documentation page with live diagram rendering
+- 12+ diagrams embedded directly, 65 total in DIAGRAM_DOCS.md
+- Dev server running, no errors
