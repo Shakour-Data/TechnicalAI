@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
-import { db } from '@/lib/db';
 import {
   selectMLCombination,
   selectMethods,
@@ -47,17 +46,53 @@ function getTodayDateStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-// ─── Price Hash for Cache Key ─────────────────────────────────────
-// Rounds price into 0.5% buckets so that small price movements
-// (< 0.5%) reuse the same cache, but meaningful moves create a new entry.
-// This enables multiple analyses per day when price changes significantly.
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL for cache entries
+// ─── Uniqueness Helpers ───────────────────────────────────────────
+// Random seed/salt based on symbolName + currentPrice + timestamp to force unique generation
+function computeUniqueSeed(symbolName: string, currentPrice: number): string {
+  const ts = Date.now();
+  const raw = `${symbolName}:${currentPrice}:${ts}:${Math.random().toFixed(8)}`;
+  // Simple hash to create a short seed string
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) {
+    h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+  }
+  return `seed-${Math.abs(h).toString(36)}-${ts}`;
+}
 
-function computePriceHash(price: number): string {
-  if (!price || price <= 0 || !isFinite(price)) return '0';
-  // Round to nearest 0.5% bucket
-  const bucket = Math.round(price * 2) / 2; // Round to nearest 0.5%
-  return bucket.toString();
+// Generate a random "writing session ID" to force LLM to produce different text each time
+function generateSessionId(): string {
+  return `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Random "analysis angle" chosen from a list of different analytical perspectives to force diversity
+const ANALYSIS_ANGLES: string[] = [
+  'تحلیل از منظر روان‌شناسی بازار و رفتار جمعی سرمایه‌گذاران',
+  'تحلیل با تمرکز بر ساختار بازار و نقدینگی',
+  'تحلیل از منظر مدیریت ریسک و حفظ سرمایه',
+  'تحلیل با دیدگاه زمان‌بندی ورود و خروج به موقع',
+  'تحلیل از زاویه تقاطع سطوح کلیدی و نقاط عطف',
+  'تحلیل با تمرکز بر سناریوهای محتمل و احتمالات شرطی',
+  'تحلیل از منظر دینامیک عرضه و تقاضا',
+  'تحلیل با دیدگاه مقایسه نسبی با گروه هم‌گروه',
+  'تحلیل از زاویه شکست سطوح و تغییر فاز بازار',
+  'تحلیل با تمرکز بر هم‌بستگی اندیکاتورها و تایید متقابل',
+];
+
+function pickRandomAngle(): string {
+  return ANALYSIS_ANGLES[Math.floor(Math.random() * ANALYSIS_ANGLES.length)];
+}
+
+// Random permutation of analysis dimensions (school/style/tone) even within the same ML selection
+const STYLE_VARIANTS: string[] = [
+  'صراحت‌آمیز و قاطع',
+  'متعادل و چندمنظوره',
+  'محافظه‌کارانه و احتیاط‌آمیز',
+  'پویا و انطباق‌پذیر',
+  'عمیق و بنیادین',
+];
+
+function pickRandomStyleVariant(): string {
+  return STYLE_VARIANTS[Math.floor(Math.random() * STYLE_VARIANTS.length)];
 }
 
 
@@ -453,6 +488,7 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 26. **قیمت فعلی الزامی:** قیمت فعلی ذکرشده در تحلیل باید دقیقاً همان قیمتی باشد که در داده‌های پایه با برچسب «قیمت فعلی» مشخص شده است. این قیمت نقطه شروع تمام تحلیل‌ها و محاسبات شماست.
 27. **منع تناقض:** هیچ جمله‌ای در تحلیل نباید با داده‌های ارائه‌شده تناقض داشته باشد. اگر داده‌ها نشان‌دهنده روند صعودی هستند، تحلیل نباید نزولی باشد و بالعکس. اگر احتمال صعودی بیشتر است، تحلیل باید بازتاب‌دهنده این اولویت باشد.
 28. **حفظ مقیاس قیمت — ممنوعیت تغییر مقیاس:** تمام قیمت‌ها (میانگین متحرک، باند بولینگر، اهداف سناریو، حد ضرر، حمایت، مقاومت) باید در همان مقیاس قیمت فعلی باشند. اگر قیمت فعلی ۲,۱۴۰,۰۰۰ ریال است، میانگین متحرک باید حدود ۱,۸۰۰,۰۰۰ تا ۲,۱۰۰,۰۰۰ ریال باشد (نه ۳۰,۰۰۰ یا ۲۴,۰۰۰). هرگز صفرهای قیمت را حذف نکنید. هرگز مقیاس قیمت را تغییر ندهید.
+29. **قانون آهن:** هر عدد ذکرشده در متن باید دقیقاً از داده‌های ارائه‌شده گرفته شده باشد. هیچ عددی از خود نسازید. این شامل قیمت فعلی، سطوح حمایت/مقاومت، اهداف سناریو، مقادیر اندیکاتور، و درصدهای احتمال می‌شود.
 `;
 
 // ─── POST Handler ────────────────────────────────────────────────
@@ -476,41 +512,16 @@ export async function POST(req: NextRequest) {
     }
 
     const symbolName = String(body.symbolName || 'unknown');
-    const today = getTodayDateStr();
     const currentPrice = Number(body.currentPrice) || 0;
-    const priceHash = computePriceHash(currentPrice);
-    const forceRefresh = Boolean(body.forceRefresh);
+    // forceRefresh is kept as a no-op (no cache to bypass)
+    const _forceRefresh = Boolean(body.forceRefresh);
+    void _forceRefresh;
 
-    // 1. Check time-based cache (Prisma/SQLite)
-    // Cache key is (symbol, priceHash) — allows multiple analyses per day
-    // when price moves significantly. Cache expires after CACHE_TTL_MS (5 min).
-    if (!forceRefresh) {
-      try {
-        const cached = await db.aiAnalysisCache.findUnique({
-          where: { symbol_priceHash: { symbol: symbolName, priceHash } },
-        });
-        if (cached && cached.text) {
-          const ageMs = Date.now() - cached.updatedAt.getTime();
-          const isExpired = ageMs > CACHE_TTL_MS;
-          if (!isExpired) {
-            console.log(`[AI] Cache HIT for ${symbolName} (priceHash=${priceHash}, age=${Math.round(ageMs / 1000)}s) [${Date.now() - startTime}ms]`);
-            return NextResponse.json({
-              text: cached.text,
-              ml: cached.ml ? JSON.parse(cached.ml) : undefined,
-              cached: true,
-              cachedAge: Math.round(ageMs / 1000),
-              priceAtGeneration: cached.price,
-            });
-          } else {
-            console.log(`[AI] Cache EXPIRED for ${symbolName} (priceHash=${priceHash}, age=${Math.round(ageMs / 1000)}s > ${CACHE_TTL_MS / 1000}s), re-generating`);
-          }
-        }
-      } catch (dbErr) {
-        console.warn('[AI] DB cache read failed, continuing:', dbErr instanceof Error ? dbErr.message : dbErr);
-      }
-    } else {
-      console.log(`[AI] Force refresh requested for ${symbolName}, skipping cache`);
-    }
+    // Generate unique context for this analysis run
+    const uniqueSeed = computeUniqueSeed(symbolName, currentPrice);
+    const sessionId = generateSessionId();
+    const analysisAngle = pickRandomAngle();
+    const styleVariant = pickRandomStyleVariant();
 
     // 2. ML selection
     const mlInput = buildMLInput(body);
@@ -525,12 +536,29 @@ export async function POST(req: NextRequest) {
     mlSelection.tone = mslResult.analysis_tone.primary.id as typeof mlSelection.tone;
     mlSelection.reasoning = `MSLv4: ${mslResult.school_of_analysis.primary.id}/${mslResult.analysis_style.primary.id}/${mslResult.analysis_tone.primary.id}`;
 
-    // 4. Build prompt
+    // 4. Build prompt with unique context
     const mslSystemPrompt = buildMSLV4PromptSection(mslResult);
     const userMessage = buildPrompt(body, mlSelection, methods);
-    const dynamicSystemPrompt = `${SYSTEM_PROMPT}\n\n${mslSystemPrompt}`;
 
-    console.log(`[AI] Generating for ${symbolName} (cache miss) [${Date.now() - startTime}ms]`);
+    // Add unique prompt elements to force diversity and human-like output
+    const uniquenessBlock = `
+**شناسه یکتایی این تحلیل:**
+- بذر یکتایی: ${uniqueSeed}
+- شناسه نشست نوشتاری: ${sessionId}
+- زاویه تحلیلی منتخب: ${analysisAngle}
+- سبک بیان منتخب: ${styleVariant}
+- تاریخ و زمان درخواست: ${new Date().toISOString()}
+
+**دستورالعمل یکتایی:**
+- هر تحلیل باید منحصر به فرد باشد. حتی اگر دو نماد اندیکاتورهای مشابهی داشته باشند، تحلیل آن‌ها باید متفاوت باشد. از زاویه تحلیلی متفاوت، اولویت‌بندی متفاوت سطوح کلیدی، و بیان خلاقانه استفاده کنید.
+- تحلیل باید طبیعی و انسانی به نظر برسد، نه ماشینی. از جملات متنوع، تشبیه‌های بازار سرمایه‌گذاری، و بیان روان‌شناسی بازار استفاده کنید.
+- زاویه تحلیلی شما برای این تحلیل: «${analysisAngle}» — این زاویه باید در نحوه بیان و اولویت‌بندی سطوح و سناریوها بازتاب یابد.
+- سبک بیان شما برای این تحلیل: «${styleVariant}» — متن باید با این سبک نوشته شود.
+`;
+
+    const dynamicSystemPrompt = `${SYSTEM_PROMPT}\n\n${mslSystemPrompt}\n\n${uniquenessBlock}`;
+
+    console.log(`[AI] Generating for ${symbolName} (seed=${uniqueSeed}, angle=${analysisAngle.slice(0, 30)}...) [${Date.now() - startTime}ms]`);
 
     // 5. Call AI through dedicated channel — fail fast on 429
     //    Only retry 2 times max (3 total attempts) to avoid wasting time.
@@ -541,7 +569,7 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: userMessage },
       ],
       {
-        timeoutMs: 90_000,  // 90s max (1 initial + 2 retries)
+        timeoutMs: 120_000,  // 120s max since no cache — every call goes to LLM
         maxRetries: 2,
       }
     );
@@ -552,52 +580,11 @@ export async function POST(req: NextRequest) {
 
     // If prices are severely hallucinated, log but still return (don't crash)
     if (!priceValid) {
-      console.warn(`[AI] Price hallucination detected for ${symbolName}: ${hallucinationCount} bad prices found. NOT caching.`);
+      console.warn(`[AI] Price hallucination detected for ${symbolName}: ${hallucinationCount} bad prices found.`);
     }
     const mlData = { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods };
 
-    // 7. Save to time-based cache — ONLY if prices are valid
-    // Cache key is (symbol, priceHash) — allows multiple entries per day
-    if (priceValid) {
-      try {
-        await db.aiAnalysisCache.upsert({
-          where: { symbol_priceHash: { symbol: symbolName, priceHash } },
-          create: {
-            symbol: symbolName,
-            date: today,
-            text: cleaned,
-            ml: JSON.stringify(mlData),
-            price: currentPrice,
-            priceHash,
-          },
-          update: {
-            date: today,
-            text: cleaned,
-            ml: JSON.stringify(mlData),
-            price: currentPrice,
-          },
-        });
-        console.log(`[AI] Saved to cache: ${symbolName} (priceHash=${priceHash}, price=${currentPrice}) [${Date.now() - startTime}ms]`);
-      } catch (dbErr) {
-        console.warn('[AI] DB cache write failed:', dbErr instanceof Error ? dbErr.message : dbErr);
-      }
-    } else {
-      console.log(`[AI] Skipped cache save for ${symbolName} due to price hallucination`);
-    }
-
-    // 8. Clean up old cache entries for this symbol (keep only last 3 per symbol)
-    try {
-      const allEntries = await db.aiAnalysisCache.findMany({
-        where: { symbol: symbolName },
-        orderBy: { updatedAt: 'desc' },
-        select: { id: true },
-      });
-      if (allEntries.length > 3) {
-        const idsToDelete = allEntries.slice(3).map(e => e.id);
-        await db.aiAnalysisCache.deleteMany({ where: { id: { in: idsToDelete } } });
-      }
-    } catch { /* ignore cleanup failure */ }
-
+    // No cache — every analysis is fresh from LLM
     console.log(`[AI] Complete for ${symbolName} [${Date.now() - startTime}ms]`);
     return NextResponse.json({ text: cleaned, ml: mlData });
 

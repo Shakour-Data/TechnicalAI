@@ -1,0 +1,252 @@
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:3:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/tsetmc-index-service/fetch-sectors.mjs:5:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/tsetmc-index-service/bun.lock:8:        "z-ai-web-dev-sdk": "latest",
+/home/z/my-project/mini-services/tsetmc-index-service/bun.lock:74:    "z-ai-web-dev-sdk": ["z-ai-web-dev-sdk@0.0.18", "", { "bin": { "z-ai": "dist/cli.js", "z-ai-generate": "dist/cli.js" } }, "sha512-xVoZIEME2F+/Z06orHCgUKzOMuFPhoHuzN4ZFZqcD71g11nzbzq2jKSP53igi3lJFE8ZbMB4WKb4gp6lCGrMXQ=="],
+/home/z/my-project/mini-services/tsetmc-index-service/test_with_server.mjs:2:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/tsetmc-index-service/fetch-sectors.ts:10:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/tsetmc-index-service/package.json:9:    "z-ai-web-dev-sdk": "latest"
+/home/z/my-project/mini-services/tsetmc-index-service/package-lock.json:11:        "z-ai-web-dev-sdk": "latest"
+/home/z/my-project/mini-services/tsetmc-index-service/package-lock.json:535:    "node_modules/z-ai-web-dev-sdk": {
+/home/z/my-project/mini-services/tsetmc-index-service/package-lock.json:537:      "resolved": "https://registry.npmjs.org/z-ai-web-dev-sdk/-/z-ai-web-dev-sdk-0.0.18.tgz",
+/home/z/my-project/mini-services/tsetmc-index-service/test_sdk.mjs:1:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:3:// Uses z-ai-web-dev-sdk page_reader to fetch index data from cdn.tsetmc.com
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:8:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/tsetmc-index-service/fetch-one.mjs:5:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/finpy-tse/bun.lock:9:        "z-ai-web-dev-sdk": "^0.0.18",
+/home/z/my-project/mini-services/finpy-tse/bun.lock:32:    "z-ai-web-dev-sdk": ["z-ai-web-dev-sdk@0.0.18", "", { "bin": { "z-ai": "dist/cli.js", "z-ai-generate": "dist/cli.js" } }, "sha512-xVoZIEME2F+/Z06orHCgUKzOMuFPhoHuzN4ZFZqcD71g11nzbzq2jKSP53igi3lJFE8ZbMB4WKb4gp6lCGrMXQ=="],
+/home/z/my-project/mini-services/finpy-tse/index.ts:11:import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/mini-services/finpy-tse/package.json:14:    "z-ai-web-dev-sdk": "^0.0.18"
+/home/z/my-project/bpmn-section.md:54:        PROMPT --> LLM["🧠 فراخوانی LLM"]
+/home/z/my-project/bpmn-section.md:55:        LLM --> POST["✂️ پس‌پردازش"]
+/home/z/my-project/bpmn-section.md:84:    class PROMPT,LLM,POST process
+/home/z/my-project/bpmn-section.md:99:۵. استخر «سرویس AI» فرآیند تولید متن تحلیلی را مدل‌سازی می‌کند: ابتدا پرامپت بر اساس MSL انتخابی ساخته می‌شود، سپس LLM فراخوانی شده و در نهایت خروجی پس‌پردازش می‌گردد. این استخر مستقل از موتور تحلیل عمل می‌کند و تنها نتیجه TAResult را دریافت می‌نماید.
+/home/z/my-project/bpmn-section.md:262:    BUILD_P --> CALL_LLM["🧠 فراخوانی LLM\nmodel: gpt-4o / llama3"]
+/home/z/my-project/bpmn-section.md:263:    CALL_LLM --> LLM_OK{"🜂 پاسخ معتبر؟"}
+/home/z/my-project/bpmn-section.md:264:    LLM_OK -->|بله| POST_PROC["✂️ پس‌پردازش\nپاکسازی + فرمت + ترجمه"]
+/home/z/my-project/bpmn-section.md:265:    LLM_OK -->|خیر| RETRY_LLM["🔄 تلاش مجدد LLM\nحداکثر ۲ بار"]
+/home/z/my-project/bpmn-section.md:266:    RETRY_LLM --> CALL_LLM
+/home/z/my-project/bpmn-section.md:276:    class MSL_GW3,LLM_OK gateway
+/home/z/my-project/bpmn-section.md:277:    class RETRY_LLM error
+/home/z/my-project/bpmn-section.md:278:    class IN_TAR,SEL_MSL,MSLA,MSLB,MSLC,MSLD,BUILD_P,CALL_LLM,POST_PROC,CACHE_AI,OUT3 task
+/home/z/my-project/bpmn-section.md:289:۴. پس از فراخوانی LLM، خروجی اعتبارسنجی می‌شود. در صورت نامعتبر بودن (مثلاً JSON ناقص)، تلاش مجدد انجام می‌گیرد.
+/home/z/my-project/bpmn-section.md:293:۶. نتیجه نهایی در کش ذخیره می‌شود تا برای درخواست‌های تکراری بدون فراخوانی مجدد LLM بازگردانده شود.
+/home/z/my-project/bpmn-section.md:302:| ۴ | فراخوانی LLM | `gpt-4o.chat(prompt)` در ۳s | `raw_text: str` |
+/home/z/my-project/bpmn-section.md:312:| E-403 | LLM timeout | تلاش مجدد + کاهش token | زمان‌بری پاسخ LLM |
+/home/z/my-project/bpmn-section.md:313:| E-404 | LLM خطای محتوا | استفاده از تحلیل الگویی | خروجی LLM نامعتبر |
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:432:   432→  - Parallel data gathering (candlestick local, ML service, AI patterns via LLM)
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:452:   452→  4. AI-Powered Harmonic/Elliott: ZAI LLM analysis of swing points and patterns
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:554:   554→  - V9 prompt builder that combines persona, phrase bank, template, school/style/tone into rich LLM prompt
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:577:   577→- Phrase bank provides LLM with contextual phrase suggestions for each analysis section
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:607:   607→- Diagnosed 502 as gateway timeout (LLM took 28-37s, prompt was 5KB+)
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:632:   632→- Analyzed the full V9 analysis pipeline: API route → ml-narrative-v9.ts → ZAI LLM
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:637:   637→  3. `detectAIPatterns` LLM call had no timeout → could hang indefinitely
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:640:   640→- Added 45s hard timeout on main narrative LLM call
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:641:   641→- Added 15s hard timeout on AI pattern detection LLM call (secondary feature)
+/home/z/my-project/tool-results/read_1787395902402_c83d4ab3eeb8.txt:792:   792→- End-to-end consistency: client sends keys → API uses them in data section → LLM includes in text
+/home/z/my-project/tool-results/read_1787345610952_684b5be3f3ca.txt:676:   676→ * Build the V9 narrative prompt for LLM consumption.
+/home/z/my-project/tool-results/read_1787345610952_684b5be3f3ca.txt:680:   680→ * @returns Complete prompt string for LLM
+/home/z/my-project/tool-results/read_1787345140357_d29f887d020d.txt:299:   676→ * Build the V9 narrative prompt for LLM consumption.
+/home/z/my-project/tool-results/read_1787345140357_d29f887d020d.txt:303:   680→ * @returns Complete prompt string for LLM
+/home/z/my-project/bun.lock:79:        "z-ai-web-dev-sdk": "^0.0.18",
+/home/z/my-project/bun.lock:246:    "@floating-ui/core": ["@floating-ui/core@1.7.3", "https://registry.npmjs.com/@floating-ui/core/-/core-1.7.3.tgz", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-sGnvb5dmrJaKEZ+LDIpguvdX3bDlEllmv4/ClQ9awcmCZrlx5jQyyMWFM5kBI+EyNOCDDiKk8il0zeuX3Zlg/w=="],
+/home/z/my-project/bun.lock:1904:    "react-is": ["react-is@18.3.1", "https://registry.npmjs.com/react-is/-/react-is-18.3.1.tgz", {}, "sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg=="],
+/home/z/my-project/bun.lock:2206:    "z-ai-web-dev-sdk": ["z-ai-web-dev-sdk@0.0.18", "", { "bin": { "z-ai": "dist/cli.js", "z-ai-generate": "dist/cli.js" } }, "sha512-xVoZIEME2F+/Z06orHCgUKzOMuFPhoHuzN4ZFZqcD71g11nzbzq2jKSP53igi3lJFE8ZbMB4WKb4gp6lCGrMXQ=="],
+/home/z/my-project/tool-results/read_1787088074033_f69bb7bc4961.txt:427:   427→- Created `/api/ai-analysis` (POST) route using z-ai-web-dev-sdk LLM:
+/home/z/my-project/tool-results/read_1787268627175_816ad7718a0b.txt:659:   659→                  {/* AI → LLM */}
+/home/z/my-project/tool-results/read_1787268627175_816ad7718a0b.txt:670:   670→                  {/* LLM */}
+/home/z/my-project/tool-results/read_1787268627175_816ad7718a0b.txt:690:   690→                    LLM
+/home/z/my-project/DIAGRAM_DOCS.md:53:    E5[Z-AI SDK / LLM<br/>هوش مصنوعی]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:78:- **جریان‌های خروجی**: نتایج تحلیل تکنیکال، متن تحلیل AI، و پرامپت ارسالی به LLM.
+/home/z/my-project/DIAGRAM_DOCS.md:99:    E5[Z-AI SDK / LLM]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:369:    E5[Z-AI SDK / LLM]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:376:    P63[P6.3: فراخوانی LLM<br/>call-llm]:::Process
+/home/z/my-project/DIAGRAM_DOCS.md:386:    P63 -->|متن LLM| P64
+/home/z/my-project/DIAGRAM_DOCS.md:395:- **P6.3 فراخوانی LLM**: پرامپت به Z-AI SDK ارسال و متن خام تحلیل دریافت می‌شود.
+/home/z/my-project/DIAGRAM_DOCS.md:397:- **P6.5 کش نتیجه**: متن نهایی تحلیل در D2 کش می‌شود تا در درخواست‌های بعدی بدون فراخوانی مجدد LLM بازگردانده شود.
+/home/z/my-project/DIAGRAM_DOCS.md:645:        PROMPT --> LLM["🧠 فراخوانی LLM"]
+/home/z/my-project/DIAGRAM_DOCS.md:646:        LLM --> POST["✂️ پس‌پردازش"]
+/home/z/my-project/DIAGRAM_DOCS.md:675:    class PROMPT,LLM,POST process
+/home/z/my-project/DIAGRAM_DOCS.md:690:۵. استخر «سرویس AI» فرآیند تولید متن تحلیلی را مدل‌سازی می‌کند: ابتدا پرامپت بر اساس MSL انتخابی ساخته می‌شود، سپس LLM فراخوانی شده و در نهایت خروجی پس‌پردازش می‌گردد. این استخر مستقل از موتور تحلیل عمل می‌کند و تنها نتیجه TAResult را دریافت می‌نماید.
+/home/z/my-project/DIAGRAM_DOCS.md:853:    BUILD_P --> CALL_LLM["🧠 فراخوانی LLM\nmodel: gpt-4o / llama3"]
+/home/z/my-project/DIAGRAM_DOCS.md:854:    CALL_LLM --> LLM_OK{"🜂 پاسخ معتبر؟"}
+/home/z/my-project/DIAGRAM_DOCS.md:855:    LLM_OK -->|بله| POST_PROC["✂️ پس‌پردازش\nپاکسازی + فرمت + ترجمه"]
+/home/z/my-project/DIAGRAM_DOCS.md:856:    LLM_OK -->|خیر| RETRY_LLM["🔄 تلاش مجدد LLM\nحداکثر ۲ بار"]
+/home/z/my-project/DIAGRAM_DOCS.md:857:    RETRY_LLM --> CALL_LLM
+/home/z/my-project/DIAGRAM_DOCS.md:867:    class MSL_GW3,LLM_OK gateway
+/home/z/my-project/DIAGRAM_DOCS.md:868:    class RETRY_LLM error
+/home/z/my-project/DIAGRAM_DOCS.md:869:    class IN_TAR,SEL_MSL,MSLA,MSLB,MSLC,MSLD,BUILD_P,CALL_LLM,POST_PROC,CACHE_AI,OUT3 task
+/home/z/my-project/DIAGRAM_DOCS.md:880:۴. پس از فراخوانی LLM، خروجی اعتبارسنجی می‌شود. در صورت نامعتبر بودن (مثلاً JSON ناقص)، تلاش مجدد انجام می‌گیرد.
+/home/z/my-project/DIAGRAM_DOCS.md:884:۶. نتیجه نهایی در کش ذخیره می‌شود تا برای درخواست‌های تکراری بدون فراخوانی مجدد LLM بازگردانده شود.
+/home/z/my-project/DIAGRAM_DOCS.md:893:| ۴ | فراخوانی LLM | `gpt-4o.chat(prompt)` در ۳s | `raw_text: str` |
+/home/z/my-project/DIAGRAM_DOCS.md:903:| E-403 | LLM timeout | تلاش مجدد + کاهش token | زمان‌بری پاسخ LLM |
+/home/z/my-project/DIAGRAM_DOCS.md:904:| E-404 | LLM خطای محتوا | استفاده از تحلیل الگویی | خروجی LLM نامعتبر |
+/home/z/my-project/DIAGRAM_DOCS.md:2820:  usecase "UC12\nCache Hit (Skip LLM)"   as UC12
+/home/z/my-project/DIAGRAM_DOCS.md:2861:> مشاهده متن تحلیل AI (UC3) نیازمند انتخاب ترکیب MSL (UC11) است تا پارامترهای ورودی LLM تعیین شوند.
+/home/z/my-project/DIAGRAM_DOCS.md:2862:> اگر نتیجه در حافظه نهان موجود باشد، UC12 (Cache Hit) تحلیل AI را گسترش می‌دهد و فراخوانی LLM حذف می‌شود.
+/home/z/my-project/DIAGRAM_DOCS.md:2898:    usecase "UC3a\nNormal: LLM generates text"  as UC3a
+/home/z/my-project/DIAGRAM_DOCS.md:2899:    usecase "UC3b\nAlt: cache hit (skip LLM)"   as UC3b
+/home/z/my-project/DIAGRAM_DOCS.md:2900:    usecase "UC3c\nExc: LLM timeout / rate-limit" as UC3c
+/home/z/my-project/DIAGRAM_DOCS.md:2965:> برای تحلیل AI (UC3): اگر LLM قطع شود یا محدودیت نرخ رخ دهد، UC3c فعال می‌شود و نتیجه حافظه نهان قدیمی نمایش داده می‌شود.
+/home/z/my-project/DIAGRAM_DOCS.md:3045:  :Call LLM service
+/home/z/my-project/DIAGRAM_DOCS.md:3151:  :Construct LLM prompt
+/home/z/my-project/DIAGRAM_DOCS.md:3256:    GeneratingText --> Complete : textGenerated(ai_text)\n[llm_response_ok]
+/home/z/my-project/DIAGRAM_DOCS.md:3258:    GeneratingText --> GeneratingText : retryLLM()\n[llm_timeout AND retry < 2]
+/home/z/my-project/DIAGRAM_DOCS.md:3259:    GeneratingText --> Complete : fallbackText()\n[llm_timeout AND retry >= 2]
+/home/z/my-project/DIAGRAM_DOCS.md:3271:> اگر LLM قطع شود، سیستم تا دو بار تلاش مجدد و سپس متن بدیل نمایش می‌دهد.
+/home/z/my-project/DIAGRAM_DOCS.md:4559:| 30 | P6.3: فراخوانی LLM | فعالیت «فراخوانی LLM» | `ZAIShared` | `chatCompletion()` | `src/lib/zai-shared.ts` |
+/home/z/my-project/DIAGRAM_DOCS.md:4577:| 48 | E5: Z-AI SDK/LLM | سرویس هوش مصنوعی | `ZAIShared` | `chatCompletion()` | `src/lib/zai-shared.ts` |
+/home/z/my-project/DIAGRAM_DOCS.md:4680:| 31 | پرامپت | Prompt | متن ساختاریافته ارسالی به LLM برای تولید تحلیل فارسی |
+/home/z/my-project/DIAGRAM_DOCS.md:4681:| 32 | پس‌پردازش | Post-Processing | اصلاح متن خام LLM: حذف تکرار، نرمال‌سازی فارسی، قالب‌بندی |
+/home/z/my-project/tool-results/read_1787345087379_0d6562998985.txt:377:   676→ * Build the V9 narrative prompt for LLM consumption.
+/home/z/my-project/tool-results/read_1787345087379_0d6562998985.txt:381:   680→ * @returns Complete prompt string for LLM
+/home/z/my-project/tool-results/read_1787410994923_9baa221fb05b.txt:306:   306→  // a 10-25s LLM call, making the text disappear each minute)
+/home/z/my-project/docs/DFD-section.md:35:    E5[Z-AI SDK / LLM<br/>هوش مصنوعی]:::Entity
+/home/z/my-project/docs/DFD-section.md:60:- **جریان‌های خروجی**: نتایج تحلیل تکنیکال، متن تحلیل AI، و پرامپت ارسالی به LLM.
+/home/z/my-project/docs/DFD-section.md:81:    E5[Z-AI SDK / LLM]:::Entity
+/home/z/my-project/docs/DFD-section.md:351:    E5[Z-AI SDK / LLM]:::Entity
+/home/z/my-project/docs/DFD-section.md:358:    P63[P6.3: فراخوانی LLM<br/>call-llm]:::Process
+/home/z/my-project/docs/DFD-section.md:368:    P63 -->|متن LLM| P64
+/home/z/my-project/docs/DFD-section.md:377:- **P6.3 فراخوانی LLM**: پرامپت به Z-AI SDK ارسال و متن خام تحلیل دریافت می‌شود.
+/home/z/my-project/docs/DFD-section.md:379:- **P6.5 کش نتیجه**: متن نهایی تحلیل در D2 کش می‌شود تا در درخواست‌های بعدی بدون فراخوانی مجدد LLM بازگردانده شود.
+/home/z/my-project/tool-results/read_1787639243181_43849d929165.txt:1490:  1490→  1490→  # برای استفاده در پرامپت LLM
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:432:   432→  - Parallel data gathering (candlestick local, ML service, AI patterns via LLM)
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:452:   452→  4. AI-Powered Harmonic/Elliott: ZAI LLM analysis of swing points and patterns
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:554:   554→  - V9 prompt builder that combines persona, phrase bank, template, school/style/tone into rich LLM prompt
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:577:   577→- Phrase bank provides LLM with contextual phrase suggestions for each analysis section
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:607:   607→- Diagnosed 502 as gateway timeout (LLM took 28-37s, prompt was 5KB+)
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:632:   632→- Analyzed the full V9 analysis pipeline: API route → ml-narrative-v9.ts → ZAI LLM
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:637:   637→  3. `detectAIPatterns` LLM call had no timeout → could hang indefinitely
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:640:   640→- Added 45s hard timeout on main narrative LLM call
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:641:   641→- Added 15s hard timeout on AI pattern detection LLM call (secondary feature)
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:792:   792→- End-to-end consistency: client sends keys → API uses them in data section → LLM includes in text
+/home/z/my-project/tool-results/read_1787415216595_86f8fac986b8.txt:849:   849→  `useEffect` fires → `setAiLoading(true)` hides text → 10-25s LLM call → text reappears.
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:432:   432→  - Parallel data gathering (candlestick local, ML service, AI patterns via LLM)
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:452:   452→  4. AI-Powered Harmonic/Elliott: ZAI LLM analysis of swing points and patterns
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:554:   554→  - V9 prompt builder that combines persona, phrase bank, template, school/style/tone into rich LLM prompt
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:577:   577→- Phrase bank provides LLM with contextual phrase suggestions for each analysis section
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:607:   607→- Diagnosed 502 as gateway timeout (LLM took 28-37s, prompt was 5KB+)
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:632:   632→- Analyzed the full V9 analysis pipeline: API route → ml-narrative-v9.ts → ZAI LLM
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:637:   637→  3. `detectAIPatterns` LLM call had no timeout → could hang indefinitely
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:640:   640→- Added 45s hard timeout on main narrative LLM call
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:641:   641→- Added 15s hard timeout on AI pattern detection LLM call (secondary feature)
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:792:   792→- End-to-end consistency: client sends keys → API uses them in data section → LLM includes in text
+/home/z/my-project/tool-results/read_1787550278338_dadee56dc01f.txt:849:   849→  `useEffect` fires → `setAiLoading(true)` hides text → 10-25s LLM call → text reappears.
+/home/z/my-project/tool-results/read_1787340947845_cfb2f0bdd2fe.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+/home/z/my-project/tool-results/read_1787340947845_cfb2f0bdd2fe.txt:432:   432→  - Parallel data gathering (candlestick local, ML service, AI patterns via LLM)
+/home/z/my-project/tool-results/read_1787340947845_cfb2f0bdd2fe.txt:452:   452→  4. AI-Powered Harmonic/Elliott: ZAI LLM analysis of swing points and patterns
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:432:   432→  - Parallel data gathering (candlestick local, ML service, AI patterns via LLM)
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:452:   452→  4. AI-Powered Harmonic/Elliott: ZAI LLM analysis of swing points and patterns
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:554:   554→  - V9 prompt builder that combines persona, phrase bank, template, school/style/tone into rich LLM prompt
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:577:   577→- Phrase bank provides LLM with contextual phrase suggestions for each analysis section
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:607:   607→- Diagnosed 502 as gateway timeout (LLM took 28-37s, prompt was 5KB+)
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:632:   632→- Analyzed the full V9 analysis pipeline: API route → ml-narrative-v9.ts → ZAI LLM
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:637:   637→  3. `detectAIPatterns` LLM call had no timeout → could hang indefinitely
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:640:   640→- Added 45s hard timeout on main narrative LLM call
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:641:   641→- Added 15s hard timeout on AI pattern detection LLM call (secondary feature)
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:792:   792→- End-to-end consistency: client sends keys → API uses them in data section → LLM includes in text
+/home/z/my-project/tool-results/read_1787440122854_644dd868f545.txt:849:   849→  `useEffect` fires → `setAiLoading(true)` hides text → 10-25s LLM call → text reappears.
+/home/z/my-project/tool-results/read_1787439566405_a79ce65f44e2.txt:40:    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1787439566405_a79ce65f44e2.txt:94:    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1787439566405_a79ce65f44e2.txt:326:   326→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1787441712183_8bf768809df2.txt:7:    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1787441712183_8bf768809df2.txt:61:    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1787441712183_8bf768809df2.txt:293:   326→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1787344384698_fbd6aaf3860c.txt:7:     7→//   3. AI-powered harmonic & Elliott wave pattern detection (via ZAI LLM)
+/home/z/my-project/tool-results/read_1787344384698_fbd6aaf3860c.txt:13:    13→import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/tool-results/read_1787344384698_fbd6aaf3860c.txt:416:   416→    // 3b. AI Harmonic/Elliott patterns (via ZAI LLM, with timeout)
+/home/z/my-project/tool-results/read_1787344384698_fbd6aaf3860c.txt:445:   445→/** Detect AI patterns (harmonic + Elliott) via ZAI LLM */
+/home/z/my-project/tool-results/read_1787344384698_fbd6aaf3860c.txt:483:   483→    console.warn('[V9 AI-Patterns] Parse/LLM error:', err);
+/home/z/my-project/tool-results/read_1787344384698_fbd6aaf3860c.txt:546:   546→    // ── Step 5: Call ZAI LLM ──
+/home/z/my-project/tool-results/read_1787097374368_d2f74d955383.txt:427:   427→- Created `/api/ai-analysis` (POST) route using z-ai-web-dev-sdk LLM:
+/home/z/my-project/tool-results/read_1787464444693_c41e36023e04.txt:891:   891→   891→   891→ * V11 KEY DIFFERENCE from V10: The LLM is EXPLICITLY required to use
+/home/z/my-project/tool-results/read_1787088101286_f69bb7bc4961.txt:427:   427→- Created `/api/ai-analysis` (POST) route using z-ai-web-dev-sdk LLM:
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:54:    54→        PROMPT --> LLM["🧠 فراخوانی LLM"]
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:55:    55→        LLM --> POST["✂️ پس‌پردازش"]
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:84:    84→    class PROMPT,LLM,POST process
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:99:    99→۵. استخر «سرویس AI» فرآیند تولید متن تحلیلی را مدل‌سازی می‌کند: ابتدا پرامپت بر اساس MSL انتخابی ساخته می‌شود، سپس LLM فراخوانی شده و در نهایت خروجی پس‌پردازش می‌گردد. این استخر مستقل از موتور تحلیل عمل می‌کند و تنها نتیجه TAResult را دریافت می‌نماید.
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:262:   262→    BUILD_P --> CALL_LLM["🧠 فراخوانی LLM\nmodel: gpt-4o / llama3"]
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:263:   263→    CALL_LLM --> LLM_OK{"🜂 پاسخ معتبر؟"}
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:264:   264→    LLM_OK -->|بله| POST_PROC["✂️ پس‌پردازش\nپاکسازی + فرمت + ترجمه"]
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:265:   265→    LLM_OK -->|خیر| RETRY_LLM["🔄 تلاش مجدد LLM\nحداکثر ۲ بار"]
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:266:   266→    RETRY_LLM --> CALL_LLM
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:276:   276→    class MSL_GW3,LLM_OK gateway
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:277:   277→    class RETRY_LLM error
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:278:   278→    class IN_TAR,SEL_MSL,MSLA,MSLB,MSLC,MSLD,BUILD_P,CALL_LLM,POST_PROC,CACHE_AI,OUT3 task
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:289:   289→۴. پس از فراخوانی LLM، خروجی اعتبارسنجی می‌شود. در صورت نامعتبر بودن (مثلاً JSON ناقص)، تلاش مجدد انجام می‌گیرد.
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:293:   293→۶. نتیجه نهایی در کش ذخیره می‌شود تا برای درخواست‌های تکراری بدون فراخوانی مجدد LLM بازگردانده شود.
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:302:   302→| ۴ | فراخوانی LLM | `gpt-4o.chat(prompt)` در ۳s | `raw_text: str` |
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:312:   312→| E-403 | LLM timeout | تلاش مجدد + کاهش token | زمان‌بری پاسخ LLM |
+/home/z/my-project/tool-results/read_1788754397163_ffcb9a0df400.txt:313:   313→| E-404 | LLM خطای محتوا | استفاده از تحلیل الگویی | خروجی LLM نامعتبر |
+/home/z/my-project/tool-results/read_1787431937679_a79ce65f44e2.txt:40:    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1787431937679_a79ce65f44e2.txt:94:    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1787431937679_a79ce65f44e2.txt:326:   326→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1786951697401_6c01bbeae1fc.txt:96:    96→- Created test script using bun + z-ai-web-dev-sdk page_reader to test 10 instruments
+/home/z/my-project/tool-results/read_1788671413323_fed9c64b1e28.txt:1050:  1050→  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+/home/z/my-project/tool-results/read_1787373869985_946c2eccdb74.txt:820:   889→ * reducing LLM response time and avoiding gateway timeouts.
+/home/z/my-project/tool-results/read_1787736437397_6bd725564c8c.txt:286:   286→   - `buildMSLV4PromptSection(result)` — Persian prompt generator for LLM injection
+/home/z/my-project/tool-results/read_1787736437397_6bd725564c8c.txt:334:   334→  - Persian prompt generation for LLM injection
+/home/z/my-project/tool-results/read_1787404116803_91e5a889e235.txt:300:   300→  // a 10-25s LLM call, making the text disappear each minute)
+/home/z/my-project/tool-results/read_1787817405130_6cb057b51e48.txt:286:   286→   - `buildMSLV4PromptSection(result)` — Persian prompt generator for LLM injection
+/home/z/my-project/tool-results/read_1787817405130_6cb057b51e48.txt:334:   334→  - Persian prompt generation for LLM injection
+/home/z/my-project/tool-results/read_1787817405130_6cb057b51e48.txt:1187:  1187→- Fixed AI analysis LLM timeout: 180s → 280s
+/home/z/my-project/tool-results/read_1787817405130_6cb057b51e48.txt:1210:  1210→- Updated AI analysis LLM timeout 180s→280s (previous session)
+/home/z/my-project/tool-results/read_1788731174760_becf0b91627d.txt:40:    40→    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1788731174760_becf0b91627d.txt:94:    94→    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1788731174760_becf0b91627d.txt:324:   324→   324→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1787344066194_fbd6aaf3860c.txt:7:     7→//   3. AI-powered harmonic & Elliott wave pattern detection (via ZAI LLM)
+/home/z/my-project/tool-results/read_1787344066194_fbd6aaf3860c.txt:13:    13→import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/tool-results/read_1787344066194_fbd6aaf3860c.txt:416:   416→    // 3b. AI Harmonic/Elliott patterns (via ZAI LLM, with timeout)
+/home/z/my-project/tool-results/read_1787344066194_fbd6aaf3860c.txt:445:   445→/** Detect AI patterns (harmonic + Elliott) via ZAI LLM */
+/home/z/my-project/tool-results/read_1787344066194_fbd6aaf3860c.txt:483:   483→    console.warn('[V9 AI-Patterns] Parse/LLM error:', err);
+/home/z/my-project/tool-results/read_1787344066194_fbd6aaf3860c.txt:546:   546→    // ── Step 5: Call ZAI LLM ──
+/home/z/my-project/tool-results/read_1787441403991_62789a769e69.txt:322:   322→  // a 10-25s LLM call, making the text disappear each time)
+/home/z/my-project/tool-results/read_1788316089637_9f7ba76b109b.txt:40:    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1788316089637_9f7ba76b109b.txt:94:    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1788316089637_9f7ba76b109b.txt:324:   324→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1787438699631_1743ec4c65a2.txt:891:   891→ * V10 KEY DIFFERENCE from V9: The LLM is EXPLICITLY required to use
+/home/z/my-project/tool-results/read_1787413917198_7e9b6b208780.txt:326:   326→  // a 10-25s LLM call, making the text disappear each time)
+/home/z/my-project/tool-results/read_1787411179568_362687f78e7d.txt:891:   891→ * V10 KEY DIFFERENCE from V9: The LLM is EXPLICITLY required to use
+/home/z/my-project/tool-results/read_1787345602920_684b5be3f3ca.txt:676:   676→ * Build the V9 narrative prompt for LLM consumption.
+/home/z/my-project/tool-results/read_1787345602920_684b5be3f3ca.txt:680:   680→ * @returns Complete prompt string for LLM
+/home/z/my-project/tool-results/read_1787728313165_5cb886540e35.txt:286:   286→   - `buildMSLV4PromptSection(result)` — Persian prompt generator for LLM injection
+/home/z/my-project/tool-results/read_1787728313165_5cb886540e35.txt:334:   334→  - Persian prompt generation for LLM injection
+/home/z/my-project/tool-results/read_1787827213580_48f923ffb97b.txt:286:   286→   - `buildMSLV4PromptSection(result)` — Persian prompt generator for LLM injection
+/home/z/my-project/tool-results/read_1787827213580_48f923ffb97b.txt:334:   334→  - Persian prompt generation for LLM injection
+/home/z/my-project/tool-results/read_1787827213580_48f923ffb97b.txt:1187:  1187→- Fixed AI analysis LLM timeout: 180s → 280s
+/home/z/my-project/tool-results/read_1787827213580_48f923ffb97b.txt:1210:  1210→- Updated AI analysis LLM timeout 180s→280s (previous session)
+/home/z/my-project/tool-results/read_1787441623728_0475c42564b0.txt:40:    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1787441623728_0475c42564b0.txt:94:    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1787441623728_0475c42564b0.txt:326:   326→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1787095583082_9e2c0deabac9.txt:427:   427→   427→- Created `/api/ai-analysis` (POST) route using z-ai-web-dev-sdk LLM:
+/home/z/my-project/tool-results/read_1787638868933_3944ecc2ef73.txt:1490:  1490→  # برای استفاده در پرامپت LLM
+/home/z/my-project/tool-results/read_1787154717053_0f5497a831ab.txt:276:   276→  let zai: Awaited<ReturnType<typeof import('z-ai-web-dev-sdk').default.create>> | null = null;
+/home/z/my-project/tool-results/read_1787154717053_0f5497a831ab.txt:279:   279→    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+/home/z/my-project/tool-results/read_1787154717053_0f5497a831ab.txt:478:   478→    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+/home/z/my-project/tool-results/read_1788267275937_32a7b73ffb63.txt:997:   997→  const ZAI = (await import('z-ai-web-dev-sdk')).default;
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:432:   432→  - Parallel data gathering (candlestick local, ML service, AI patterns via LLM)
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:452:   452→  4. AI-Powered Harmonic/Elliott: ZAI LLM analysis of swing points and patterns
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:554:   554→  - V9 prompt builder that combines persona, phrase bank, template, school/style/tone into rich LLM prompt
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:577:   577→- Phrase bank provides LLM with contextual phrase suggestions for each analysis section
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:607:   607→- Diagnosed 502 as gateway timeout (LLM took 28-37s, prompt was 5KB+)
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:632:   632→- Analyzed the full V9 analysis pipeline: API route → ml-narrative-v9.ts → ZAI LLM
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:637:   637→  3. `detectAIPatterns` LLM call had no timeout → could hang indefinitely
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:640:   640→- Added 45s hard timeout on main narrative LLM call
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:641:   641→- Added 15s hard timeout on AI pattern detection LLM call (secondary feature)
+/home/z/my-project/tool-results/read_1787391565198_c83d4ab3eeb8.txt:792:   792→- End-to-end consistency: client sends keys → API uses them in data section → LLM includes in text
+/home/z/my-project/tool-results/read_1787343615709_fbd6aaf3860c.txt:7:     7→//   3. AI-powered harmonic & Elliott wave pattern detection (via ZAI LLM)
+/home/z/my-project/tool-results/read_1787343615709_fbd6aaf3860c.txt:13:    13→import ZAI from 'z-ai-web-dev-sdk';
+/home/z/my-project/tool-results/read_1787343615709_fbd6aaf3860c.txt:416:   416→    // 3b. AI Harmonic/Elliott patterns (via ZAI LLM, with timeout)
+/home/z/my-project/tool-results/read_1787343615709_fbd6aaf3860c.txt:445:   445→/** Detect AI patterns (harmonic + Elliott) via ZAI LLM */
+/home/z/my-project/tool-results/read_1787343615709_fbd6aaf3860c.txt:483:   483→    console.warn('[V9 AI-Patterns] Parse/LLM error:', err);
+/home/z/my-project/tool-results/read_1787343615709_fbd6aaf3860c.txt:546:   546→    // ── Step 5: Call ZAI LLM ──
+/home/z/my-project/tool-results/read_1788731206802_6274fff9ca7c.txt:40:    40→  { icon: Flame, title: 'تشخیص هارمونیک و الیوت با AI', desc: 'شناسایی نقاط چرخش (Swing Points) + تحلیل LLM برای الگوهای هارمونیک و موج الیوت. ساختاردهی شده با Prompt تخصصی فارسی.', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200/60' },
+/home/z/my-project/tool-results/read_1788731206802_6274fff9ca7c.txt:94:    94→  { label: 'هارمونیک و الیوت AI', desc: 'شناسایی Swing Points + LLM برای الگوهای هارمونیک و موج الیوت. Prompt ساختاریافته فارسی.', color: 'text-fuchsia-600' },
+/home/z/my-project/tool-results/read_1788731206802_6274fff9ca7c.txt:324:   324→                  <div className="text-[10px] text-gray-500">شناسایی Swing Points + تحلیل LLM زد.آی برای الگوهای هارمونیک و موج الیوت با Prompt فارسی ساختاریافته.</div>
+/home/z/my-project/tool-results/read_1787404113209_6714d421f944.txt:418:   418→  - AI-powered harmonic/Elliott detection via ZAI LLM (buildAIPatternPrompt)
+
+[Showing results with pagination = limit: 250]

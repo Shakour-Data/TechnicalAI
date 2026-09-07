@@ -335,6 +335,8 @@ interface AnalysisContext {
   currencyUnit?: string;
   priceDecimals?: number;
   regimeResult?: VdesAnalysisProps['regimeResult'];
+  probabilityTrend?: VdesAnalysisProps['probabilityTrend'];
+  decisionGraph?: VdesAnalysisProps['decisionGraph'];
 }
 
 function generateAnalysisText(ctx: AnalysisContext) {
@@ -344,11 +346,11 @@ function generateAnalysisText(ctx: AnalysisContext) {
     diPlus, diMinus, sar, atr, obv,
     bollingerUpper, bollingerMiddle, bollingerLower,
     trendDirection, trendAngle, trendR2, overallSignal,
-    highestKey, highestProb, scenarios, S1, R1, R2,
+    highestKey, highestProb, scenarios, S1, SC1: R1, SC2: R2,
     hasVolume, resistanceStrengths, supportStrengths,
     v11Result, currencyUnit: ctxCurrencyUnit,
     instrumentCategory, priceDecimals: ctxPriceDecimals,
-    regimeResult,
+    regimeResult, probabilityTrend, decisionGraph,
   } = ctx;
   const unit = ctxCurrencyUnit || 'ریال';
   // Dynamic price formatter using data-source-derived decimals
@@ -609,7 +611,358 @@ function generateAnalysisText(ctx: AnalysisContext) {
     );
   }
 
-  return [p1, p2, p3, p4, p5];
+  // ── DIVERSITY SEED (hash of symbolName for varied phrasing) ──
+  let diversitySeed = 0;
+  for (let i = 0; i < symbolName.length; i++) {
+    diversitySeed = ((diversitySeed << 5) - diversitySeed + symbolName.charCodeAt(i)) | 0;
+  }
+  diversitySeed = Math.abs(diversitySeed);
+
+  // Diverse opening patterns for p1 (selected by seed % 4)
+  const openingPatterns = [
+    `بررسی وضعیت ${terms.noun} ${symbolName} نشان می‌دهد که سناریوی غالب`,
+    `با توجه به ساختار قیمت ${terms.noun} ${symbolName}، سناریوی مسلط`,
+    `تحلیل جامع ${terms.noun} ${symbolName} حاکی از آن است که سناریوی پیش‌رو`,
+    `از منظر تکنیکال، ${terms.noun} ${symbolName} در وضعیتی قرار دارد که سناریوی غالب`,
+  ];
+
+  // Diverse transition phrases for between sections
+  const transitionPhrases = [
+    'در ادامه بررسی اندیکاتورها،',
+    'از زاویه مومنتوم و اسیلاتورها،',
+    'با تمرکز بر سیگنال‌های مومنتومی،',
+    'نگاهی به وضعیت اسیلاتورها نشان می‌دهد که',
+  ];
+
+  // Diverse conclusion starters for p5
+  const conclusionStarters = [
+    'جمع‌بندی تلاقی سیگنال‌ها:',
+    'از منظر تلاقی شاخص‌ها:',
+    'بر اساس تلفیق سیگنال‌های مختلف:',
+    'سنتز شاخص‌ها و سطوح کلیدی:',
+  ];
+
+  const seedIdx = diversitySeed % 4;
+
+  // ── ENHANCED PARAGRAPH 1 with diverse opening ──
+  const p1Enhanced = (
+    <>
+      <strong className="text-amber-800">روند کلی و موقعیت قیمت:</strong>{' '}
+      {openingPatterns[seedIdx]} <b className="text-[#111827]">{highestKey} — {dominant}</b> با احتمال انحصاری <b className="text-[#111827]">{toFa(highestProb)}٪</b> می‌باشد.
+      {terms.priceAction} در محدوده <b className="text-[#111827]">{toFa(currentPrice)} {unit}</b> معامله می‌شود و روند میان‌مدت{' '}
+      <b className={trendColor}>{trendLabel}</b>
+      {' '}است (زاویه {toFa(Math.abs(trendAngle))}°، R²={toPersianDigits((trendR2 * 100).toFixed(1))}٪).
+      قیمت نسبت به MA21 ({toFa(ma21)} {unit}){' '}
+      <span className={abColor(currentPrice, ma21)}>{aboveBelow(currentPrice, ma21)}</span>
+      {' '}و نسبت به MA100 ({toFa(ma100)} {unit}){' '}
+      <span className={abColor(currentPrice, ma100)}>{aboveBelow(currentPrice, ma100)}</span>
+      {' '}قرار دارد.
+      اندیکاتور Parabolic SAR ({toFa(sar)}) نیز{' '}
+      {sar < currentPrice
+        ? <><span>زیر قیمت قرار دارد که <b className="text-emerald-700">تأیید روند صعودی</b> است.</span></>
+        : <><span>بالای قیمت قرار دارد که <b className="text-red-700">تأیید روند نزولی</b> است.</span></>
+      }
+      {' '}شاخص ADX ({toFa(adx)}) نشان‌دهنده <b className={adxText}>{adxText}</b> می‌باشد.
+      {' '}{diSignal}.
+      {regimeResult && (
+        <> {' '}رژیم بازار: <b className={
+          regimeResult.regime === 'TRENDING_UP' ? 'text-emerald-700' :
+          regimeResult.regime === 'TRENDING_DOWN' ? 'text-red-700' :
+          regimeResult.regime === 'VOLATILE' ? 'text-amber-800' :
+          regimeResult.regime === 'BREAKOUT' ? 'text-purple-700' :
+          'text-[#6b7280]'
+        }>{regimeResult.description}</b> (اطمینان: {toFa(Math.round(regimeResult.confidence * 100))}٪).</>
+      )}
+      {' '}احتمال تجمعی صعودی {toFa(bullCum)}٪، نزولی {toFa(bearCum)}٪ و خنثی {toFa(rangeCum)}٪ محاسبه شده است.
+    </>
+  );
+
+  // ── ENHANCED PARAGRAPH 2 with diverse transition ──
+  const p2Transition = transitionPhrases[seedIdx];
+  // Wrap p2 with the diverse transition (prepend it after the strong label)
+  let p2Enhanced: React.ReactNode;
+  if (isBull(highestKey)) {
+    const isStrongBull = highestKey === 'SC8' || highestKey === 'SC9';
+    p2Enhanced = (
+      <>
+        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — مومنتوم صعودی{isStrongBull ? ' قوی' : ''}:</strong>{' '}
+        {p2Transition} اندیکاتور RSI ({toFa(rsi)}) در ناحیه{' '}
+        <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b>
+        {rsi > 70 && <span className="text-red-700"> — با این حال در فاز {highestKey === 'SC9' ? 'شوک' : 'شتابدار'} صعودی، RSI بالا طبیعی بوده و لزوماً سیگنال فروش نیست.</span>}
+        {' '}قرار دارد.
+        {ctx.hasVolume && <span> MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید را نشان می‌دهد اما تأیید ورود قوی پول را تأیید می‌کند</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش را نشان می‌دهد</span> : <span>در محدوده عادی است</span>}.</span>}
+        {' '}CCI ({toFa(cci)}) {cci > 100 ? <span className="text-emerald-700">بالاتر از +100 — قدرت خریداران بسیار بالا</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 (قدرت فروشندگان)</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+        {' '}استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
+        {' '}MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}) با{' '}
+        {macdBullish
+          ? <span className="text-emerald-700">عبور خط اصلی بالای خط سیگنال — تأیید‌کننده مومنتوم صعودی قدرتمند</span>
+          : <span className="text-red-700">خط اصلی زیر خط سیگنال — هشدار کاهش مومنتوم</span>}
+        . هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت و در حال گسترش</span> : <span className="text-red-700">منفی</span>}.
+        {isStrongBull && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده <b className="text-emerald-700">شتاب صعودی شدید</b> و ورود نقدینگی گسترده است.</span>}
+        {!isStrongBull && bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده بایاس صعودی قوی در بازار است.</span>}
+      </>
+    );
+  } else if (highestKey === 'SC5') {
+    p2Enhanced = (
+      <>
+        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — بازار بدون جهت:</strong>{' '}
+        {p2Transition} اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد.
+        {ctx.hasVolume && <span> MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید</span> : mfi < 20 ? <span className="text-emerald-700">اشباع فروش</span> : <span>در محدوده خنثی</span>}.</span>}
+        {' '}CCI ({toFa(cci)}) {cci > 100 ? <span>بالاتر از +100</span> : cci < -100 ? <span>پایین‌تر از -100</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+        {' '}استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b> را نشان می‌دهد.
+        {' '}MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+        {macdBullish
+          ? <span className="text-emerald-700">صعودی اما ضعیف</span>
+          : <span className="text-red-700">نزولی اما ضعیف</span>}.
+        {' '}هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-emerald-700">مثبت</span> : <span className="text-red-700">منفی</span>} — مومنتوم پایین.
+        {' '}اندیکاتورها تأییدکننده فاز رنج و عدم قطعیت بازار هستند. خروج از محدوده رنج نیاز به تأیید مومنتوم دارد.
+      </>
+    );
+  } else if (isBear(highestKey)) {
+    const isStrongBear = highestKey === 'SC1' || highestKey === 'SC2';
+    p2Enhanced = (
+      <>
+        <strong className="text-amber-800">تحلیل اسیلاتورها و مومنتوم — {isStrongBear ? 'تضعیف شدید ساختار' : 'هشدار اصلاح'}:</strong>{' '}
+        {p2Transition} اندیکاتور RSI ({toFa(rsi)}) در ناحیه <b className={rsi > 70 ? 'text-red-700' : rsi < 30 ? 'text-emerald-700' : 'text-[#374151]'}>{rsiSignal}</b> قرار دارد
+        {rsi < 40 && <span> — {isStrongBear ? 'سقوط RSI نشان‌دهنده فشار فروش سنگین است' : 'روند نزولی RSI هشدار ادامه اصلاح است'}.</span>}.
+        {ctx.hasVolume && <span> MFI ({toFa(mfi)}) {mfi > 80 ? <span className="text-red-700">اشباع خرید — واگرایی منفی {isStrongBear ? 'خطرناک' : 'محتمل'}</span> : mfi < 20 ? <span className="text-red-700">اشباع فروش شدید — {isStrongBear ? 'خروج پول گسترده' : 'احتمال بازگشت کوتاه‌مدت'}</span> : <span>{isStrongBear ? 'در حال کاهش — هشدار خروج پول' : 'در محدوده نزولی'}</span>}.</span>}
+        {' '}CCI ({toFa(cci)}) {cci > 100 ? <span className="text-red-700">بالاتر از +100 — {isStrongBear ? 'واگرایی قطعی' : 'ممکن است واگرایی منفی باشد'}</span> : cci < -100 ? <span className="text-red-700">پایین‌تر از -100 — {isStrongBear ? 'سقوط آزاد' : 'فشار فروش قوی'}</span> : <span>در محدوده عادی (-100 تا +100)</span>}.
+        {' '}استوکاستیک (%K={toFa(stochK)}، %D={toFa(stochD)}) وضعیت <b>{stochSignal}</b>.
+        {' '}MACD (خط={toFa(macdLine)}، سیگنال={toFa(macdSignal)}){' '}
+        {macdBullish
+          ? <span className="text-amber-800">صعودی موقت — {isStrongBear ? 'در ساختار نزولی قابل اعتماد نیست' : 'در روند نزولی سیگنال ضعیف'}</span>
+          : <span className="text-red-700">تقاطع نزولی — {isStrongBear ? 'سیگنال خروج فوری' : 'تأیید‌کننده فشار فروش'}</span>}.
+        {' '}هیستوگرام MACD ({toFa(macdHist)}) {macdHist > 0 ? <span className="text-amber-800">مثبت اما ضعیف</span> : <span className="text-red-700">منفی و {isStrongBear ? 'تشدید شونده' : 'در حال گسترش'}</span>}.
+        {isStrongBear && <span> تمام اندیکاتورها تضعیف ساختاری و هشدار خروج سرمایه را تأیید می‌کنند.</span>}
+        {!isStrongBear && <span> در مجموع، اندیکاتورها هشدار اصلاح عمیق‌تر را صادر می‌کنند.</span>}
+      </>
+    );
+  } else {
+    p2Enhanced = <></>;
+  }
+
+  // ── PARAGRAPH 2.5: Decision Graph Analysis (NEW) ──
+  let pDecisionGraph: React.ReactNode;
+  if (decisionGraph) {
+    const bp = decisionGraph.branchProbabilities;
+    const bpEntries = [
+      { key: 'trend', label: 'پیرو روند', prob: bp.trend },
+      { key: 'breakout', label: 'شکست', prob: bp.breakout },
+      { key: 'reversal', label: 'بازگشت', prob: bp.reversal },
+    ] as const;
+    const sortedBranches = [...bpEntries].sort((a, b) => b.prob - a.prob);
+    const dominantBranch = sortedBranches[0];
+    const secondBranch = sortedBranches[1];
+
+    // Determine the branch description
+    const branchDescriptions: Record<string, string> = {
+      'trend': 'استراتژی پیرو روند (Trend Following) فعال شده که نشان‌دهنده ادامه جهت فعلی بازار است',
+      'breakout': 'استراتژی شکست (Breakout) فعال شده که حاکی از احتمال عبور قیمت از سطوح کلیدی است',
+      'reversal': 'استراتژی بازگشت (Reversal) فعال شده که نشانه تغییر جهت احتمالی بازار است',
+    };
+
+    // Count decision vs event nodes
+    const decisionNodes = decisionGraph.nodes.filter(n => n.type === 'decision');
+    const eventNodes = decisionGraph.nodes.filter(n => n.type === 'event');
+
+    // Get key decision node signals
+    const keyDecisionSignals = decisionNodes.slice(0, 3).map(n => n.title).join('، ');
+
+    // Path contributions for the dominant scenario
+    const pathContribs = decisionGraph.pathContributions?.[highestKey];
+    let pathText = '';
+    if (pathContribs) {
+      const contribEntries = [
+        { label: 'پیرو روند', val: pathContribs.trend },
+        { label: 'شکست', val: pathContribs.breakout },
+        { label: 'بازگشت', val: pathContribs.reversal },
+      ].filter(e => e.val > 0.01).sort((a, b) => b.val - a.val);
+      if (contribEntries.length > 0) {
+        pathText = ` مسیرهای مؤثر در سناریوی غالب (${highestKey}): ${contribEntries.map(e => `${e.label} (${toFa(Math.round(e.val * 100))}٪)`).join(' و ')}.`;
+      }
+    }
+
+    // Diverse phrasing for the decision graph paragraph
+    const dgOpeners = [
+      'در گراف تصمیم‌گیری پیشرفته،',
+      'بر اساس تحلیل گراف تصمیم‌گیری،',
+      'از منظر ساختار تصمیم‌گیری،',
+      'با بررسی گراف تصمیم‌گیری چندشاخه‌ای،',
+    ];
+
+    pDecisionGraph = (
+      <>
+        <strong className="text-amber-800">تحلیل گراف تصمیم‌گیری پیشرفته:</strong>{' '}
+        {dgOpeners[seedIdx]} شاخه <b className="text-[#111827]">{dominantBranch.label}</b> با احتمال مسیر {' '}
+        <b className="text-[#111827]">{toFa(Math.round(dominantBranch.prob * 100))}٪</b> غالب بوده و {' '}
+        {branchDescriptions[dominantBranch.key]}.
+        {' '}شاخه {secondBranch.label} با {toFa(Math.round(secondBranch.prob * 100))}٪ احتمال به عنوان دومین استراتژی محتمل شناخته می‌شود.
+        {' '}گراف شامل {toPersianDigits(String(decisionGraph.nodes.length))} گره ({toPersianDigits(String(decisionNodes.length))} تصمیم و {toPersianDigits(String(eventNodes.length))} ارزیابی) و {toPersianDigits(String(decisionGraph.edges.length))} یال است.
+        {keyDecisionSignals && <span> گره‌های تصمیم کلیدی شامل {keyDecisionSignals} می‌باشند.</span>}
+        {pathText}
+        {' '}این ساختار تصمیم‌گیری چندمسیره امکان تحلیل همزمان سه استراتژی را فراهم کرده و با تخصیص احتمال به هر مسیر، تصمیم‌گیری مبتنی بر داده را تقویت می‌کند.
+      </>
+    );
+  } else {
+    pDecisionGraph = (
+      <>
+        <strong className="text-amber-800">تحلیل ساختار تصمیم‌گیری:</strong>{' '}
+        بر اساس توزیع احتمال سناریوها، ساختار تصمیم‌گیری {' '}
+        {isBull(highestKey) ? <span className="text-emerald-700">تمایل صعودی</span> : isBear(highestKey) ? <span className="text-red-700">تمایل نزولی</span> : <span className="text-amber-800">تمایل خنثی</span>}
+        {' '}دارد. مجموع احتمال صعودی {toFa(bullCum)}٪، نزولی {toFa(bearCum)}٪ و خنثی {toFa(rangeCum)}٪ نشان‌دهنده {' '}
+        {bullCum > bearCum ? <b className="text-emerald-700">بایاس گاوی</b> : bearCum > bullCum ? <b className="text-red-700">بایاس خرسی</b> : <b className="text-amber-800">بازار متعادل</b>}
+        {' '}در فضای تصمیم‌گیری است.
+      </>
+    );
+  }
+
+  // ── PARAGRAPH 2.8: Probabilities and Trends (NEW) ──
+  let pProbTrends: React.ReactNode;
+
+  // Sort scenarios by probability descending to get top 3
+  const scenarioEntries = SCENARIO_KEYS.map(k => ({
+    key: k,
+    prob: scenarios[k]?.probability ?? 0,
+    label: SCENARIO_META[k]?.label ?? k,
+  })).sort((a, b) => b.prob - a.prob);
+  const top3 = scenarioEntries.slice(0, 3);
+
+  // Get trend data for scenarios if available
+  const getScenarioTrend = (key: string) => {
+    if (!probabilityTrend) return null;
+    return probabilityTrend.scenarios.find(s => s.scenarioKey === key);
+  };
+  const getGroupTrend = (group: string) => {
+    if (!probabilityTrend) return null;
+    return probabilityTrend.groups.find(g => g.group === group);
+  };
+
+  const trendDirectionFa = (dir: string) => {
+    switch (dir) {
+      case 'rising': return { text: 'صعودی (در حال افزایش)', color: 'text-emerald-700' };
+      case 'falling': return { text: 'نزولی (در حال کاهش)', color: 'text-red-700' };
+      case 'volatile': return { text: 'نوسانی (بدون جهت مشخص)', color: 'text-amber-800' };
+      default: return { text: 'پایدار (بدون تغییر قابل توجه)', color: 'text-[#6b7280]' };
+    }
+  };
+
+  const dominantTrend = getScenarioTrend(highestKey);
+  const bullGroupTrend = getGroupTrend('bullish');
+  const bearGroupTrend = getGroupTrend('bearish');
+  const neutralGroupTrend = getGroupTrend('neutral');
+
+  const probOpeners = [
+    'بررسی توزیع احتمال‌ها و روند تغییرات آن‌ها',
+    'تحلیل احتمال‌های انحصاری و تجمعی به همراه روندها',
+    'وضعیت احتمال‌ها و جهت تغییرات آنها در بازه اخیر',
+    'نگاهی به احتمال‌های سناریو و روند تکامل آنها',
+  ];
+
+  pProbTrends = (
+    <>
+      <strong className="text-amber-800">{probOpeners[seedIdx]}:</strong>{' '}
+      سه سناریوی محتمل‌ترین عبارتند از: {' '}
+      {top3.map((s, i) => (
+        <React.Fragment key={s.key}>
+          {i > 0 && '، '}
+          <b className="text-[#111827]">{s.key} ({s.label})</b> با احتمال انحصاری <b className="text-[#111827]">{toFa(s.prob)}٪</b>
+          {(() => {
+            const trend = getScenarioTrend(s.key);
+            if (trend && trend.trendDirection) {
+              const td = trendDirectionFa(trend.trendDirection);
+              return <span> — روند احتمال: <b className={td.color}>{td.text}</b></span>;
+            }
+            return null;
+          })()}
+        </React.Fragment>
+      ))}
+      .
+      {' '}احتمال تجمعی گاوی <b className="text-emerald-700">{toFa(bullCum)}٪</b>
+      {bullGroupTrend && (() => {
+        const td = trendDirectionFa(bullGroupTrend.trendDirection);
+        return <span> (روند: <b className={td.color}>{td.text}</b>)</span>;
+      })()}
+      {', '}خرسی <b className="text-red-700">{toFa(bearCum)}٪</b>
+      {bearGroupTrend && (() => {
+        const td = trendDirectionFa(bearGroupTrend.trendDirection);
+        return <span> (روند: <b className={td.color}>{td.text}</b>)</span>;
+      })()}
+      {' '}و خنثی <b className="text-amber-800">{toFa(rangeCum)}٪</b>
+      {neutralGroupTrend && (() => {
+        const td = trendDirectionFa(neutralGroupTrend.trendDirection);
+        return <span> (روند: <b className={td.color}>{td.text}</b>)</span>;
+      })()}
+      .
+      {dominantTrend && (() => {
+        const td = trendDirectionFa(dominantTrend.trendDirection);
+        return <span> روند احتمال سناریوی غالب ({highestKey}) <b className={td.color}>{td.text}</b> است{dominantTrend.trendDirection === 'rising' ? ' که نشان‌دهنده تقویت این سناریو در بازه اخیر می‌باشد' : dominantTrend.trendDirection === 'falling' ? ' که هشدار تضعیف این سناریو و احتمال تغییر فاز بازار را می‌دهد' : ' که حاکی از ثبات نسبی ساختار احتمالی بازار است'}.</span>;
+      })()}
+      {!dominantTrend && <span> روند تغییرات احتمال سناریوی غالب در دسترس نیست اما با توجه به فاصله احتمالی آن از سناریوی دوم ({toFa(Math.round(top3[0].prob - top3[1].prob))}٪), {' '}
+        {top3[0].prob - top3[1].prob > 15 ? 'قطعیت بالای سناریوی غالب مشهود است' : top3[0].prob - top3[1].prob > 5 ? 'قطعیت متوسطی در سناریوی غالب وجود دارد' : 'فاصله کم بین دو سناریوی اول هشدار عدم قطعیت بازار است'}.
+      </span>}
+    </>
+  );
+
+  // ── ENHANCED PARAGRAPH 5 with diverse conclusion starter ──
+  // Replace the strong label in p5 with diverse conclusion starter
+  let p5Enhanced: React.ReactNode;
+  if (isBull(highestKey)) {
+    const isStrong = highestKey === 'SC3' || highestKey === 'SC4';
+    p5Enhanced = (
+      <>
+        <strong className="text-amber-800">{conclusionStarters[seedIdx]}</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
+        با احتمال {toFa(highestProb)}٪ برای {highestKey} ({dominant})، اکثر شاخص‌ها <b className="text-emerald-700">الگوی صعودی{isStrong ? ' قدرتمند و شتابدار' : ''}</b> را تأیید می‌کنند.
+        {bullCum > 60 && <span> مجموع احتمال صعودی {toFa(bullCum)}٪ نشان‌دهنده <b className="text-emerald-700">بایاس صعودی قوی</b> در بازار است.</span>}
+        {' '}نسبت ریسک به بازده با حد ضرر در حمایت {toFa(S1)} و هدف {toFa(R1)} {unit}، حدود <b className="text-emerald-700">{toPersianDigits(((R1 - currentPrice) / (currentPrice - S1)).toFixed(1))}:۱</b> محاسبه می‌شود.
+        {' '}تلاقی MA21 و MA100{' '}
+        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+          ? <span className="text-amber-800">بسیار نزدیک به هم — تقاطع طلایی احتمالی</span>
+          : ma21 > ma100
+          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
+        {' '}است. {isStrong ? 'مومنتوم بالا مدیریت ریسک دقیق‌تری را ایجاب می‌کند.' : `توصیه: در صورت شکست مقاومت ${toFa(R1)}، هدف بعدی ${toFa(R2)} ${unit} تعیین می‌شود.`}
+      </>
+    );
+  } else if (highestKey === 'SC5') {
+    p5Enhanced = (
+      <>
+        <strong className="text-amber-800">{conclusionStarters[seedIdx]}</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
+        {highestKey} ({dominant}) با احتمال {toFa(highestProb)}٪ نشان‌دهنده <b className="text-amber-800">بازار رنج و بدون جهت مشخص</b> است.
+        {' '}سیگنال‌ها <b className="text-amber-800">تضاد</b> دارند و بهترین استراتژی <b className="text-amber-800">انتظار و مشاهده</b> است.
+        {' '}منتظر خروج قیمت از محدوده {toFa(S1)} تا {toFa(R1)} {unit} بمانید.
+        {' '}تلاقی MA21 و MA100{' '}
+        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+          ? <span className="text-amber-800">نزدیک به هم — هر گونه تقاطع می‌تواند سیگنال جهت باشد</span>
+          : ma21 > ma100
+          ? <span className="text-emerald-700">به نفع صعودی (MA21 بالاتر از MA100)</span>
+          : <span className="text-red-700">به نفع نزولی (MA21 پایین‌تر از MA100)</span>}
+        {' '}. شکست سطوح کلیدی و مومنتوم MACD را پایش کنید.
+      </>
+    );
+  } else {
+    // Bearish
+    const isStrong = highestKey === 'SC8' || highestKey === 'SC9';
+    p5Enhanced = (
+      <>
+        <strong className="text-amber-800">{conclusionStarters[seedIdx]}</strong>{' '}
+        {R1_grade && <span>مقاومت R۱ ({R1_grade}{R1_methods}) و حمایت S۱ ({S1_grade}{S1_methods}). </span>}
+        {highestKey} ({dominant}) با احتمال {toFa(highestProb)}٪ نشان‌دهنده {isStrong ? <b className="text-red-700">تضعیف شدید ساختار</b> : <b className="text-red-700">ریسک اصلاح عمیق</b>} است.
+        {bearCum > 60 && <span> مجموع احتمال نزولی {toFa(bearCum)}٪ — <b className="text-red-700">بایاس نزولی {isStrong ? 'بسیار' : ''}قوی</b> در بازار حاکم است.</span>}
+        {isStrong ? <span> تمام شاخص‌ها هشدار <b className="text-red-700">خروج فوری</b> را صادر می‌کنند.</span> : <span> ورود به معامله خرید در این شرایط <b className="text-red-700">ریسک بالایی</b> دارد.</span>}
+        {' '}تلاقی MA21 و MA100{' '}
+        {Math.abs(ma21 - ma100) / currentPrice < 0.01
+          ? <span className="text-red-700">نزدیک به هم — {isStrong ? 'تقاطع مرگ در حال تکوین' : 'احتمال تقاطع مرگ'}</span>
+          : ma21 > ma100
+          ? <span className="text-amber-800">MA21 هنوز بالاتر اما {isStrong ? 'به سرعت در حال نزدیک شدن' : 'در حال ضعیف شدن'}</span>
+          : <span className="text-red-700">MA21 زیر MA100 — {isStrong ? 'تأیید نهایی ساختار نزولی' : 'تأیید‌کننده فشار فروش'}</span>}
+        {' '}. {isStrong ? 'حفظ سرمایه اولویت اول است. از هرگونه موقعیت خرید جدید خودداری کنید.' : `توصیه: احتیاط و انتظار برای بازگشت به محدوده حمایت ${toFa(S1)} ${unit}.`}
+      </>
+    );
+  }
+
+  return [p1Enhanced, p2Enhanced, pDecisionGraph, pProbTrends, p3, p4, p5Enhanced];
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -741,6 +1094,8 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
       instrumentCategory,
       priceDecimals: decimals,
       regimeResult,
+      probabilityTrend,
+      decisionGraph,
     });
   }, [
     symbolName, currentPrice, ma21, ma100, rsi, mfi, cci, adx,
@@ -752,6 +1107,7 @@ export default function VdesAnalysis(props: VdesAnalysisProps) {
     S1_level, R1_level, R2_level, hasVolume,
     resistanceStrengths, supportStrengths, v11Result, propCurrencyUnit,
     instrumentCategory, decimals, regimeResult,
+    probabilityTrend, decisionGraph,
   ]);
 
   // ── Strategy recommendation text ────────────────────────────────
@@ -1768,6 +2124,48 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
           )}
           {!aiLoading && !aiText && !aiError && analysisParagraphs.length > 0 && (
             <div className="space-y-4">
+              {/* Fallback warning banner */}
+              <div style={{
+                background: 'rgba(180, 83, 9, 0.08)',
+                borderRight: '4px solid #b45309',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                marginBottom: '8px',
+                direction: 'rtl',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}>
+                <span style={{ color: '#b45309', fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.7 }}>
+                  ⚠️ این تحلیل به صورت خودکار (بدون AI) تولید شده است.
+                </span>
+                <button
+                  onClick={() => {
+                    setAiRetryKey(k => k + 1);
+                    setAiLoading(true);
+                    setAiText(null);
+                    setAiError(null);
+                    aiAutoRetryRef.current = 0;
+                  }}
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: '#b45309',
+                    background: 'rgba(180, 83, 9, 0.12)',
+                    border: '1px solid #b45309',
+                    borderRadius: '8px',
+                    padding: '4px 12px',
+                    cursor: 'pointer',
+                    lineHeight: 1.5,
+                    whiteSpace: 'nowrap',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(180, 83, 9, 0.2)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(180, 83, 9, 0.12)'; }}
+                >🧠 تلاش مجدد برای تحلیل هوشمند</button>
+              </div>
               {analysisParagraphs.map((p, i) => (
                 <p key={i} style={{ color: C.cardFg }}>{p}</p>
               ))}

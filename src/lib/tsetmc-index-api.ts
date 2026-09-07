@@ -4,7 +4,8 @@
 // Fetches index OHLC data via the Next.js index-fetch-proxy endpoint
 // which uses z-ai SDK rate-limited page_reader to reach cdn.tsetmc.com.
 //
-// Fallback chain: memory cache → file cache → proxy fetch → expired cache
+// Fallback chain: memory cache → file cache → proxy fetch (with retry)
+//   → direct fetch → expired cache
 // ═══════════════════════════════════════════════════════════════════
 
 import { join } from 'node:path';
@@ -204,23 +205,89 @@ function parseB2Response(jsonStr: string): IndexCandle[] {
   return candles;
 }
 
-// ── Fetch from Next.js proxy ──────────────────────────────────────
-async function fetchViaProxy(webId: string): Promise<IndexCandle[]> {
+// ── Sleep helper ─────────────────────────────────────────────────
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ── Fetch from Next.js proxy (with retry) ────────────────────────
+async function fetchViaProxy(webId: string, retries = 1): Promise<IndexCandle[]> {
   const proxyUrl = `http://localhost:3000/api/index-fetch-proxy?webId=${encodeURIComponent(webId)}`;
-  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(120_000) });
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`[tsetmc-index] Retry #${attempt} for webId=${webId} after 3s...`);
+        await sleep(3000);
+      }
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(120_000) });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Proxy error ${res.status}: ${body.slice(0, 200)}`);
+      }
+      const json = await res.json();
+      if (json.error) {
+        throw new Error(json.error);
+      }
+      const rawJson = json.raw || '';
+      if (!rawJson || rawJson.length < 10) {
+        throw new Error('Empty response from proxy');
+      }
+      console.log(`[tsetmc-index] Proxy fetch succeeded for webId=${webId} (source=${json.source || 'unknown'}, attempt=${attempt})`);
+      return parseB2Response(rawJson);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < retries) {
+        console.warn(`[tsetmc-index] Proxy attempt ${attempt + 1} failed for webId=${webId}: ${msg}. Will retry...`);
+      } else {
+        throw new Error(`Proxy fetch failed after ${attempt + 1} attempts: ${msg}`);
+      }
+    }
+  }
+  // Unreachable, but TypeScript needs it
+  throw new Error('Proxy fetch failed');
+}
+
+// ── Direct HTTP fetch to TSETMC CDN ──────────────────────────────
+/**
+ * Fetch index data directly from TSETMC CDN, bypassing the page_reader proxy.
+ * This is used as a fallback when the proxy times out.
+ * The CDN API returns JSON directly, so a regular fetch may work.
+ */
+export async function directFetchIndexData(webId: string, timeoutMs = 15_000): Promise<IndexCandle[]> {
+  const url = `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`;
+  console.log(`[tsetmc-index] Direct fetch for webId=${webId}...`);
+
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'application/json, text/plain, */*',
+    },
+  });
+
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Proxy error ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Direct fetch HTTP ${res.status} for webId=${webId}`);
   }
-  const json = await res.json();
-  if (json.error) {
-    throw new Error(json.error);
+
+  const text = await res.text();
+  if (!text || text.length < 10) {
+    throw new Error(`Direct fetch returned empty/short response for webId=${webId}`);
   }
-  const rawJson = json.raw || '';
-  if (!rawJson || rawJson.length < 10) {
-    throw new Error('Empty response from proxy');
+
+  // The CDN may return raw JSON or HTML-wrapped JSON
+  let jsonStr = text.trim();
+  const preMatch = /<pre[^>]*>([\s\S]*?)<\/pre>/.exec(jsonStr);
+  if (preMatch) {
+    jsonStr = preMatch[1].trim();
+  } else if (jsonStr.startsWith('<')) {
+    // Strip HTML tags if present
+    jsonStr = jsonStr.replace(/<[^>]+>/g, '').trim();
   }
-  return parseB2Response(rawJson);
+
+  const candles = parseB2Response(jsonStr);
+  console.log(`[tsetmc-index] Direct fetch: ${candles.length} candles for webId=${webId}`);
+  return candles;
 }
 
 // ── Resolve webId to sector name ──────────────────────────────────
@@ -237,7 +304,7 @@ function webIdToSectorName(webId: string): string | undefined {
 
 /**
  * Fetch historical candle data for a main market index.
- * Tries: memory cache → file cache → proxy fetch → expired cache
+ * Tries: memory cache → file cache → proxy fetch (with retry) → direct fetch → expired cache
  */
 export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCandle[]> {
   const key = indexKey.toUpperCase();
@@ -259,18 +326,32 @@ export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCand
     return fileCached;
   }
 
-  // Tier 3: Fetch via proxy
+  // Tier 3: Fetch via proxy (with retry)
   console.log(`[tsetmc-index] Fetching ${key} via proxy (webId=${webId})...`);
   try {
     const candles = await fetchViaProxy(webId);
     if (candles.length > 0) {
       cache.set(cacheKey, { data: candles, timestamp: Date.now() });
       saveFileCache(cacheKey, candles);
-      console.log(`[tsetmc-index] ${key}: ${candles.length} candles fetched`);
+      console.log(`[tsetmc-index] ${key}: ${candles.length} candles fetched via proxy`);
       return candles;
     }
   } catch (err) {
     console.warn(`[tsetmc-index] Proxy fetch failed for ${key}:`, err instanceof Error ? err.message : String(err));
+  }
+
+  // Tier 3b: Direct HTTP fetch fallback (bypasses page_reader)
+  try {
+    console.log(`[tsetmc-index] Attempting direct fetch for ${key} (webId=${webId})...`);
+    const candles = await directFetchIndexData(webId);
+    if (candles.length > 0) {
+      cache.set(cacheKey, { data: candles, timestamp: Date.now() });
+      saveFileCache(cacheKey, candles);
+      console.log(`[tsetmc-index] ${key}: ${candles.length} candles fetched via direct fetch`);
+      return candles;
+    }
+  } catch (err) {
+    console.warn(`[tsetmc-index] Direct fetch failed for ${key}:`, err instanceof Error ? err.message : String(err));
   }
 
   // Tier 4: Expired file cache fallback
@@ -286,7 +367,8 @@ export async function fetchMainIndexHistory(indexKey: string): Promise<IndexCand
 
 /**
  * Fetch historical candle data for a sector/industry index by webId.
- * Tries: memory cache → file cache (by webId + sector name) → proxy fetch → expired cache
+ * Tries: memory cache → file cache (by webId + sector name) → proxy fetch (with retry)
+ *   → direct fetch → expired cache
  */
 export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCandle[]> {
   if (!webIdStr) throw new Error('شناسه وب (webId) الزامی است');
@@ -312,7 +394,7 @@ export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCa
     return fileCached;
   }
 
-  // Tier 3: Fetch via proxy
+  // Tier 3: Fetch via proxy (with retry)
   console.log(`[tsetmc-index] Fetching sector webId=${webIdStr}${sectorName ? ` (${sectorName})` : ''} via proxy...`);
   try {
     const candles = await fetchViaProxy(webIdStr);
@@ -326,11 +408,31 @@ export async function fetchSectorIndexHistory(webIdStr: string): Promise<IndexCa
           writeFileSync(sectorFileCachePath(sectorName), JSON.stringify({ data: candles, time: Date.now() }), 'utf-8');
         } catch { /* ignore */ }
       }
-      console.log(`[tsetmc-index] Sector ${sectorName || webIdStr}: ${candles.length} candles fetched`);
+      console.log(`[tsetmc-index] Sector ${sectorName || webIdStr}: ${candles.length} candles fetched via proxy`);
       return candles;
     }
   } catch (err) {
     console.warn(`[tsetmc-index] Proxy fetch failed for webId=${webIdStr}:`, err instanceof Error ? err.message : String(err));
+  }
+
+  // Tier 3b: Direct HTTP fetch fallback (bypasses page_reader)
+  try {
+    console.log(`[tsetmc-index] Attempting direct fetch for sector webId=${webIdStr}${sectorName ? ` (${sectorName})` : ''}...`);
+    const candles = await directFetchIndexData(webIdStr);
+    if (candles.length > 0) {
+      cache.set(cacheKey, { data: candles, timestamp: Date.now() });
+      saveFileCache(cacheKey, candles);
+      if (sectorName) {
+        try {
+          if (!existsSync(FILE_CACHE_DIR)) mkdirSync(FILE_CACHE_DIR, { recursive: true });
+          writeFileSync(sectorFileCachePath(sectorName), JSON.stringify({ data: candles, time: Date.now() }), 'utf-8');
+        } catch { /* ignore */ }
+      }
+      console.log(`[tsetmc-index] Sector ${sectorName || webIdStr}: ${candles.length} candles fetched via direct fetch`);
+      return candles;
+    }
+  } catch (err) {
+    console.warn(`[tsetmc-index] Direct fetch failed for webId=${webIdStr}:`, err instanceof Error ? err.message : String(err));
   }
 
   // Tier 4: Expired file cache fallback

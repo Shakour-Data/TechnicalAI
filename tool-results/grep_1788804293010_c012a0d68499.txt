@@ -1,0 +1,252 @@
+/home/z/my-project/uml-interaction-diagrams.md:1:# UML 2.5 Interaction Diagrams — Iranian Stock Market Technical Analysis System
+/home/z/my-project/uml-interaction-diagrams.md:4:> **System:** بورس تهران — سامانه تحلیل تکنیکال (Tehran Stock Exchange — Technical Analysis System)  
+/home/z/my-project/uml-interaction-diagrams.md:30:| `«entity»` | **tse_api** | TSE data fetcher (candlestick, daily snapshots) |
+/home/z/my-project/uml-interaction-diagrams.md:43:> **سطح اول:** جریان اصلی موفق تحلیل از انتخاب نماد توسط کاربر تا نمایش نتایج در صفحه. این نمودار نگاهی سطح‌بالا به تعاملات اصلی سیستم ارائه می‌دهد و مسیر پردازش داده از TSE API تا پاسخ نهایی را نشان می‌دهد.
+/home/z/my-project/uml-interaction-diagrams.md:52:participant "tse_api" as tse <<entity>>
+/home/z/my-project/uml-interaction-diagrams.md:61:api -> tse : fetchCandlestick(symbol, range)
+/home/z/my-project/uml-interaction-diagrams.md:62:activate tse
+/home/z/my-project/uml-interaction-diagrams.md:63:tse --> api : CandlestickData[]
+/home/z/my-project/uml-interaction-diagrams.md:64:deactivate tse
+/home/z/my-project/uml-interaction-diagrams.md:84:| 3 | `fetchCandlestick(symbol, range)` | analysis_api → tse_api | Fetch market data from TSE |
+/home/z/my-project/uml-interaction-diagrams.md:85:| 4 | return `CandlestickData[]` | tse_api → analysis_api | OHLCV data returned |
+/home/z/my-project/uml-interaction-diagrams.md:104:participant "tse_api" as tse <<entity>>
+/home/z/my-project/uml-interaction-diagrams.md:117:api -> tse : fetchCandlestick(symbol, range)
+/home/z/my-project/uml-interaction-diagrams.md:118:activate tse
+/home/z/my-project/uml-interaction-diagrams.md:119:tse --> api : candles[]
+/home/z/my-project/uml-interaction-diagrams.md:120:deactivate tse
+/home/z/my-project/uml-interaction-diagrams.md:122:api -> tse : fetchDailySnapshots(symbol)
+/home/z/my-project/uml-interaction-diagrams.md:123:activate tse
+/home/z/my-project/uml-interaction-diagrams.md:124:tse --> api : snapshots[]
+/home/z/my-project/uml-interaction-diagrams.md:125:deactivate tse
+/home/z/my-project/uml-interaction-diagrams.md:205:participant "tse_api" as tse <<entity>>
+/home/z/my-project/uml-interaction-diagrams.md:235:  api -> tse : fetchCandlestick(symbol, range)
+/home/z/my-project/uml-interaction-diagrams.md:236:  activate tse
+/home/z/my-project/uml-interaction-diagrams.md:237:  tse --> api : candles[]
+/home/z/my-project/uml-interaction-diagrams.md:238:  deactivate tse
+/home/z/my-project/uml-interaction-diagrams.md:240:  api -> tse : fetchDailySnapshots(symbol)
+/home/z/my-project/uml-interaction-diagrams.md:241:  activate tse
+/home/z/my-project/uml-interaction-diagrams.md:242:  tse --> api : snapshots[]
+/home/z/my-project/uml-interaction-diagrams.md:243:  deactivate tse
+/home/z/my-project/uml-interaction-diagrams.md:432:    participant tse as tse_api
+/home/z/my-project/uml-interaction-diagrams.md:441:    api--)tse: 3: fetchMarketData()
+/home/z/my-project/uml-interaction-diagrams.md:442:    tse--)api: 4: return data
+/home/z/my-project/uml-interaction-diagrams.md:460:User ────────── page.tsx ────────── analysis_api ─┬── tse_api
+/home/z/my-project/uml-interaction-diagrams.md:611:│  │  User→page→api→tse   │                                           │
+/home/z/my-project/uml-interaction-diagrams.md:654:| sd FetchData | Data acquisition from TSE | L1 | Steps 1–4 |
+/home/z/my-project/uml-interaction-diagrams.md:778:│  ║  │ tse_api.fetchCandlestick│         ║                                    │
+/home/z/my-project/uml-interaction-diagrams.md:783:│  ║  │ tse_api.fetchDaily      │         ║                                    │
+/home/z/my-project/uml-interaction-diagrams.md:994:| `fetchCandlestick()` | analysis_api → tse_api | 100ms | 2s | 400ms | `≤2s` | ✅ P95 |
+/home/z/my-project/uml-interaction-diagrams.md:995:| `fetchDailySnapshots()` | analysis_api → tse_api | 100ms | 2s | 500ms | `≤2s` | ✅ P95 |
+/home/z/my-project/uml-interaction-diagrams.md:1062:| Seq L1: FetchData | DFD Process 1.0 — Acquire Data | BPMN Task: Fetch Market Data | `tse_api` class methods |
+/home/z/my-project/uml-interaction-diagrams.md:1075:| D1: CandlestickData | FetchData (Seq L1) | AnalyzeTechnical (Seq L2) | `tse_api` → `ta_engine` |
+/home/z/my-project/uml-interaction-diagrams.md:1076:| D2: DailySnapshots | FetchData (Seq L1) | DetectRegime (Seq L2) | `tse_api` → `regime_engine` |
+/home/z/my-project/index-page-test.json:4:    "description": "TSETMC",
+/home/z/my-project/index-page-test.json:7:        "https://tsetmc.com/logo.png": {}
+/home/z/my-project/index-page-test.json:10:        "https://tsetmc.com/favicon.ico?v=2": {
+/home/z/my-project/index-page-test.json:15:    "html": "<html lang=\"en\"><head><meta charset=\"utf-8\"><link rel=\"icon\" href=\"/favicon.ico?v=2\" type=\"image/x-icon\"><link rel=\"shortcut icon\" href=\"/favicon.ico?v=2\"><meta name=\"theme-color\" content=\"#000000\"><meta http-equiv=\"cache-control\" content=\"no-cache\"><meta http-equiv=\"expires\" content=\"0\"><meta http-equiv=\"pragma\" content=\"no-cache\"><meta name=\"description\" content=\"TSETMC\"><link rel=\"apple-touch-icon\" href=\"/logo.png\"><script src=\"/charting_library/charting_library.min.js\"></script><title>.:TSETMC:. :: مدیریت فناوری بورس تهران</title><script defer=\"defer\" src=\"/main.9d60e7997e683da143f0.js\"></script><link href=\"/static/css/main.9521d91f.css\" rel=\"stylesheet\"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id=\"root\"></div></body></html>",
+/home/z/my-project/index-page-test.json:19:      "description": "TSETMC",
+/home/z/my-project/index-page-test.json:24:    "title": ".:TSETMC:. :: مدیریت فناوری بورس تهران",
+/home/z/my-project/index-page-test.json:25:    "url": "https://tsetmc.com/Loader.aspx",
+/home/z/my-project/worklog.md:7:- Explored codebase structure: found 48 .ts files in src/lib/, 11 .tsx files in src/components/tse/
+/home/z/my-project/worklog.md:62:- Read all 48 lib/*.ts files, 11 components/tse/*.tsx files, and all API routes
+/home/z/my-project/mini-services/finpy-tse-service/start.sh:2:# Start TSETMC Index Service with auto-restart
+/home/z/my-project/mini-services/finpy-tse-service/start.sh:11:    echo "[$(date)] Starting TSETMC Index Service on port $PORT..."
+/home/z/my-project/mini-services/finpy-tse-service/app.py:1:# finpy-tse Index & Stock Data Service
+/home/z/my-project/mini-services/finpy-tse-service/app.py:8:from socketserver import ThreadingMixIn
+/home/z/my-project/mini-services/finpy-tse-service/app.py:58:    url = f'http://cdn.tsetmc.com/api/Index/GetIndexB2History/{web_id}'
+/home/z/my-project/mini-services/finpy-tse-service/app.py:118:    import finpy_tse
+/home/z/my-project/mini-services/finpy-tse-service/app.py:119:    df = finpy_tse.Get_Price_History(stock=symbol, ignore_date=True, adjust_price=adjust, show_weekday=False, double_date=False)
+/home/z/my-project/mini-services/finpy-tse-service/app.py:134:    import finpy_tse
+/home/z/my-project/mini-services/finpy-tse-service/app.py:135:    df = finpy_tse.Build_Market_StockList(bourse=True, farabourse=True, payeh=True, detailed_list=False, show_progress=False, save_excel=False, save_csv=False)
+/home/z/my-project/mini-services/finpy-tse-service/app.py:226:        self._json({'status': 'ok', 'service': 'finpy-tse-index-service',
+/home/z/my-project/mini-services/finpy-tse-service/app.py:249:        return self._json({'symbol': symbol, 'adjust': adjust, 'count': len(candles), 'source': 'finpy-tse', 'candles': candles})
+/home/z/my-project/mini-services/finpy-tse-service/app.py:263:        return self._json({'query': query, 'results': sl[:50], 'source': 'finpy-tse'})
+/home/z/my-project/mini-services/finpy-tse-service/app.py:312:    print(f'finpy-tse service on :{PORT} | {len(MAIN_INDEX_IDS)} indices, {len(SECTOR_WEB_IDS)} sectors', flush=True)
+/home/z/my-project/mini-services/finpy-tse-service/slow-fetch-sectors.sh:70:  z-ai function -n page_reader -a "{\"url\":\"http://cdn.tsetmc.com/api/Index/GetIndexB2History/${WEBID}\"}" -o "$TMP" >/dev/null 2>&1
+/home/z/my-project/mini-services/finpy-tse-service/prefetch-sectors.py:2:"""Pre-fetch all sector index data from TSETMC CDN B2 API via z-ai page_reader.
+/home/z/my-project/mini-services/finpy-tse-service/prefetch-sectors.py:71:    url = f'http://cdn.tsetmc.com/api/Index/GetIndexB2History/{web_id}'
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:3:finpy-tse Index Fetcher — Bulk fetch & store all 50 TSE indices
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:5:Uses finpy-tse for web IDs and data processing methodology.
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:6:Since cdn.tsetmc.com is Iran-only, HTTP requests are proxied through
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:20:from socketserver import ThreadingMixIn
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:26:import finpy_tse as fpy
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:41:# Index Definitions (from finpy-tse)
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:173:    Fetch raw JSON from cdn.tsetmc.com via the Next.js proxy.
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:174:    The proxy uses z-ai SDK page_reader (the only way to reach Iran-only CDN).
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:228:# Data processing (finpy-tse methodology)
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:235:    """Parse B2 JSON with truncation repair (same logic as finpy-tse/TypeScript)."""
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:264:    Process B2 entries into candle data using finpy-tse methodology.
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:282:        # Convert to Jalali using jdatetime (same as finpy-tse)
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:348:        # Process entries (finpy-tse methodology)
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:516:                    'source': 'finpy-tse + z-ai SDK proxy',
+/home/z/my-project/mini-services/finpy-index-fetcher/index.py:622:    print(f'Data source: finpy-tse methodology + z-ai SDK proxy')
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:1:// TSETMC Index History Service - Node.js native
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:43:  const result = await sdk.functions.invoke('page_reader', { url: `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}` });
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:45:  if (result.code !== 200 || !result.data?.html) throw new Error(`TSETMC API returned status ${result.code}`);
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:48:  if (!preMatch) throw new Error('Failed to parse TSETMC response');
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:79:    console.error('[tsetmc-index-service] Error:', err);
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:89:  if (url.pathname === '/health') { res.writeHead(200); res.end(JSON.stringify({status:'ok',service:'tsetmc-index-service'})); return; }
+/home/z/my-project/mini-services/tsetmc-index-service/service.mjs:116:server.listen(PORT, () => console.log(`TSETMC Index Service on port ${PORT}`));
+/home/z/my-project/mini-services/tsetmc-index-service/fetch-sectors.mjs:62:      const r = await zai.functions.invoke('page_reader', {url:'http://cdn.tsetmc.com/api/Index/GetIndexB2History/'+webId});
+/home/z/my-project/mini-services/tsetmc-index-service/bun.lock:6:      "name": "tsetmc-index-service",
+/home/z/my-project/mini-services/tsetmc-index-service/test_with_server.mjs:5:const r = await zai.functions.invoke('page_reader', { url: 'http://cdn.tsetmc.com/api/Index/GetIndexB2History/32097828799138957' });
+/home/z/my-project/mini-services/tsetmc-index-service/test_with_server.mjs:12:    const r2 = await zai.functions.invoke('page_reader', { url: 'http://cdn.tsetmc.com/api/Index/GetIndexB2History/32097828799138957' });
+/home/z/my-project/mini-services/tsetmc-index-service/fetch-sectors.ts:116:        url: `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`,
+/home/z/my-project/mini-services/tsetmc-index-service/index.ts:2:// TSETMC Index Service
+/home/z/my-project/mini-services/tsetmc-index-service/index.ts:277:      status: 'ok', service: 'tsetmc-index-service',
+/home/z/my-project/mini-services/tsetmc-index-service/index.ts:355:  console.log(`TSETMC Index Service starting on port ${PORT}...`);
+/home/z/my-project/mini-services/tsetmc-index-service/index.ts:359:    console.log(`TSETMC Index Service listening on port ${PORT}`);
+/home/z/my-project/mini-services/tsetmc-index-service/package.json:2:  "name": "tsetmc-index-service",
+/home/z/my-project/mini-services/tsetmc-index-service/package-lock.json:2:  "name": "tsetmc-index-service",
+/home/z/my-project/mini-services/tsetmc-index-service/package-lock.json:8:      "name": "tsetmc-index-service",
+/home/z/my-project/mini-services/tsetmc-index-service/test_sdk.mjs:4:const r = await zai.functions.invoke('page_reader', { url: 'http://cdn.tsetmc.com/api/Index/GetIndexB2History/32097828799138957' });
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:2:// TSETMC Index History Service
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:3:// Uses z-ai-web-dev-sdk page_reader to fetch index data from cdn.tsetmc.com
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:64:// ── Fetch and parse B2 data from cdn.tsetmc.com ───────────────────
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:68:    url: `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`,
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:73:    throw new Error(`TSETMC API returned status ${result.code}`);
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:81:    throw new Error('Failed to parse TSETMC response: no <pre> tag found');
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:145:    console.error(`[tsetmc-index-service] Error:`, err);
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:159:    res.end(JSON.stringify({ status: 'ok', service: 'tsetmc-index-service' }));
+/home/z/my-project/mini-services/tsetmc-index-service/index.mjs:207:  console.log(`TSETMC Index Service starting on port ${PORT}...`);
+/home/z/my-project/mini-services/tsetmc-index-service/fetch-one.mjs:17:const r = await zai.functions.invoke('page_reader', {url:`http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`});
+/home/z/my-project/mini-services/finpy-tse/README.md:1:# finpy-tse
+/home/z/my-project/mini-services/finpy-tse/bun.lock:6:      "name": "finpy-tse",
+/home/z/my-project/mini-services/finpy-tse/index.ts:2: * finpy-tse Mini Service — Historical TSE Index Data
+/home/z/my-project/mini-services/finpy-tse/index.ts:4: * Uses z-ai SDK page_reader to access cdn.tsetmc.com (Iran-only CDN)
+/home/z/my-project/mini-services/finpy-tse/index.ts:5: * Endpoint: cdn.tsetmc.com/api/Index/GetIndexB2History/{webId}
+/home/z/my-project/mini-services/finpy-tse/index.ts:15:// Web IDs from finpy-tse (https://github.com/ARahimiQuant/finpy-tse)
+/home/z/my-project/mini-services/finpy-tse/index.ts:78:interface TsetmcB2Entry {
+/home/z/my-project/mini-services/finpy-tse/index.ts:126:// Data Fetching — via z-ai SDK page_reader → cdn.tsetmc.com
+/home/z/my-project/mini-services/finpy-tse/index.ts:133:function parseB2Json(jsonStr: string): TsetmcB2Entry[] {
+/home/z/my-project/mini-services/finpy-tse/index.ts:134:  let parsed: { indexB2: TsetmcB2Entry[] };
+/home/z/my-project/mini-services/finpy-tse/index.ts:149:async function fetchCdnB2History(webId: string, maxRetries = 3): Promise<TsetmcB2Entry[]> {
+/home/z/my-project/mini-services/finpy-tse/index.ts:150:  const url = `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`;
+/home/z/my-project/mini-services/finpy-tse/index.ts:197:// Data Processing (finpy-tse methodology + Jalali dates)
+/home/z/my-project/mini-services/finpy-tse/index.ts:207:  entries: TsetmcB2Entry[],
+/home/z/my-project/mini-services/finpy-tse/index.ts:318:        return json({ status: 'ok', service: 'finpy-tse', version: '1.2.10', source: 'cdn.tsetmc.com (via z-ai SDK)', indices: Object.keys(INDEX_WEB_IDS), sectors: SECTOR_WEB_IDS.length });
+/home/z/my-project/mini-services/finpy-tse/index.ts:353:        return json({ data: candles, count: candles.length, code, web_id: String(webId), source: 'finpy-tse / cdn.tsetmc.com' });
+/home/z/my-project/mini-services/finpy-tse/index.ts:365:console.log(`finpy-tse service running on port ${PORT}`);
+/home/z/my-project/mini-services/finpy-tse/index.ts:366:console.log(`Data source: cdn.tsetmc.com via z-ai SDK (finpy-tse methodology)`);
+/home/z/my-project/mini-services/finpy-tse/package.json:2:  "name": "finpy-tse",
+/home/z/my-project/mini-services/finpy-tse/tsconfig.json:14:    "allowImportingTsExtensions": true,
+/home/z/my-project/mini-services/finpy-service/index.py:1:# finpy-tse candlestick data service
+/home/z/my-project/mini-services/finpy-service/index.py:2:# Provides TSE historical price data as a fallback when BrsApi is unavailable
+/home/z/my-project/mini-services/finpy-service/index.py:11:# We import finpy_tse lazily to avoid slow startup
+/home/z/my-project/mini-services/finpy-service/index.py:12:finpy_tse = None
+/home/z/my-project/mini-services/finpy-service/index.py:15:    global finpy_tse
+/home/z/my-project/mini-services/finpy-service/index.py:16:    if finpy_tse is None:
+/home/z/my-project/mini-services/finpy-service/index.py:17:        import finpy_tse
+/home/z/my-project/mini-services/finpy-service/index.py:18:        finpy_tse = finpy_tse
+/home/z/my-project/mini-services/finpy-service/index.py:19:    return finpy_tse
+/home/z/my-project/mini-services/finpy-service/index.py:72:        tse = get_finpy()
+/home/z/my-project/mini-services/finpy-service/index.py:73:        df = tse.Get_Price_History(
+/home/z/my-project/mini-services/finpy-service/index.py:116:        tse = get_finpy()
+/home/z/my-project/mini-services/finpy-service/index.py:117:        df = tse.Get_SectorIndex_History(
+/home/z/my-project/mini-services/finpy-service/index.py:147:        Fetch main TSE index historical data.
+/home/z/my-project/mini-services/finpy-service/index.py:157:        tse = get_finpy()
+/home/z/my-project/mini-services/finpy-service/index.py:159:        # Map index keys to finpy-tse functions
+/home/z/my-project/mini-services/finpy-service/index.py:174:        if not func_name or not hasattr(tse, func_name):
+/home/z/my-project/mini-services/finpy-service/index.py:177:        func = getattr(tse, func_name)
+/home/z/my-project/mini-services/finpy-service/index.py:205:    print(f'[finpy] finpy-tse service starting on port {PORT}')
+/home/z/my-project/mini-services/dev-keepalive/index.ts:21:function startServer(): ChildProcess {
+/home/z/my-project/mini-services/dev-keepalive/index.ts:44:    setTimeout(startServer, 2000);
+/home/z/my-project/mini-services/dev-keepalive/index.ts:49:    setTimeout(startServer, 2000);
+/home/z/my-project/mini-services/dev-keepalive/index.ts:56:startServer();
+/home/z/my-project/mini-services/ml-trainer/index.py:20:from socketserver import ThreadingMixIn
+/home/z/my-project/keep-server.js:5:function startServer() {
+/home/z/my-project/keep-server.js:14:    setTimeout(startServer, 3000);
+/home/z/my-project/keep-server.js:19:startServer();
+/home/z/my-project/bpmn-section.md:59:        SRC_GW{"🜂 کدام منبع؟"} -->|TSE| TSE["🏛️ TSE"]
+/home/z/my-project/bpmn-section.md:62:        TSE --> OHLCV["📉 داده OHLCV"]
+/home/z/my-project/bpmn-section.md:85:    class TSE,TGJU,YAHOO,OHLCV data
+/home/z/my-project/bpmn-section.md:95:۳. سه گیت‌وی کلیدی در این سطح وجود دارد: گیت‌وی انتخاب منبع داده (TSE/TGJU/Yahoo)، گیت‌وی تشخیص رژیم (رونده/رنج/بازگشتی) و گیت‌وی انتخاب MSL. هر گیت‌وی بر اساس شرایط ورودی، مسیر مناسب را انتخاب می‌کند و تصمیم‌گیری سیستمی را مدل‌سازی می‌نماید.
+/home/z/my-project/bpmn-section.md:118:    SRC_GW1 -->|نماد TSE| TSE_F["🏛️ درخواست TSE\ntse_client.fetch()"]
+/home/z/my-project/bpmn-section.md:121:    TSE_F --> VALIDATE["✅ اعتبارسنجی داده"]
+/home/z/my-project/bpmn-section.md:139:    class INPUT,IDENTIFY,TSE_F,TGJU_F,YH_F,VALIDATE,CACHE,TRANSFORM,RETURN1 task
+/home/z/my-project/bpmn-section.md:146:۲. ابتدا منبع داده مناسب شناسایی می‌شود: نمادهای بورس تهران از TSE، نمادهای commodities از TGJU و نمادهای بین‌المللی از Yahoo Finance دریافت می‌شوند.
+/home/z/my-project/bpmn-section.md:159:| ۲ | شناسایی منبع | نماد در لیست TSE شناسایی می‌شود | `source='TSE'` |
+/home/z/my-project/bpmn-section.md:160:| ۳ | درخواست TSE | `tse_client.fetch('فولاد', '1Y')` فراخوانی می‌شود | `raw_data: DataFrame` |
+/home/z/my-project/bpmn-section.md:170:| E-202 | TSE در دسترس نیست | سعی از TGJU به‌عنوان جایگزین | قطعی سرور TSE |
+/home/z/my-project/bun.lock:394:    "@lezer/html": ["@lezer/html@1.3.13", "https://registry.npmjs.com/@lezer/html/-/html-1.3.13.tgz", { "dependencies": { "@lezer/common": "^1.2.0", "@lezer/highlight": "^1.0.0", "@lezer/lr": "^1.0.0" } }, "sha512-oI7n6NJml729m7pjm9lvLvmXbdoMoi2f+1pwSDJkl9d68zGr7a9Btz8NdHTGQZtW2DA25ybeuv/SyDb9D5tseg=="],
+/home/z/my-project/bun.lock:452:    "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "https://registry.npmjs.com/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
+/home/z/my-project/bun.lock:700:    "@tanstack/react-table": ["@tanstack/react-table@8.21.3", "https://registry.npmjs.com/@tanstack/react-table/-/react-table-8.21.3.tgz", { "dependencies": { "@tanstack/table-core": "8.21.3" }, "peerDependencies": { "react": ">=16.8", "react-dom": ">=16.8" } }, "sha512-5nNMTSETP4ykGegmVkhjcS8tTLW6Vl4axfEGQN3v0zdHYbK4UfoqfPChclTrJ4EoK9QynqAu9oUf8VEmrpZ5Ww=="],
+/home/z/my-project/DIAGRAM_DOCS.md:2:# Iranian Stock Market Technical Analysis System — Diagram Documentation
+/home/z/my-project/DIAGRAM_DOCS.md:50:    E2[TSETMC / BrsApi<br/>سرویس بورس]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:54:    E6[finpy-tse<br/>سرویس TSE]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:55:    E7[tsetmc-index<br/>شاخص بورس]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:66:    E6 -->|داده تاریخی TSE| P0
+/home/z/my-project/DIAGRAM_DOCS.md:75:- **نهادهای خارجی**: هفت منبع/مقصد داده در مرز سیستم وجود دارند. سه نهاد داده‌محور (TSETMC/BrsApi, TGJU, Yahoo Finance) داده‌های خام بازار را تأمین می‌کنند. دو نهاد سرویسی (finpy-tse, tsetmc-index) داده‌های تکمیلی تاریخی و شاخصی ارائه می‌دهند. نهاد Z-AI SDK متن تحلیل هوشمند فارسی تولید می‌کند و کاربر (معامله‌گر) درخواست و بازخورد را ارسال می‌کند.
+/home/z/my-project/DIAGRAM_DOCS.md:96:    E2[TSETMC/BrsApi]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:100:    E6[finpy-tse]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:101:    E7[tsetmc-index]:::Entity
+/home/z/my-project/DIAGRAM_DOCS.md:167:- **نهادهای خارجی**: داده‌های خام از TSETMC, TGJU و Yahoo Finance وارد D1 می‌شوند. Z-AI SDK متن تحلیل فارسی تولید می‌کند. کاربر هم درخواست و هم بازخورد ارسال می‌کند.
+/home/z/my-project/DIAGRAM_DOCS.md:575:| OHLCV خام | TSETMC/TGJU/Yahoo | D1 | داده‌های خام بازار (قیمت باز/بسته/بالا/پایین + حجم) |
+/home/z/my-project/DIAGRAM_DOCS.md:650:        SRC_GW{"🜂 کدام منبع؟"} -->|TSE| TSE["🏛️ TSE"]
+/home/z/my-project/DIAGRAM_DOCS.md:653:        TSE --> OHLCV["📉 داده OHLCV"]
+/home/z/my-project/DIAGRAM_DOCS.md:676:    class TSE,TGJU,YAHOO,OHLCV data
+/home/z/my-project/DIAGRAM_DOCS.md:686:۳. سه گیت‌وی کلیدی در این سطح وجود دارد: گیت‌وی انتخاب منبع داده (TSE/TGJU/Yahoo)، گیت‌وی تشخیص رژیم (رونده/رنج/بازگشتی) و گیت‌وی انتخاب MSL. هر گیت‌وی بر اساس شرایط ورودی، مسیر مناسب را انتخاب می‌کند و تصمیم‌گیری سیستمی را مدل‌سازی می‌نماید.
+/home/z/my-project/DIAGRAM_DOCS.md:709:    SRC_GW1 -->|نماد TSE| TSE_F["🏛️ درخواست TSE\ntse_client.fetch()"]
+/home/z/my-project/DIAGRAM_DOCS.md:712:    TSE_F --> VALIDATE["✅ اعتبارسنجی داده"]
+/home/z/my-project/DIAGRAM_DOCS.md:730:    class INPUT,IDENTIFY,TSE_F,TGJU_F,YH_F,VALIDATE,CACHE,TRANSFORM,RETURN1 task
+/home/z/my-project/DIAGRAM_DOCS.md:737:۲. ابتدا منبع داده مناسب شناسایی می‌شود: نمادهای بورس تهران از TSE، نمادهای commodities از TGJU و نمادهای بین‌المللی از Yahoo Finance دریافت می‌شوند.
+/home/z/my-project/DIAGRAM_DOCS.md:750:| ۲ | شناسایی منبع | نماد در لیست TSE شناسایی می‌شود | `source='TSE'` |
+/home/z/my-project/DIAGRAM_DOCS.md:751:| ۳ | درخواست TSE | `tse_client.fetch('فولاد', '1Y')` فراخوانی می‌شود | `raw_data: DataFrame` |
+/home/z/my-project/DIAGRAM_DOCS.md:761:| E-202 | TSE در دسترس نیست | سعی از TGJU به‌عنوان جایگزین | قطعی سرور TSE |
+/home/z/my-project/DIAGRAM_DOCS.md:1247:# UML 2.5 Structural Diagrams — Iranian Stock Market Technical Analysis System
+/home/z/my-project/DIAGRAM_DOCS.md:1977:> **توضیح فارسی:** در سطح زیرمؤلفه، هر مؤلفه اصلی به اجزای خرد شکسته شده است. TA Engine شامل Indicator Calculators، S/R Analyzer و VDSS Engine است. ML Engine شامل Logistic Regression، Bayesian Weights و Adaptive Weight Model است. Regime Engine شامل Fuzzy Detector، Markov Chain و Voting System است. AI Service شامل Chat Completion و Post-Processor و Narrative Selector است. Data Layer شامل TSE API و TGJU API و Safe Storage است.
+/home/z/my-project/DIAGRAM_DOCS.md:2013:  component "TSE API" as TSE
+/home/z/my-project/DIAGRAM_DOCS.md:2028:TSE --> Stor : caches
+/home/z/my-project/DIAGRAM_DOCS.md:2138:> **توضیح فارسی:** در سطح دوم، مؤلفه‌های نرم‌افزاری روی گره‌های فیزیکی تخصیص داده شده‌اند و پروتکل‌های ارتباطی دقیق‌تر مشخص شده‌اند. روی Browser کامپوننت‌های React UI و Theme Store قرار دارند. روی Next.js Server تمام Engine ها و Analyzer ها و Store ها مستقر هستند. Mini Services شامل TSE Fetcher و TGJU Fetcher است. ارتباط از نوع HTTP، WebSocket و REST با پورت‌های مشخص است.
+/home/z/my-project/DIAGRAM_DOCS.md:2167:  component "TSE Fetcher\n  (port 3100)" as tsef
+/home/z/my-project/DIAGRAM_DOCS.md:2178:nextjs "HTTP :3100" --> mini : "TSE data fetch"
+/home/z/my-project/DIAGRAM_DOCS.md:2208:node "Mini: TSE Fetcher\n  OS: Linux (Alpine)\n  Runtime: Bun 1.1\n  Port: 3100\n  Instances: 1\n  Cache: Redis {TTL: 60s}\n  Schedule: */30s cron\n  Timeout: 10s" as tsemini <<Micro Service>> {
+/home/z/my-project/DIAGRAM_DOCS.md:2209:  artifact "tse-fetcher.ts\n  fetchIntraDay()\n  fetchHistory()" as tsef
+/home/z/my-project/DIAGRAM_DOCS.md:2226:nextjs "HTTP :3100\n  timeout: 10s\n  retry: 3" --> tsemini
+/home/z/my-project/DIAGRAM_DOCS.md:2272:> **توضیح فارسی:** در سطح دوم، بسته lib/ به زیربسته‌های ta (تحلیل تکنیکال)، ml (یادگیری ماشین)، regime (رژیم بازار)، sr (سطوح حمایتی/مقاومتی)، pattern (تشخیص الگو)، feedback (بازخورد)، data (داده) و ui (رابط کاربری) شکسته شده است. بسته components/ شامل analysis، scenarios و common است. بسته api/ شامل analyze، regime و ai-chat است. mini-services/ شامل tse-fetcher و tgju-fetcher است.
+/home/z/my-project/DIAGRAM_DOCS.md:2288:  package "data" as data <<tse-api, tgju-api>>
+/home/z/my-project/DIAGRAM_DOCS.md:2312:  package "tse-fetcher" as tsefetcher
+/home/z/my-project/DIAGRAM_DOCS.md:2345:tsefetcher ..> data : «feeds»
+/home/z/my-project/DIAGRAM_DOCS.md:2717:# 8–10. UML 2.5 Behavioral Diagrams — Iranian Stock Market Technical Analysis System
+/home/z/my-project/DIAGRAM_DOCS.md:2744:rectangle "Iranian Stock Market TA System" {
+/home/z/my-project/DIAGRAM_DOCS.md:2807:rectangle "Iranian Stock Market TA System" {
+/home/z/my-project/DIAGRAM_DOCS.md:2882:rectangle "Iranian Stock Market TA System" {
+/home/z/my-project/DIAGRAM_DOCS.md:3007:case (TSE)
+/home/z/my-project/DIAGRAM_DOCS.md:3008:  :Fetch from TSE API;
+/home/z/my-project/DIAGRAM_DOCS.md:3059:> گره تصمیم «منبع داده؟» مسیر واکشی را بر اساس TSE، TGJU، یاهو یا داده شاخص انتخاب می‌کند.
+/home/z/my-project/DIAGRAM_DOCS.md:3083:case (TSE)
+/home/z/my-project/DIAGRAM_DOCS.md:3085:  :GET /api/tse/{symbol};
+/home/z/my-project/DIAGRAM_DOCS.md:3086:  :Parse TSE CSV;
+/home/z/my-project/DIAGRAM_DOCS.md:3204:> واکشی داده از چهار منبع مختلف (TSE، TGJU، یاهو، شاخص) نرمال‌سازی و در حافظه نهان Redis ذخیره می‌شود.
+/home/z/my-project/DIAGRAM_DOCS.md:3246:    Searching --> Loading : symbolSelected(symbol)\n[symbol in TSE∪TGJU]
+/home/z/my-project/DIAGRAM_DOCS.md:3417:# UML 2.5 Interaction Diagrams — Iranian Stock Market Technical Analysis System
+/home/z/my-project/DIAGRAM_DOCS.md:3420:> **System:** بورس تهران — سامانه تحلیل تکنیکال (Tehran Stock Exchange — Technical Analysis System)  
+/home/z/my-project/DIAGRAM_DOCS.md:3446:| `«entity»` | **tse_api** | TSE data fetcher (candlestick, daily snapshots) |
+/home/z/my-project/DIAGRAM_DOCS.md:3459:> **سطح اول:** جریان اصلی موفق تحلیل از انتخاب نماد توسط کاربر تا نمایش نتایج در صفحه. این نمودار نگاهی سطح‌بالا به تعاملات اصلی سیستم ارائه می‌دهد و مسیر پردازش داده از TSE API تا پاسخ نهایی را نشان می‌دهد.
+/home/z/my-project/DIAGRAM_DOCS.md:3468:participant "tse_api" as tse <<entity>>
+/home/z/my-project/DIAGRAM_DOCS.md:3477:api -> tse : fetchCandlestick(symbol, range)
+/home/z/my-project/DIAGRAM_DOCS.md:3478:activate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3479:tse --> api : CandlestickData[]
+/home/z/my-project/DIAGRAM_DOCS.md:3480:deactivate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3500:| 3 | `fetchCandlestick(symbol, range)` | analysis_api → tse_api | Fetch market data from TSE |
+/home/z/my-project/DIAGRAM_DOCS.md:3501:| 4 | return `CandlestickData[]` | tse_api → analysis_api | OHLCV data returned |
+/home/z/my-project/DIAGRAM_DOCS.md:3520:participant "tse_api" as tse <<entity>>
+/home/z/my-project/DIAGRAM_DOCS.md:3533:api -> tse : fetchCandlestick(symbol, range)
+/home/z/my-project/DIAGRAM_DOCS.md:3534:activate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3535:tse --> api : candles[]
+/home/z/my-project/DIAGRAM_DOCS.md:3536:deactivate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3538:api -> tse : fetchDailySnapshots(symbol)
+/home/z/my-project/DIAGRAM_DOCS.md:3539:activate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3540:tse --> api : snapshots[]
+/home/z/my-project/DIAGRAM_DOCS.md:3541:deactivate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3621:participant "tse_api" as tse <<entity>>
+/home/z/my-project/DIAGRAM_DOCS.md:3651:  api -> tse : fetchCandlestick(symbol, range)
+/home/z/my-project/DIAGRAM_DOCS.md:3652:  activate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3653:  tse --> api : candles[]
+/home/z/my-project/DIAGRAM_DOCS.md:3654:  deactivate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3656:  api -> tse : fetchDailySnapshots(symbol)
+/home/z/my-project/DIAGRAM_DOCS.md:3657:  activate tse
+/home/z/my-project/DIAGRAM_DOCS.md:3658:  tse --> api : snapshots[]
+/home/z/my-project/DIAGRAM_DOCS.md:3659:  deactivate tse
+
+[Showing results with pagination = limit: 250]

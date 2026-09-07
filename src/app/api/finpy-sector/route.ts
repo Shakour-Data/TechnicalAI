@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMainIndexHistory, fetchSectorIndexHistory, fetchSectorByName } from '@/lib/tsetmc-index-api';
+import { fetchMainIndexHistory, fetchSectorIndexHistory, fetchSectorByName, directFetchIndexData } from '@/lib/tsetmc-index-api';
 import { INDUSTRY_INDICES, type IndustryIndex } from '@/lib/industry-indices';
 import type { OHLCV } from '@/lib/ta-engine';
 import type { DailyProbabilitySnapshot } from '@/lib/probability-trend';
@@ -25,6 +25,7 @@ function findSectorByName(name: string): IndustryIndex | undefined {
 function buildResponse(
   candles: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>,
   label: string,
+  fetchSource?: string,
 ) {
   // For TA analysis, use only the last 500 candles to limit memory usage
   const taCandles = candles.length > 500 ? candles.slice(-500) : candles;
@@ -37,7 +38,13 @@ function buildResponse(
     volume: c.volume,
   }));
 
-  const ta = analyze(ohlcv, 'واحد');
+  let ta;
+  try {
+    ta = analyze(ohlcv, 'واحد');
+  } catch (err) {
+    console.error(`[finpy-sector] TA analysis failed for ${label}:`, err instanceof Error ? err.message : String(err));
+    ta = undefined;
+  }
 
   // Compute 30-day probability trend
   let probabilityTrend;
@@ -56,7 +63,7 @@ function buildResponse(
   const lastClose = lastCandle?.close || 0;
   const prevClose = prevCandle?.close || 0;
 
-  return NextResponse.json({
+  const result: Record<string, unknown> = {
     symbol: label,
     candles,
     info: {
@@ -81,7 +88,13 @@ function buildResponse(
     },
     ta,
     probabilityTrend,
-  });
+  };
+
+  if (fetchSource) {
+    result.fetchSource = fetchSource;
+  }
+
+  return NextResponse.json(result);
 }
 
 export async function GET(req: NextRequest) {
@@ -90,47 +103,97 @@ export async function GET(req: NextRequest) {
   const indexKey = url.searchParams.get('indexKey');
   const webIdParam = url.searchParams.get('webId');
 
-  try {
-    // ── Main index (CWI, EWI, CWPI, etc.) ──
-    if (indexKey) {
+  // ── Main index (CWI, EWI, CWPI, etc.) ──
+  if (indexKey) {
+    try {
       const candles = await fetchMainIndexHistory(indexKey);
       return buildResponse(candles, indexKey.toUpperCase());
+    } catch (err) {
+      console.error(`[finpy-sector] Error fetching main index ${indexKey}:`, err instanceof Error ? err.message : String(err));
+      // Return partial result with error info instead of hard 500
+      return NextResponse.json({
+        symbol: indexKey.toUpperCase(),
+        candles: [],
+        error: err instanceof Error ? err.message : 'خطا در دریافت داده‌های شاخص',
+        fetchFailed: true,
+        info: null,
+        ta: null,
+        probabilityTrend: null,
+      }, { status: 200 });
     }
+  }
 
-    // ── Sector/industry index by webId (string to preserve precision) ──
-    if (webIdParam) {
-      // Check if this webId belongs to a main index (has finpyIndex) → use fetchMainIndexHistory
-      const mainIndexMatch = INDUSTRY_INDICES.find(s => s.webId === webIdParam && s.finpyIndex);
-      if (mainIndexMatch?.finpyIndex) {
+  // ── Sector/industry index by webId (string to preserve precision) ──
+  if (webIdParam) {
+    // Check if this webId belongs to a main index (has finpyIndex) → use fetchMainIndexHistory
+    const mainIndexMatch = INDUSTRY_INDICES.find(s => s.webId === webIdParam && s.finpyIndex);
+    if (mainIndexMatch?.finpyIndex) {
+      try {
         const candles = await fetchMainIndexHistory(mainIndexMatch.finpyIndex);
         return buildResponse(candles, mainIndexMatch.symbol);
+      } catch (err) {
+        console.error(`[finpy-sector] Error fetching main index by webId ${webIdParam}:`, err instanceof Error ? err.message : String(err));
+        return NextResponse.json({
+          symbol: mainIndexMatch.symbol,
+          candles: [],
+          error: err instanceof Error ? err.message : 'خطا در دریافت داده‌ها',
+          fetchFailed: true,
+          info: null,
+          ta: null,
+          probabilityTrend: null,
+        }, { status: 200 });
       }
+    }
 
+    try {
       const candles = await fetchSectorIndexHistory(webIdParam);
       const label = INDUSTRY_INDICES.find(s => s.webId === webIdParam)?.symbol || `شاخص ${webIdParam}`;
       return buildResponse(candles, label);
+    } catch (err) {
+      console.error(`[finpy-sector] Error fetching sector webId=${webIdParam}:`, err instanceof Error ? err.message : String(err));
+      const label = INDUSTRY_INDICES.find(s => s.webId === webIdParam)?.symbol || `شاخص ${webIdParam}`;
+      // Return partial result — frontend can still render with empty candles
+      return NextResponse.json({
+        symbol: label,
+        candles: [],
+        error: err instanceof Error ? err.message : 'خطا در دریافت داده‌های شاخص گروه',
+        fetchFailed: true,
+        info: null,
+        ta: null,
+        probabilityTrend: null,
+      }, { status: 200 });
     }
+  }
 
-    // ── Sector/industry index by name ──
-    if (sector) {
-      const sectorDef = findSectorByName(sector);
-      if (sectorDef) {
+  // ── Sector/industry index by name ──
+  if (sector) {
+    const sectorDef = findSectorByName(sector);
+    if (sectorDef) {
+      try {
         const candles = await fetchSectorByName(sectorDef.finpySector!);
         return buildResponse(candles, sectorDef.symbol);
+      } catch (err) {
+        console.error(`[finpy-sector] Error fetching sector "${sector}":`, err instanceof Error ? err.message : String(err));
+        return NextResponse.json({
+          symbol: sectorDef.symbol,
+          candles: [],
+          error: err instanceof Error ? err.message : 'خطا در دریافت داده‌های شاخص گروه',
+          fetchFailed: true,
+          info: null,
+          ta: null,
+          probabilityTrend: null,
+        }, { status: 200 });
       }
-      return NextResponse.json({
-        error: `شاخص گروه «${sector}» یافت نشد.`,
-        candles: [],
-      }, { status: 404 });
     }
-
-    return NextResponse.json(
-      { error: 'پارامتر indexKey، sector یا webId الزامی است.', candles: [] },
-      { status: 400 },
-    );
-  } catch (err) {
-    console.error('[finpy-sector] Error:', err);
-    const msg = err instanceof Error ? err.message : 'خطای ناشناخته';
-    return NextResponse.json({ error: msg, candles: [] }, { status: 500 });
+    return NextResponse.json({
+      error: `شاخص گروه «${sector}» یافت نشد.`,
+      candles: [],
+      fetchFailed: true,
+    }, { status: 404 });
   }
+
+  return NextResponse.json(
+    { error: 'پارامتر indexKey، sector یا webId الزامی است.', candles: [] },
+    { status: 400 },
+  );
 }
