@@ -1196,73 +1196,68 @@ export const UML_STRUCT_DIAGRAMS = [
   AIPostProcessor خروجی متنی هوش مصنوعی را پردازش و اصلاح می‌کند.
   ZaiShared خدمات مشترک هوش مصنوعی و محدودکننده نرخ را فراهم می‌کند.`,
     level: 1,
-    code: `@startuml
-' نمودار کلاس سطح ۱ - مدل دامنه
-skinparam classAttributeIconSize 0
-skinparam monochrome false
-skinparam shadowing true
+    code: `classDiagram
+    direction TB
 
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار کلاس - سطح ۱: مدل دامنه
+    class TAEngine {
+        <<Core>>
+        +analyze()
+        +calcTrend()
+        +linearRegression()
+    }
 
-note as N1
-  این نمودار کلاس‌های اصلی دامنه
-  و مسئولیت‌های کلیدی آن‌ها را
-  نمایش می‌دهد. هر کلاس نقش
-  محوری در سامانه دارد.
-end note
+    class RegimeEngine {
+        <<Core>>
+        +detectRegime()
+        +fuzzyMembership()
+        +markovTransition()
+        +weightedVote()
+    }
 
-class TAEngine <<Core>> {
-  +analyze()
-  +calcTrend()
-  +linearRegression()
-}
+    class DecisionGraph {
+        <<Core>>
+        +buildGraph()
+        +computePaths()
+        +normalizeWeights()
+    }
 
-class RegimeEngine <<Core>> {
-  +detectRegime()
-  +fuzzyMembership()
-  +markovTransition()
-  +weightedVote()
-}
+    class MLEngine {
+        <<ML>>
+        +trainAdaptive()
+        +predict()
+        +getCachedWeights()
+    }
 
-class DecisionGraph <<Core>> {
-  +buildGraph()
-  +computePaths()
-  +normalizeWeights()
-}
+    class SRAnalyzer {
+        <<Analysis>>
+        +detectLevels()
+        +mlOptimize()
+        +computeStrength()
+    }
 
-class MLEngine <<ML>> {
-  +trainAdaptive()
-  +predict()
-  +getCachedWeights()
-}
+    class AIPostProcessor {
+        <<AI>>
+        +stripCodes()
+        +fixPersian()
+        +validatePrices()
+        +fixDirection()
+    }
 
-class SRAnalyzer <<Analysis>> {
-  +detectLevels()
-  +mlOptimize()
-  +computeStrength()
-}
+    class ZaiShared {
+        <<Infra>>
+        +dedicatedAIChatCompletion()
+        +rateLimitedPageReader()
+        +getZai()
+    }
 
-class AIPostProcessor <<AI>> {
-  +stripCodes()
-  +fixPersian()
-  +validatePrices()
-  +fixDirection()
-}
+    TAEngine --> RegimeEngine : استفاده
+    TAEngine --> SRAnalyzer : تحلیل سطح
+    DecisionGraph --> RegimeEngine : رژیم‌ها
+    MLEngine --> TAEngine : اندیکاتورها
+    AIPostProcessor --> ZaiShared : فراخوانی AI
+    DecisionGraph --> MLEngine : پیش‌بینی
 
-class ZaiShared <<Infra>> {
-  +dedicatedAIChatCompletion()
-  +rateLimitedPageReader()
-  +getZai()
-}
-
-TAEngine --> RegimeEngine : استفاده
-TAEngine --> SRAnalyzer : تحلیل سطح
-DecisionGraph --> RegimeEngine : رژیم‌ها
-MLEngine --> TAEngine : اندیکاتورها
-AIPostProcessor --> ZaiShared : فراخوانی AI
-DecisionGraph --> MLEngine : پیش‌بینی
-
-@enduml`,
+    note for TAEngine "این نمودار کلاس‌های اصلی دامنه و مسئولیت‌های کلیدی آن‌ها را نمایش می‌دهد. هر کلاس نقش محوری در سامانه دارد."`,
   },
   {
     id: 'uml-class-l2',
@@ -1276,134 +1271,126 @@ DecisionGraph --> MLEngine : پیش‌بینی
   VolumeProfile و CandlestickPatterns بخش‌های تحلیلی هستند.
   چندگانگی و جهت ارتباطات به‌دقت مشخص شده‌اند.`,
     level: 2,
-    code: `@startuml
-' نمودار کلاس سطح ۲ - طراحی با ارتباطات
-skinparam classAttributeIconSize 0
-skinparam linetype ortho
+    code: `classDiagram
+    direction TB
 
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار کلاس - سطح ۲: طراحی
+    class TAEngine {
+        +analyze()
+        +calcTrend()
+        +linearRegression()
+        -indicators Map~string,Function~
+        -candlesticks Candlestick[]
+    }
 
-class TAEngine {
-  +analyze()
-  +calcTrend()
-  +linearRegression()
-  -indicators: Map<string, Function>
-  -candlesticks: Candlestick[]
-}
+    class RegimeEngine {
+        +detectRegime()
+        +fuzzyMembership()
+        +markovTransition()
+        +weightedVote()
+        -regimes Regime[]
+        -transitionMatrix number[][]
+    }
 
-class RegimeEngine {
-  +detectRegime()
-  +fuzzyMembership()
-  +markovTransition()
-  +weightedVote()
-  -regimes: Regime[]
-  -transitionMatrix: number[][]
-}
+    class DecisionGraph {
+        +buildGraph()
+        +computePaths()
+        +normalizeWeights()
+        -nodes GraphNode[34]
+        -edges GraphEdge[55]
+    }
 
-class DecisionGraph {
-  +buildGraph()
-  +computePaths()
-  +normalizeWeights()
-  -nodes: GraphNode[34]
-  -edges: GraphEdge[55]
-}
+    class MLEngine {
+        +trainAdaptive()
+        +predict()
+        +getCachedWeights()
+        -model LogisticRegression
+        -cache WeightsCache
+    }
 
-class MLEngine {
-  +trainAdaptive()
-  +predict()
-  +getCachedWeights()
-  -model: LogisticRegression
-  -cache: WeightsCache
-}
+    class SRAnalyzer {
+        +detectLevels()
+        +mlOptimize()
+        +computeStrength()
+        -levels SRLevel[]
+        -strengthThreshold number
+    }
 
-class SRAnalyzer {
-  +detectLevels()
-  +mlOptimize()
-  +computeStrength()
-  -levels: SRLevel[]
-  -strengthThreshold: number
-}
+    class AIPostProcessor {
+        +stripCodes()
+        +fixPersian()
+        +validatePrices()
+        +fixDirection()
+    }
 
-class AIPostProcessor {
-  +stripCodes()
-  +fixPersian()
-  +validatePrices()
-  +fixDirection()
-}
+    class ZaiShared {
+        +dedicatedAIChatCompletion()
+        +rateLimitedPageReader()
+        +getZai()
+    }
 
-class ZaiShared {
-  +dedicatedAIChatCompletion()
-  +rateLimitedPageReader()
-  +getZai()
-}
+    class ProbabilityTrend {
+        +calculateCDF()
+        +buildTrend()
+        +getInterpretation()
+    }
 
-class ProbabilityTrend {
-  +calculateCDF()
-  +buildTrend()
-  +getInterpretation()
-}
+    class CompositeScores {
+        +calcTrendStrength()
+        +calcSRStrength()
+    }
 
-class CompositeScores {
-  +calcTrendStrength()
-  +calcSRStrength()
-}
+    class AnalysisMLSelector {
+        +selectCombination()
+        +selectMethods()
+    }
 
-class AnalysisMLSelector {
-  +selectCombination()
-  +selectMethods()
-}
+    class BayesianWeights {
+        +updateWeights()
+        +prior()
+        +posterior()
+    }
 
-class BayesianWeights {
-  +updateWeights()
-  +prior()
-  +posterior()
-}
+    class VolumeProfile {
+        +approximate()
+        +countTouch()
+        +poc()
+    }
 
-class VolumeProfile {
-  +approximate()
-  +countTouch()
-  +poc()
-}
+    class CandlestickPatterns {
+        +detectClassic()
+        +detectHarmonic()
+        +detectElliott()
+    }
 
-class CandlestickPatterns {
-  +detectClassic()
-  +detectHarmonic()
-  +detectElliott()
-}
+    TAEngine "1" *-- "1" RegimeEngine : composition
+    TAEngine "1" *-- "1" SRAnalyzer : composition
+    TAEngine "1" *-- "1" VolumeProfile : composition
+    TAEngine "1" *-- "1" CandlestickPatterns : composition
 
-' ترکیب - TAEngine مالک RegimeEngine و SRAnalyzer است
-TAEngine *-- "1" RegimeEngine : <<composition>>
-TAEngine *-- "1" SRAnalyzer : <<composition>>
-TAEngine *-- "1" VolumeProfile : <<composition>>
-TAEngine *-- "1" CandlestickPatterns : <<composition>>
+    DecisionGraph "1" o-- "1" MLEngine : aggregation
+    DecisionGraph "1" o-- "1..*" ProbabilityTrend : aggregation
+    DecisionGraph --> CompositeScores : محاسبه نمرات
 
-' تجمیع - DecisionGraph استفاده می‌کند اما مالک نیست
-DecisionGraph o-- "1" MLEngine : <<aggregation>>
-DecisionGraph o-- "1..*" ProbabilityTrend : <<aggregation>>
-DecisionGraph --> "1" CompositeScores : محاسبه نمرات
+    MLEngine "1" *-- "1" BayesianWeights : composition
+    MLEngine --> AnalysisMLSelector : انتخاب روش
 
-MLEngine *-- "1" BayesianWeights : <<composition>>
-MLEngine --> "1" AnalysisMLSelector : انتخاب روش
+    CompositeScores --> TAEngine : اندیکاتورها
+    CompositeScores --> SRAnalyzer : سطوح
 
-CompositeScores --> "1" TAEngine : اندیکاتورها
-CompositeScores --> "1" SRAnalyzer : سطوح
+    AIPostProcessor --> ZaiShared : فراخوانی AI
+    TAEngine --> "0..1" ProbabilityTrend : روند احتمالی
 
-AIPostProcessor --> "1" ZaiShared : فراخوانی AI
-TAEngine --> "0..1" ProbabilityTrend : روند احتمالی
+    note right of TAEngine
+        هسته اصلی تحلیل تکنیکال
+        شامل بیش از ۶۰ اندیکاتور
+        و زیرسیستم‌های تحلیلی
+    end note
 
-note right of TAEngine
-  هسته اصلی تحلیل تکنیکال
-  شامل بیش از ۶۰ اندیکاتور
-  و زیرسیستم‌های تحلیلی
-end note
-
-note right of DecisionGraph
-  گراف تصمیم‌گیری با
-  ۳۴ گره و ۵۵ یال
-  مسیرهای تصمیم را محاسبه می‌کند
-end note
-
-@enduml`,
+    note right of DecisionGraph
+        گراف تصمیم‌گیری با
+        ۳۴ گره و ۵۵ یال
+        مسیرهای تصمیم را محاسبه می‌کند
+    end note`,
   },
   {
     id: 'uml-class-l3',
@@ -1415,205 +1402,201 @@ end note
   تمام فیلدها با نوع و modifier نمایش داده شده‌اند.
   این سطح برای پیاده‌سازی مستقیم کد قابل استفاده است.`,
     level: 3,
-    code: `@startuml
-' نمودار کلاس سطح ۳ - پیاده‌سازی کامل
-skinparam classAttributeIconSize 0
+    code: `classDiagram
+    direction TB
 
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار کلاس - سطح ۳: پیاده‌سازی
+    class BaseEngine {
+        <<abstract>>
+        #logger Logger
+        #config EngineConfig
+        +initialize(config EngineConfig) Promise~void~
+        +shutdown() Promise~void~
+        #validateInput(data MarketData) boolean
+    }
 
-abstract class BaseEngine {
-  #logger: Logger
-  #config: EngineConfig
-  +{abstract} initialize(config: EngineConfig): Promise<void>
-  +{abstract} shutdown(): Promise<void>
-  #validateInput(data: MarketData): boolean
-}
+    class TAEngine {
+        -_indicators Map~string,IndicatorFn~
+        -_candlesticks Candlestick[]
+        -_results AnalysisResult[]
+        -_regimeEngine RegimeEngine
+        -_srAnalyzer SRAnalyzer
+        -_volumeProfile VolumeProfile
+        -_patterns CandlestickPatterns
+        +constructor(config EngineConfig)
+        +analyze(symbol string, period Period) Promise~AnalysisResult~
+        +calcTrend(data number[]) TrendDirection
+        +linearRegression(x number[], y number[]) RegressionResult
+        +getIndicator(name string) IndicatorFn
+        +listIndicators() string[]
+        +computeRSI(candles Candlestick[], period number) number[]
+        +computeMACD(candles Candlestick[], fast number, slow number, signal number) MACDResult
+        +computeBollinger(candles Candlestick[], period number, stdDev number) BollingerResult
+        +computeStochastic(candles Candlestick[], kPeriod number, dPeriod number) StochasticResult
+        +computeADX(candles Candlestick[], period number) number
+        +computeATR(candles Candlestick[], period number) number
+        -preprocessData(raw RawData) Candlestick[]
+        -cacheResult(key string, result AnalysisResult)
+    }
 
-class TAEngine {
-  -_indicators: Map<string, IndicatorFn>
-  -_candlesticks: Candlestick[]
-  -_results: AnalysisResult[]
-  -_regimeEngine: RegimeEngine
-  -_srAnalyzer: SRAnalyzer
-  -_volumeProfile: VolumeProfile
-  -_patterns: CandlestickPatterns
-  +constructor(config: EngineConfig)
-  +analyze(symbol: string, period: Period): Promise<AnalysisResult>
-  +calcTrend(data: number[]): TrendDirection
-  +linearRegression(x: number[], y: number[]): RegressionResult
-  +getIndicator(name: string): IndicatorFn | null
-  +listIndicators(): string[]
-  +computeRSI(candles: Candlestick[], period: number): number[]
-  +computeMACD(candles: Candlestick[], fast: number, slow: number, signal: number): MACDResult
-  +computeBollinger(candles: Candlestick[], period: number, stdDev: number): BollingerResult
-  +computeStochastic(candles: Candlestick[], kPeriod: number, dPeriod: number): StochasticResult
-  +computeADX(candles: Candlestick[], period: number): number
-  +computeATR(candles: Candlestick[], period: number): number
-  -preprocessData(raw: RawData): Candlestick[]
-  -cacheResult(key: string, result: AnalysisResult): void
-}
+    class RegimeEngine {
+        -_regimes Regime[]
+        -_transitionMatrix number[][]
+        -_fuzzySets FuzzySet[]
+        -_currentRegime Regime
+        +constructor(config RegimeConfig)
+        +detectRegime(marketData MarketData) Promise~RegimeResult~
+        +fuzzyMembership(value number, set FuzzySet) number
+        +markovTransition(current Regime, next Regime) number
+        +weightedVote(regimes RegimeResult[]) RegimeResult
+        +getCurrentRegime() Regime
+        +getTransitionMatrix() number[][]
+        -initializeFuzzySets() FuzzySet[]
+        -computeTransitionProb(history Regime[]) number[][]
+    }
 
-class RegimeEngine {
-  -_regimes: Regime[]
-  -_transitionMatrix: number[][]
-  -_fuzzySets: FuzzySet[]
-  -_currentRegime: Regime | null
-  +constructor(config: RegimeConfig)
-  +detectRegime(marketData: MarketData): Promise<RegimeResult>
-  +fuzzyMembership(value: number, set: FuzzySet): number
-  +markovTransition(current: Regime, next: Regime): number
-  +weightedVote(regimes: RegimeResult[]): RegimeResult
-  +getCurrentRegime(): Regime | null
-  +getTransitionMatrix(): number[][]
-  -initializeFuzzySets(): FuzzySet[]
-  -computeTransitionProb(history: Regime[]): number[][]
-}
+    class DecisionGraph {
+        -_nodes Map~string,GraphNode~
+        -_edges GraphEdge[]
+        -_adjacency Map~string,GraphNodeSet~
+        -_weights Map~string,number~
+        +constructor()
+        +buildGraph(regime RegimeResult, analysis AnalysisResult)
+        +computePaths(start string, end string) Path[]
+        +normalizeWeights()
+        +addNode(node GraphNode)
+        +addEdge(from string, to string, weight number)
+        +getNode(id string) GraphNode
+        +getEdge(from string, to string) GraphEdge
+        +topologicalSort() string[]
+        +shortestPath(source string, target string) Path
+        -validateAcyclic() boolean
+        -propagateWeights()
+    }
 
-class DecisionGraph {
-  -_nodes: Map<string, GraphNode>
-  -_edges: GraphEdge[]
-  -_adjacency: Map<string, Set<string>>
-  -_weights: Map<string, number>
-  +constructor()
-  +buildGraph(regime: RegimeResult, analysis: AnalysisResult): void
-  +computePaths(start: string, end: string): Path[]
-  +normalizeWeights(): void
-  +addNode(node: GraphNode): void
-  +addEdge(from: string, to: string, weight: number): void
-  +getNode(id: string): GraphNode | undefined
-  +getEdge(from: string, to: string): GraphEdge | undefined
-  +topologicalSort(): string[]
-  +shortestPath(source: string, target: string): Path
-  -validateAcyclic(): boolean
-  -propagateWeights(): void
-}
+    class MLEngine {
+        -_model LogisticRegression
+        -_cache WeightsCache
+        -_featureNames string[]
+        -_bayesianWeights BayesianWeights
+        +constructor(modelPath string)
+        +trainAdaptive(features Feature[][], labels number[]) TrainingResult
+        +predict(features Feature[]) PredictionResult
+        +getCachedWeights(modelId string) Weights
+        +updateModel(data TrainingData) Promise~void~
+        +evaluate(testData TestData[]) EvaluationMetrics
+        +featureImportance() Map~string,number~
+        -preprocessFeatures(raw Feature[][]) Feature[][]
+        -splitTrainTest(data Data[], ratio number) SplitResult
+        -saveModel(path string) Promise~void~
+        -loadModel(path string) Promise~void~
+    }
 
-class MLEngine {
-  -_model: LogisticRegression
-  -_cache: WeightsCache
-  -_featureNames: string[]
-  -_bayesianWeights: BayesianWeights
-  +constructor(modelPath: string)
-  +trainAdaptive(features: Feature[][], labels: number[]): TrainingResult
-  +predict(features: Feature[]): PredictionResult
-  +getCachedWeights(modelId: string): Weights | null
-  +updateModel(data: TrainingData): Promise<void>
-  +evaluate(testData: TestData[]): EvaluationMetrics
-  +featureImportance(): Map<string, number>
-  -preprocessFeatures(raw: Feature[][]): Feature[][]
-  -splitTrainTest(data: Data[], ratio: number): SplitResult
-  -saveModel(path: string): Promise<void>
-  -loadModel(path: string): Promise<void>
-}
+    class SRAnalyzer {
+        -_levels SRLevel[]
+        -_strengthThreshold number
+        -_mlOptimizer MLEngine
+        +constructor(threshold number)
+        +detectLevels(candles Candlestick[], method SRMethod) SRLevel[]
+        +mlOptimize(levels SRLevel[], features Feature[]) SRLevel[]
+        +computeStrength(level SRLevel, candles Candlestick[]) number
+        +mergeLevels(levels SRLevel[], tolerance number) SRLevel[]
+        +classifyLevels(levels SRLevel[]) ClassifiedSR
+        +getNearestLevels(price number, count number) SRLevel[]
+        -calculateTouchCount(level number, candles Candlestick[]) number
+        -computeVolumeAtLevel(level number, profile VolumeProfile) number
+    }
 
-class SRAnalyzer {
-  -_levels: SRLevel[]
-  -_strengthThreshold: number
-  -_mlOptimizer: MLEngine
-  +constructor(threshold: number)
-  +detectLevels(candles: Candlestick[], method: SRMethod): SRLevel[]
-  +mlOptimize(levels: SRLevel[], features: Feature[]): SRLevel[]
-  +computeStrength(level: SRLevel, candles: Candlestick[]): number
-  +mergeLevels(levels: SRLevel[], tolerance: number): SRLevel[]
-  +classifyLevels(levels: SRLevel[]): ClassifiedSR
-  +getNearestLevels(price: number, count: number): SRLevel[]
-  -calculateTouchCount(level: number, candles: Candlestick[]): number
-  -computeVolumeAtLevel(level: number, profile: VolumeProfile): number
-}
+    class AIPostProcessor {
+        -_codePatterns RegExp[]
+        -_persianRules PersianFixRule[]
+        +constructor()
+        +stripCodes(text string) string
+        +fixPersian(text string) string
+        +validatePrices(text string, currentPrice number) ValidationResult
+        +fixDirection(text string, trend TrendDirection) string
+        +process(text string, context AIContext) string
+        -applyPersianTypographics(text string) string
+        -normalizeNumbers(text string) string
+        -fixZwnj(text string) string
+    }
 
-class AIPostProcessor {
-  -_codePatterns: RegExp[]
-  -_persianRules: PersianFixRule[]
-  +constructor()
-  +stripCodes(text: string): string
-  +fixPersian(text: string): string
-  +validatePrices(text: string, currentPrice: number): ValidationResult
-  +fixDirection(text: string, trend: TrendDirection): string
-  +process(text: string, context: AIContext): string
-  -applyPersianTypographics(text: string): string
-  -normalizeNumbers(text: string): string
-  -fixZwnj(text: string): string
-}
+    class ZaiShared {
+        -_client ZAIClient
+        -_rateLimiter RateLimiter
+        -_cache ResponseCache
+        +constructor(apiKey string)
+        +dedicatedAIChatCompletion(params ChatParams) Promise~ChatResponse~
+        +rateLimitedPageReader(url string) Promise~PageContent~
+        +getZai() ZAIClient
+        +setRateLimit(rps number)
+        +clearCache()
+        -enforceRateLimit() Promise~void~
+        -cacheResponse(key string, response ChatResponse)
+        -handleError(error APIError) never
+    }
 
-class ZaiShared {
-  -_client: ZAIClient
-  -_rateLimiter: RateLimiter
-  -_cache: ResponseCache
-  +constructor(apiKey: string)
-  +dedicatedAIChatCompletion(params: ChatParams): Promise<ChatResponse>
-  +rateLimitedPageReader(url: string, opts?: ReaderOpts): Promise<PageContent>
-  +getZai(): ZAIClient
-  +setRateLimit(rps: number): void
-  +clearCache(): void
-  -enforceRateLimit(): Promise<void>
-  -cacheResponse(key: string, response: ChatResponse): void
-  -handleError(error: APIError): never
-}
+    class ProbabilityTrend {
+        -_cdf Map~number,number~
+        -_trend TrendResult
+        +constructor()
+        +calculateCDF(data number[]) Map~number,number~
+        +buildTrend(cdf Map~number,number~) TrendResult
+        +getInterpretation(trend TrendResult) PersianInterpretation
+        +getConfidence() number
+        -fitDistribution(data number[]) DistributionFit
+    }
 
-class ProbabilityTrend {
-  -_cdf: Map<number, number>
-  -_trend: TrendResult
-  +constructor()
-  +calculateCDF(data: number[]): Map<number, number>
-  +buildTrend(cdf: Map<number, number>): TrendResult
-  +getInterpretation(trend: TrendResult): PersianInterpretation
-  +getConfidence(): number
-  -fitDistribution(data: number[]): DistributionFit
-}
+    class BayesianWeights {
+        -_prior Map~string,number~
+        -_posterior Map~string,number~
+        -_likelihood Map~string,number~
+        +constructor(prior Map~string,number~)
+        +updateWeights(evidence Evidence) Map~string,number~
+        +prior() Map~string,number~
+        +posterior() Map~string,number~
+        -computeLikelihood(evidence Evidence) Map~string,number~
+        -normalize(weights Map~string,number~) Map~string,number~
+    }
 
-class BayesianWeights {
-  -_prior: Map<string, number>
-  -_posterior: Map<string, number>
-  -_likelihood: Map<string, number>
-  +constructor(prior: Map<string, number>)
-  +updateWeights(evidence: Evidence): Map<string, number>
-  +prior(): Map<string, number>
-  +posterior(): Map<string, number>
-  -computeLikelihood(evidence: Evidence): Map<string, number>
-  -normalize(weights: Map<string, number>): Map<string, number>
-}
+    class VolumeProfile {
+        -_bins VolumeBin[]
+        -_pocPrice number
+        +constructor(binSize number)
+        +approximate(candles Candlestick[]) VolumeBin[]
+        +countTouch(price number, tolerance number) number
+        +poc() number
+        +getVA(high boolean) number
+        -binCandles(candles Candlestick[]) VolumeBin[]
+    }
 
-class VolumeProfile {
-  -_bins: VolumeBin[]
-  -_pocPrice: number
-  +constructor(binSize: number)
-  +approximate(candles: Candlestick[]): VolumeBin[]
-  +countTouch(price: number, tolerance: number): number
-  +poc(): number
-  +getVA(high: boolean): number
-  -binCandles(candles: Candlestick[]): VolumeBin[]
-}
+    class CandlestickPatterns {
+        -_detected PatternResult[]
+        +constructor()
+        +detectClassic(candles Candlestick[]) PatternResult[]
+        +detectHarmonic(candles Candlestick[], minLen number) PatternResult[]
+        +detectElliott(candles Candlestick[]) PatternResult[]
+        +getPattern(name string) PatternResult
+        -matchDoji(candle Candlestick) boolean
+        -matchEngulfing(prev Candlestick, curr Candlestick) boolean
+        -matchHammer(candle Candlestick) boolean
+    }
 
-class CandlestickPatterns {
-  -_detected: PatternResult[]
-  +constructor()
-  +detectClassic(candles: Candlestick[]): PatternResult[]
-  +detectHarmonic(candles: Candlestick[], minLen: number): PatternResult[]
-  +detectElliott(candles: Candlestick[]): PatternResult[]
-  +getPattern(name: string): PatternResult | undefined
-  -matchDoji(candle: Candlestick): boolean
-  -matchEngulfing(prev: Candlestick, curr: Candlestick): boolean
-  -matchHammer(candle: Candlestick): boolean
-}
+    BaseEngine <|-- TAEngine
+    BaseEngine <|-- RegimeEngine
+    BaseEngine <|-- MLEngine
 
-BaseEngine <|-- TAEngine
-BaseEngine <|-- RegimeEngine
-BaseEngine <|-- MLEngine
+    TAEngine "1" *-- "1" RegimeEngine : _regimeEngine
+    TAEngine "1" *-- "1" SRAnalyzer : _srAnalyzer
+    TAEngine "1" *-- "1" VolumeProfile : _volumeProfile
+    TAEngine "1" *-- "1" CandlestickPatterns : _patterns
 
-TAEngine *-- "1" RegimeEngine : _regimeEngine
-TAEngine *-- "1" SRAnalyzer : _srAnalyzer
-TAEngine *-- "1" VolumeProfile : _volumeProfile
-TAEngine *-- "1" CandlestickPatterns : _patterns
+    DecisionGraph "1" o-- "1" MLEngine
+    DecisionGraph "1" o-- "0..*" ProbabilityTrend
 
-DecisionGraph o-- "1" MLEngine
-DecisionGraph o-- "0..*" ProbabilityTrend
+    MLEngine "1" *-- "1" BayesianWeights : _bayesianWeights
+    SRAnalyzer --> "0..1" MLEngine : _mlOptimizer
 
-MLEngine *-- "1" BayesianWeights : _bayesianWeights
-SRAnalyzer --> "0..1" MLEngine : _mlOptimizer
-
-AIPostProcessor --> "1" ZaiShared
-
-@enduml`,
+    AIPostProcessor --> ZaiShared`,
   },
   {
     id: 'uml-object-l1',
@@ -1626,70 +1609,70 @@ AIPostProcessor --> "1" ZaiShared
   SRAnalyzer سطوح ۸,۵۰۰ و ۹,۲۰۰ را شناسایی کرده است.
   MLEngine مدل لجستیک‌رجression را با وزن‌های کش‌شده اجرا می‌کند.`,
     level: 1,
-    code: `@startuml
-' نمودار شیء سطح ۱ - نشست تحلیل نمونه
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار شیء - سطح ۱: نشست تحلیل نمونه
+    code: `classDiagram
+    direction TB
 
-object session {
-  symbol = "فولاد"
-  period = "daily"
-  startTime = "1403/12/15 09:00"
-  status = "completed"
-}
+    class session {
+        <<instance>>
+        +symbol : فولاد
+        +period : daily
+        +startTime : 1403/12/15 09:00
+        +status : completed
+    }
 
-object taEngine {
-  indicators = 63
-  candlestickCount = 250
-  lastAnalysis = "1403/12/15"
-}
+    class taEngine {
+        <<instance>>
+        +indicators : 63
+        +candlestickCount : 250
+        +lastAnalysis : 1403/12/15
+    }
 
-object regimeEngine {
-  currentRegime = "روند صعودی"
-  confidence = 0.78
-  fuzzyMembership = 0.82
-}
+    class regimeEngine {
+        <<instance>>
+        +currentRegime : روند صعودی
+        +confidence : 0.78
+        +fuzzyMembership : 0.82
+    }
 
-object decisionGraph {
-  nodeCount = 34
-  edgeCount = 55
-  bestPath = "N1→N5→N12→N28→N34"
-  pathWeight = 0.85
-}
+    class decisionGraph {
+        <<instance>>
+        +nodeCount : 34
+        +edgeCount : 55
+        +bestPath : N1→N5→N12→N28→N34
+        +pathWeight : 0.85
+    }
 
-object mlEngine {
-  modelType = "LogisticRegression"
-  accuracy = 0.74
-  cachedWeightsId = "w_v4_2024"
-}
+    class mlEngine {
+        <<instance>>
+        +modelType : LogisticRegression
+        +accuracy : 0.74
+        +cachedWeightsId : w_v4_2024
+    }
 
-object srAnalyzer {
-  supportLevels = [8500, 8200, 7900]
-  resistanceLevels = [9200, 9500, 9800]
-  nearestSupport = 8500
-  nearestResistance = 9200
-}
+    class srAnalyzer {
+        <<instance>>
+        +supportLevels : 8500, 8200, 7900
+        +resistanceLevels : 9200, 9500, 9800
+        +nearestSupport : 8500
+        +nearestResistance : 9200
+    }
 
-object result {
-  trend = "صعودی"
-  strength = 0.72
-  recommendation = "خرید"
-  confidence = 0.81
-}
+    class result {
+        <<instance>>
+        +trend : صعودی
+        +strength : 0.72
+        +recommendation : خرید
+        +confidence : 0.81
+    }
 
-session --> taEngine : استفاده
-taEngine --> regimeEngine : تشخیص رژیم
-taEngine --> srAnalyzer : شناسایی سطوح
-taEngine --> decisionGraph : ساخت گراف
-decisionGraph --> mlEngine : پیش‌بینی
-taEngine --> result : تولید نتیجه
+    session --> taEngine : استفاده
+    taEngine --> regimeEngine : تشخیص رژیم
+    taEngine --> srAnalyzer : شناسایی سطوح
+    taEngine --> decisionGraph : ساخت گراف
+    decisionGraph --> mlEngine : پیش‌بینی
+    taEngine --> result : تولید نتیجه
 
-note right of session
-  نشست تحلیل نماد فولاد
-  در تاریخ ۱۵ اسفند ۱۴۰۳
-  با نتیجه نهایی «خرید»
-end note
-
-@enduml`,
+    note for session "نشست تحلیل نماد فولاد در تاریخ ۱۵ اسفند ۱۴۰۳ با نتیجه نهایی خرید"`,
   },
   {
     id: 'uml-object-l2',
@@ -1701,54 +1684,62 @@ end note
   AnalysisMLSelector ترکیب بهینه روش‌ها را انتخاب می‌کند.
   مقادیر واقعی هر شیء در لحظه محاسبه نمایش داده شده است.`,
     level: 2,
-    code: `@startuml
-' نمودار شیء سطح ۲ - محاسبه احتمال
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار شیء - سطح ۲: محاسبه احتمال
+    code: `classDiagram
+    direction TB
 
-object probTrend {
-  cdfPoints = 50
-  distribution = "normal"
-  trendValue = 0.68
-  interpretation = "احتمال روند صعودی متوسط"
-}
+    class probTrend {
+        <<instance>>
+        +cdfPoints : 50
+        +distribution : normal
+        +trendValue : 0.68
+        +interpretation : احتمال روند صعودی متوسط
+    }
 
-object bayesianWeights {
-  prior = {RSI: 0.15, MACD: 0.20, ADX: 0.12, SR: 0.18, Volume: 0.10, Pattern: 0.25}
-  posterior = {RSI: 0.18, MACD: 0.22, ADX: 0.10, SR: 0.20, Volume: 0.08, Pattern: 0.22}
-  evidence = "last_30_candles"
-}
+    class bayesianWeights {
+        <<instance>>
+        +prior_RSI : 0.15
+        +prior_MACD : 0.20
+        +prior_ADX : 0.12
+        +prior_SR : 0.18
+        +prior_Volume : 0.10
+        +prior_Pattern : 0.25
+        +posterior_RSI : 0.18
+        +posterior_MACD : 0.22
+        +posterior_ADX : 0.10
+        +posterior_SR : 0.20
+        +posterior_Volume : 0.08
+        +posterior_Pattern : 0.22
+        +evidence : last_30_candles
+    }
 
-object compositeScores {
-  trendStrength = 0.72
-  srStrength = 0.65
-  volumeStrength = 0.58
-  patternStrength = 0.81
-  overallScore = 0.69
-}
+    class compositeScores {
+        <<instance>>
+        +trendStrength : 0.72
+        +srStrength : 0.65
+        +volumeStrength : 0.58
+        +patternStrength : 0.81
+        +overallScore : 0.69
+    }
 
-object mlSelector {
-  selectedCombination = "RSI+MACD+SR+Pattern"
-  selectedMethods = ["classic", "ml_hybrid"]
-  score = 0.88
-}
+    class mlSelector {
+        <<instance>>
+        +selectedCombination : RSI+MACD+SR+Pattern
+        +selectedMethods : classic, ml_hybrid
+        +score : 0.88
+    }
 
-object cdfData {
-  x = [-2.0, -1.5, -1.0, -0.5, 0, 0.5, 1.0, 1.5, 2.0]
-  y = [0.02, 0.07, 0.16, 0.31, 0.50, 0.69, 0.84, 0.93, 0.98]
-}
+    class cdfData {
+        <<instance>>
+        +x : -2.0, -1.5, -1.0, -0.5, 0, 0.5, 1.0, 1.5, 2.0
+        +y : 0.02, 0.07, 0.16, 0.31, 0.50, 0.69, 0.84, 0.93, 0.98
+    }
 
-probTrend --> cdfData : داده‌های CDF
-bayesianWeights --> compositeScores : وزن‌دهی
-mlSelector --> compositeScores : روش‌های انتخابی
-compositeScores --> probTrend : نمرات ورودی
+    probTrend --> cdfData : داده‌های CDF
+    bayesianWeights --> compositeScores : وزن‌دهی
+    mlSelector --> compositeScores : روش‌های انتخابی
+    compositeScores --> probTrend : نمرات ورودی
 
-note bottom of bayesianWeights
-  وزن‌های بیزی پسین پس از
-  مشاهده ۳۰ کندل آخر به‌روز شده
-  الگوی SR و Pattern بیشترین وزن را دارند
-end note
-
-@enduml`,
+    note for bayesianWeights "وزن‌های بیزی پسین پس از مشاهده ۳۰ کندل آخر به‌روز شده. الگوی SR و Pattern بیشترین وزن را دارند."`,
   },
   {
     id: 'uml-object-l3',
@@ -1760,76 +1751,68 @@ end note
   وضعیت هر شیء شامل مقادیر فیلدها در لحظه اجراست.
   توالی پردازش از انتخاب سبک تا خروجی نهایی قابل ردیابی است.`,
     level: 3,
-    code: `@startuml
-' نمودار شیء سطح ۳ - وضعیت تولید متن AI
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار شیء - سطح ۳: وضعیت تولید متن AI
+    code: `classDiagram
+    direction TB
 
-object mslv4 {
-  school = "کلاسیک_تکنیکال"
-  style = "رسمی_بازار"
-  tone = "محافظه‌کار"
-  schoolIdx = 2
-  styleIdx = 1
-  toneIdx = 4
-  combinationId = "2-1-4"
-  totalCombinations = 180
-}
+    class mslv4 {
+        <<instance>>
+        +school : کلاسیک_تکنیکال
+        +style : رسمی_بازار
+        +tone : محافظه‌کار
+        +schoolIdx : 2
+        +styleIdx : 1
+        +toneIdx : 4
+        +combinationId : 2-1-4
+        +totalCombinations : 180
+    }
 
-object aiPostProcessor {
-  rawInput = "## تحلیل ## نماد فولاد روند **صعودی** دارد"
-  afterStripCodes = "تحلیل نماد فولاد روند صعودی دارد"
-  afterFixPersian = "تحلیل نماد فولاد روند صعودی دارد"
-  afterValidate = "قیمت ۸۹۰۰ در محدوده معتبر"
-  afterFixDirection = "روند صعودی با حرکت رو به بالا"
-  codePatterns = 5
-  persianRules = 12
-}
+    class aiPostProcessor {
+        <<instance>>
+        +rawInput : تحلیل نماد فولاد روند صعودی دارد
+        +afterStripCodes : تحلیل نماد فولاد روند صعودی دارد
+        +afterFixPersian : تحلیل نماد فولاد روند صعودی دارد
+        +afterValidate : قیمت ۸۹۰۰ در محدوده معتبر
+        +afterFixDirection : روند صعودی با حرکت رو به بالا
+        +codePatterns : 5
+        +persianRules : 12
+    }
 
-object zaiShared {
-  apiKey = "sk-***...***"
-  rateLimit = 10
-  currentRPS = 3.2
-  cacheSize = 256
-  lastCallTime = "1403/12/15 10:32:15"
-  pendingRequests = 0
-}
+    class zaiShared {
+        <<instance>>
+        +apiKey : sk-***...***
+        +rateLimit : 10
+        +currentRPS : 3.2
+        +cacheSize : 256
+        +lastCallTime : 1403/12/15 10:32:15
+        +pendingRequests : 0
+    }
 
-object chatParams {
-  model = "gpt-4o-mini"
-  temperature = 0.7
-  maxTokens = 2048
-  systemPrompt = "شما تحلیلگر تکنیکال هستید..."
-  userMessage = "تحلیل فولاد با رژیم صعودی..."
-}
+    class chatParams {
+        <<instance>>
+        +model : gpt-4o-mini
+        +temperature : 0.7
+        +maxTokens : 2048
+        +systemPrompt : شما تحلیلگر تکنیکال هستید...
+        +userMessage : تحلیل فولاد با رژیم صعودی...
+    }
 
-object chatResponse {
-  id = "chatcmpl-abc123"
-  content = "## تحلیل ## نماد فولاد..."
-  tokensUsed = 487
-  finishReason = "stop"
-  latency = 1240
-}
+    class chatResponse {
+        <<instance>>
+        +id : chatcmpl-abc123
+        +content : تحلیل نماد فولاد...
+        +tokensUsed : 487
+        +finishReason : stop
+        +latency : 1240
+    }
 
-mslv4 --> chatParams : تنظیم پرامپت
-chatParams --> zaiShared : فراخوانی API
-zaiShared --> chatResponse : پاسخ خام
-chatResponse --> aiPostProcessor : پردازش خروجی
+    mslv4 --> chatParams : تنظیم پرامپت
+    chatParams --> zaiShared : فراخوانی API
+    zaiShared --> chatResponse : پاسخ خام
+    chatResponse --> aiPostProcessor : پردازش خروجی
 
-note right of mslv4
-  ترکیب مکتب×سبک×لحن
-  ۶ × ۵ × ۶ = ۱۸۰ حالت
-  کد ترکیب فعلی: 2-1-4
-end note
+    note for mslv4 "ترکیب مکتب×سبک×لحن: ۶ × ۵ × ۶ = ۱۸۰ حالت. کد ترکیب فعلی: 2-1-4"
 
-note left of aiPostProcessor
-  خط لوله پردازش:
-  ۱. حذف کدهای مارکداون
-  ۲. اصلاح نیم‌فاصله و تایپوگرافی
-  ۳. اعتبارسنجی قیمت‌ها
-  ۴. اصلاح جهت روند
-end note
-
-@enduml`,
+    note for aiPostProcessor "خط لوله پردازش: ۱. حذف کدهای مارکداون ۲. اصلاح نیم‌فاصله و تایپوگرافی ۳. اعتبارسنجی قیمت‌ها ۴. اصلاح جهت روند"`,
   },
   {
     id: 'uml-component-l1',
@@ -1842,55 +1825,55 @@ end note
   لایه داده منابع داده بورس تهران را جمع‌آوری می‌کند.
   لایه زیرساخت خدمات مشترک و هوش مصنوعی را فراهم می‌کند.`,
     level: 1,
-    code: `@startuml
-' نمودار مؤلفه سطح ۱ - لایه‌های اصلی
-skinparam componentStyle uml2
+    code: `flowchart TB
+    classDef presentation fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef api fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef analysis fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef ml fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#000
+    classDef data fill:#fce4ec,stroke:#c62828,stroke-width:2px,color:#000
+    classDef infra fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000
 
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار مؤلفه - سطح ۱: لایه‌های اصلی
+    subgraph S1 ["لایه ارائه<br/>Presentation"]
+        UI["رابط کاربری وب<br/>Web UI"]:::presentation
+        Charts["نمودارها و گراف‌ها<br/>Charts & Graphs"]:::presentation
+    end
 
-package "لایه ارائه\\nPresentation" {
-  component [رابط کاربری وب\\nWeb UI] as UI
-  component [نمودارها و گراف‌ها\\nCharts & Graphs] as Charts
-}
+    subgraph S2 ["لایه API"]
+        API["اندپوینت‌های REST<br/>REST Endpoints"]:::api
+    end
 
-package "لایه API" {
-  component [اندپوینت‌های REST\\nREST Endpoints] as API
-}
+    subgraph S3 ["لایه تحلیل<br/>Analysis"]
+        TA["موتور تحلیل تکنیکال<br/>TA Engine"]:::analysis
+        DG["گراف تصمیم‌گیری<br/>Decision Graph"]:::analysis
+        SR["شناسایی S/R<br/>SR Analyzer"]:::analysis
+    end
 
-package "لایه تحلیل\\nAnalysis" {
-  component [موتور تحلیل تکنیکال\\nTA Engine] as TA
-  component [گراف تصمیم‌گیری\\nDecision Graph] as DG
-  component [شناسایی S/R\\nSR Analyzer] as SR
-}
+    subgraph S4 ["لایه یادگیری ماشین<br/>ML"]
+        ML["موتور ML<br/>ML Engine"]:::ml
+        BW["وزن‌دهی بیزی<br/>Bayesian Weights"]:::ml
+    end
 
-package "لایه یادگیری ماشین\\nML" {
-  component [موتور ML\\nML Engine] as ML
-  component [وزن‌دهی بیزی\\nBayesian Weights] as BW
-}
+    subgraph S5 ["لایه داده<br/>Data"]
+        Data["منابع داده بورس<br/>Market Data Sources"]:::data
+    end
 
-package "لایه داده\\nData" {
-  component [منابع داده بورس\\nMarket Data Sources] as Data
-}
+    subgraph S6 ["لایه زیرساخت<br/>Infrastructure"]
+        AI["هوش مصنوعی مشترک<br/>Shared AI"]:::infra
+        PP["پردازش‌گر متن<br/>Post Processor"]:::infra
+    end
 
-package "لایه زیرساخت\\nInfrastructure" {
-  component [هوش مصنوعی مشترک\\nShared AI] as AI
-  component [پردازش‌گر متن\\nPost Processor] as PP
-}
-
-UI --> API : درخواست HTTP
-Charts --> API : داده نمودار
-API --> TA : تحلیل
-API --> DG : تصمیم
-API --> SR : سطوح
-TA --> ML : پیش‌بینی
-DG --> ML : وزن‌ها
-ML --> BW : به‌روزرسانی
-TA --> Data : کندل‌ها
-SR --> Data : قیمت‌ها
-API --> AI : تولید متن
-AI --> PP : پردازش
-
-@enduml`,
+    UI -->|"درخواست HTTP"| API
+    Charts -->|"داده نمودار"| API
+    API -->|"تحلیل"| TA
+    API -->|"تصمیم"| DG
+    API -->|"سطوح"| SR
+    TA -->|"پیش‌بینی"| ML
+    DG -->|"وزن‌ها"| ML
+    ML -->|"به‌روزرسانی"| BW
+    TA -->|"کندل‌ها"| Data
+    SR -->|"قیمت‌ها"| Data
+    API -->|"تولید متن"| AI
+    AI -->|"پردازش"| PP`,
   },
   {
     id: 'uml-component-l2',
@@ -1902,101 +1885,101 @@ AI --> PP : پردازش
   منابع داده شامل TSE، TSETMC، TGJU و Yahoo است.
   زیرساخت شامل محدودکننده نرخ، کش و لاگ است.`,
     level: 2,
-    code: `@startuml
-' نمودار مؤلفه سطح ۲ - زیرمؤلفه‌ها
-skinparam componentStyle uml2
+    code: `flowchart TB
+    classDef ui fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef api fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef analysis fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef ml fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#000
+    classDef data fill:#fce4ec,stroke:#c62828,stroke-width:2px,color:#000
+    classDef infra fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000
 
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار مؤلفه - سطح ۲: زیرمؤلفه‌ها
+    subgraph UI_Layer ["رابط کاربری"]
+        Dash["داشبورد<br/>Dashboard"]:::ui
+        AnaPage["صفحه تحلیل<br/>Analysis Page"]:::ui
+        HelpPage["صفحه راهنما<br/>Help Page"]:::ui
+        Chart["نمودار شمعی<br/>Candlestick Chart"]:::ui
+        GraphViz["گراف تصمیم<br/>Decision Viz"]:::ui
+    end
 
-package "رابط کاربری" {
-  component [داشبورد\\nDashboard] as Dash
-  component [صفحه تحلیل\\nAnalysis Page] as AnaPage
-  component [صفحه راهنما\\nHelp Page] as HelpPage
-  component [نمودار شمعی\\nCandlestick Chart] as Chart
-  component [گراف تصمیم\\nDecision Viz] as GraphViz
-}
+    subgraph API_Layer ["API"]
+        ApiAnalysis["/api/analysis"]:::api
+        ApiInstr["/api/instruments"]:::api
+        ApiIndices["/api/indices"]:::api
+        ApiAI["/api/ai"]:::api
+    end
 
-package "API" {
-  component [/api/analysis] as ApiAnalysis
-  component [/api/instruments] as ApiInstr
-  component [/api/indices] as ApiIndices
-  component [/api/ai] as ApiAI
-}
+    subgraph Analysis_Layer ["تحلیل"]
+        TA["TAEngine"]:::analysis
+        RE["RegimeEngine"]:::analysis
+        DG["DecisionGraph"]:::analysis
+        SR["SRAnalyzer"]:::analysis
+        CP["CandlestickPatterns"]:::analysis
+        VP["VolumeProfile"]:::analysis
+        PT["ProbabilityTrend"]:::analysis
+        CS["CompositeScores"]:::analysis
+    end
 
-package "تحلیل" {
-  component [TAEngine] as TA
-  component [RegimeEngine] as RE
-  component [DecisionGraph] as DG
-  component [SRAnalyzer] as SR
-  component [CandlestickPatterns] as CP
-  component [VolumeProfile] as VP
-  component [ProbabilityTrend] as PT
-  component [CompositeScores] as CS
-}
+    subgraph ML_Layer ["یادگیری ماشین"]
+        ML["MLEngine"]:::ml
+        BW["BayesianWeights"]:::ml
+        MLS["AnalysisMLSelector"]:::ml
+    end
 
-package "یادگیری ماشین" {
-  component [MLEngine] as ML
-  component [BayesianWeights] as BW
-  component [AnalysisMLSelector] as MLS
-}
+    subgraph Data_Layer ["منابع داده"]
+        TSE["TSEApi"]:::data
+        TSETMC["TsetmcIndexApi"]:::data
+        TGJU["TgjuApi"]:::data
+        YAHOO["YahooApi"]:::data
+    end
 
-package "منابع داده" {
-  component [TSEApi] as TSE
-  component [TsetmcIndexApi] as TSETMC
-  component [TgjuApi] as TGJU
-  component [YahooApi] as YAHOO
-}
+    subgraph Infra_Layer ["زیرساخت"]
+        ZAI["ZaiShared"]:::infra
+        PP["AIPostProcessor"]:::infra
+        MSL["MSLV4"]:::infra
+        RL["RateLimiter"]:::infra
+        Cache["Cache"]:::infra
+        Log["Logger"]:::infra
+    end
 
-package "زیرساخت" {
-  component [ZaiShared] as ZAI
-  component [AIPostProcessor] as PP
-  component [MSLV4] as MSL
-  component [RateLimiter] as RL
-  component [Cache] as Cache
-  component [Logger] as Log
-}
+    Dash --> ApiAnalysis
+    AnaPage --> ApiAnalysis
+    AnaPage --> ApiInstr
+    HelpPage --> ApiInstr
+    Chart --> ApiAnalysis
+    GraphViz --> ApiAnalysis
 
-Dash --> ApiAnalysis
-AnaPage --> ApiAnalysis
-AnaPage --> ApiInstr
-HelpPage --> ApiInstr
-Chart --> ApiAnalysis
-GraphViz --> ApiAnalysis
+    ApiAnalysis --> TA
+    ApiAnalysis --> DG
+    ApiAnalysis --> CS
+    ApiInstr --> TSE
+    ApiIndices --> TSETMC
+    ApiAI --> ZAI
 
-ApiAnalysis --> TA
-ApiAnalysis --> DG
-ApiAnalysis --> CS
-ApiInstr --> TSE
-ApiIndices --> TSETMC
-ApiAI --> ZAI
+    TA --> RE
+    TA --> SR
+    TA --> CP
+    TA --> VP
+    TA --> PT
+    DG --> ML
+    CS --> TA
+    CS --> SR
 
-TA --> RE
-TA --> SR
-TA --> CP
-TA --> VP
-TA --> PT
-DG --> ML
-CS --> TA
-CS --> SR
+    ML --> BW
+    ML --> MLS
 
-ML --> BW
-ML --> MLS
+    TSE --> RL
+    TSETMC --> RL
+    TGJU --> RL
+    YAHOO --> RL
 
-TSE --> RL
-TSETMC --> RL
-TGJU --> RL
-YAHOO --> RL
+    TSE --> Cache
+    TSETMC --> Cache
 
-TSE --> Cache
-TSETMC --> Cache
+    ZAI --> PP
+    ZAI --> MSL
+    ZAI --> RL
 
-ZAI --> PP
-ZAI --> MSL
-ZAI --> RL
-
-RL --> Log
-
-@enduml`,
+    RL --> Log`,
   },
   {
     id: 'uml-component-l3',
@@ -2009,96 +1992,54 @@ RL --> Log
   IMLService آموزش و پیش‌بینی مدل را فراهم می‌کند.
   وابستگی‌ها فقط از طریق اینترفیس‌ها برقرار می‌شود.`,
     level: 3,
-    code: `@startuml
-' نمودار مؤلفه سطح ۳ - اینترفیس‌ها
-skinparam componentStyle uml2
+    code: `flowchart TB
+    classDef provided fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef required fill:#ffecb3,stroke:#ff8f00,stroke-width:2px,color:#000
+    classDef component fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
 
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار مؤلفه - سطح ۳: اینترفیس‌ها
+    subgraph Provided ["اینترفیس‌های فراهم‌شده"]
+        IAS{{"IAnalysisService<br/>analyze(symbol, period)<br/>getIndicators(symbol)<br/>getTrend(symbol)"}}:::provided
+        IRS{{"IRegimeService<br/>detectRegime(data)<br/>getCurrentRegime()"}}:::provided
+        IGS{{"IGraphService<br/>buildGraph(regime)<br/>computePaths()"}}:::provided
+        ISRS{{"ISRService<br/>detectLevels(symbol)<br/>computeStrength(level)"}}:::provided
+        IMLS{{"IMLService<br/>trainAdaptive(features, labels)<br/>predict(features)"}}:::provided
+        IDP{{"IDataProvider<br/>fetchCandlesticks(symbol, period)<br/>fetchSymbols()<br/>fetchIndices()"}}:::provided
+        IAIS{{"IAIService<br/>chatCompletion(params)<br/>processText(text, context)"}}:::provided
+    end
 
-interface IAnalysisService <<provided>> {
-  +analyze(symbol: string, period: Period): Promise<AnalysisResult>
-  +getIndicators(symbol: string): Promise<IndicatorResult[]>
-  +getTrend(symbol: string): Promise<TrendResult>
-}
+    subgraph Required ["اینترفیس‌های موردنیاز"]
+        ICS{{"ICacheService<br/>get(key)<br/>set(key, value, ttl?)<br/>invalidate(pattern)"}}:::required
+        IRL{{"IRateLimiter<br/>acquire()<br/>release()<br/>getRemaining()"}}:::required
+    end
 
-interface IRegimeService <<provided>> {
-  +detectRegime(data: MarketData): Promise<RegimeResult>
-  +getCurrentRegime(): Regime | null
-}
+    subgraph Components ["مؤلفه‌ها"]
+        TA["TAEngine"]:::component
+        RE["RegimeEngine"]:::component
+        DG["DecisionGraph"]:::component
+        SR["SRAnalyzer"]:::component
+        ML["MLEngine"]:::component
+        TSE["TSEApi"]:::component
+        ZAI["ZaiShared"]:::component
+        CM["CacheManager"]:::component
+        RLS["RateLimiterService"]:::component
+    end
 
-interface IGraphService <<provided>> {
-  +buildGraph(regime: RegimeResult): DecisionGraph
-  +computePaths(): Path[]
-}
-
-interface ISRService <<provided>> {
-  +detectLevels(symbol: string): Promise<SRLevel[]>
-  +computeStrength(level: SRLevel): number
-}
-
-interface IMLService <<provided>> {
-  +trainAdaptive(features: Feature[][], labels: number[]): TrainingResult
-  +predict(features: Feature[]): PredictionResult
-}
-
-interface IDataProvider <<provided>> {
-  +fetchCandlesticks(symbol: string, period: Period): Promise<Candlestick[]>
-  +fetchSymbols(): Promise<Symbol[]>
-  +fetchIndices(): Promise<Index[]>
-}
-
-interface IAIService <<provided>> {
-  +chatCompletion(params: ChatParams): Promise<ChatResponse>
-  +processText(text: string, context: AIContext): Promise<string>
-}
-
-interface ICacheService <<required>> {
-  +get(key: string): Promise<T | null>
-  +set(key: string, value: T, ttl?: number): Promise<void>
-  +invalidate(pattern: string): Promise<void>
-}
-
-interface IRateLimiter <<required>> {
-  +acquire(): Promise<void>
-  +release(): void
-  +getRemaining(): number
-}
-
-component [TAEngine] as TA
-component [RegimeEngine] as RE
-component [DecisionGraph] as DG
-component [SRAnalyzer] as SR
-component [MLEngine] as ML
-component [TSEApi] as TSE
-component [ZaiShared] as ZAI
-component [CacheManager] as CM
-component [RateLimiterService] as RLS
-
-TA -up- IAnalysisService
-TA ..> IDataProvider
-TA ..> ICacheService
-
-RE -up- IRegimeService
-
-DG -up- IGraphService
-DG ..> IMLService
-
-SR -up- ISRService
-SR ..> IMLService
-
-ML -up- IMLService
-ML ..> ICacheService
-
-TSE -up- IDataProvider
-TSE ..> IRateLimiter
-
-ZAI -up- IAIService
-ZAI ..> IRateLimiter
-
-CM -up- ICacheService
-RLS -up- IRateLimiter
-
-@enduml`,
+    TA --- IAS
+    TA -.-> IDP
+    TA -.-> ICS
+    RE --- IRS
+    DG --- IGS
+    DG -.-> IMLS
+    SR --- ISRS
+    SR -.-> IMLS
+    ML --- IMLS
+    ML -.-> ICS
+    TSE --- IDP
+    TSE -.-> IRL
+    ZAI --- IAIS
+    ZAI -.-> IRL
+    CM --- ICS
+    RLS --- IRL`,
   },
   {
     id: 'uml-deployment-l1',
@@ -2110,49 +2051,43 @@ RLS -up- IRateLimiter
   منابع داده بورس تهران خارج از سامانه هستند.
   ارتباطات با پروتکل‌های مشخص شده‌اند.`,
     level: 1,
-    code: `@startuml
-' نمودار استقرار سطح ۱ - گره‌های فیزیکی
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار استقرار - سطح ۱: گره‌های فیزیکی
+    code: `flowchart TB
+    classDef nodeStyle fill:#e8eaf6,stroke:#283593,stroke-width:2px,color:#000
+    classDef artifact fill:#fff8e1,stroke:#f57f17,stroke-width:1px,color:#000
+    classDef noteStyle fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#666,stroke-dasharray: 5 5
 
-node "مرورگر کاربر\\nBrowser" as browser {
-  artifact [SPA Client]
-}
+    subgraph Browser ["مرورگر کاربر<br/>Browser"]
+        SPAClient["SPA Client"]:::artifact
+    end
 
-node "سرور Next.js\\nApplication Server" as appserver {
-  artifact [Next.js App]
-}
+    subgraph AppServer ["سرور Next.js<br/>Application Server"]
+        NextApp["Next.js App"]:::artifact
+    end
 
-node "سرور PlantUML\\nDiagram Renderer" as plantuml {
-  artifact [PlantUML Server]
-}
+    subgraph PumlSvr ["سرور PlantUML<br/>Diagram Renderer"]
+        PumlArtifact["PlantUML Server"]:::artifact
+    end
 
-node "منابع داده بورس\\nMarket Data Sources" as datasource {
-  artifact [TSE API]
-  artifact [TSETMC API]
-  artifact [TGJU API]
-  artifact [Yahoo API]
-}
+    subgraph DataSource ["منابع داده بورس<br/>Market Data Sources"]
+        TSEAPI["TSE API"]:::artifact
+        TSETMCAPI["TSETMC API"]:::artifact
+        TGJUAPI["TGJU API"]:::artifact
+        YahooAPI["Yahoo API"]:::artifact
+    end
 
-node "سرویس هوش مصنوعی\\nAI Service" as aiservice {
-  artifact [ZAI API]
-}
+    subgraph AIService ["سرویس هوش مصنوعی<br/>AI Service"]
+        ZAIAPI["ZAI API"]:::artifact
+    end
 
-browser --> appserver : HTTPS
-appserver --> plantuml : HTTP
-appserver --> datasource : HTTPS/REST
-appserver --> aiservice : HTTPS/API
+    Browser -->|"HTTPS"| AppServer
+    AppServer -->|"HTTP"| PumlSvr
+    AppServer -->|"HTTPS/REST"| DataSource
+    AppServer -->|"HTTPS/API"| AIService
 
-note right of browser
-  مرورگر کاربر نقطه ورود
-  به سامانه تحلیلی است
-end note
-
-note left of datasource
-  منابع داده خارجی بورس
-  تهران و بازارهای جهانی
-end note
-
-@enduml`,
+    Note1("مرورگر کاربر نقطه ورود<br/>به سامانه تحلیلی است"):::noteStyle
+    Note2("منابع داده خارجی بورس<br/>تهران و بازارهای جهانی"):::noteStyle
+    Browser -.- Note1
+    DataSource -.- Note2`,
   },
   {
     id: 'uml-deployment-l2',
@@ -2163,61 +2098,59 @@ end note
   منابع داده با پروتکل‌های مختلف ارتباط برقرار می‌کنند.
   مسیر ارتباطی از مرورگر تا منابع داده قابل ردیابی است.`,
     level: 2,
-    code: `@startuml
-' نمودار استقرار سطح ۲ - تخصیص مؤلفه‌ها
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار استقرار - سطح ۲: تخصیص مؤلفه‌ها
+    code: `flowchart TB
+    classDef nodeStyle fill:#e8eaf6,stroke:#283593,stroke-width:2px,color:#000
+    classDef artifact fill:#fff8e1,stroke:#f57f17,stroke-width:1px,color:#000
 
-node "مرورگر کاربر\\nBrowser" as browser {
-  artifact [React SPA] as SPA
-  artifact [Recharts] as Recharts
-  artifact [D3.js Visuals] as D3
-}
+    subgraph Browser ["مرورگر کاربر<br/>Browser"]
+        SPA["React SPA"]:::artifact
+        Recharts["Recharts"]:::artifact
+        D3["D3.js Visuals"]:::artifact
+    end
 
-node "سرور Next.js\\n:3000" as nextjs {
-  artifact [API Routes] as API
-  artifact [TAEngine] as TA
-  artifact [RegimeEngine] as RE
-  artifact [DecisionGraph] as DG
-  artifact [SRAnalyzer] as SR
-  artifact [MLEngine] as ML
-  artifact [AIPostProcessor] as PP
-  artifact [MSLV4] as MSL
-  artifact [ZaiShared] as ZAI
-}
+    subgraph NextJS ["سرور Next.js<br/>:3000"]
+        API["API Routes"]:::artifact
+        TA["TAEngine"]:::artifact
+        RE["RegimeEngine"]:::artifact
+        DG["DecisionGraph"]:::artifact
+        SR["SRAnalyzer"]:::artifact
+        ML["MLEngine"]:::artifact
+        PP["AIPostProcessor"]:::artifact
+        MSL["MSLV4"]:::artifact
+        ZAI["ZaiShared"]:::artifact
+    end
 
-node "سرور PlantUML\\n:8080" as plantuml {
-  artifact [PlantUML Jar] as PumlJar
-}
+    subgraph PumlSvr ["سرور PlantUML<br/>:8080"]
+        PumlJar["PlantUML Jar"]:::artifact
+    end
 
-node "TSE Server\\ntsetmc.com" as tse {
-  artifact [TSE REST API] as TSEApi
-}
+    subgraph TSESvr ["TSE Server<br/>tsetmc.com"]
+        TSEAPI["TSE REST API"]:::artifact
+    end
 
-node "TSETMC Server\\ntsetmc.com" as tsetmc {
-  artifact [TSETMC API] as TSETMCApi
-}
+    subgraph TSETMCSvr ["TSETMC Server<br/>tsetmc.com"]
+        TSETMCAPI["TSETMC API"]:::artifact
+    end
 
-node "TGJU Server\\ntgju.org" as tgju {
-  artifact [TGJU API] as TGJUApi
-}
+    subgraph TGJUSvr ["TGJU Server<br/>tgju.org"]
+        TGJUAPI["TGJU API"]:::artifact
+    end
 
-node "Yahoo Server\\nquery1.finance.yahoo.com" as yahoo {
-  artifact [Yahoo API] as YahooApi
-}
+    subgraph YahooSvr ["Yahoo Server<br/>query1.finance.yahoo.com"]
+        YahooAPI["Yahoo API"]:::artifact
+    end
 
-node "ZAI Server\\napi.z-ai.com" as zai {
-  artifact [ZAI API] as ZAIApi
-}
+    subgraph ZAISvr ["ZAI Server<br/>api.z-ai.com"]
+        ZAIAPI["ZAI API"]:::artifact
+    end
 
-browser "1" -down-> "1" nextjs : HTTPS/JSON\\nport 443→3000
-nextjs "1" -down-> "1" plantuml : HTTP\\nport 3000→8080
-nextjs "1" -down-> "1" tse : HTTPS/REST\\nrate: 1 req/s
-nextjs "1" -down-> "1" tsetmc : HTTPS/REST\\nrate: 2 req/s
-nextjs "1" -down-> "1" tgju : HTTPS/REST\\nrate: 1 req/s
-nextjs "1" -down-> "1" yahoo : HTTPS/REST\\nrate: 0.5 req/s
-nextjs "1" -down-> "1" zai : HTTPS/REST\\nrate: 10 req/s
-
-@enduml`,
+    Browser -->|"HTTPS/JSON<br/>port 443→3000"| NextJS
+    NextJS -->|"HTTP<br/>port 3000→8080"| PumlSvr
+    NextJS -->|"HTTPS/REST<br/>rate: 1 req/s"| TSESvr
+    NextJS -->|"HTTPS/REST<br/>rate: 2 req/s"| TSETMCSvr
+    NextJS -->|"HTTPS/REST<br/>rate: 1 req/s"| TGJUSvr
+    NextJS -->|"HTTPS/REST<br/>rate: 0.5 req/s"| YahooSvr
+    NextJS -->|"HTTPS/REST<br/>rate: 10 req/s"| ZAISvr`,
   },
   {
     id: 'uml-deployment-l3',
@@ -2228,46 +2161,40 @@ nextjs "1" -down-> "1" zai : HTTPS/REST\\nrate: 10 req/s
   تنظیمات شبکه شامل پورت‌ها و پروتکل‌ها قابل مشاهده است.
   این سطح برای مدیران سیستم و DevOps قابل استفاده است.`,
     level: 3,
-    code: `@startuml
-' نمودار استقرار سطح ۳ - جزئیات پیکربندی
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار استقرار - سطح ۳: جزئیات پیکربندی
+    code: `flowchart TB
+    classDef nodeStyle fill:#e8eaf6,stroke:#283593,stroke-width:2px,color:#000
+    classDef artifact fill:#fff8e1,stroke:#f57f17,stroke-width:1px,color:#000
 
-node "مرورگر کاربر\\nChrome 120+ / Firefox 115+ / Safari 17+\\nOS: Windows 11 / macOS 14 / Ubuntu 22.04\\nRAM: 8GB+ | Screen: 1920×1080+" as browser {
-  artifact "React 19 SPA\\nBundle: ~450KB gzipped\\nWebpack 5 Turbopack" as SPA
-  artifact "Recharts 2.12\\nD3.js 7.9\\n@xyflow/react 12" as VizLibs
-}
+    subgraph Browser ["مرورگر کاربر<br/>Chrome 120+ / Firefox 115+ / Safari 17+<br/>OS: Windows 11 / macOS 14 / Ubuntu 22.04<br/>RAM: 8GB+ | Screen: 1920×1080+"]
+        BrowserSPA["React 19 SPA<br/>Bundle: ~450KB gzipped<br/>Webpack 5 Turbopack"]:::artifact
+        BrowserViz["Recharts 2.12 / D3.js 7.9 / @xyflow/react 12"]:::artifact
+    end
 
-node "سرور Next.js 16\\nUbuntu 22.04 LTS | Node.js 22.x | Bun 1.2\\nCPU: 4 vCPU | RAM: 8GB | SSD: 50GB\\nIP: 10.0.1.10 | Port: 3000" as nextjs {
-  artifact "Next.js 16 App Router\\nTypeScript 5.7\\nTailwind CSS 4\\nPrisma ORM 6" as AppCore
-  artifact "API Routes (REST)\\n/api/analysis → POST\\n/api/instruments → GET\\n/api/indices → GET\\n/api/ai → POST" as APIRoutes
-  artifact "TAEngine v4.2\\n63 indicators\\nWASM-accelerated" as TA
-  artifact "MLEngine v3.1\\nLogisticRegression\\nWeights Cache: 256 entries" as ML
-  artifact "ZaiShared v2.8\\nRate Limit: 10 RPS\\nCache TTL: 300s" as ZAI
-}
+    subgraph NextJS ["سرور Next.js 16<br/>Ubuntu 22.04 LTS | Node.js 22.x | Bun 1.2<br/>CPU: 4 vCPU | RAM: 8GB | SSD: 50GB<br/>IP: 10.0.1.10 | Port: 3000"]
+        AppCore["Next.js 16 App Router<br/>TypeScript 5.7 / Tailwind CSS 4 / Prisma ORM 6"]:::artifact
+        APIRoutes["API Routes: /api/analysis POST /api/instruments GET<br/>/api/indices GET /api/ai POST"]:::artifact
+        TAArt["TAEngine v4.2 - 63 indicators - WASM-accelerated"]:::artifact
+        MLArt["MLEngine v3.1 - LogisticRegression<br/>Weights Cache: 256 entries"]:::artifact
+        ZAIArt["ZaiShared v2.8 - Rate Limit: 10 RPS - Cache TTL: 300s"]:::artifact
+    end
 
-node "سرور PlantUML\\nUbuntu 22.04 | Java 21 | Jetty 12\\nCPU: 2 vCPU | RAM: 4GB\\nIP: 10.0.1.20 | Port: 8080" as plantuml {
-  artifact "PlantUML 1.2024.3\\nGraphviz 12.0\\nMax diagram size: 4096×4096" as PumlSrv
-}
+    subgraph PumlSvr ["سرور PlantUML<br/>Ubuntu 22.04 | Java 21 | Jetty 12<br/>CPU: 2 vCPU | RAM: 4GB<br/>IP: 10.0.1.20 | Port: 8080"]
+        PumlArtifact["PlantUML 1.2024.3 / Graphviz 12.0<br/>Max diagram size: 4096×4096"]:::artifact
+    end
 
-node "TSE Server\\ntsetmc.com:443\\nREST API | JSON\\nRate Limit: 1 req/s\\nTimeout: 30s" as tse
+    TSE["TSE Server<br/>tsetmc.com:443<br/>REST API | JSON<br/>Rate Limit: 1 req/s | Timeout: 30s"]:::nodeStyle
+    TSETMC["TSETMC Server<br/>tsetmc.com:443<br/>Direct Fetch + API<br/>Rate Limit: 2 req/s | Timeout: 15s"]:::nodeStyle
+    TGJU["TGJU Server<br/>tgju.org:443<br/>REST + Scraping<br/>Rate Limit: 1 req/s | Timeout: 20s"]:::nodeStyle
+    Yahoo["Yahoo Finance<br/>query1.finance.yahoo.com:443<br/>v8 API | JSON<br/>Rate Limit: 0.5 req/s | Timeout: 10s"]:::nodeStyle
+    ZAISvr["ZAI API Server<br/>api.z-ai.com:443<br/>OpenAI-compatible API<br/>Rate Limit: 10 RPS | Model: gpt-4o-mini<br/>Max Tokens: 4096"]:::nodeStyle
 
-node "TSETMC Server\\ntsetmc.com:443\\nDirect Fetch + API\\nRate Limit: 2 req/s\\nTimeout: 15s" as tsetmc
-
-node "TGJU Server\\ntgju.org:443\\nREST + Scraping\\nRate Limit: 1 req/s\\nTimeout: 20s" as tgju
-
-node "Yahoo Finance\\nquery1.finance.yahoo.com:443\\nv8 API | JSON\\nRate Limit: 0.5 req/s\\nTimeout: 10s" as yahoo
-
-node "ZAI API Server\\napi.z-ai.com:443\\nOpenAI-compatible API\\nRate Limit: 10 RPS\\nModel: gpt-4o-mini\\nMax Tokens: 4096" as zai
-
-browser "HTTPS" -down-> nextjs : "443 → 3000\\nH2 with keep-alive\\nCORS: enabled"
-nextjs "HTTP" -down-> plantuml : "3000 → 8080\\nPlantUML text POST\\nPNG/SVG response"
-nextjs "HTTPS" -down-> tse : "REST/JSON\\nX-API-Key header\\nRetry: 3 with backoff"
-nextjs "HTTPS" -down-> tsetmc : "Direct+API\\nCookie-based auth\\nRetry: 3"
-nextjs "HTTPS" -down-> tgju : "REST+Scrape\\nUser-Agent rotation\\nRetry: 2"
-nextjs "HTTPS" -down-> yahoo : "v8 API\\ncrumb-based auth\\nRetry: 2"
-nextjs "HTTPS" -down-> zai : "Bearer token auth\\nStreaming: supported\\nRetry: 3 with backoff"
-
-@enduml`,
+    Browser -->|"443 → 3000 / H2 keep-alive / CORS: enabled"| NextJS
+    NextJS -->|"3000 → 8080 / PlantUML text POST / PNG-SVG response"| PumlSvr
+    NextJS -->|"REST/JSON / X-API-Key header / Retry: 3 backoff"| TSE
+    NextJS -->|"Direct+API / Cookie auth / Retry: 3"| TSETMC
+    NextJS -->|"REST+Scrape / User-Agent rotation / Retry: 2"| TGJU
+    NextJS -->|"v8 API / crumb auth / Retry: 2"| Yahoo
+    NextJS -->|"Bearer token / Streaming: yes / Retry: 3 backoff"| ZAISvr`,
   },
   {
     id: 'uml-package-l1',
@@ -2279,44 +2206,38 @@ nextjs "HTTPS" -down-> zai : "Bearer token auth\\nStreaming: supported\\nRetry: 
   بسته api شامل اندپوینت‌های سرویس‌دهنده است.
   وابستگی‌ها از بالا به پایین (از رابط کاربری تا داده) است.`,
     level: 1,
-    code: `@startuml
-' نمودار بسته سطح ۱ - بسته‌های اصلی
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار بسته - سطح ۱: بسته‌های اصلی
+    code: `flowchart TB
+    classDef application fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef library fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef ui fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef service fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#000
+    classDef noteStyle fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#666,stroke-dasharray: 5 5
 
-package "app" <<application>> {
-  note: صفحات Next.js App Router
-}
+    subgraph PkgApp ["app «application»"]
+        App["صفحات Next.js App Router"]:::application
+    end
 
-package "lib" <<library>> {
-  note: کتابخانه‌های تحلیلی و ML
-}
+    subgraph PkgLib ["lib «library»"]
+        Lib["کتابخانه‌های تحلیلی و ML"]:::library
+    end
 
-package "components" <<ui>> {
-  note: مؤلفه‌های رابط کاربری React
-}
+    subgraph PkgComponents ["components «ui»"]
+        Comp["مؤلفه‌های رابط کاربری React"]:::ui
+    end
 
-package "api" <<service>> {
-  note: اندپوینت‌های REST API
-}
+    subgraph PkgApi ["api «service»"]
+        Api["اندپوینت‌های REST API"]:::service
+    end
 
-app --> components : استفاده
-app --> api : فراخوانی
-api --> lib : استفاده
-components --> lib : داده تحلیلی
+    App -.->|"استفاده"| Comp
+    App -.->|"فراخوانی"| Api
+    Api -.->|"استفاده"| Lib
+    Comp -.->|"داده تحلیلی"| Lib
 
-note right of app
-  بسته برنامه اصلی
-  شامل صفحات و لایه‌ها
-  app/analysis, app/help
-end note
-
-note right of lib
-  بسته کتابخانه‌ها
-  شامل تمام موتورهای
-  تحلیلی و یادگیری ماشین
-end note
-
-@enduml`,
+    NoteApp("بسته برنامه اصلی<br/>شامل صفحات و لایه‌ها<br/>app/analysis, app/help"):::noteStyle
+    NoteLib("بسته کتابخانه‌ها<br/>شامل تمام موتورهای<br/>تحلیلی و یادگیری ماشین"):::noteStyle
+    App -.- NoteApp
+    Lib -.- NoteLib`,
   },
   {
     id: 'uml-package-l2',
@@ -2328,93 +2249,93 @@ end note
   lib/data شامل منابع داده بورس است.
   api/analysis و api/instruments اندپوینت‌های اصلی هستند.`,
     level: 2,
-    code: `@startuml
-' نمودار بسته سطح ۲ - زیربسته‌ها
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار بسته - سطح ۲: زیربسته‌ها
+    code: `flowchart TB
+    classDef appPkg fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef libPkg fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef compPkg fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef apiPkg fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#000
 
-package "app" {
-  package "app/analysis" {
-    note: صفحه تحلیل نماد
-  }
-  package "app/help" {
-    note: صفحه راهنما
-  }
-  package "app/scenarios" {
-    note: صفحه سناریوها
-  }
-}
+    subgraph PkgApp ["app"]
+        subgraph PkgAppAnalysis ["app/analysis"]
+            AppAnalysis["صفحه تحلیل نماد"]:::appPkg
+        end
+        subgraph PkgAppHelp ["app/help"]
+            AppHelp["صفحه راهنما"]:::appPkg
+        end
+        subgraph PkgAppScenarios ["app/scenarios"]
+            AppScenarios["صفحه سناریوها"]:::appPkg
+        end
+    end
 
-package "lib" {
-  package "lib/ta" {
-    note: TAEngine, RegimeEngine\\nProbabilityTrend, CompositeScores
-  }
-  package "lib/ml" {
-    note: MLEngine, BayesianWeights\\nAnalysisMLSelector
-  }
-  package "lib/ai" {
-    note: AIPostProcessor, MSLV4\\nZaiShared
-  }
-  package "lib/data" {
-    note: TSEApi, TsetmcIndexApi\\nTgjuApi, YahooApi
-  }
-  package "lib/sr" {
-    note: SRAnalyzer, VolumeProfile
-  }
-  package "lib/graph" {
-    note: DecisionGraph\\nCandlestickPatterns
-  }
-}
+    subgraph PkgLib ["lib"]
+        subgraph PkgLibTa ["lib/ta"]
+            LibTa["TAEngine, RegimeEngine<br/>ProbabilityTrend, CompositeScores"]:::libPkg
+        end
+        subgraph PkgLibMl ["lib/ml"]
+            LibMl["MLEngine, BayesianWeights<br/>AnalysisMLSelector"]:::libPkg
+        end
+        subgraph PkgLibAi ["lib/ai"]
+            LibAi["AIPostProcessor, MSLV4<br/>ZaiShared"]:::libPkg
+        end
+        subgraph PkgLibData ["lib/data"]
+            LibData["TSEApi, TsetmcIndexApi<br/>TgjuApi, YahooApi"]:::libPkg
+        end
+        subgraph PkgLibSr ["lib/sr"]
+            LibSr["SRAnalyzer, VolumeProfile"]:::libPkg
+        end
+        subgraph PkgLibGraph ["lib/graph"]
+            LibGraph["DecisionGraph<br/>CandlestickPatterns"]:::libPkg
+        end
+    end
 
-package "components" {
-  package "components/analysis" {
-    note: کارت تحلیل، نوار اندیکاتور
-  }
-  package "components/charts" {
-    note: نمودار شمعی، گراف تصمیم
-  }
-  package "components/ui" {
-    note: shadcn/ui primitives
-  }
-}
+    subgraph PkgComponents ["components"]
+        subgraph PkgCompAnalysis ["components/analysis"]
+            CompAnalysis["کارت تحلیل، نوار اندیکاتور"]:::compPkg
+        end
+        subgraph PkgCompCharts ["components/charts"]
+            CompCharts["نمودار شمعی، گراف تصمیم"]:::compPkg
+        end
+        subgraph PkgCompUi ["components/ui"]
+            CompUi["shadcn/ui primitives"]:::compPkg
+        end
+    end
 
-package "api" {
-  package "api/analysis" {
-    note: POST /api/analysis
-  }
-  package "api/instruments" {
-    note: GET /api/instruments
-  }
-  package "api/indices" {
-    note: GET /api/indices
-  }
-  package "api/ai" {
-    note: POST /api/ai
-  }
-}
+    subgraph PkgApi ["api"]
+        subgraph PkgApiAnalysis ["api/analysis"]
+            ApiAnalysis["POST /api/analysis"]:::apiPkg
+        end
+        subgraph PkgApiInstruments ["api/instruments"]
+            ApiInstruments["GET /api/instruments"]:::apiPkg
+        end
+        subgraph PkgApiIndices ["api/indices"]
+            ApiIndices["GET /api/indices"]:::apiPkg
+        end
+        subgraph PkgApiAi ["api/ai"]
+            ApiAi["POST /api/ai"]:::apiPkg
+        end
+    end
 
-"app/analysis" --> "api/analysis"
-"app/analysis" --> "api/instruments"
-"app/help" --> "api/instruments"
-"app/scenarios" --> "api/analysis"
+    AppAnalysis -.-> ApiAnalysis
+    AppAnalysis -.-> ApiInstruments
+    AppHelp -.-> ApiInstruments
+    AppScenarios -.-> ApiAnalysis
 
-"api/analysis" --> "lib/ta"
-"api/analysis" --> "lib/graph"
-"api/analysis" --> "lib/sr"
-"api/analysis" --> "lib/ml"
-"api/instruments" --> "lib/data"
-"api/indices" --> "lib/data"
-"api/ai" --> "lib/ai"
+    ApiAnalysis -.-> LibTa
+    ApiAnalysis -.-> LibGraph
+    ApiAnalysis -.-> LibSr
+    ApiAnalysis -.-> LibMl
+    ApiInstruments -.-> LibData
+    ApiIndices -.-> LibData
+    ApiAi -.-> LibAi
 
-"lib/ta" --> "lib/data"
-"lib/ta" --> "lib/ml"
-"lib/graph" --> "lib/ml"
-"lib/sr" --> "lib/data"
-"lib/sr" --> "lib/ml"
+    LibTa -.-> LibData
+    LibTa -.-> LibMl
+    LibGraph -.-> LibMl
+    LibSr -.-> LibData
+    LibSr -.-> LibMl
 
-"components/analysis" --> "lib/ta"
-"components/charts" --> "lib/graph"
-
-@enduml`,
+    CompAnalysis -.-> LibTa
+    CompCharts -.-> LibGraph`,
   },
   {
     id: 'uml-package-l3',
@@ -2426,74 +2347,75 @@ package "api" {
   SRAnalyzer برای بهینه‌سازی ML از MLEngine استفاده می‌کند.
   AIPostProcessor از ZaiShared و MSLV4 استفاده می‌کند.`,
     level: 3,
-    code: `@startuml
-' نمودار بسته سطح ۳ - وابستگی‌های واردات
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار بسته - سطح ۳: وابستگی‌های واردات
+    code: `flowchart TB
+    classDef taPkg fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef mlPkg fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#000
+    classDef aiPkg fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef srPkg fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef graphPkg fill:#fce4ec,stroke:#c62828,stroke-width:2px,color:#000
+    classDef dataPkg fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#000
 
-package "lib/ta" {
-  class TAEngine
-  class RegimeEngine
-  class ProbabilityTrend
-  class CompositeScores
-  class CandlestickPatterns
-}
+    subgraph PkgLibTa ["lib/ta"]
+        TAEngine["TAEngine"]:::taPkg
+        RegimeEngine["RegimeEngine"]:::taPkg
+        ProbabilityTrend["ProbabilityTrend"]:::taPkg
+        CompositeScores["CompositeScores"]:::taPkg
+        CandlestickPatterns["CandlestickPatterns"]:::taPkg
+    end
 
-package "lib/ml" {
-  class MLEngine
-  class BayesianWeights
-  class AnalysisMLSelector
-}
+    subgraph PkgLibMl ["lib/ml"]
+        MLEngine["MLEngine"]:::mlPkg
+        BayesianWeights["BayesianWeights"]:::mlPkg
+        AnalysisMLSelector["AnalysisMLSelector"]:::mlPkg
+    end
 
-package "lib/ai" {
-  class AIPostProcessor
-  class MSLV4
-  class ZaiShared
-}
+    subgraph PkgLibAi ["lib/ai"]
+        AIPostProcessor["AIPostProcessor"]:::aiPkg
+        MSLV4["MSLV4"]:::aiPkg
+        ZaiShared["ZaiShared"]:::aiPkg
+    end
 
-package "lib/sr" {
-  class SRAnalyzer
-  class VolumeProfile
-}
+    subgraph PkgLibSr ["lib/sr"]
+        SRAnalyzer["SRAnalyzer"]:::srPkg
+        VolumeProfile["VolumeProfile"]:::srPkg
+    end
 
-package "lib/graph" {
-  class DecisionGraph
-}
+    subgraph PkgLibGraph ["lib/graph"]
+        DecisionGraph["DecisionGraph"]:::graphPkg
+    end
 
-package "lib/data" {
-  class TSEApi
-  class TsetmcIndexApi
-  class TgjuApi
-  class YahooApi
-}
+    subgraph PkgLibData ["lib/data"]
+        TSEApi["TSEApi"]:::dataPkg
+        TsetmcIndexApi["TsetmcIndexApi"]:::dataPkg
+        TgjuApi["TgjuApi"]:::dataPkg
+        YahooApi["YahooApi"]:::dataPkg
+    end
 
-' وابستگی‌های واردات واقعی
-TAEngine ..> RegimeEngine : import
-TAEngine ..> SRAnalyzer : import
-TAEngine ..> VolumeProfile : import
-TAEngine ..> CandlestickPatterns : import
-TAEngine ..> TSEApi : import
-TAEngine ..> MLEngine : import
+    TAEngine -.->|"import"| RegimeEngine
+    TAEngine -.->|"import"| SRAnalyzer
+    TAEngine -.->|"import"| VolumeProfile
+    TAEngine -.->|"import"| CandlestickPatterns
+    TAEngine -.->|"import"| TSEApi
+    TAEngine -.->|"import"| MLEngine
 
-DecisionGraph ..> MLEngine : import
-DecisionGraph ..> ProbabilityTrend : import
-DecisionGraph ..> RegimeEngine : import
+    DecisionGraph -.->|"import"| MLEngine
+    DecisionGraph -.->|"import"| ProbabilityTrend
+    DecisionGraph -.->|"import"| RegimeEngine
 
-SRAnalyzer ..> MLEngine : import
-SRAnalyzer ..> VolumeProfile : import
-SRAnalyzer ..> TSEApi : import
+    SRAnalyzer -.->|"import"| MLEngine
+    SRAnalyzer -.->|"import"| VolumeProfile
+    SRAnalyzer -.->|"import"| TSEApi
 
-CompositeScores ..> TAEngine : import
-CompositeScores ..> SRAnalyzer : import
+    CompositeScores -.->|"import"| TAEngine
+    CompositeScores -.->|"import"| SRAnalyzer
 
-AIPostProcessor ..> ZaiShared : import
-AIPostProcessor ..> MSLV4 : import
+    AIPostProcessor -.->|"import"| ZaiShared
+    AIPostProcessor -.->|"import"| MSLV4
 
-MLEngine ..> BayesianWeights : import
-MLEngine ..> AnalysisMLSelector : import
+    MLEngine -.->|"import"| BayesianWeights
+    MLEngine -.->|"import"| AnalysisMLSelector
 
-ProbabilityTrend ..> CompositeScores : import
-
-@enduml`,
+    ProbabilityTrend -.->|"import"| CompositeScores`,
   },
   {
     id: 'uml-composite-l1',
@@ -2505,54 +2427,88 @@ ProbabilityTrend ..> CompositeScores : import
   پورت marketData داده بازار را دریافت می‌کند.
   پورت analysisResult نتیجه تحلیل را منتشر می‌کند.`,
     level: 1,
-    code: `@startuml
-' نمودار ساختار مرکب سطح ۱ - ساختار داخلی TAEngine
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار ساختار مرکب - سطح ۱: ساختار داخلی TAEngine
+    code: `classDiagram
+    direction TB
 
-class TAEngine {
-  ' ساختار داخلی
-  -- Ports --
-  +in marketData : MarketData
-  +out analysisResult : AnalysisResult
-  +out trendSignal : TrendDirection
-}
+    class TAEngine {
+        <<component>>
+        +analyze() AnalysisResult
+        +calcTrend() TrendDirection
+    }
 
-component "RegimeEngine" as RE
-component "SRAnalyzer" as SR
-component "VolumeProfile" as VP
-component "CandlestickPatterns" as CP
-component "ProbabilityTrend" as PT
-component "IndicatorCalculator" as IC
-component "ResultAggregator" as RA
+    class marketData {
+        <<port in>>
+        +receive(data MarketData)
+    }
 
-rectangle TAEngine <<component>> {
-  RE -down-> IC : regimeInfo
-  SR -down-> IC : srLevels
-  VP -right-> SR : volumeData
-  CP -down-> IC : patterns
-  IC -down-> PT : indicatorValues
-  PT -down-> RA : trendData
-  RA -down-> RA : aggregate
-}
+    class analysisResult {
+        <<port out>>
+        +send(result AnalysisResult)
+    }
 
-TAEngine::marketData --> RE
-TAEngine::marketData --> SR
-TAEngine::marketData --> VP
-TAEngine::marketData --> CP
-RA --> TAEngine::analysisResult
-PT --> TAEngine::trendSignal
+    class trendSignal {
+        <<port out>>
+        +send(signal TrendDirection)
+    }
 
-note right of TAEngine
-  TAEngine به‌صورت ترکیب شامل
-  ۵ بخش همکار است:
-  • RegimeEngine: تشخیص رژیم
-  • SRAnalyzer: سطوح S/R
-  • VolumeProfile: پروفایل حجم
-  • CandlestickPatterns: الگوها
-  • ProbabilityTrend: روند احتمالی
-end note
+    class RegimeEngine {
+        <<part>>
+        +detectRegime() RegimeResult
+    }
 
-@enduml`,
+    class SRAnalyzer {
+        <<part>>
+        +detectLevels() SRLevel[]
+    }
+
+    class VolumeProfile {
+        <<part>>
+        +approximate() VolumeBin[]
+    }
+
+    class CandlestickPatterns {
+        <<part>>
+        +detectClassic() PatternResult[]
+    }
+
+    class ProbabilityTrend {
+        <<part>>
+        +calculateCDF() Map~number,number~
+    }
+
+    class IndicatorCalculator {
+        <<part>>
+        +compute(indicator string) number[]
+    }
+
+    class ResultAggregator {
+        <<part>>
+        +aggregate() AnalysisResult
+    }
+
+    TAEngine *-- RegimeEngine : part
+    TAEngine *-- SRAnalyzer : part
+    TAEngine *-- VolumeProfile : part
+    TAEngine *-- CandlestickPatterns : part
+    TAEngine *-- ProbabilityTrend : part
+    TAEngine *-- IndicatorCalculator : part
+    TAEngine *-- ResultAggregator : part
+
+    marketData --> RegimeEngine : input
+    marketData --> SRAnalyzer : input
+    marketData --> VolumeProfile : input
+    marketData --> CandlestickPatterns : input
+
+    RegimeEngine --> IndicatorCalculator : regimeInfo
+    SRAnalyzer --> IndicatorCalculator : srLevels
+    VolumeProfile --> SRAnalyzer : volumeData
+    CandlestickPatterns --> IndicatorCalculator : patterns
+    IndicatorCalculator --> ProbabilityTrend : indicatorValues
+    ProbabilityTrend --> ResultAggregator : trendData
+    ResultAggregator --> analysisResult : output
+    ProbabilityTrend --> trendSignal : output
+
+    note for TAEngine "TAEngine به‌صورت ترکیب شامل ۵ بخش همکار است: RegimeEngine: تشخیص رژیم, SRAnalyzer: سطوح S/R, VolumeProfile: پروفایل حجم, CandlestickPatterns: الگوها, ProbabilityTrend: روند احتمالی"`,
   },
   {
     id: 'uml-composite-l2',
@@ -2564,74 +2520,82 @@ end note
   WeightNormalizer وزن‌های یال‌ها را نرمال‌سازی می‌کند.
   MLEngine به‌صورت نقش فراهم‌شده پیش‌بینی می‌کند.`,
     level: 2,
-    code: `@startuml
-' نمودار ساختار مرکب سطح ۲ - بخش‌های DecisionGraph
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار ساختار مرکب - سطح ۲: بخش‌های DecisionGraph
+    code: `classDiagram
+    direction TB
 
-class DecisionGraph <<component>> {
-  -- پورت‌های فراهم‌شده --
-  +in regimeInput : RegimeResult
-  +in analysisInput : AnalysisResult
-  +out decisionOutput : DecisionPath
-  +out confidenceOutput : number
-  -- بخش‌های داخلی --
-}
+    class DecisionGraph {
+        <<component>>
+        +buildGraph() void
+        +computePaths() Path[]
+        +normalizeWeights() void
+    }
 
-component "GraphBuilder" as GB {
-  +buildFromRegime(regime: RegimeResult): void
-  +addAnalysisNodes(analysis: AnalysisResult): void
-  -nodeFactory: NodeFactory
-  -edgeFactory: EdgeFactory
-}
+    class regimeInput {
+        <<port in>>
+        +receive(regime RegimeResult)
+    }
 
-component "PathComputer" as PC {
-  +computeAllPaths(): Path[]
-  +shortestPath(source: string, target: string): Path
-  +topologicalSort(): string[]
-  -adjacencyList: Map
-}
+    class analysisInput {
+        <<port in>>
+        +receive(analysis AnalysisResult)
+    }
 
-component "WeightNormalizer" as WN {
-  +normalizeWeights(): void
-  +applyDecay(factor: number): void
-  +rebalance(): void
-  -totalWeight: number
-}
+    class decisionOutput {
+        <<port out>>
+        +send(path DecisionPath)
+    }
 
-component "MLEngine\\n<<provided role>>" as MLRole {
-  +predict(features: Feature[]): PredictionResult
-}
+    class confidenceOutput {
+        <<port out>>
+        +send(confidence number)
+    }
 
-rectangle DecisionGraph <<component>> {
-  port "regimeInput" as regIn
-  port "analysisInput" as anaIn
-  port "decisionOutput" as decOut
-  port "confidenceOutput" as confOut
+    class GraphBuilder {
+        <<part>>
+        +buildFromRegime(regime RegimeResult)
+        +addAnalysisNodes(analysis AnalysisResult)
+        -nodeFactory NodeFactory
+        -edgeFactory EdgeFactory
+    }
 
-  GB -down-> PC : rawGraph
-  PC -down-> WN : weightedPaths
-  WN -right-> MLRole : features
-  MLRole -up-> WN : predictions
+    class PathComputer {
+        <<part>>
+        +computeAllPaths() Path[]
+        +shortestPath(source string, target string) Path
+        +topologicalSort() string[]
+        -adjacencyList Map
+    }
 
-  regIn --> GB
-  anaIn --> GB
-  WN --> decOut
-  WN --> confOut
-}
+    class WeightNormalizer {
+        <<part>>
+        +normalizeWeights()
+        +applyDecay(factor number)
+        +rebalance()
+        -totalWeight number
+    }
 
-note bottom of GB
-  GraphBuilder گراف را با
-  ۳۴ گره و ۵۵ یال می‌سازد
-  بر اساس رژیم و تحلیل جاری
-end note
+    class MLEngineRole {
+        <<provided role>>
+        +predict(features Feature[]) PredictionResult
+    }
 
-note bottom of PC
-  PathComputer مسیرهای
-  تصمیم را محاسبه می‌کند
-  با الگوریتم دیکسترا
-end note
+    DecisionGraph *-- GraphBuilder : part
+    DecisionGraph *-- PathComputer : part
+    DecisionGraph *-- WeightNormalizer : part
+    DecisionGraph o-- MLEngineRole : provided
 
-@enduml`,
+    regimeInput --> GraphBuilder : input
+    analysisInput --> GraphBuilder : input
+    GraphBuilder --> PathComputer : rawGraph
+    PathComputer --> WeightNormalizer : weightedPaths
+    WeightNormalizer --> MLEngineRole : features
+    MLEngineRole --> WeightNormalizer : predictions
+    WeightNormalizer --> decisionOutput : output
+    WeightNormalizer --> confidenceOutput : output
+
+    note for GraphBuilder "GraphBuilder گراف را با ۳۴ گره و ۵۵ یال می‌سازد بر اساس رژیم و تحلیل جاری"
+
+    note for PathComputer "PathComputer مسیرهای تصمیم را محاسبه می‌کند با الگوریتم دیکسترا"`,
   },
   {
     id: 'uml-composite-l3',
@@ -2644,77 +2608,74 @@ end note
   نقش تجمیع‌گر نتیجه نهایی را تولید می‌کند.
   هر اتصال با پروتکل و جهت مشخص شده است.`,
     level: 3,
-    code: `@startuml
-' نمودار ساختار مرکب سطح ۳ - اتصالات محاسبه احتمال
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار ساختار مرکب - سطح ۳: اتصالات محاسبه احتمال
+    code: `classDiagram
+    direction TB
 
-interface IMarketDataProvider <<role>> {
-  +getCandlesticks(symbol: string): Candlestick[]
-}
+    class IMarketDataProvider {
+        <<role>>
+        +getCandlesticks(symbol string) Candlestick[]
+    }
 
-interface IIndicatorProvider <<role>> {
-  +getIndicatorValues(name: string): number[]
-}
+    class IIndicatorProvider {
+        <<role>>
+        +getIndicatorValues(name string) number[]
+    }
 
-interface IPredictionProvider <<role>> {
-  +getPrediction(symbol: string): PredictionResult
-}
+    class IPredictionProvider {
+        <<role>>
+        +getPrediction(symbol string) PredictionResult
+    }
 
-interface IResultConsumer <<role>> {
-  +accept(result: ProbabilityResult): void
-}
+    class IResultConsumer {
+        <<role>>
+        +accept(result ProbabilityResult)
+    }
 
-component "MarketDataFetcher\\n<<dataProvider role>>" as MDF {
-  port "marketDataOut" as mdOut
-}
+    class MarketDataFetcher {
+        <<dataProvider role>>
+        +fetch(symbol string) Candlestick[]
+    }
 
-component "TAEngine\\n<<analyzer role>>" as TA {
-  port "marketDataIn" as taMdIn
-  port "indicatorsOut" as taIndOut
-  port "regimeOut" as taRegOut
-}
+    class TAEngine {
+        <<analyzer role>>
+        +analyze(symbol string) AnalysisResult
+    }
 
-component "RegimeEngine\\n<<regimeDetector role>>" as RE {
-  port "regimeIn" as reRegIn
-  port "regimeResultOut" as reResOut
-}
+    class RegimeEngine {
+        <<regimeDetector role>>
+        +detectRegime(marketData MarketData) RegimeResult
+    }
 
-component "MLEngine\\n<<predictor role>>" as ML {
-  port "featuresIn" as mlFeatIn
-  port "predictionsOut" as mlPredOut
-}
+    class MLEngine {
+        <<predictor role>>
+        +predict(features Feature[]) PredictionResult
+    }
 
-component "ProbabilityTrend\\n<<aggregator role>>" as PT {
-  port "indicatorsIn" as ptIndIn
-  port "regimeIn" as ptRegIn
-  port "predictionsIn" as ptPredIn
-  port "resultOut" as ptResOut
-}
+    class ProbabilityTrend {
+        <<aggregator role>>
+        +calculateCDF(data number[]) Map~number,number~
+    }
 
-component "CompositeScores\\n<<resultConsumer role>>" as CS {
-  port "probResultIn" as csProbIn
-}
+    class CompositeScores {
+        <<resultConsumer role>>
+        +calcTrendStrength() number
+        +calcSRStrength() number
+    }
 
-' اتصالات
-mdOut --> taMdIn : "Candlestick[]\\nsync call"
-taIndOut --> ptIndIn : "Map<string, number[]>\\nasync stream"
-taRegOut --> reRegIn : "MarketData\\nsync call"
-reResOut --> ptRegIn : "RegimeResult\\nsync return"
-mlPredOut --> ptPredIn : "PredictionResult\\nasync callback"
-taIndOut --> mlFeatIn : "Feature[]\\nsync call"
-ptResOut --> csProbIn : "ProbabilityResult\\nasync event"
+    MarketDataFetcher --> TAEngine : Candlestick[] sync
+    TAEngine --> ProbabilityTrend : Map~string,number[]~ async
+    TAEngine --> RegimeEngine : MarketData sync
+    RegimeEngine --> ProbabilityTrend : RegimeResult sync
+    MLEngine --> ProbabilityTrend : PredictionResult async
+    TAEngine --> MLEngine : Feature[] sync
+    ProbabilityTrend --> CompositeScores : ProbabilityResult async
 
-note right of PT
-  ProbabilityTrend نقش تجمیع‌گر دارد
-  ورودی‌ها:
-  • اندیکاتورها از TAEngine
-  • رژیم از RegimeEngine
-  • پیش‌بینی از MLEngine
-  خروجی:
-  • نتیجه احتمال با CDF
-end note
+    IMarketDataProvider <|.. MarketDataFetcher : realizes
+    IIndicatorProvider <|.. TAEngine : realizes
+    IPredictionProvider <|.. MLEngine : realizes
+    IResultConsumer <|.. CompositeScores : realizes
 
-@enduml`,
+    note for ProbabilityTrend "ProbabilityTrend نقش تجمیع‌گر دارد. ورودی‌ها: اندیکاتورها از TAEngine, رژیم از RegimeEngine, پیش‌بینی از MLEngine. خروجی: نتیجه احتمال با CDF"`,
   },
   {
     id: 'uml-profile-l1',
@@ -2726,68 +2687,78 @@ end note
   کلیشه <<AI>> برای مؤلفه‌های هوش مصنوعی استفاده می‌شود.
   هر کلیشه از metaclass مشخصی گسترش می‌یابد.`,
     level: 1,
-    code: `@startuml
-' نمودار پروفایل سطح ۱ - کلیشه‌های اصلی
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار پروفایل - سطح ۱: کلیشه‌های اصلی
+    code: `classDiagram
+    direction TB
 
-class Stereotype <<stereotype>>
-class Metaclass <<metaclass>>
+    class Stereotype {
+        <<stereotype>>
+    }
 
-class "Engine" as Engine <<stereotype>> {
-  نوع: موتورهای تحلیلی اصلی
-  مثال: TAEngine, RegimeEngine
-}
-class "API" as API <<stereotype>> {
-  نوع: سرویس‌های داده خارجی
-  مثال: TSEApi, YahooApi
-}
-class "DataStore" as DataStore <<stereotype>> {
-  نوع: ذخیره‌سازی و کش
-  مثال: Cache, WeightsCache
-}
-class "AI" as AI <<stereotype>> {
-  نوع: مؤلفه‌های هوش مصنوعی
-  مثال: ZaiShared, MSLV4
-}
-class "Analyzer" as Analyzer <<stereotype>> {
-  نوع: تحلیل‌گرهای تخصصی
-  مثال: SRAnalyzer, VolumeProfile
-}
-class "Processor" as Processor <<stereotype>> {
-  نوع: پردازش‌گرهای خروجی
-  مثال: AIPostProcessor
-}
+    class Metaclass {
+        <<metaclass>>
+    }
 
-class "Class" as ClassMeta <<metaclass>>
-class "Component" as CompMeta <<metaclass>>
+    class Engine {
+        <<stereotype>>
+        +نوع : موتورهای تحلیلی اصلی
+        +مثال : TAEngine, RegimeEngine
+    }
 
-Engine --|> Stereotype
-API --|> Stereotype
-DataStore --|> Stereotype
-AI --|> Stereotype
-Analyzer --|> Stereotype
-Processor --|> Stereotype
+    class API {
+        <<stereotype>>
+        +نوع : سرویس‌های داده خارجی
+        +مثال : TSEApi, YahooApi
+    }
 
-Engine ..> ClassMeta : extends
-API ..> CompMeta : extends
-DataStore ..> CompMeta : extends
-AI ..> CompMeta : extends
-Analyzer ..> ClassMeta : extends
-Processor ..> ClassMeta : extends
+    class DataStore {
+        <<stereotype>>
+        +نوع : ذخیره‌سازی و کش
+        +مثال : Cache, WeightsCache
+    }
 
-note right of Engine
-  کلیشه <<Engine>> برای
-  موتورهای تحلیلی که
-  هسته سامانه هستند
-end note
+    class AI {
+        <<stereotype>>
+        +نوع : مؤلفه‌های هوش مصنوعی
+        +مثال : ZaiShared, MSLV4
+    }
 
-note right of AI
-  کلیشه <<AI>> برای
-  مؤلفه‌های مبتنی بر
-  هوش مصنوعی
-end note
+    class Analyzer {
+        <<stereotype>>
+        +نوع : تحلیل‌گرهای تخصصی
+        +مثال : SRAnalyzer, VolumeProfile
+    }
 
-@enduml`,
+    class Processor {
+        <<stereotype>>
+        +نوع : پردازش‌گرهای خروجی
+        +مثال : AIPostProcessor
+    }
+
+    class ClassMeta {
+        <<metaclass>>
+    }
+
+    class CompMeta {
+        <<metaclass>>
+    }
+
+    Engine --|> Stereotype
+    API --|> Stereotype
+    DataStore --|> Stereotype
+    AI --|> Stereotype
+    Analyzer --|> Stereotype
+    Processor --|> Stereotype
+
+    Engine ..> ClassMeta : extends
+    API ..> CompMeta : extends
+    DataStore ..> CompMeta : extends
+    AI ..> CompMeta : extends
+    Analyzer ..> ClassMeta : extends
+    Processor ..> ClassMeta : extends
+
+    note for Engine "کلیشه Engine برای موتورهای تحلیلی که هسته سامانه هستند"
+
+    note for AI "کلیشه AI برای مؤلفه‌های مبتنی بر هوش مصنوعی"`,
   },
   {
     id: 'uml-profile-l2',
@@ -2800,71 +2771,50 @@ end note
   {wasm} نشان‌دهنده شتاب‌دهی WASM است.
   هر برچسب با نوع و مقدار پیش‌فرض مشخص شده است.`,
     level: 2,
-    code: `@startuml
-' نمودار پروفایل سطح ۲ - کلیشه‌های گسترش‌یافته
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار پروفایل - سطح ۲: کلیشه‌های گسترش‌یافته
+    code: `classDiagram
+    direction TB
 
-class "Engine" as Engine <<stereotype>> {
-  +{cached} cacheTTL : int = 300
-  +{wasm} accelerated : boolean = false
-  +{version} engineVersion : string
-}
+    class Engine {
+        <<stereotype>>
+        +cacheTTL : int = 300
+        +accelerated : boolean = false
+        +engineVersion : string
+    }
 
-class "API" as API <<stereotype>> {
-  +{rateLimited} maxRPS : double = 1.0
-  +{noCache} disableCache : boolean = false
-  +{timeout} requestTimeout : int = 30000
-  +{retry} maxRetries : int = 3
-}
+    class API {
+        <<stereotype>>
+        +maxRPS : double = 1.0
+        +disableCache : boolean = false
+        +requestTimeout : int = 30000
+        +maxRetries : int = 3
+    }
 
-class "AI" as AI <<stereotype>> {
-  +{rateLimited} maxRPS : double = 10.0
-  +{streaming} supportsStreaming : boolean = true
-  +{cached} cacheTTL : int = 300
-  +{tokenLimit} maxTokens : int = 4096
-}
+    class AI {
+        <<stereotype>>
+        +maxRPS : double = 10.0
+        +supportsStreaming : boolean = true
+        +cacheTTL : int = 300
+        +maxTokens : int = 4096
+    }
 
-class "DataStore" as DataStore <<stereotype>> {
-  +{cached} defaultTTL : int = 300
-  +{maxSize} maxSize : int = 1000
-  +{eviction} evictionPolicy : string = "LRU"
-}
+    class DataStore {
+        <<stereotype>>
+        +defaultTTL : int = 300
+        +maxSize : int = 1000
+        +evictionPolicy : string = LRU
+    }
 
-class "Analyzer" as Analyzer <<stereotype>> {
-  +{cached} cacheTTL : int = 600
-  +{threshold} threshold : double = 0.5
-}
+    class Analyzer {
+        <<stereotype>>
+        +cacheTTL : int = 600
+        +threshold : double = 0.5
+    }
 
-Engine --|> Engine
-API --|> API
-AI --|> AI
-DataStore --|> DataStore
-Analyzer --|> Analyzer
+    note for Engine "کلیشه Engine با برچسب‌ها: cached - نتایج کش می‌شوند, wasm - شتاب‌دهی WASM, version - نسخه موتور"
 
-note right of Engine
-  کلیشه <<Engine>> با برچسب‌ها:
-  • {cached} - نتایج کش می‌شوند
-  • {wasm} - شتاب‌دهی WASM
-  • {version} - نسخه موتور
-end note
+    note for API "کلیشه API با برچسب‌ها: rateLimited - محدود نرخ, noCache - بدون کش, timeout - مهلت درخواست, retry - حداکثر تلاش مجدد"
 
-note right of API
-  کلیشه <<API>> با برچسب‌ها:
-  • {rateLimited} - محدود نرخ
-  • {noCache} - بدون کش
-  • {timeout} - مهلت درخواست
-  • {retry} - حداکثر تلاش مجدد
-end note
-
-note right of AI
-  کلیشه <<AI>> با برچسب‌ها:
-  • {rateLimited} - محدود نرخ
-  • {streaming} - پشتیبانی جریانی
-  • {cached} - کش پاسخ‌ها
-  • {tokenLimit} - سقف توکن
-end note
-
-@enduml`,
+    note for AI "کلیشه AI با برچسب‌ها: rateLimited - محدود نرخ, streaming - پشتیبانی جریانی, cached - کش پاسخ‌ها, tokenLimit - سقف توکن"`,
   },
   {
     id: 'uml-profile-l3',
@@ -2876,125 +2826,111 @@ end note
   TSEApi با کلیشه API و محدودیت نرخ اعمال شده است.
   ZaiShared با کلیشه AI و پشتیبانی جریانی اعمال شده است.`,
     level: 3,
-    code: `@startuml
-' نمودار پروفایل سطح ۳ - اعمال کلیشه‌ها با OCL
-title سامانه تحلیل تکنیکال مالی ایران\\nنمودار پروفایل - سطح ۳: اعمال کلیشه‌ها با OCL
+    code: `classDiagram
+    direction TB
 
-class TAEngine <<Engine>> {
-  +analyze(): AnalysisResult
-  +calcTrend(): TrendDirection
-  {cached} cacheTTL = 300
-  {wasm} accelerated = true
-  {version} engineVersion = "4.2"
-}
+    class TAEngine {
+        <<Engine>>
+        +analyze() AnalysisResult
+        +calcTrend() TrendDirection
+        +cacheTTL : 300
+        +accelerated : true
+        +engineVersion : 4.2
+    }
 
-class RegimeEngine <<Engine>> {
-  +detectRegime(): RegimeResult
-  +fuzzyMembership(): number
-  {cached} cacheTTL = 600
-  {wasm} accelerated = false
-  {version} engineVersion = "3.0"
-}
+    class RegimeEngine {
+        <<Engine>>
+        +detectRegime() RegimeResult
+        +fuzzyMembership() number
+        +cacheTTL : 600
+        +accelerated : false
+        +engineVersion : 3.0
+    }
 
-class MLEngine <<Engine>> {
-  +trainAdaptive(): TrainingResult
-  +predict(): PredictionResult
-  {cached} cacheTTL = 3600
-  {wasm} accelerated = false
-  {version} engineVersion = "3.1"
-}
+    class MLEngine {
+        <<Engine>>
+        +trainAdaptive() TrainingResult
+        +predict() PredictionResult
+        +cacheTTL : 3600
+        +accelerated : false
+        +engineVersion : 3.1
+    }
 
-class TSEApi <<API>> {
-  +fetchCandlesticks(): Candlestick[]
-  +fetchSymbols(): Symbol[]
-  {rateLimited} maxRPS = 1.0
-  {noCache} disableCache = false
-  {timeout} requestTimeout = 30000
-  {retry} maxRetries = 3
-}
+    class TSEApi {
+        <<API>>
+        +fetchCandlesticks() Candlestick[]
+        +fetchSymbols() Symbol[]
+        +maxRPS : 1.0
+        +disableCache : false
+        +requestTimeout : 30000
+        +maxRetries : 3
+    }
 
-class TsetmcIndexApi <<API>> {
-  +fetchMainIndex(): IndexData
-  {rateLimited} maxRPS = 2.0
-  {noCache} disableCache = true
-  {timeout} requestTimeout = 15000
-}
+    class TsetmcIndexApi {
+        <<API>>
+        +fetchMainIndex() IndexData
+        +maxRPS : 2.0
+        +disableCache : true
+        +requestTimeout : 15000
+    }
 
-class TgjuApi <<API>> {
-  +fetchHistory(): HistoricalData
-  {rateLimited} maxRPS = 1.0
-  {timeout} requestTimeout = 20000
-  {retry} maxRetries = 2
-}
+    class TgjuApi {
+        <<API>>
+        +fetchHistory() HistoricalData
+        +maxRPS : 1.0
+        +requestTimeout : 20000
+        +maxRetries : 2
+    }
 
-class YahooApi <<API>> {
-  +fetchHistory(): HistoricalData
-  {rateLimited} maxRPS = 0.5
-  {timeout} requestTimeout = 10000
-  {retry} maxRetries = 2
-}
+    class YahooApi {
+        <<API>>
+        +fetchHistory() HistoricalData
+        +maxRPS : 0.5
+        +requestTimeout : 10000
+        +maxRetries : 2
+    }
 
-class ZaiShared <<AI>> {
-  +dedicatedAIChatCompletion(): ChatResponse
-  +rateLimitedPageReader(): PageContent
-  {rateLimited} maxRPS = 10.0
-  {streaming} supportsStreaming = true
-  {cached} cacheTTL = 300
-  {tokenLimit} maxTokens = 4096
-}
+    class ZaiShared {
+        <<AI>>
+        +dedicatedAIChatCompletion() ChatResponse
+        +rateLimitedPageReader() PageContent
+        +maxRPS : 10.0
+        +supportsStreaming : true
+        +cacheTTL : 300
+        +maxTokens : 4096
+    }
 
-class AIPostProcessor <<Processor>> {
-  +stripCodes(): string
-  +fixPersian(): string
-  +validatePrices(): ValidationResult
-}
+    class AIPostProcessor {
+        <<Processor>>
+        +stripCodes() string
+        +fixPersian() string
+        +validatePrices() ValidationResult
+    }
 
-class SRAnalyzer <<Analyzer>> {
-  +detectLevels(): SRLevel[]
-  +computeStrength(): number
-  {cached} cacheTTL = 600
-  {threshold} threshold = 0.5
-}
+    class SRAnalyzer {
+        <<Analyzer>>
+        +detectLevels() SRLevel[]
+        +computeStrength() number
+        +cacheTTL : 600
+        +threshold : 0.5
+    }
 
-class VolumeProfile <<Analyzer>> {
-  +approximate(): VolumeBin[]
-  +poc(): number
-  {cached} cacheTTL = 300
-}
+    class VolumeProfile {
+        <<Analyzer>>
+        +approximate() VolumeBin[]
+        +poc() number
+        +cacheTTL : 300
+    }
 
-note bottom of TAEngine
-  OCL: context TAEngine inv:
-  self.cacheTTL > 0 and
-  self.engineVersion.isNotEmpty()
-end note
+    note for TAEngine "OCL: context TAEngine inv: self.cacheTTL > 0 and self.engineVersion.isNotEmpty()"
 
-note bottom of TSEApi
-  OCL: context TSEApi inv:
-  self.maxRPS > 0 and
-  self.requestTimeout > 0 and
-  self.maxRetries >= 0
-end note
+    note for TSEApi "OCL: context TSEApi inv: self.maxRPS > 0 and self.requestTimeout > 0 and self.maxRetries >= 0"
 
-note bottom of ZaiShared
-  OCL: context ZaiShared inv:
-  self.maxRPS > 0 and
-  self.maxTokens > 0 and
-  self.cacheTTL > 0
-end note
+    note for ZaiShared "OCL: context ZaiShared inv: self.maxRPS > 0 and self.maxTokens > 0 and self.cacheTTL > 0"
 
-note bottom of MLEngine
-  OCL: context MLEngine inv:
-  self.cacheTTL >= 300 and
-  self.engineVersion.startsWith("3.")
-end note
+    note for MLEngine "OCL: context MLEngine inv: self.cacheTTL >= 300 and self.engineVersion.startsWith(3.)"
 
-note bottom of SRAnalyzer
-  OCL: context SRAnalyzer inv:
-  self.threshold >= 0.0 and
-  self.threshold <= 1.0
-end note
-
-@enduml`,
+    note for SRAnalyzer "OCL: context SRAnalyzer inv: self.threshold >= 0.0 and self.threshold <= 1.0"`,
   },
 ] as const;
 
@@ -3009,47 +2945,38 @@ export const UML_BEHAV_DIAGRAMS = [
   منابع داده به‌عنوان بازیگر خارجی داده‌های بازار را تأمین می‌کنند.
   هر کاربرد نمایانگر یک قابلیت اصلی سامانه از دید کاربر است.`,
     level: 1,
-    code: `@startuml
-left to right direction
-skinparam packageStyle rectangle
-skinparam actorStyle awesome
+    code: `flowchart TB
+    classDef actor fill:#ffecb3,stroke:#ff8f00,stroke-width:2px,color:#000
+    classDef usecase fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef note fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:#000,font-style:italic
 
-actor "کاربر\\n(User)" as User
-actor "مدیر سامانه\\n(SystemAdmin)" as Admin
-actor "منبع داده\\n(DataSource)" as DataSource
+    User{{"کاربر<br/>(User)"}}:::actor
+    Admin{{"مدیر سامانه<br/>(SystemAdmin)"}}:::actor
+    DataSource{{"منبع داده<br/>(DataSource)"}}:::actor
 
-rectangle "سامانه تحلیل تکنیکال مالی ایران" {
-  usecase "تحلیل نماد\\n(Analyze Symbol)" as UC1
-  usecase "مشاهده شاخص‌ها\\n(View Indicators)" as UC2
-  usecase "تولید گزارش هوش مصنوعی\\n(Generate AI Report)" as UC3
-  usecase "مدیریت شاخص‌ها\\n(Manage Indices)" as UC4
-  usecase "واکشی داده‌های بازار\\n(Fetch Market Data)" as UC5
-  usecase "پیکربندی سامانه\\n(System Configuration)" as UC6
-}
+    subgraph System["سامانه تحلیل تکنیکال مالی ایران"]
+        UC1("تحلیل نماد<br/>(Analyze Symbol)"):::usecase
+        UC2("مشاهده شاخص‌ها<br/>(View Indicators)"):::usecase
+        UC3("تولید گزارش هوش مصنوعی<br/>(Generate AI Report)"):::usecase
+        UC4("مدیریت شاخص‌ها<br/>(Manage Indices)"):::usecase
+        UC5("واکشی داده‌های بازار<br/>(Fetch Market Data)"):::usecase
+        UC6("پیکربندی سامانه<br/>(System Configuration)"):::usecase
+    end
 
-User --> UC1
-User --> UC2
-User --> UC3
-Admin --> UC4
-Admin --> UC6
-DataSource --> UC5
+    User --> UC1
+    User --> UC2
+    User --> UC3
+    Admin --> UC4
+    Admin --> UC6
+    DataSource --> UC5
 
-UC1 ..> UC5 : «نیاز»
-UC3 ..> UC5 : «نیاز»
+    UC1 -.->|"«include»"| UC5
+    UC3 -.->|"«include»"| UC5
 
-note right of UC1
-  تحلیل تکنیکال کامل نماد
-  شامل: RSI, MACD, BB,
-  Ichimoku, Stochastic
-end note
-
-note right of UC3
-  تولید تحلیل متنی
-  توسط هوش مصنوعی
-  با مدل MSLV4
-end note
-
-@enduml`,
+    N1["تحلیل تکنیکال کامل نماد<br/>شامل: RSI, MACD, BB,<br/>Ichimoku, Stochastic"]:::note
+    N2["تولید تحلیل متنی<br/>توسط هوش مصنوعی<br/>با مدل MSLV4"]:::note
+    UC1 -.- N1
+    UC3 -.- N2`,
   },
   {
     id: 'UC-L2',
@@ -3061,53 +2988,49 @@ end note
   مشاهده شاخص‌ها شامل انتخاب بازه زمانی و کش‌بازخوانی است.
   هر رابطه شامل نشان‌دهنده وابستگی اجباری است.`,
     level: 2,
-    code: `@startuml
-left to right direction
-skinparam actorStyle awesome
+    code: `flowchart TB
+    classDef actor fill:#ffecb3,stroke:#ff8f00,stroke-width:2px,color:#000
+    classDef usecase fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef note fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:#000,font-style:italic
 
-actor "کاربر\\n(User)" as User
-actor "مدیر سامانه\\n(SystemAdmin)" as Admin
-actor "منبع داده\\n(DataSource)" as DataSource
+    User{{"کاربر<br/>(User)"}}:::actor
+    Admin{{"مدیر سامانه<br/>(SystemAdmin)"}}:::actor
+    DataSource{{"منبع داده<br/>(DataSource)"}}:::actor
 
-rectangle "سامانه تحلیل تکنیکال مالی ایران" {
-  usecase "تحلیل نماد\\n(Analyze Symbol)" as UC1
-  usecase "مشاهده شاخص‌ها\\n(View Indicators)" as UC2
-  usecase "تولید گزارش AI\\n(Generate AI Report)" as UC3
-  usecase "مدیریت شاخص‌ها\\n(Manage Indices)" as UC4
+    subgraph System["سامانه تحلیل تکنیکال مالی ایران"]
+        UC1("تحلیل نماد<br/>(Analyze Symbol)"):::usecase
+        UC2("مشاهده شاخص‌ها<br/>(View Indicators)"):::usecase
+        UC3("تولید گزارش AI<br/>(Generate AI Report)"):::usecase
+        UC4("مدیریت شاخص‌ها<br/>(Manage Indices)"):::usecase
+        UC_Fetch("واکشی داده<br/>(Fetch Data)"):::usecase
+        UC_Compute("محاسبه شاخص‌ها<br/>(Compute Indicators)"):::usecase
+        UC_Regime("تشخیص رژیم<br/>(Detect Regime)"):::usecase
+        UC_PreAI("پیش‌پردازش AI<br/>(AI Preprocess)"):::usecase
+        UC_PostAI("پس‌پردازش AI<br/>(AI Postprocess)"):::usecase
+        UC_Fallback("تحلیل جایگزین<br/>(Fallback Analysis)"):::usecase
+        UC_Timeframe("انتخاب بازه زمانی<br/>(Select Timeframe)"):::usecase
+        UC_Cache("کش‌بازخوانی<br/>(Cache Lookup)"):::usecase
+        UC_Config("پیکربندی منابع<br/>(Configure Sources)"):::usecase
+    end
 
-  usecase "واکشی داده\\n(Fetch Data)" as UC_Fetch
-  usecase "محاسبه شاخص‌ها\\n(Compute Indicators)" as UC_Compute
-  usecase "تشخیص رژیم\\n(Detect Regime)" as UC_Regime
-  usecase "پیش‌پردازش AI\\n(AI Preprocess)" as UC_PreAI
-  usecase "پس‌پردازش AI\\n(AI Postprocess)" as UC_PostAI
-  usecase "تحلیل جایگزین\\n(Fallback Analysis)" as UC_Fallback
-  usecase "انتخاب بازه زمانی\\n(Select Timeframe)" as UC_Timeframe
-  usecase "کش‌بازخوانی\\n(Cache Lookup)" as UC_Cache
-  usecase "پیکربندی منابع\\n(Configure Sources)" as UC_Config
-}
+    User --> UC1
+    User --> UC2
+    User --> UC3
+    Admin --> UC4
+    DataSource --> UC_Fetch
 
-User --> UC1
-User --> UC2
-User --> UC3
-Admin --> UC4
-DataSource --> UC_Fetch
+    UC1 -.->|"«include»"| UC_Fetch
+    UC1 -.->|"«include»"| UC_Compute
+    UC1 -.->|"«include»"| UC_Regime
+    UC3 -.->|"«include»"| UC_PreAI
+    UC3 -.->|"«include»"| UC_PostAI
+    UC3 -.->|"«extend»"| UC_Fallback
+    UC2 -.->|"«include»"| UC_Timeframe
+    UC2 -.->|"«include»"| UC_Cache
+    UC4 -.->|"«include»"| UC_Config
 
-UC1 .> UC_Fetch : <<include>>
-UC1 .> UC_Compute : <<include>>
-UC1 .> UC_Regime : <<include>>
-UC3 .> UC_PreAI : <<include>>
-UC3 .> UC_PostAI : <<include>>
-UC3 .> UC_Fallback : <<extend>>
-UC2 .> UC_Timeframe : <<include>>
-UC2 .> UC_Cache : <<include>>
-UC4 .> UC_Config : <<include>>
-
-note bottom of UC_Fallback
-  در صورت خطای 429 یا
-  نرخ‌محدودی AI
-end note
-
-@enduml`,
+    N1["در صورت خطای 429 یا<br/>نرخ‌محدودی AI"]:::note
+    UC_Fallback -.- N1`,
   },
   {
     id: 'UC-L3',
@@ -3120,83 +3043,67 @@ end note
   تشخیص رژیم در صورت نبود رژیم واضح، رژیم «نامشخص» برمی‌گرداند.
   پس‌پردازش AI در صورت نامعتبر بودن خروجی، بازتولید انجام می‌دهد.`,
     level: 3,
-    code: `@startuml
-left to right direction
-skinparam actorStyle awesome
+    code: `flowchart TB
+    classDef actor fill:#ffecb3,stroke:#ff8f00,stroke-width:2px,color:#000
+    classDef usecase fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef note fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:#000,font-style:italic
 
-actor "کاربر\\n(User)" as User
+    User{{"کاربر<br/>(User)"}}:::actor
 
-rectangle "سامانه تحلیل تکنیکال مالی ایران" {
-  usecase "تحلیل نماد\\n(Analyze Symbol)" as UC1
-  usecase "واکشی داده\\n(Fetch Data)" as UC_Fetch
-  usecase "واکشی از TSE\\n(Fetch TSE)" as UC_TSE
-  usecase "واکشی از TGJU\\n(Fetch TGJU)" as UC_TGJU
-  usecase "واکشی از Yahoo\\n(Fetch Yahoo)" as UC_Yahoo
+    subgraph System["سامانه تحلیل تکنیکال مالی ایران"]
+        UC1("تحلیل نماد<br/>(Analyze Symbol)"):::usecase
+        UC_Fetch("واکشی داده<br/>(Fetch Data)"):::usecase
+        UC_TSE("واکشی از TSE<br/>(Fetch TSE)"):::usecase
+        UC_TGJU("واکشی از TGJU<br/>(Fetch TGJU)"):::usecase
+        UC_Yahoo("واکشی از Yahoo<br/>(Fetch Yahoo)"):::usecase
+        UC3("تولید گزارش AI<br/>(Generate AI Report)"):::usecase
+        UC_MSLV4("ارسال به MSLV4<br/>(Send to MSLV4)"):::usecase
+        UC_ZaiSDK("ارسال به ZaiSDK<br/>(Send to ZaiSDK)"):::usecase
+        UC_Rule("تحلیل قاعده‌محور<br/>(Rule-based Analysis)"):::usecase
+        UC_Fallback("تحلیل جایگزین<br/>(Fallback Analysis)"):::usecase
+        UC_Compute("محاسبه شاخص‌ها<br/>(Compute Indicators)"):::usecase
+        UC_CacheCompute("کشل شاخص‌ها<br/>(Cached Indicators)"):::usecase
+        UC_Regime("تشخیص رژیم<br/>(Detect Regime)"):::usecase
+        UC_UnknownRegime("رژیم نامشخص<br/>(Unknown Regime)"):::usecase
+        UC_PostAI("پس‌پردازش AI<br/>(AI Postprocess)"):::usecase
+        UC_RegenAI("بازتولید AI<br/>(AI Regeneration)"):::usecase
+        UC_429("مدیریت خطای 429<br/>(Handle Rate Limit)"):::usecase
+        UC_Timeout("مدیریت تایم‌اوت<br/>(Handle Timeout)"):::usecase
+        UC_Insuff("داده ناکافی<br/>(Insufficient Data)"):::usecase
+    end
 
-  usecase "تولید گزارش AI\\n(Generate AI Report)" as UC3
-  usecase "ارسال به MSLV4\\n(Send to MSLV4)" as UC_MSLV4
-  usecase "ارسال به ZaiSDK\\n(Send to ZaiSDK)" as UC_ZaiSDK
+    User --> UC1
+    User --> UC3
 
-  usecase "تحلیل قاعده‌محور\\n(Rule-based Analysis)" as UC_Rule
-  usecase "تحلیل جایگزین\\n(Fallback Analysis)" as UC_Fallback
+    UC1 -.->|"«include»"| UC_Fetch
+    UC1 -.->|"«include»"| UC_Compute
+    UC1 -.->|"«include»"| UC_Regime
+    UC3 -.->|"«include»"| UC_MSLV4
+    UC3 -.->|"«include»"| UC_PostAI
 
-  usecase "محاسبه شاخص‌ها\\n(Compute Indicators)" as UC_Compute
-  usecase "کشل شاخص‌ها\\n(Cached Indicators)" as UC_CacheCompute
+    UC_Fetch -.->|"«include»"| UC_TSE
+    UC_TSE -.->|"«extend»"| UC_TGJU
+    UC_TGJU -.->|"«extend»"| UC_Yahoo
+    UC_Fetch -.->|"«extend»"| UC_Timeout
+    UC_Fetch -.->|"«extend»"| UC_Insuff
 
-  usecase "تشخیص رژیم\\n(Detect Regime)" as UC_Regime
-  usecase "رژیم نامشخص\\n(Unknown Regime)" as UC_UnknownRegime
+    UC3 -.->|"«extend»"| UC_Fallback
+    UC_Fallback -.->|"«include»"| UC_Rule
+    UC3 -.->|"«extend»"| UC_429
+    UC_429 -.->|"«include»"| UC_Rule
 
-  usecase "پس‌پردازش AI\\n(AI Postprocess)" as UC_PostAI
-  usecase "بازتولید AI\\n(AI Regeneration)" as UC_RegenAI
-  usecase "مدیریت خطای 429\\n(Handle Rate Limit)" as UC_429
-  usecase "مدیریت تایم‌اوت\\n(Handle Timeout)" as UC_Timeout
-  usecase "داده ناکافی\\n(Insufficient Data)" as UC_Insuff
-}
+    UC_Compute -.->|"«extend»"| UC_CacheCompute
+    UC_Regime -.->|"«extend»"| UC_UnknownRegime
+    UC_PostAI -.->|"«extend»"| UC_RegenAI
 
-User --> UC1
-User --> UC3
+    UC_MSLV4 -.->|"«include»"| UC_ZaiSDK
 
-UC1 .> UC_Fetch : <<include>>
-UC1 .> UC_Compute : <<include>>
-UC1 .> UC_Regime : <<include>>
-UC3 .> UC_MSLV4 : <<include>>
-UC3 .> UC_PostAI : <<include>>
-
-UC_Fetch .> UC_TSE : <<include>>
-UC_TSE .> UC_TGJU : <<extend>>
-UC_TGJU .> UC_Yahoo : <<extend>>
-UC_Fetch .> UC_Timeout : <<extend>>
-UC_Fetch .> UC_Insuff : <<extend>>
-
-UC3 .> UC_Fallback : <<extend>>
-UC_Fallback .> UC_Rule : <<include>>
-UC3 .> UC_429 : <<extend>>
-UC_429 .> UC_Rule : <<include>>
-
-UC_Compute .> UC_CacheCompute : <<extend>>
-UC_Regime .> UC_UnknownRegime : <<extend>>
-UC_PostAI .> UC_RegenAI : <<extend>>
-
-UC_MSLV4 .> UC_ZaiSDK : <<include>>
-
-note right of UC_429
-  خطای HTTP 429:
-  Too Many Requests
-  → تحلیل قاعده‌محور
-end note
-
-note right of UC_Timeout
-  تایم‌اوت واکشی:
-  → تلاش از منبع بعدی
-end note
-
-note right of UC_Insuff
-  داده ناکافی:
-  → محاسبه کشل شده
-  → هشدار به کاربر
-end note
-
-@enduml`,
+    N1["خطای HTTP 429:<br/>Too Many Requests<br/>→ تحلیل قاعده‌محور"]:::note
+    N2["تایم‌اوت واکشی:<br/>→ تلاش از منبع بعدی"]:::note
+    N3["داده ناکافی:<br/>→ محاسبه کشل شده<br/>→ هشدار به کاربر"]:::note
+    UC_429 -.- N1
+    UC_Timeout -.- N2
+    UC_Insuff -.- N3`,
   },
   {
     id: 'ACT-L1',
@@ -3208,28 +3115,35 @@ end note
   پیش‌بینی ML را انجام می‌دهد، متن AI را تولید می‌کند
   و در نهایت نتایج را نمایش می‌دهد. این سطح فورک/جوین ندارد.`,
     level: 1,
-    code: `@startuml
-skinparam activityStyle rectangle
+    code: `flowchart TB
+    classDef startend fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef activity fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef note fill:#fff9c4,stroke:#f9a825,stroke-width:1px,color:#000,font-style:italic
 
-title جریان اصلی: انتخاب و تحلیل نماد
+    START(("شروع")):::startend
+    A1["انتخاب نماد توسط کاربر<br/>(Select Symbol)"]:::activity
+    A2["واکشی داده‌های بازار<br/>(Fetch Market Data)"]:::activity
+    A3["محاسبه شاخص‌های تکنیکال<br/>(Compute TA Indicators)"]:::activity
+    A4["تشخیص رژیم بازار<br/>(Detect Market Regime)"]:::activity
+    A5["ساخت گراف تصمیم<br/>(Build Decision Graph)"]:::activity
+    A6["پیش‌بینی یادگیری ماشین<br/>(ML Prediction)"]:::activity
+    A7["تولید متن تحلیل AI<br/>(Generate AI Analysis Text)"]:::activity
+    A8["نمایش نتایج<br/>(Display Results)"]:::activity
+    END((("پایان"))):::startend
 
-start
-:انتخاب نماد توسط کاربر\\n(Select Symbol);
-:واکشی داده‌های بازار\\n(Fetch Market Data);
-note right: از TSE, TGJU, Yahoo
-:محاسبه شاخص‌های تکنیکال\\n(Compute TA Indicators);
-note right: RSI, MACD, BB, Ichimoku
-:تشخیص رژیم بازار\\n(Detect Market Regime);
-note right: صعودی/نزولی/رنج
-:ساخت گراف تصمیم\\n(Build Decision Graph);
-:پیش‌بینی یادگیری ماشین\\n(ML Prediction);
-note right: MSLV4, ProbabilityTrend
-:تولید متن تحلیل AI\\n(Generate AI Analysis Text);
-note right: ZaiSDK → AIPostProcessor
-:نمایش نتایج\\n(Display Results);
-stop
+    START --> A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8 --> END
 
-@enduml`,
+    N2["از TSE, TGJU, Yahoo"]:::note
+    N3["RSI, MACD, BB, Ichimoku"]:::note
+    N4["صعودی/نزولی/رنج"]:::note
+    N6["MSLV4, ProbabilityTrend"]:::note
+    N7["ZaiSDK → AIPostProcessor"]:::note
+
+    A2 -.- N2
+    A3 -.- N3
+    A4 -.- N4
+    A6 -.- N6
+    A7 -.- N7`,
   },
   {
     id: 'ACT-L2',
@@ -3241,65 +3155,82 @@ stop
   تولید AI نیز در صورت موفقیت و در صورت نرخ‌محدودی (429)
   مسیرهای متفاوتی دارد. این سطح منطق شرطی کامل را نشان می‌دهد.`,
     level: 2,
-    code: `@startuml
-skinparam activityStyle rectangle
+    code: `flowchart TB
+    classDef startend fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef activity fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef decision fill:#ffe0b2,stroke:#e65100,stroke-width:2px,color:#000
+    classDef note fill:#fff9c4,stroke:#f9a825,stroke-width:1px,color:#000,font-style:italic
 
-title جریان‌های موازی و شرطی: تحلیل نماد
+    START(("شروع")):::startend
+    A1["انتخاب نماد<br/>(Select Symbol)"]:::activity
 
-start
-:انتخاب نماد\\n(Select Symbol);
+    FORK{{"فورک"}}:::decision
+    F_TSE["واکشی از TSE API<br/>(Fetch TSE)"]:::activity
+    F_TGJU["واکشی از TGJU API<br/>(Fetch TGJU)"]:::activity
+    F_Yahoo["واکشی از Yahoo API<br/>(Fetch Yahoo)"]:::activity
+    JOIN{{"جوین"}}:::decision
 
-fork
-  :واکشی از TSE API\\n(Fetch TSE);
-fork again
-  :واکشی از TGJU API\\n(Fetch TGJU);
-fork again
-  :واکشی از Yahoo API\\n(Fetch Yahoo);
-end fork
+    D1{{"واکشی موفق؟"}}:::decision
+    A_Merge["ادغام داده‌ها<br/>(Merge Data)"]:::activity
+    A_Fallback1["تلاش از منبع جایگزین<br/>(Try Fallback Source)"]:::activity
+    D2{{"منبع جایگزین موفق؟"}}:::decision
+    A_ShowErr["نمایش خطا به کاربر<br/>(Show Error)"]:::activity
 
-if (واکشی موفق؟) then (بله)
-  :ادغام داده‌ها\\n(Merge Data);
-else (خیر - شکست)
-  :تلاش از منبع جایگزین\\n(Try Fallback Source);
-  if (منبع جایگزین موفق؟) then (بله)
-    :ادغام داده‌ها\\n(Merge Data);
-  else (خیر)
-    :نمایش خطا به کاربر\\n(Show Error);
-    stop
-  endif
-endif
+    A_Compute["محاسبه شاخص‌های TA<br/>(Compute TA Indicators)"]:::activity
+    A_Regime["تشخیص رژیم بازار<br/>(Detect Regime)"]:::activity
+    D_Regime{{"نوع رژیم؟"}}:::decision
 
-:محاسبه شاخص‌های TA\\n(Compute TA Indicators);
+    A_Bull["تحلیل صعودی<br/>(Bullish Analysis)"]:::activity
+    A_BullPred["پیش‌بینی روند صعودی<br/>(Bullish Trend Prediction)"]:::activity
+    A_Bear["تحلیل نزولی<br/>(Bearish Analysis)"]:::activity
+    A_BearPred["پیش‌بینی روند نزولی<br/>(Bearish Trend Prediction)"]:::activity
+    A_Range["تحلیل رنج<br/>(Range Analysis)"]:::activity
+    A_RangePred["پیش‌بینی روند خنثی<br/>(Neutral Trend Prediction)"]:::activity
 
-:تشخیص رژیم بازار\\n(Detect Regime);
+    A_Graph["ساخت گراف تصمیم<br/>(Build Decision Graph)"]:::activity
+    A_AISend["ارسال درخواست AI<br/>(Send AI Request)"]:::activity
+    D_AI{{"پاسخ AI موفق؟"}}:::decision
+    A_AIPost["پس‌پردازش AI<br/>(AI Postprocess)"]:::activity
+    A_RuleBased["تحلیل قاعده‌محور جایگزین<br/>(Rule-based Fallback)"]:::activity
+    A_Display["نمایش نتایج<br/>(Display Results)"]:::activity
+    END((("پایان"))):::startend
 
-switch (نوع رژیم؟)
-case (صعودی - Bullish)
-  :تحلیل صعودی\\n(Bullish Analysis);
-  :پیش‌بینی روند صعودی\\n(Bullish Trend Prediction);
-case (نزولی - Bearish)
-  :تحلیل نزولی\\n(Bearish Analysis);
-  :پیش‌بینی روند نزولی\\n(Bearish Trend Prediction);
-case (رنج - Range)
-  :تحلیل رنج\\n(Range Analysis);
-  :پیش‌بینی روند خنثی\\n(Neutral Trend Prediction);
-endswitch
+    START --> A1 --> FORK
+    FORK --> F_TSE
+    FORK --> F_TGJU
+    FORK --> F_Yahoo
+    F_TSE --> JOIN
+    F_TGJU --> JOIN
+    F_Yahoo --> JOIN
+    JOIN --> D1
 
-:ساخت گراف تصمیم\\n(Build Decision Graph);
+    D1 -->|"بله"| A_Merge
+    D1 -->|"خیر - شکست"| A_Fallback1
+    A_Fallback1 --> D2
+    D2 -->|"بله"| A_Merge
+    D2 -->|"خیر"| A_ShowErr
+    A_ShowErr --> END
 
-:ارسال درخواست AI\\n(Send AI Request);
+    A_Merge --> A_Compute --> A_Regime --> D_Regime
+    D_Regime -->|"صعودی - Bullish"| A_Bull
+    D_Regime -->|"نزولی - Bearish"| A_Bear
+    D_Regime -->|"رنج - Range"| A_Range
+    A_Bull --> A_BullPred
+    A_Bear --> A_BearPred
+    A_Range --> A_RangePred
+    A_BullPred --> A_Graph
+    A_BearPred --> A_Graph
+    A_RangePred --> A_Graph
 
-if (پاسخ AI موفق؟) then (بله)
-  :پس‌پردازش AI\\n(AI Postprocess);
-else (خیر - نرخ‌محدودی 429)
-  :تحلیل قاعده‌محور جایگزین\\n(Rule-based Fallback);
-  note right: بدون AI
-endif
+    A_Graph --> A_AISend --> D_AI
+    D_AI -->|"بله"| A_AIPost
+    D_AI -->|"خیر - نرخ‌محدودی 429"| A_RuleBased
+    A_AIPost --> A_Display
+    A_RuleBased --> A_Display
+    A_Display --> END
 
-:نمایش نتایج\\n(Display Results);
-stop
-
-@enduml`,
+    N1["بدون AI"]:::note
+    A_RuleBased -.- N1`,
   },
   {
     id: 'ACT-L3',
@@ -3311,113 +3242,119 @@ stop
   نشان داده می‌شود. فرآیند تلاش مجدد (retry) برای واکشی داده
   و تولید AI مشخص است. این سطح کامل‌ترین نمودار فرآیند است.`,
     level: 3,
-    code: `@startuml
-skinparam activityStyle rectangle
+    code: `flowchart TB
+    classDef startend fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef activity fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef decision fill:#ffe0b2,stroke:#e65100,stroke-width:2px,color:#000
+    classDef note fill:#fff9c4,stroke:#f9a825,stroke-width:1px,color:#000,font-style:italic
 
-title جریان تفکیک‌شده با خط شناور: تحلیل کامل نماد
+    START(("شروع")):::startend
+    END((("پایان"))):::startend
 
-|Frontend|
-start
-:کاربر نماد را انتخاب می‌کند\\n(User Selects Symbol);
-:ارسال درخواست به API\\n(Send Request to API);
+    subgraph FE["Frontend"]
+        A_Select["کاربر نماد را انتخاب می‌کند<br/>(User Selects Symbol)"]:::activity
+        A_SendReq["ارسال درخواست به API<br/>(Send Request to API)"]:::activity
+        A_ValErr["نمایش خطای اعتبارسنجی<br/>(Show Validation Error)"]:::activity
+        A_CacheDisplay["نمایش نتایج کش‌شده<br/>(Display Cached Results)"]:::activity
+        A_ShowErr["نمایش خطا<br/>(Show Error)"]:::activity
+        A_Render["رندر نتایج تحلیل<br/>(Render Analysis Results)"]:::activity
+        A_DisplayFinal["نمایش نمودارها و متن AI<br/>(Display Charts & AI Text)"]:::activity
+    end
 
-|API Routes|
-:دریافت درخواست\\n(Receive Request);
-:اعتبارسنجی پارامترها\\n(Validate Parameters);
-if (پارامترها معتبر؟) then (بله)
-else (خیر)
-  |Frontend|
-  :نمایش خطای اعتبارسنجی\\n(Show Validation Error);
-  stop
-endif
+    subgraph APIR["API Routes"]
+        A_Receive["دریافت درخواست<br/>(Receive Request)"]:::activity
+        A_Validate["اعتبارسنجی پارامترها<br/>(Validate Parameters)"]:::activity
+        A_CheckCache["بررسی کش<br/>(Check Cache)"]:::activity
+        A_DataErr["خطای واکشی داده<br/>(Data Fetch Error)"]:::activity
+        A_BuildGraph["ساخت گراف تصمیم<br/>(Build Decision Graph)"]:::activity
+        A_Aggregate["تجمیع نتایج<br/>(Aggregate Results)"]:::activity
+        A_SendFE["ارسال به فرانت‌اند<br/>(Send to Frontend)"]:::activity
+    end
 
-|API Routes|
-:بررسی کش\\n(Check Cache);
-if (نتیجه کش موجود؟) then (بله)
-  |Frontend|
-  :نمایش نتایج کش‌شده\\n(Display Cached Results);
-  stop
-else (خیر)
-endif
+    subgraph DS["Data Sources"]
+        A_Fetch["واکشی داده‌های بازار<br/>(Fetch Market Data)"]:::activity
+        A_Retry["تلاش مجدد - Retry<br/>(Retry Fetch)"]:::activity
+    end
 
-|Data Sources|
-:واکشی داده‌های بازار\\n(Fetch Market Data);
-note right: TSE → TGJU → Yahoo (اولویت)
-if (واکشی موفق؟) then (خیر)
-  :تلاش مجدد (Retry)\\n(Retry Fetch);
-  if (تلاش دوم موفق؟) then (خیر)
-    |API Routes|
-    :خطای واکشی داده\\n(Data Fetch Error);
-    |Frontend|
-    :نمایش خطا\\n(Show Error);
-    stop
-  endif
-endif
+    subgraph TAE["TA Engine"]
+        A_Compute["محاسبه شاخص‌های تکنیکال<br/>(Compute TA Indicators)"]:::activity
+        A_DetectRegime["تشخیص رژیم بازار<br/>(Detect Market Regime)"]:::activity
+        A_Bullish["تحلیل صعودی<br/>(Bullish Analysis)"]:::activity
+        A_Bearish["تحلیل نزولی<br/>(Bearish Analysis)"]:::activity
+        A_RangeA["تحلیل رنج<br/>(Range Analysis)"]:::activity
+        A_Generic["تحلیل عمومی<br/>(Generic Analysis)"]:::activity
+    end
 
-|TA Engine|
-:محاسبه شاخص‌های تکنیکال\\n(Compute TA Indicators);
-note right
-  RSI, MACD, Bollinger Bands,
-  Ichimoku, Stochastic, ADX,
-  ATR, Volume Profile
-end note
+    subgraph MLE["ML Engine"]
+        A_SelectModel["انتخاب مدل ML<br/>(Select ML Model)"]:::activity
+        A_Predict["پیش‌بینی احتمالی<br/>(Probability Prediction)"]:::activity
+    end
 
-:تشخیص رژیم بازار\\n(Detect Market Regime);
-note right
-  بررسی: ADX, روند MA,
-  الگوی حجم
-end note
+    subgraph AIE["AI Engine"]
+        A_CheckRate["بررسی نرخ‌محدودی<br/>(Check Rate Limit)"]:::activity
+        A_BuildPrompt["ساخت پرامپت AI<br/>(Build AI Prompt)"]:::activity
+        A_SendZai["ارسال به ZaiSDK<br/>(Send to ZaiSDK)"]:::activity
+        A_PostProcess["پس‌پردازش AI<br/>(AIPostProcessor)"]:::activity
+        A_SaveCache["ذخیره در کش<br/>(Save to Cache)"]:::activity
+        A_RegenAI["بازتولید AI<br/>(Regenerate AI)"]:::activity
+        A_RuleFB1["تحلیل قاعده‌محور<br/>(Rule-based Fallback 1)"]:::activity
+        A_RuleFB2["تحلیل قاعده‌محور<br/>(Rule-based Fallback 2)"]:::activity
+    end
 
-switch (رژیم تشخیص‌داده‌شده)
-case (صعودی)
-  :تحلیل صعودی\\n(Bullish Analysis);
-case (نزولی)
-  :تحلیل نزولی\\n(Bearish Analysis);
-case (رنج)
-  :تحلیل رنج\\n(Range Analysis);
-case (نامشخص)
-  :تحلیل عمومی\\n(Generic Analysis);
-endswitch
+    D_Valid{{"پارامترها معتبر؟"}}:::decision
+    D_Cache{{"نتیجه کش موجود؟"}}:::decision
+    D_FetchOK{{"واکشی موفق؟"}}:::decision
+    D_RetryOK{{"تلاش دوم موفق؟"}}:::decision
+    D_Regime{{"رژیم تشخیص‌داده‌شده"}}:::decision
+    D_RateOK{{"نرخ مجاز؟"}}:::decision
+    D_AIOK{{"پاسخ موفق؟"}}:::decision
+    D_ValidOut{{"خروجی معتبر؟"}}:::decision
 
-|API Routes|
-:ساخت گراف تصمیم\\n(Build Decision Graph);
+    START --> A_Select --> A_SendReq --> A_Receive --> A_Validate --> D_Valid
+    D_Valid -->|"بله"| A_CheckCache
+    D_Valid -->|"خیر"| A_ValErr --> END
 
-|ML Engine|
-:انتخاب مدل ML\\n(Select ML Model);
-note right: AnalysisMLSelector
-:پیش‌بینی احتمالی\\n(Probability Prediction);
-note right: ProbabilityTrend, MSLV4
+    A_CheckCache --> D_Cache
+    D_Cache -->|"بله"| A_CacheDisplay --> END
+    D_Cache -->|"خیر"| A_Fetch
 
-|AI Engine|
-:بررسی نرخ‌محدودی\\n(Check Rate Limit);
-if (نرخ مجاز؟) then (بله)
-  :ساخت پرامپت AI\\n(Build AI Prompt);
-  :ارسال به ZaiSDK\\n(Send to ZaiSDK);
-  if (پاسخ موفق؟) then (بله)
-    :پس‌پردازش AI\\n(AIPostProcessor);
-    if (خروجی معتبر؟) then (بله)
-      :ذخیره در کش\\n(Save to Cache);
-    else (خیر)
-      :بازتولید AI\\n(Regenerate AI);
-    endif
-  else (خیر - 429/تایم‌اوت)
-    :تحلیل قاعده‌محور\\n(Rule-based Fallback);
-    note right: بدون هوش مصنوعی
-  endif
-else (خیر - نرخ‌محدود)
-  :تحلیل قاعده‌محور\\n(Rule-based Fallback);
-endif
+    A_Fetch --> D_FetchOK
+    D_FetchOK -->|"بله"| A_Compute
+    D_FetchOK -->|"خیر"| A_Retry
+    A_Retry --> D_RetryOK
+    D_RetryOK -->|"بله"| A_Compute
+    D_RetryOK -->|"خیر"| A_DataErr --> A_ShowErr --> END
 
-|API Routes|
-:تجمیع نتایج\\n(Aggregate Results);
-:ارسال به فرانت‌اند\\n(Send to Frontend);
+    A_Compute --> A_DetectRegime --> D_Regime
+    D_Regime -->|"صعودی"| A_Bullish
+    D_Regime -->|"نزولی"| A_Bearish
+    D_Regime -->|"رنج"| A_RangeA
+    D_Regime -->|"نامشخص"| A_Generic
 
-|Frontend|
-:رندر نتایج تحلیل\\n(Render Analysis Results);
-:نمایش نمودارها و متن AI\\n(Display Charts & AI Text);
-stop
+    A_Bullish --> A_BuildGraph
+    A_Bearish --> A_BuildGraph
+    A_RangeA --> A_BuildGraph
+    A_Generic --> A_BuildGraph
 
-@enduml`,
+    A_BuildGraph --> A_SelectModel --> A_Predict --> A_CheckRate --> D_RateOK
+
+    D_RateOK -->|"بله"| A_BuildPrompt --> A_SendZai --> D_AIOK
+    D_AIOK -->|"بله"| A_PostProcess --> D_ValidOut
+    D_ValidOut -->|"بله"| A_SaveCache --> A_Aggregate
+    D_ValidOut -->|"خیر"| A_RegenAI --> A_Aggregate
+    D_AIOK -->|"خیر - 429/تایم‌اوت"| A_RuleFB1 --> A_Aggregate
+    D_RateOK -->|"خیر - نرخ‌محدود"| A_RuleFB2 --> A_Aggregate
+
+    A_Aggregate --> A_SendFE --> A_Render --> A_DisplayFinal --> END
+
+    N1["TSE → TGJU → Yahoo - اولویت"]:::note
+    N2["RSI, MACD, BB, Ichimoku,<br/>Stochastic, ADX, ATR, Volume Profile"]:::note
+    N3["AnalysisMLSelector"]:::note
+    N4["ProbabilityTrend, MSLV4"]:::note
+    A_Fetch -.- N1
+    A_Compute -.- N2
+    A_SelectModel -.- N3
+    A_Predict -.- N4`,
   },
   {
     id: 'SM-L1',
@@ -3429,24 +3366,20 @@ stop
   گذارها ساده و بدون شرط نگه‌دار در این سطح هستند.
   نشست پس از نمایش نتایج دوباره بیکار می‌شود.`,
     level: 1,
-    code: `@startuml
-title حالات نشست تحلیل - سطح کلان
+    code: `stateDiagram-v2
+    [*] --> Idle : شروع نشست
 
-[*] -> Idle : شروع نشست
+    Idle --> Fetching : انتخاب نماد
+    Fetching --> Computing : داده واکشی شد
+    Computing --> Generating : شاخص‌ها محاسبه شد
+    Generating --> Displaying : تحلیل AI تولید شد
+    Displaying --> Idle : نتایج نمایش داده شد
 
-Idle --> Fetching : انتخاب نماد
-Fetching --> Computing : داده واکشی شد
-Computing --> Generating : شاخص‌ها محاسبه شد
-Generating --> Displaying : تحلیل AI تولید شد
-Displaying --> Idle : نتایج نمایش داده شد
-
-note right of Idle : آماده دریافت درخواست
-note right of Fetching : واکشی از TSE/TGJU/Yahoo
-note right of Computing : محاسبه TA + تشخیص رژیم
-note right of Generating : تولید AI + پیش‌بینی ML
-note right of Displaying : نمایش نتایج به کاربر
-
-@enduml`,
+    note right of Idle : آماده دریافت درخواست
+    note right of Fetching : واکشی از TSE/TGJU/Yahoo
+    note right of Computing : محاسبه TA + تشخیص رژیم
+    note right of Generating : تولید AI + پیش‌بینی ML
+    note right of Displaying : نمایش نتایج به کاربر`,
   },
   {
     id: 'SM-L2',
@@ -3458,50 +3391,46 @@ note right of Displaying : نمایش نتایج به کاربر
   به حالت خطا گذار می‌یابیم. حالت خطا امکان بازگشت به بیکار را دارد.
   هر محرک و شرط دقیقاً مشخص شده است.`,
     level: 2,
-    code: `@startuml
-title حالات نشست تحلیل - با محرک‌ها و شرط‌ها
+    code: `stateDiagram-v2
+    [*] --> Idle
 
-[*] -> Idle
+    Idle --> Fetching : selectSymbol(symbol) / [symbol != null]
 
-Idle --> Fetching : selectSymbol(symbol) / [symbol != null]
+    Fetching --> Computing : onDataFetched(data) / [data.isValid == true]
+    Fetching --> Fetching : onRetry() / [retryCount < 3]
+    Fetching --> Error : onFetchFailed(err) / [retryCount >= 3]
 
-Fetching --> Computing : onDataFetched(data) / [data.isValid == true]
-Fetching --> Fetching : onRetry() / [retryCount < 3]
-Fetching --> Error : onFetchFailed(err) / [retryCount >= 3]
+    Computing --> RegimeDetection : onIndicatorsComputed() / [data.length >= minLength]
+    Computing --> Error : onInsufficientData() / [data.length < minLength]
 
-Computing --> RegimeDetection : onIndicatorsComputed() / [data.length >= minLength]
-Computing --> Error : onInsufficientData() / [data.length < minLength]
+    RegimeDetection --> AIGeneration : onRegimeDetected(regime) / [regime != null]
+    RegimeDetection --> AIGeneration : onUnknownRegime() / [regime == null]
 
-RegimeDetection --> AIGeneration : onRegimeDetected(regime) / [regime != null]
-RegimeDetection --> AIGeneration : onUnknownRegime() / [regime == null]
+    AIGeneration --> Displaying : onAISuccess(response) / [response.isValid == true]
+    AIGeneration --> AIGeneration : onRateLimited() / [canRetry == true]
+    AIGeneration --> FallbackAnalysis : onAIFailed() / [canRetry == false]
 
-AIGeneration --> Displaying : onAISuccess(response) / [response.isValid == true]
-AIGeneration --> AIGeneration : onRateLimited() / [canRetry == true]
-AIGeneration --> FallbackAnalysis : onAIFailed() / [canRetry == false]
+    FallbackAnalysis --> Displaying : onFallbackComplete()
 
-FallbackAnalysis --> Displaying : onFallbackComplete()
+    Displaying --> Idle : onUserDismiss() / resetSession
+    Displaying --> Idle : onNewSymbolSelected(symbol) / [symbol != null]
 
-Displaying --> Idle : onUserDismiss() / resetSession
-Displaying --> Idle : onNewSymbolSelected(symbol) / [symbol != null]
+    Error --> Idle : onUserRetry()
 
-Error --> Idle : onUserRetry()
+    state Error {
+        [*] --> ErrorActive
+        ErrorActive --> [*] : onReset()
+    }
 
-state Error {
-  [*] --> ErrorActive
-  ErrorActive --> [*] : onReset()
-}
+    note right of Fetching
+        محرک: onDataFetched, onRetry, onFetchFailed
+        شرط: اعتبارسنجی داده و تعداد تلاش
+    end note
 
-note right of Fetching
-  محرک: onDataFetched, onRetry, onFetchFailed
-  شرط: اعتبارسنجی داده و تعداد تلاش
-end note
-
-note right of AIGeneration
-  محرک: onAISuccess, onRateLimited, onAIFailed
-  شرط: بررسی نرخ‌محدودی و اعتبار پاسخ
-end note
-
-@enduml`,
+    note right of AIGeneration
+        محرک: onAISuccess, onRateLimited, onAIFailed
+        شرط: بررسی نرخ‌محدودی و اعتبار پاسخ
+    end note`,
   },
   {
     id: 'SM-L3',
@@ -3514,83 +3443,75 @@ end note
   مختلف (TSE, TSETMC, TGJU, Yahoo) مدل شده است.
   تایم‌اوت و تلاش مجدد در هر زیرحالت مشخص شده‌اند.`,
     level: 3,
-    code: `@startuml
-title حالات مرکب: نشست تحلیل با زیرحالات
+    code: `stateDiagram-v2
+    [*] --> Idle
 
-[*] -> Idle
+    Idle --> FetchingData : selectSymbol(symbol)
 
-Idle --> FetchingData : selectSymbol(symbol)
+    state FetchingData {
+        [*] --> FetchFromTSE
+        FetchFromTSE --> FetchFromTSETMC : onTSEComplete() / [tseSuccess]
+        FetchFromTSE --> FetchFromTGJU : onTSEFailed() / [!tseSuccess]
+        FetchFromTSETMC --> MergeData : onTSETMCComplete()
+        FetchFromTGJU --> FetchFromYahoo : onTGJUFailed()
+        FetchFromYahoo --> MergeData : onYahooComplete()
+        FetchFromYahoo --> FetchFailed : onYahooFailed()
+        MergeData --> [*] : onDataReady(data)
+        FetchFailed --> [*] : onAllSourcesFailed()
+    }
 
-state FetchingData {
-  [*] --> FetchFromTSE
-  FetchFromTSE --> FetchFromTSETMC : onTSEComplete() / [tseSuccess]
-  FetchFromTSE --> FetchFromTGJU : onTSEFailed() / [!tseSuccess]
-  FetchFromTSETMC --> MergeData : onTSETMCComplete()
-  FetchFromTGJU --> FetchFromYahoo : onTGJUFailed()
-  FetchFromYahoo --> MergeData : onYahooComplete()
-  FetchFromYahoo --> FetchFailed : onYahooFailed()
-  MergeData --> [*] : onDataReady(data)
-  FetchFailed --> [*] : onAllSourcesFailed()
-}
+    FetchingData --> Computing : dataReady(data) / [data.valid]
+    FetchingData --> Error : allSourcesFailed()
 
-FetchingData --> Computing : dataReady(data) / [data.valid]
-FetchingData --> Error : allSourcesFailed()
+    Computing --> RegimeDetection : indicatorsReady()
+    RegimeDetection --> AIGeneration : regimeDetected(regime)
 
-Computing --> RegimeDetection : indicatorsReady()
-RegimeDetection --> AIGeneration : regimeDetected(regime)
+    state AIGeneration {
+        [*] --> CheckingRateLimit
+        CheckingRateLimit --> BuildingPrompt : onRateAllowed() / [!rateLimited]
+        CheckingRateLimit --> WaitingForRateWindow : onRateLimited() / [rateLimited]
+        WaitingForRateWindow --> CheckingRateLimit : onRateWindowAvailable() / [waitTime > 0]
+        BuildingPrompt --> SendingRequest : onPromptBuilt()
+        SendingRequest --> ReceivingResponse : onRequestSent()
+        SendingRequest --> RequestTimeout : onTimeout() / [elapsed > 90s]
+        RequestTimeout --> RetryDecision : onTimeoutHandled()
+        ReceivingResponse --> PostProcessing : onResponseReceived(response) / [response.valid]
+        ReceivingResponse --> InvalidResponse : onResponseReceived(response) / [!response.valid]
+        InvalidResponse --> RetryDecision : onInvalidHandled()
+        RetryDecision --> BuildingPrompt : onRetryAllowed() / [retryCount < 3]
+        RetryDecision --> [*] : onRetryExhausted() / [retryCount >= 3]
+        PostProcessing --> ValidatingOutput : onPostProcessed()
+        ValidatingOutput --> [*] : onOutputValid()
+        ValidatingOutput --> RetryDecision : onOutputInvalid()
+    }
 
-state AIGeneration {
-  [*] --> CheckingRateLimit
-  CheckingRateLimit --> BuildingPrompt : onRateAllowed() / [!rateLimited]
-  CheckingRateLimit --> WaitingForRateWindow : onRateLimited() / [rateLimited]
-  WaitingForRateWindow --> CheckingRateLimit : onRateWindowAvailable() / [waitTime > 0]
+    AIGeneration --> Displaying : aIResultReady(result)
+    AIGeneration --> FallbackAnalysis : aIFailed() / [allRetriesExhausted]
 
-  BuildingPrompt --> SendingRequest : onPromptBuilt()
-  SendingRequest --> ReceivingResponse : onRequestSent()
-  SendingRequest --> RequestTimeout : onTimeout() / [elapsed > 90s]
-  RequestTimeout --> RetryDecision : onTimeoutHandled()
+    FallbackAnalysis --> Displaying : fallbackComplete()
 
-  ReceivingResponse --> PostProcessing : onResponseReceived(response) / [response.valid]
-  ReceivingResponse --> InvalidResponse : onResponseReceived(response) / [!response.valid]
-  InvalidResponse --> RetryDecision : onInvalidHandled()
+    Displaying --> Idle : newSymbolOrDismiss()
 
-  RetryDecision --> BuildingPrompt : onRetryAllowed() / [retryCount < 3]
-  RetryDecision --> [*] : onRetryExhausted() / [retryCount >= 3]
+    state Error {
+        [*] --> ErrorLogged
+        ErrorLogged --> [*] : onUserRetry()
+    }
 
-  PostProcessing --> ValidatingOutput : onPostProcessed()
-  ValidatingOutput --> [*] : onOutputValid()
-  ValidatingOutput --> RetryDecision : onOutputInvalid()
-}
+    note right of FetchingData
+        حالات مرکب واکشی داده:
+        TSE → TSETMC → TGJU → Yahoo
+        با اولویت نزولی
+    end note
 
-AIGeneration --> Displaying : aIResultReady(result)
-AIGeneration --> FallbackAnalysis : aIFailed() / [allRetriesExhausted]
-
-FallbackAnalysis --> Displaying : fallbackComplete()
-
-Displaying --> Idle : newSymbolOrDismiss()
-
-state Error {
-  [*] --> ErrorLogged
-  ErrorLogged --> [*] : onUserRetry()
-}
-
-note right of FetchingData
-  حالات مرکب واکشی داده:
-  TSE → TSETMC → TGJU → Yahoo
-  با اولویت نزولی
-end note
-
-note right of AIGeneration
-  حالات مرکب تولید AI:
-  ۱. بررسی نرخ‌محدود
-  ۲. ساخت پرامپت
-  ۳. ارسال درخواست
-  ۴. دریافت پاسخ
-  ۵. پس‌پردازش
-  ۶. اعتبارسنجی خروجی
-end note
-
-@enduml`,
+    note right of AIGeneration
+        حالات مرکب تولید AI:
+        ۱. بررسی نرخ‌محدود
+        ۲. ساخت پرامپت
+        ۳. ارسال درخواست
+        ۴. دریافت پاسخ
+        ۵. پس‌پردازش
+        ۶. اعتبارسنجی خروجی
+    end note`,
   },
   {
     id: 'SEQ-L1',
@@ -3602,31 +3523,27 @@ end note
   داخلی هر لایه است و فقط پیام‌های اصلی را نشان می‌دهد.
   تعامل ساده و همگام فرض شده است.`,
     level: 1,
-    code: `@startuml
-title تعامل لایه‌ها: مشاهده تحلیل نماد
+    code: `sequenceDiagram
+    actor User as "کاربر"
+    participant FE as "Frontend<br/>(Next.js)"
+    participant API as "API Routes"
+    participant TA as "TA Engine"
+    participant DS as "Data Sources"
+    participant ML as "ML Engine"
+    participant AI as "AI Engine"
 
-actor "کاربر" as User
-participant "Frontend\\n(Next.js)" as FE
-participant "API Routes" as API
-participant "TA Engine" as TA
-participant "Data Sources" as DS
-participant "ML Engine" as ML
-participant "AI Engine" as AI
-
-User -> FE : انتخاب نماد (symbol)
-FE -> API : GET /api/analysis/{symbol}
-API -> DS : fetchMarketData(symbol)
-DS --> API : marketData
-API -> TA : computeIndicators(marketData)
-TA --> API : indicators
-API -> ML : predict(indicators)
-ML --> API : prediction
-API -> AI : generateAnalysis(indicators, prediction)
-AI --> API : analysisText
-API --> FE : {indicators, prediction, analysis}
-FE --> User : نمایش نتایج تحلیل
-
-@enduml`,
+    User ->> FE : انتخاب نماد (symbol)
+    FE ->> API : GET /api/analysis/{symbol}
+    API ->> DS : fetchMarketData(symbol)
+    DS -->> API : marketData
+    API ->> TA : computeIndicators(marketData)
+    TA -->> API : indicators
+    API ->> ML : predict(indicators)
+    ML -->> API : prediction
+    API ->> AI : generateAnalysis(indicators, prediction)
+    AI -->> API : analysisText
+    API -->> FE : {indicators, prediction, analysis}
+    FE -->> User : نمایش نتایج تحلیل`,
   },
   {
     id: 'SEQ-L2',
@@ -3639,43 +3556,39 @@ FE --> User : نمایش نتایج تحلیل
   ProbabilityTrend احتمال‌ها را محاسبه می‌کند.
   این سطح بدون مدیریت خطا است.`,
     level: 2,
-    code: `@startuml
-title تعامل جزئی: تولید تحلیل AI
+    code: `sequenceDiagram
+    autonumber
 
-autonumber
+    actor User as "کاربر"
+    participant FE as "Frontend"
+    participant API as "API Route<br/>/analysis"
+    participant MLSel as "Analysis<br/>MLSelector"
+    participant MSLV4 as "MSLV4<br/>Model"
+    participant ProbTrend as "Probability<br/>Trend"
+    participant Zai as "ZaiSDK"
+    participant AIPP as "AI<br/>PostProcessor"
 
-actor "کاربر" as User
-participant "Frontend" as FE
-participant "API Route\\n/analysis" as API
-participant "Analysis\\nMLSelector" as MLSel
-participant "MSLV4\\nModel" as MSLV4
-participant "Probability\\nTrend" as ProbTrend
-participant "ZaiSDK" as Zai
-participant "AI\\nPostProcessor" as AIPP
+    User ->> FE : requestAnalysis(symbol)
+    FE ->> API : POST /api/ai-analysis<br/>{symbol, indicators, regime}
+    API ->> MLSel : selectModel(indicators, regime)
+    MLSel -->> API : selectedModel = "MSLV4"
 
-User -> FE : requestAnalysis(symbol)
-FE -> API : POST /api/ai-analysis\\n{symbol, indicators, regime}
-API -> MLSel : selectModel(indicators, regime)
-MLSel --> API : selectedModel = "MSLV4"
+    API ->> MSLV4 : analyze(model, indicators, marketData)
+    MSLV4 ->> MSLV4 : buildPrompt(indicators, regime)
+    MSLV4 ->> Zai : sendPrompt(prompt, config)
+    Zai -->> MSLV4 : rawAIResponse
+    MSLV4 ->> AIPP : postProcess(rawAIResponse)
+    AIPP ->> AIPP : cleanMarkdown()
+    AIPP ->> AIPP : validateStructure()
+    AIPP ->> AIPP : extractSignals()
+    AIPP -->> MSLV4 : processedAnalysis
 
-API -> MSLV4 : analyze(model, indicators, marketData)
-MSLV4 -> MSLV4 : buildPrompt(indicators, regime)
-MSLV4 -> Zai : sendPrompt(prompt, config)
-Zai --> MSLV4 : rawAIResponse
-MSLV4 -> AIPP : postProcess(rawAIResponse)
-AIPP -> AIPP : cleanMarkdown()
-AIPP -> AIPP : validateStructure()
-AIPP -> AIPP : extractSignals()
-AIPP --> MSLV4 : processedAnalysis
+    MSLV4 ->> ProbTrend : computeProbability(indicators, regime)
+    ProbTrend -->> MSLV4 : probabilityResult
 
-MSLV4 -> ProbTrend : computeProbability(indicators, regime)
-ProbTrend --> MSLV4 : probabilityResult
-
-MSLV4 --> API : {analysis, probability, signals}
-API --> FE : {aiText, probability, confidence}
-FE --> User : نمایش تحلیل AI
-
-@enduml`,
+    MSLV4 -->> API : {analysis, probability, signals}
+    API -->> FE : {aiText, probability, confidence}
+    FE -->> User : نمایش تحلیل AI`,
   },
   {
     id: 'SEQ-L3',
@@ -3688,115 +3601,112 @@ FE --> User : نمایش تحلیل AI
   AIPostProcessor در صورت نامعتبر بودن خروجی، بازتولید درخواست می‌کند.
   این سطح کامل‌ترین نمودار دنباله با تمام جزئیات خطا و تلاش مجدد است.`,
     level: 3,
-    code: `@startuml
-title تعامل کامل: تحلیل با async، استثنا و تلاش مجدد
+    code: `sequenceDiagram
+    autonumber
 
-autonumber
+    actor User as "کاربر"
+    participant FE as "Frontend"
+    participant API as "API Route"
+    participant TSE as "TSE Api"
+    participant TGJU as "TGJU Api"
+    participant Yahoo as "Yahoo Api"
+    participant TA as "TA Engine"
+    participant RE as "Regime<br/>Engine"
+    participant DG as "Decision<br/>Graph"
+    participant MSL as "MSLV4"
+    participant Zai as "ZaiSDK"
+    participant AIPP as "AI Post<br/>Processor"
+    participant PT as "Prob<br/>Trend"
 
-actor "کاربر" as User
-participant "Frontend" as FE
-participant "API Route" as API
-participant "TSE Api" as TSE
-participant "TGJU Api" as TGJU
-participant "Yahoo Api" as Yahoo
-participant "TA Engine" as TA
-participant "Regime\\nEngine" as RE
-participant "Decision\\nGraph" as DG
-participant "MSLV4" as MSL
-participant "ZaiSDK" as Zai
-participant "AI Post\\nProcessor" as AIPP
-participant "Prob\\nTrend" as PT
+    Note over User,PT: واکشی ناهمگام داده
+    User ->> FE : selectSymbol("فولاد")
+    FE ->> API : GET /api/analysis/فولاد
 
-== واکشی ناهمگام داده ==
-User -> FE : selectSymbol("فولاد")
-FE -> API : GET /api/analysis/فولاد
-
-par واکشی موازی داده
-  API -> TSE : async fetchTSE("فولاد")
-  TSE --> API : tseData [بعد از 2s]
-and
-  API -> TGJU : async fetchTGJU("فولاد")
-  TGJU --> API : tgjuData [بعد از 3s]
-and
-  API -> Yahoo : async fetchYahoo("فولاد")
-  Yahoo --> API : yahooData [بعد از 1.5s]
-end
-
-API -> API : mergeData(tse, tgju, yahoo)
-
-alt داده ناکافی
-  API --> FE : 400 Insufficient Data
-  FE --> User : هشدار: داده ناکافی
-else داده کافی
-end
-
-== محاسبه تحلیل تکنیکال ==
-API -> TA : computeAll(marketData)
-TA --> API : indicators{RSI, MACD, BB, ...}
-
-API -> RE : detectRegime(indicators)
-RE --> RE : classifyADX()
-RE --> RE : classifyTrend()
-RE --> API : regime = "صعودی"
-
-API -> DG : buildGraph(indicators, regime)
-DG --> API : decisionGraph
-
-== پیش‌بینی ML ==
-API -> PT : computeProbability(indicators, regime)
-PT --> API : probability = 0.72
-
-== تولید AI با تلاش مجدد ==
-loop [تا ۳ تلاش]
-  API -> MSL : analyze(indicators, regime)
-  MSL -> MSL : buildPrompt()
-
-  opt بررسی نرخ‌محدود
-    MSL -> Zai : checkRateLimit()
-    alt نرخ‌محدود (429)
-      Zai --> MSL : 429 Too Many Requests
-      MSL -> MSL : exponentialBackoff(retryCount)
-      note right of MSL
-        تأخیر نمایی:
-        2^n ثانیه
-      end note
-    else نرخ مجاز
+    par واکشی موازی داده
+        API ->> TSE : async fetchTSE("فولاد")
+        TSE -->> API : tseData [بعد از 2s]
+    and
+        API ->> TGJU : async fetchTGJU("فولاد")
+        TGJU -->> API : tgjuData [بعد از 3s]
+    and
+        API ->> Yahoo : async fetchYahoo("فولاد")
+        Yahoo -->> API : yahooData [بعد از 1.5s]
     end
-  end
 
-  MSL -> Zai : generateText(prompt, config) [timeout: 90s]
+    API ->> API : mergeData(tse, tgju, yahoo)
 
-  alt پاسخ موفق
-    Zai --> MSL : rawResponse
-    MSL -> AIPP : postProcess(rawResponse)
-    AIPP -> AIPP : validateStructure()
-    alt خروجی معتبر
-      AIPP --> MSL : processedAnalysis
-      MSL --> API : finalResult
-    else خروجی نامعتبر
-      AIPP --> MSL : invalidOutput
-      note right of AIPP : بازتولید درخواست
+    alt داده ناکافی
+        API -->> FE : 400 Insufficient Data
+        FE -->> User : هشدار: داده ناکافی
+    else داده کافی
+        Note over API: ادامه فرآیند
     end
-  else تایم‌اوت
-    Zai --> MSL : TimeoutException
-    MSL -> MSL : logTimeout()
-  else خطای 429
-    Zai --> MSL : RateLimitException
-    MSL -> MSL : incrementRetryCount()
-  end
-end
 
-alt AI موفق
-  API --> FE : 200 {analysis, probability, signals}
-  FE --> User : نمایش کامل تحلیل
-else AI شکست خورد
-  API -> API : ruleBasedFallback(indicators, regime)
-  API --> FE : 200 {ruleBasedAnalysis}
-  FE --> User : نمایش تحلیل قاعده‌محور
-  note right of FE : بدون AI - تحلیل جایگزین
-end
+    Note over User,PT: محاسبه تحلیل تکنیکال
+    API ->> TA : computeAll(marketData)
+    TA -->> API : indicators{RSI, MACD, BB, ...}
 
-@enduml`,
+    API ->> RE : detectRegime(indicators)
+    RE ->> RE : classifyADX()
+    RE ->> RE : classifyTrend()
+    RE -->> API : regime = "صعودی"
+
+    API ->> DG : buildGraph(indicators, regime)
+    DG -->> API : decisionGraph
+
+    Note over User,PT: پیش‌بینی ML
+    API ->> PT : computeProbability(indicators, regime)
+    PT -->> API : probability = 0.72
+
+    Note over User,PT: تولید AI با تلاش مجدد
+    loop تا ۳ تلاش
+        API ->> MSL : analyze(indicators, regime)
+        MSL ->> MSL : buildPrompt()
+
+        opt بررسی نرخ‌محدود
+            MSL ->> Zai : checkRateLimit()
+            alt نرخ‌محدود (429)
+                Zai -->> MSL : 429 Too Many Requests
+                MSL ->> MSL : exponentialBackoff(retryCount)
+                Note right of MSL: تأخیر نمایی: 2^n ثانیه
+            else نرخ مجاز
+                Note over MSL: ادامه بدون تأخیر
+            end
+        end
+
+        MSL ->> Zai : generateText(prompt, config) [timeout: 90s]
+
+        alt پاسخ موفق
+            Zai -->> MSL : rawResponse
+            MSL ->> AIPP : postProcess(rawResponse)
+            AIPP ->> AIPP : validateStructure()
+            alt خروجی معتبر
+                AIPP -->> MSL : processedAnalysis
+                MSL -->> API : finalResult
+            else خروجی نامعتبر
+                AIPP -->> MSL : invalidOutput
+                Note right of AIPP: بازتولید درخواست
+            end
+        else خطا
+            alt تایم‌اوت
+                Zai -->> MSL : TimeoutException
+                MSL ->> MSL : logTimeout()
+            else خطای 429
+                Zai -->> MSL : RateLimitException
+                MSL ->> MSL : incrementRetryCount()
+            end
+        end
+    end
+
+    alt AI موفق
+        API -->> FE : 200 {analysis, probability, signals}
+        FE -->> User : نمایش کامل تحلیل
+    else AI شکست خورد
+        API ->> API : ruleBasedFallback(indicators, regime)
+        API -->> FE : 200 {ruleBasedAnalysis}
+        FE -->> User : نمایش تحلیل قاعده‌محور
+        Note right of FE: بدون AI - تحلیل جایگزین
+    end`,
   },
   {
     id: 'COMM-L1',
@@ -3808,33 +3718,38 @@ end
   این سطح بدون شماره‌گذاری پیام‌ها است.
   پیوندها معماری کلی سامانه را نشان می‌دهند.`,
     level: 1,
-    code: `@startuml
-title معماری ارتباطات سامانه تحلیل
+    code: `sequenceDiagram
+    participant FE as "Frontend"
+    participant API as "API Routes"
+    participant TA as "TA Engine"
+    participant RE as "Regime Engine"
+    participant DG as "Decision Graph"
+    participant ML as "ML Engine"
+    participant AI as "AI Engine"
+    participant DS as "Data Sources"
+    participant Zai as "ZaiSDK"
 
-object "Frontend" as FE
-object "API Routes" as API
-object "TA Engine" as TA
-object "Regime Engine" as RE
-object "Decision Graph" as DG
-object "ML Engine" as ML
-object "AI Engine" as AI
-object "Data Sources" as DS
-object "ZaiSDK" as Zai
+    Note over FE: رابط کاربر (Next.js)
+    Note over DS: TSE, TGJU, Yahoo
+    Note over Zai: کانال هوش مصنوعی
 
-FE -- API : HTTP Request/Response
-API -- TA : computeIndicators()
-API -- RE : detectRegime()
-API -- DG : buildGraph()
-API -- ML : predict()
-API -- AI : generateAnalysis()
-AI -- Zai : AI Generation
-API -- DS : fetchData()
+    FE ->> API : HTTP Request/Response
+    API ->> TA : computeIndicators()
+    API ->> RE : detectRegime()
+    API ->> DG : buildGraph()
+    API ->> ML : predict()
+    API ->> AI : generateAnalysis()
+    AI ->> Zai : AI Generation
+    API ->> DS : fetchData()
 
-note top of FE : رابط کاربر (Next.js)
-note bottom of DS : TSE, TGJU, Yahoo
-note bottom of Zai : کانال هوش مصنوعی
-
-@enduml`,
+    DS -->> API : data
+    TA -->> API : indicators
+    RE -->> API : regime
+    DG -->> API : decisionGraph
+    ML -->> API : prediction
+    Zai -->> AI : response
+    AI -->> API : analysis
+    API -->> FE : response`,
   },
   {
     id: 'COMM-L2',
@@ -3846,40 +3761,27 @@ note bottom of Zai : کانال هوش مصنوعی
   می‌سازد. هر پیام شماره‌گذاری شده است.
   ترتیب شماره‌ها نشان‌دهنده توالی اجرا است.`,
     level: 2,
-    code: `@startuml
-title ترتیب پیام‌ها: محاسبه احتمال روند
+    code: `sequenceDiagram
+    participant API as "API Route"
+    participant TA as "TA Engine"
+    participant RE as "Regime Engine"
+    participant MLSel as "AnalysisMLSelector"
+    participant MSL as "MSLV4"
+    participant PT as "ProbabilityTrend"
+    participant DG as "Decision Graph"
 
-object "API Route" as API
-object "TA Engine" as TA
-object "Regime Engine" as RE
-object "AnalysisMLSelector" as MLSel
-object "MSLV4" as MSL
-object "ProbabilityTrend" as PT
-object "Decision Graph" as DG
-
-API -- TA
-API -- RE
-API -- MLSel
-API -- MSL
-API -- PT
-API -- DG
-MSL -- PT
-
-' شماره‌گذاری پیام‌ها
-API -> TA : 1. computeAll(marketData)
-TA -> API : 2. return indicators
-API -> RE : 3. detectRegime(indicators)
-RE -> API : 4. return regime
-API -> MLSel : 5. selectModel(indicators, regime)
-MLSel -> API : 6. return "MSLV4"
-API -> MSL : 7. analyze(model, indicators)
-MSL -> PT : 8. computeProbability(indicators, regime)
-PT -> MSL : 9. return probability
-MSL -> API : 10. return prediction
-API -> DG : 11. buildGraph(indicators, regime, prediction)
-DG -> API : 12. return decisionGraph
-
-@enduml`,
+    API ->> TA : 1. computeAll(marketData)
+    TA -->> API : 2. return indicators
+    API ->> RE : 3. detectRegime(indicators)
+    RE -->> API : 4. return regime
+    API ->> MLSel : 5. selectModel(indicators, regime)
+    MLSel -->> API : 6. return "MSLV4"
+    API ->> MSL : 7. analyze(model, indicators)
+    MSL ->> PT : 8. computeProbability(indicators, regime)
+    PT -->> MSL : 9. return probability
+    MSL -->> API : 10. return prediction
+    API ->> DG : 11. buildGraph(indicators, regime, prediction)
+    DG -->> API : 12. return decisionGraph`,
   },
   {
     id: 'COMM-L3',
@@ -3891,56 +3793,40 @@ DG -> API : 12. return decisionGraph
   کش‌نوشتن و اعتبارسنجی انجام می‌شود. تمام پیام‌های داخلی
   و خارجی شماره‌گذاری شده‌اند.`,
     level: 3,
-    code: `@startuml
-title واکشی چندمنبعی: پیام‌های شماره‌گذاری‌شده
+    code: `sequenceDiagram
+    participant API as "API Route"
+    participant TSE as "TSE Api"
+    participant TSETMC as "TSETMC Index"
+    participant TGJU as "TGJU Api"
+    participant Yahoo as "Yahoo Api"
+    participant Cache as "Cache"
+    participant Val as "Validator"
 
-object "API Route" as API
-object "TSE Api" as TSE
-object "TSETMC Index" as TSETMC
-object "TGJU Api" as TGJU
-object "Yahoo Api" as Yahoo
-object "Cache" as Cache
-object "Validator" as Val
+    API ->> Cache : 1. checkCache(symbol)
+    Cache -->> API : 2. cacheMiss
+    API ->> TSE : 3. fetchTSE(symbol)
+    TSE ->> TSETMC : 4. fetchIndexData(symbol)
+    TSETMC -->> TSE : 5. indexData
+    TSE -->> API : 6. tseData [موفق]
+    API ->> Val : 7. validate(tseData)
+    Val -->> API : 8. valid=true
 
-API -- TSE
-API -- TSETMC
-API -- TGJU
-API -- Yahoo
-API -- Cache
-API -- Val
-TSE -- TSETMC
+    API ->> TGJU : 9. fetchTGJU(symbol) [داده تکمیلی]
+    TGJU -->> API : 10. tgjuData
+    API ->> Val : 11. validate(tgjuData)
+    Val -->> API : 12. valid=true
 
-API -> Cache : 1. checkCache(symbol)
-Cache -> API : 2. cacheMiss
-API -> TSE : 3. fetchTSE(symbol)
-TSE -> TSETMC : 4. fetchIndexData(symbol)
-TSETMC -> TSE : 5. indexData
-TSE -> API : 6. tseData [موفق]
-API -> Val : 7. validate(tseData)
-Val -> API : 8. valid=true
+    API ->> Yahoo : 13. fetchYahoo(symbol) [داده بین‌المللی]
+    Yahoo -->> API : 14. yahooData
+    API ->> Val : 15. validate(yahooData)
+    Val -->> API : 16. valid=true
 
-API -> TGJU : 9. fetchTGJU(symbol) [داده تکمیلی]
-TGJU -> API : 10. tgjuData
-API -> Val : 11. validate(tgjuData)
-Val -> API : 12. valid=true
+    API ->> API : 17. mergeData(tse, tgju, yahoo)
+    API ->> Cache : 18. saveCache(symbol, mergedData)
+    Cache -->> API : 19. saved
+    API ->> API : 20. return mergedData
 
-API -> Yahoo : 13. fetchYahoo(symbol) [داده بین‌المللی]
-Yahoo -> API : 14. yahooData
-API -> Val : 15. validate(yahooData)
-Val -> API : 16. valid=true
-
-API -> API : 17. mergeData(tse, tgju, yahoo)
-API -> Cache : 18. saveCache(symbol, mergedData)
-Cache -> API : 19. saved
-API -> API : 20. return mergedData
-
-note left of API
-  در صورت شکست هر منبع:
-  → منبع بعدی امتحان می‌شود
-  → اگر همه شکست خوردند: خطا
-end note
-
-@enduml`,
+    Note left of API: در صورت شکست هر منبع:<br/>→ منبع بعدی امتحان می‌شود<br/>→ اگر همه شکست خوردند: خطا`,
   },
   {
     id: 'IO-L1',
@@ -3952,45 +3838,27 @@ end note
   PlantUML از نمودار Interaction Overview پشتیبانی محدودی دارد
   لذا این نمودار با activity diagram با ref ها مدل شده است.`,
     level: 1,
-    code: `@startuml
-title فلوچارت کلان تعاملات سامانه
+    code: `flowchart TB
+    classDef startend fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef action fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef seqref fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#000
+    classDef decision fill:#fce4ec,stroke:#c62828,stroke-width:2px,color:#000
 
-start
+    Start([شروع]):::startend
+    A["انتخاب نماد توسط کاربر"]:::action
+    SEQ1["🔗 دنباله: انتخاب نماد<br/>(SEQ-SelectSymbol)<br/>Frontend → API"]:::seqref
+    D1{داده کش‌شده موجود؟}:::decision
+    B["بازگرداندن نتایج کش"]:::action
+    SEQ2["🔗 دنباله: واکشی داده<br/>(SEQ-FetchData)<br/>API → DataSources"]:::seqref
+    SEQ3["🔗 دنباله: تحلیل تکنیکال<br/>(SEQ-TAAnalysis)<br/>API → TA Engine → Regime Engine"]:::seqref
+    SEQ4["🔗 دنباله: پیش‌بینی و تولید AI<br/>(SEQ-MLAIPrediction)<br/>API → ML Engine → AI Engine"]:::seqref
+    SEQ5["🔗 دنباله: نمایش نتایج<br/>(SEQ-DisplayResults)<br/>API → Frontend"]:::seqref
+    End([پایان]):::startend
 
-:انتخاب نماد توسط کاربر;
-
-ref over "Frontend → API"
-  دنباله: انتخاب نماد
-  (SEQ-SelectSymbol)
-end ref
-
-if (داده کش‌شده موجود؟) then (بله)
-  :بازگرداندن نتایج کش;
-else (خیر)
-  ref over "API → DataSources"
-    دنباله: واکشی داده
-    (SEQ-FetchData)
-  end ref
-
-  ref over "API → TA Engine → Regime Engine"
-    دنباله: تحلیل تکنیکال
-    (SEQ-TAAnalysis)
-  end ref
-
-  ref over "API → ML Engine → AI Engine"
-    دنباله: پیش‌بینی و تولید AI
-    (SEQ-MLAIPrediction)
-  end ref
-endif
-
-ref over "API → Frontend"
-  دنباله: نمایش نتایج
-  (SEQ-DisplayResults)
-end ref
-
-stop
-
-@enduml`,
+    Start --> A --> SEQ1 --> D1
+    D1 -->|بله| B --> SEQ5
+    D1 -->|خیر| SEQ2 --> SEQ3 --> SEQ4 --> SEQ5
+    SEQ5 --> End`,
   },
   {
     id: 'IO-L2',
@@ -4001,83 +3869,54 @@ stop
   در صورت نرخ‌محدودی AI، دنباله جایگزین اجرا می‌شود.
   هر بلوک تعاملی مرجع دقیق به نمودار دنباله مربوطه دارد.`,
     level: 2,
-    code: `@startuml
-title نقاط تصمیم با ارجاع به دنباله‌ها
+    code: `flowchart TB
+    classDef startend fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef action fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef seqref fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#000
+    classDef decision fill:#fce4ec,stroke:#c62828,stroke-width:2px,color:#000
 
-start
+    Start([شروع]):::startend
+    A["دریافت درخواست تحلیل"]:::action
+    SEQ1["🔗 بررسی کش<br/>(SEQ-CacheLookup)"]:::seqref
+    D1{کش HIT؟}:::decision
+    B["بازگرداندن کش"]:::action
+    End1([پایان]):::startend
 
-:دریافت درخواست تحلیل;
+    SEQ2["🔗 واکشی چندمنبعی<br/>(SEQ-MultiSourceFetch)"]:::seqref
+    D2{واکشی موفق؟}:::decision
+    SEQ3["🔗 واکشی جایگزین<br/>(SEQ-FallbackFetch)"]:::seqref
+    D3{جایگزین موفق؟}:::decision
+    Err["خطا"]:::action
+    End2([پایان]):::startend
 
-ref over "API → Cache"
-  دنباله: بررسی کش
-  (SEQ-CacheLookup)
-end ref
+    SEQ4["🔗 محاسبه شاخص‌ها<br/>(SEQ-ComputeIndicators)"]:::seqref
+    SEQ5["🔗 تشخیص رژیم<br/>(SEQ-DetectRegime)"]:::seqref
+    D4{نوع رژیم؟}:::decision
+    SEQ6A["🔗 تحلیل صعودی<br/>(SEQ-BullishAnalysis)"]:::seqref
+    SEQ6B["🔗 تحلیل نزولی<br/>(SEQ-BearishAnalysis)"]:::seqref
+    SEQ6C["🔗 تحلیل رنج<br/>(SEQ-RangeAnalysis)"]:::seqref
 
-if (کش HIT؟) then (بله)
-  :بازگرداندن کش;
-  stop
-endif
+    SEQ7["🔗 تولید AI<br/>(SEQ-AIGeneration)"]:::seqref
+    D5{AI موفق؟}:::decision
+    SEQ8["🔗 تحلیل قاعده‌محور<br/>(SEQ-RuleBasedFallback)"]:::seqref
+    Z["تجمیع و نمایش نتایج"]:::action
+    End3([پایان]):::startend
 
-ref over "API → TSE → TGJU → Yahoo"
-  دنباله: واکشی چندمنبعی
-  (SEQ-MultiSourceFetch)
-end ref
-
-if (واکشی موفق؟) then (خیر)
-  ref over "API → Fallback"
-    دنباله: واکشی جایگزین
-    (SEQ-FallbackFetch)
-  end ref
-  if (جایگزین موفق؟) then (خیر)
-    :خطا;
-    stop
-  endif
-endif
-
-ref over "API → TA Engine"
-  دنباله: محاسبه شاخص‌ها
-  (SEQ-ComputeIndicators)
-end ref
-
-ref over "API → Regime Engine"
-  دنباله: تشخیص رژیم
-  (SEQ-DetectRegime)
-end ref
-
-switch (نوع رژیم)
-case (صعودی)
-  ref over "TA → DecisionGraph"
-    دنباله: تحلیل صعودی
-    (SEQ-BullishAnalysis)
-  end ref
-case (نزولی)
-  ref over "TA → DecisionGraph"
-    دنباله: تحلیل نزولی
-    (SEQ-BearishAnalysis)
-  end ref
-case (رنج)
-  ref over "TA → DecisionGraph"
-    دنباله: تحلیل رنج
-    (SEQ-RangeAnalysis)
-  end ref
-endswitch
-
-ref over "API → MSLV4 → ZaiSDK"
-  دنباله: تولید AI
-  (SEQ-AIGeneration)
-end ref
-
-if (AI موفق؟) then (خیر - 429)
-  ref over "API → RuleEngine"
-    دنباله: تحلیل قاعده‌محور
-    (SEQ-RuleBasedFallback)
-  end ref
-endif
-
-:تجمیع و نمایش نتایج;
-stop
-
-@enduml`,
+    Start --> A --> SEQ1 --> D1
+    D1 -->|بله| B --> End1
+    D1 -->|خیر| SEQ2 --> D2
+    D2 -->|خیر| SEQ3 --> D3
+    D3 -->|خیر| Err --> End2
+    D3 -->|بله| SEQ4
+    D2 -->|بله| SEQ4
+    SEQ4 --> SEQ5 --> D4
+    D4 -->|صعودی| SEQ6A --> SEQ7
+    D4 -->|نزولی| SEQ6B --> SEQ7
+    D4 -->|رنج| SEQ6C --> SEQ7
+    SEQ7 --> D5
+    D5 -->|خیر - 429| SEQ8 --> Z
+    D5 -->|بله| Z
+    Z --> End3`,
   },
   {
     id: 'IO-L3',
@@ -4089,123 +3928,59 @@ stop
   برای ترکیب نتایج موازی استفاده شده است.
   این سطح کامل‌ترین نمودار کلان تعامل است.`,
     level: 3,
-    code: `@startuml
-title حلقه‌ها و دروازه‌های موازی: تعاملات کامل
+    code: `flowchart TB
+    classDef startend fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef action fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef seqref fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#000
+    classDef decision fill:#fce4ec,stroke:#c62828,stroke-width:2px,color:#000
+    classDef parallel fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
 
-start
+    Start([شروع]):::startend
+    A["دریافت درخواست تحلیل نماد"]:::action
+    SEQ1["🔗 بررسی کش<br/>(SEQ-L1-CacheLookup)"]:::seqref
+    D1{کش HIT؟}:::decision
+    B["بازگرداندن نتایج کش"]:::action
 
-:دریافت درخواست تحلیل نماد;
+    subgraph PAR1 ["⏩ واکشی موازی داده"]
+        direction LR
+        SEQ2A["🔗 واکشی TSE<br/>(SEQ-FetchTSE)"]:::seqref
+        SEQ2B["🔗 واکشی TGJU<br/>(SEQ-FetchTGJU)"]:::seqref
+        SEQ2C["🔗 واکشی Yahoo<br/>(SEQ-FetchYahoo)"]:::seqref
+    end
 
-ref over "FE → API → Cache"
-  دنباله: بررسی کش
-  (SEQ-L1-CacheLookup)
-end ref
+    D2{همه منابع شکست؟}:::decision
+    SEQ3["🔗 واکشی جایگزین<br/>(SEQ-FallbackFetch)<br/>تا ۲ تلاش"]:::seqref
+    D3{هنوز شکست؟}:::decision
+    Err["خطا"]:::action
 
-if (کش HIT) then (بله)
-  :بازگرداندن نتایج کش;
-  stop
-endif
+    SEQ4["🔗 محاسبه شاخص‌ها<br/>(SEQ-ComputeAllIndicators)"]:::seqref
+    SEQ5["🔗 تشخیص رژیم<br/>(SEQ-DetectRegime)"]:::seqref
+    SEQ6["🔗 ساخت گراف تصمیم<br/>(SEQ-BuildDecisionGraph)"]:::seqref
 
-== واکشی موازی داده ==
+    subgraph PAR2 ["⏩ پیش‌بینی ML موازی"]
+        direction LR
+        SEQ7A["🔗 پیش‌بینی MSLV4<br/>(SEQ-MSLV4Predict)"]:::seqref
+        SEQ7B["🔗 محاسبه احتمال<br/>(SEQ-ProbTrendCompute)"]:::seqref
+    end
 
-fork
-  ref over "API → TSE"
-    دنباله: واکشی TSE
-    (SEQ-FetchTSE)
-  end ref
-fork again
-  ref over "API → TGJU"
-    دنباله: واکشی TGJU
-    (SEQ-FetchTGJU)
-  end ref
-fork again
-  ref over "API → Yahoo"
-    دنباله: واکشی Yahoo
-    (SEQ-FetchYahoo)
-  end ref
-end fork
+    SEQ8["🔗 تولید و پس‌پردازش AI<br/>(SEQ-AIGenerationWithPostProcess)<br/>🔄 تا ۳ تلاش با تأخیر نمایی 2ⁿ"]:::seqref
+    D4{AI موفق؟}:::decision
+    SEQ9["🔗 تحلیل قاعده‌محور<br/>(SEQ-RuleBasedFallback)"]:::seqref
+    SEQ10["🔗 ذخیره در کش<br/>(SEQ-SaveCache)"]:::seqref
+    SEQ11["🔗 ارسال و نمایش نتایج<br/>(SEQ-DisplayResults)"]:::seqref
+    End([پایان]):::startend
 
-if (همه منابع شکست؟) then (بله)
-  loop [تا ۲ تلاش]
-    ref over "API → FallbackSources"
-      دنباله: واکشی جایگزین
-      (SEQ-FallbackFetch)
-    end ref
-  end
-  if (هنوز شکست) then (بله)
-    :خطا;
-    stop
-  endif
-endif
-
-ref over "API → TA"
-  دنباله: محاسبه شاخص‌ها
-  (SEQ-ComputeAllIndicators)
-end ref
-
-ref over "API → Regime"
-  دنبانه: تشخیص رژیم
-  (SEQ-DetectRegime)
-end ref
-
-ref over "API → DecisionGraph"
-  دنباله: ساخت گراف تصمیم
-  (SEQ-BuildDecisionGraph)
-end ref
-
-== پیش‌بینی ML موازی ==
-
-fork
-  ref over "API → MSLV4"
-    دنباله: پیش‌بینی MSLV4
-    (SEQ-MSLV4Predict)
-  end ref
-fork again
-  ref over "API → ProbabilityTrend"
-    دنباله: محاسبه احتمال
-    (SEQ-ProbTrendCompute)
-  end ref
-end fork
-
-== تولید AI با تلاش مجدد ==
-
-loop [تا ۳ تلاش با تأخیر نمایی]
-  ref over "API → MSLV4 → ZaiSDK → AIPP"
-    دنباله: تولید و پس‌پردازش AI
-    (SEQ-AIGenerationWithPostProcess)
-  end ref
-
-  if (AI موفق و خروجی معتبر؟) then (بله)
-    break
-  else (429 یا تایم‌اوت)
-    :تأخیر نمایی: 2^n ثانیه;
-    note right
-      n = شماره تلاش
-      تأخیر: 2, 4, 8 ثانیه
-    end note
-  endif
-end
-
-if (AI شکست خورد) then (بله)
-  ref over "API → RuleEngine"
-    دنباله: تحلیل قاعده‌محور
-    (SEQ-RuleBasedFallback)
-  end ref
-endif
-
-ref over "API → Cache"
-  دنباله: ذخیره در کش
-  (SEQ-SaveCache)
-end ref
-
-ref over "API → Frontend"
-  دنباله: ارسال و نمایش نتایج
-  (SEQ-DisplayResults)
-end ref
-
-stop
-
-@enduml`,
+    Start --> A --> SEQ1 --> D1
+    D1 -->|بله| B --> End
+    D1 -->|خیر| PAR1 --> D2
+    D2 -->|بله| SEQ3 --> D3
+    D3 -->|بله| Err --> End
+    D3 -->|خیر| SEQ4
+    D2 -->|خیر| SEQ4
+    SEQ4 --> SEQ5 --> SEQ6 --> PAR2 --> SEQ8 --> D4
+    D4 -->|خیر| SEQ9 --> SEQ10
+    D4 -->|بله| SEQ10
+    SEQ10 --> SEQ11 --> End`,
   },
   {
     id: 'TIM-L1',
@@ -4217,63 +3992,50 @@ stop
   مشخص است. PlantUML پشتیبانی محدودی از timing diagram دارد
   لذا توصیف ساختاریافته نیز ارائه شده است.`,
     level: 1,
-    code: `@startuml
-title زمان‌بندی واکشی داده از منابع مختلف
+    code: `sequenceDiagram
+    participant Ctrl as "کنترلر"
+    participant TSE as "TSE API"
+    participant TSETMC as "TSETMC Index"
+    participant TGJU as "TGJU API"
+    participant Yahoo as "Yahoo API"
 
-robust "TSE API" as TSE
-robust "TSETMC Index" as TSETMC
-robust "TGJU API" as TGJU
-robust "Yahoo API" as Yahoo
+    Note over Ctrl,Yahoo: t=0: همه آماده
 
-@0
-TSE is "آماده"
-TSETMC is "آماده"
-TGJU is "آماده"
-Yahoo is "آماده"
+    Ctrl ->> TSE : @100ms درخواست HTTP
+    activate TSE
+    Note over TSE: حالت: درخواست
 
-@100
-TSE is "درخواست"
-note bottom: ارسال درخواست HTTP
+    Ctrl ->> TSETMC : @200ms درخواست
+    activate TSETMC
+    Note over TSETMC: حالت: درخواست
 
-@200
-TSETMC is "درخواست"
+    Note over TSE: @500ms شروع دریافت داده
+    Note over TSETMC: @800ms شروع دریافت داده
 
-@500
-TSE is "دریافت"
-note bottom: شروع دریافت داده
+    TSE -->> Ctrl : @1000ms tseData
+    deactivate TSE
+    Note over TSE: تکمیل (1s)
 
-@800
-TSETMC is "دریافت"
+    Ctrl ->> TGJU : @1100ms درخواست
+    activate TGJU
 
-@1000
-TSE is "تکمیل"
-note bottom: داده کامل شد (1s)
+    TSETMC -->> Ctrl : @1500ms indexData
+    deactivate TSETMC
+    Note over TSETMC: تکمیل (1.3s)
 
-@1100
-TGJU is "درخواست"
+    Ctrl ->> Yahoo : @1600ms درخواست
+    activate Yahoo
 
-@1500
-TSETMC is "تکمیل"
-note bottom: داده کامل شد (1.3s)
+    Note over TGJU: @1800ms دریافت داده
+    Note over Yahoo: @2100ms دریافت داده
 
-@1600
-Yahoo is "درخواست"
+    TGJU -->> Ctrl : @2400ms tgjuData
+    deactivate TGJU
+    Note over TGJU: تکمیل (1.3s)
 
-@1800
-TGJU is "دریافت"
-
-@2100
-Yahoo is "دریافت"
-
-@2400
-TGJU is "تکمیل"
-note bottom: داده کامل شد (1.3s)
-
-@2700
-Yahoo is "تکمیل"
-note bottom: داده کامل شد (1.1s)
-
-@enduml`,
+    Yahoo -->> Ctrl : @2700ms yahooData
+    deactivate Yahoo
+    Note over Yahoo: تکمیل (1.1s)`,
   },
   {
     id: 'TIM-L2',
@@ -4285,63 +4047,49 @@ note bottom: داده کامل شد (1.1s)
   شاخص‌ها شروع می‌شود و در صورت تغییر رژیم، AI بازتولید می‌شود.
   تأخیر هر مرحله مشخص شده است.`,
     level: 2,
-    code: `@startuml
-title زمان‌بندی: به‌روزرسانی قیمت → محاسبه مجدد → بازتولید AI
+    code: `sequenceDiagram
+    participant DF as "DataFetcher"
+    participant TA as "TAEngine"
+    participant RE as "RegimeEngine"
+    participant AI as "AIEngine"
+    participant DISP as "Display"
 
-robust "DataFetcher" as DF
-robust "TAEngine" as TA
-robust "RegimeEngine" as RE
-robust "AIEngine" as AI
-robust "Display" as DISP
+    Note over DF,DISP: t=0: رویداد به‌روزرسانی قیمت
+    Note over DF: بیکار → واکشی
+    activate DF
 
-@0
-DF is "بیکار"
-TA is "بیکار"
-RE is "بیکار"
-AI is "بیکار"
-DISP is "بیکار"
+    Note over DF,DISP: t=3s: واکشی تکمیل
+    deactivate DF
+    Note over DF: آماده
 
-note bottom of DF
-  رویداد: به‌روزرسانی قیمت
-  (Price Update Event)
-end note
+    Note over TA: بیکار → محاسبه شاخص‌ها
+    activate TA
 
-@0
-DF is "واکشی"
+    Note over TA,DISP: t=5s: محاسبه شاخص‌ها تکمیل
+    deactivate TA
+    Note over TA: تکمیل
 
-@3000
-DF is "آماده"
-TA is "محاسبه"
-note bottom of TA: محاسبه شاخص‌ها شروع
+    Note over RE: بیکار → تشخیص رژیم
+    activate RE
 
-@5000
-TA is "تکمیل"
-RE is "تشخیص"
-note bottom of RE: تشخیص رژیم
+    Note over RE,DISP: t=5.5s: تشخیص رژیم تکمیل
+    deactivate RE
+    Note over RE: تکمیل
 
-@5500
-RE is "تکمیل"
+    Note over AI: بیکار → درخواست (رژیم تغییر کرده)
+    activate AI
+    Note over AI: ارسال به ZaiSDK
 
-@5600
-AI is "درخواست"
-note bottom of AI
-  ارسال به ZaiSDK
-  (رژیم تغییر کرده)
-end note
+    Note over AI,DISP: t=9s: تولید AI تکمیل
+    deactivate AI
+    Note over AI: تکمیل
 
-@9000
-AI is "تکمیل"
-DISP is "رندر"
-note bottom of DISP: رندر نتایج جدید
+    Note over DISP: بیکار → رندر نتایج جدید
+    activate DISP
 
-@9200
-DISP is "بیکار"
-DF is "بیکار"
-TA is "بیکار"
-RE is "بیکار"
-AI is "بیکار"
-
-@enduml`,
+    Note over DISP: t=9.2s: رندر تکمیل
+    deactivate DISP
+    Note over DF,DISP: همه بیکار`,
   },
   {
     id: 'TIM-L3',
@@ -4353,112 +4101,58 @@ AI is "بیکار"
   در صورت تجاوز محدودیت، تایم‌اوت فعال می‌شود.
   این سطح برای تحلیل عملکرد و SLA سامانه حیاتی است.`,
     level: 3,
-    code: `@startuml
-title محدودیت‌های مدت زمان: SLA سامانه تحلیل
+    code: `sequenceDiagram
+    participant DF as "DataFetch<br/>⏱ max 8s"
+    participant TA as "TA Compute<br/>⏱ max 2s"
+    participant RE as "Regime Detect<br/>⏱ max 1s"
+    participant ML as "ML Predict<br/>⏱ max 5s"
+    participant AI as "AI Generate<br/>⏱ max 90s"
+    participant PP as "PostProcess<br/>⏱ max 3s"
+    participant TOTAL as "Total Pipeline<br/>⏱ max 120s"
 
-robust "DataFetch\\n[max 8s]" as DF
-robust "TA Compute\\n[max 2s]" as TA
-robust "Regime Detect\\n[max 1s]" as RE
-robust "ML Predict\\n[max 5s]" as ML
-robust "AI Generate\\n[max 90s]" as AI
-robust "PostProcess\\n[max 3s]" as PP
-robust "Total Pipeline\\n[max 120s]" as TOTAL
+    Note over DF,TOTAL: t=0: شروع خط تولید
+    activate TOTAL
+    Note over TOTAL: درحال‌اجرا
 
-@0
-DF is "آماده"
-TA is "آماده"
-RE is "آماده"
-ML is "آماده"
-AI is "آماده"
-PP is "آماده"
-TOTAL is "آماده"
+    activate DF
+    Note over DF: حالت: واکشی
+    Note over DF,TOTAL: t=4s: واکشی تکمیل (~4s)
+    Note over DF: محدودیت: {DF.duration < 8s} ✓
+    deactivate DF
 
-' مرحله ۱: واکشی داده (0-8s)
-@0
-DF is "واکشی"
-TOTAL is "درحال‌اجرا"
+    activate TA
+    Note over TA: حالت: محاسبه
+    Note over DF,TOTAL: t=5.5s: TA تکمیل (~1.5s)
+    Note over TA: محدودیت: {TA.duration < 2s} ✓
+    deactivate TA
 
-@4000
-DF is "تکمیل"
-note bottom
-  مدت: ~4s
-  محدودیت: < 8s ✓
-  {DF.duration < 8s}
-end note
+    activate RE
+    Note over RE: حالت: تشخیص
+    Note over DF,TOTAL: t=6s: Regime تکمیل (~0.5s)
+    Note over RE: محدودیت: {RE.duration < 1s} ✓
+    deactivate RE
 
-' مرحله ۲: محاسبه TA (4-6s)
-@4000
-TA is "محاسبه"
+    activate ML
+    Note over ML: حالت: پیش‌بینی
+    Note over DF,TOTAL: t=9s: ML تکمیل (~3s)
+    Note over ML: محدودیت: {ML.duration < 5s} ✓
+    deactivate ML
 
-@5500
-TA is "تکمیل"
-note bottom
-  مدت: ~1.5s
-  محدودیت: < 2s ✓
-  {TA.duration < 2s}
-end note
+    activate AI
+    Note over AI: حالت: تولید
+    Note over DF,TOTAL: t=45s: AI تکمیل (~36s)
+    Note over AI: محدودیت: {AI.duration < 90s} ✓
+    deactivate AI
 
-' مرحله ۳: تشخیص رژیم (5.5-6.5s)
-@5500
-RE is "تشخیص"
+    activate PP
+    Note over PP: حالت: پردازش
+    Note over DF,TOTAL: t=47s: PostProcess تکمیل (~2s)
+    Note over PP: محدودیت: {PP.duration < 3s} ✓
+    deactivate PP
 
-@6000
-RE is "تکمیل"
-note bottom
-  مدت: ~0.5s
-  محدودیت: < 1s ✓
-  {RE.duration < 1s}
-end note
-
-' مرحله ۴: پیش‌بینی ML (6-11s)
-@6000
-ML is "پیش‌بینی"
-
-@9000
-ML is "تکمیل"
-note bottom
-  مدت: ~3s
-  محدودیت: < 5s ✓
-  {ML.duration < 5s}
-end note
-
-' مرحله ۵: تولید AI (9-99s)
-@9000
-AI is "تولید"
-
-@45000
-AI is "تکمیل"
-note bottom
-  مدت: ~36s
-  محدودیت: < 90s ✓
-  {AI.duration < 90s}
-end note
-
-' مرحله ۶: پس‌پردازش (45-48s)
-@45000
-PP is "پردازش"
-
-@47000
-PP is "تکمیل"
-note bottom
-  مدت: ~2s
-  محدودیت: < 3s ✓
-  {PP.duration < 3s}
-end note
-
-@47000
-TOTAL is "تکمیل"
-note bottom
-  مدت کل: ~47s
-  محدودیت: < 120s ✓
-  {Total.duration < 120s}
-  
-  جمع محدودیت‌ها:
-  DF(8) + TA(2) + RE(1) +
-  ML(5) + AI(90) + PP(3)
-  = 109s < 120s ✓
-end note
-
-@enduml`,
+    Note over TOTAL: تکمیل - مدت کل: ~47s
+    Note over TOTAL: {Total.duration < 120s} ✓
+    Note over TOTAL: جمع محدودیت‌ها: 8+2+1+5+90+3 = 109s < 120s ✓
+    deactivate TOTAL`,
   },
 ] as const;

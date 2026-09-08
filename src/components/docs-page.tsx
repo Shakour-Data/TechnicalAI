@@ -167,7 +167,7 @@ function buildAllDiagrams(): UnifiedDiagram[] {
       description: d.description,
       level: d.level,
       code: d.code,
-      format: 'plantuml',
+      format: 'mermaid',
       category: 'uml-struct',
       subcategory: structTypeMap[typeKey] || typeKey,
     });
@@ -191,7 +191,7 @@ function buildAllDiagrams(): UnifiedDiagram[] {
       description: d.description,
       level: d.level,
       code: d.code,
-      format: 'plantuml',
+      format: 'mermaid',
       category: 'uml-behav',
       subcategory: behavTypeMap[typeKey] || typeKey,
     });

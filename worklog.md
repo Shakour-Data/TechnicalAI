@@ -407,3 +407,28 @@ Stage Summary:
 - All 14 UML 2.5 diagram types covered at 3 levels each
 - No lint errors
 - Server compilation verified (OOM issues are environmental, not code-related)
+---
+Task ID: 6
+Agent: Main
+Task: Fix UML diagrams not rendering - convert from PlantUML to Mermaid
+
+Work Log:
+- Diagnosed root cause: PlantUML diagrams require external server (plantuml.com) which is not accessible from sandbox
+- All 42 UML diagrams (21 structural + 21 behavioral) were using PlantUML syntax
+- DFD (13) and BPMN (8) diagrams already used Mermaid and worked fine
+- Launched 4 parallel agents to convert each UML diagram category:
+  - Agent A: class(3) + object(3) + composite(3) + profile(3) = 12 structural → Mermaid classDiagram
+  - Agent B: component(3) + deployment(3) + package(3) = 9 structural → Mermaid flowchart
+  - Agent C: usecase(3) + activity(3) + statemachine(3) = 9 behavioral → Mermaid flowchart/stateDiagram-v2
+  - Agent D: sequence(3) + communication(3) + interaction-overview(3) + timing(3) = 12 → Mermaid sequenceDiagram/flowchart
+- Applied all conversions to diagram-data.ts (replaced all PlantUML code with Mermaid)
+- Updated docs-page.tsx: changed format from 'plantuml' to 'mermaid' for UML diagrams
+- Static verification: 0 PlantUML remnants, 63 Mermaid diagrams, all syntax valid, Persian text preserved
+- Browser verification blocked by OOM kills (Next.js ~2.2GB RSS exceeds container limit)
+
+Stage Summary:
+- All 63 diagrams now use client-side Mermaid rendering (no external server dependency)
+- UML diagram types: classDiagram(12), flowchart(39), stateDiagram-v2(3), sequenceDiagram(9)
+- docs-page.tsx format: 'mermaid' for all categories (DFD, BPMN, UML Struct, UML Behav)
+- Zero PlantUML code remains in codebase
+- PlantUMLDiagram component kept as fallback but never triggered
