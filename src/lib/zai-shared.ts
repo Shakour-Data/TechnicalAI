@@ -1,9 +1,9 @@
 /**
- * Z-AI SDK rate-limited executor
+ * Z-AI SDK rate-limited executor — ADAPTED FOR OLLAMA LOCAL
  *
- * ══════════════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════════════════
  * ARCHITECTURAL NOTE — Two Separate Channels
- * ══════════════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
  * AI text generation must **NEVER** be blocked by page_reader rate limits.
  * To guarantee this, there are two completely independent channels:
@@ -21,41 +21,30 @@
  *
  * This separation ensures that page_reader 429s cannot stall AI text
  * generation, which is the most important user-facing feature.
- * ══════════════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════════════════
  */
 
 // ═══════════════════════════════════════════════════════════════
-// Z-AI SDK singleton (lazy, dynamic import)
+// Ollama client singleton (lazy, shared)
 // ═══════════════════════════════════════════════════════════════
 
-type ZaiType = Awaited<ReturnType<typeof import('z-ai-web-dev-sdk').default.create>>;
-let zaiInstance: ZaiType | null = null;
-let zaiInitPromise: Promise<ZaiType> | null = null;
+import { getOllama, type OllamaClient } from '@/lib/ollama-client';
+
+let ollamaInstance: OllamaClient | null = null;
 
 /**
- * Get the lazy-initialized Z-AI SDK singleton instance.
+ * Get the lazy-initialized Ollama client singleton instance.
  *
- * Uses a dynamic `import('z-ai-web-dev-sdk')` so the heavy SDK is only
- * loaded when first needed.  Concurrent callers during initialization
- * will all await the same promise rather than creating duplicate
- * instances.  On init failure the promise is cleared so the next call
- * will retry.
+ * Concurrent callers during initialization will all await the same promise rather than creating
+ * duplicate instances.  On init failure the promise is cleared so the next call will retry.
  *
- * @returns The initialized Z-AI SDK instance.
+ * @returns The initialized Ollama client instance.
  */
-export async function getZai(): Promise<ZaiType> {
-  if (zaiInstance) return zaiInstance;
-  if (!zaiInitPromise) {
-    zaiInitPromise = import('z-ai-web-dev-sdk').then(async (mod) => {
-      const zai = await mod.default.create();
-      zaiInstance = zai;
-      return zai;
-    }).catch((err) => {
-      zaiInitPromise = null;
-      throw err;
-    });
+export async function getOllamaInstance(): Promise<OllamaClient> {
+  if (!ollamaInstance) {
+    ollamaInstance = getOllama();
   }
-  return zaiInitPromise;
+  return ollamaInstance;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -66,13 +55,13 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const MIN_INTERVAL_MS = 2_000;
+const MIN_INTERVAL_MS = 1_000; // 1s between local calls
 let lastSharedCallTime = 0;
 let sharedCooldownUntil = 0;
 let sharedProcessing = false;
 
 interface QueueItem<T = unknown> {
-  operation: (zai: ZaiType) => Promise<T>;
+  operation: (ollama: OllamaClient) => Promise<T>;
   name: string;
   resolve: (v: T) => void;
   reject: (e: Error) => void;
@@ -88,9 +77,8 @@ const unifiedQueue: QueueItem[] = [];
  * Get the remaining cooldown time (in milliseconds) for the **shared queue**
  * channel (Channel 1).
  *
- * The cooldown is set when a 429 is received on the shared queue or when
- * {@link recordExternal429} is called.  While a cooldown is active, the
- * shared queue pauses processing until it expires.
+ * The cooldown is set when a request fails or when {@link recordExternal429} is called.
+ * While a cooldown is active, the shared queue pauses processing until it expires.
  *
  * @returns Remaining cooldown in milliseconds.  Returns `0` if no cooldown is active.
  */
@@ -99,25 +87,24 @@ export function getCooldownRemainingMs(): number {
 }
 
 /**
- * Record an external 429 event and set a cooldown on the **shared queue**
+ * Record an external error event and set a cooldown on the **shared queue**
  * channel (Channel 1).
  *
- * Call this when a 429 is detected outside the shared queue's own retry
- * logic (e.g. from a higher-level caller) so that subsequent shared-queue
- * calls know to wait.
+ * Call this when a failure is detected outside the shared queue's own retry
+ * logic so that subsequent shared-queue calls know to wait.
  *
  * Cooldown rules:
- * - Adds **60 s** to any existing remaining cooldown.
- * - Minimum cooldown is **120 s**.
- * - Maximum cooldown is capped at **600 s** (10 min).
+ * - Adds **30 s** to any existing remaining cooldown.
+ * - Minimum cooldown is **60 s**.
+ * - Maximum cooldown is capped at **300 s** (5 min).
  *
  * This does **not** affect the dedicated AI channel (Channel 2).
  */
 export function recordExternal429() {
   const currentCooldown = Math.max(sharedCooldownUntil - Date.now(), 0);
-  const newCooldown = Math.max(currentCooldown + 60_000, 120_000);
-  sharedCooldownUntil = Date.now() + Math.min(newCooldown, 600_000);
-  console.warn(`[zai-shared] External 429 recorded, cooldown: ${Math.round(Math.min(newCooldown, 600_000) / 1000)}s`);
+  const newCooldown = Math.max(currentCooldown + 30_000, 60_000);
+  sharedCooldownUntil = Date.now() + Math.min(newCooldown, 300_000);
+  console.warn(`[ollama-shared] External failure recorded, cooldown: ${Math.round(Math.min(newCooldown, 300_000) / 1000)}s`);
 }
 
 async function processQueue() {
@@ -128,7 +115,7 @@ async function processQueue() {
     const now = Date.now();
     if (sharedCooldownUntil > now) {
       const waitMs = sharedCooldownUntil - now + 1_000;
-      console.log(`[zai-shared] Cooldown, waiting ${Math.round(waitMs / 1000)}s (queue: ${unifiedQueue.length})...`);
+      console.log(`[ollama-shared] Cooldown, waiting ${Math.round(waitMs / 1000)}s (queue: ${unifiedQueue.length})...`);
       await sleep(waitMs);
     }
 
@@ -145,26 +132,23 @@ async function processQueue() {
     }
 
     try {
-      const zai = await getZai();
-      const result = await item.operation(zai);
+      const ollama = await getOllamaInstance();
+      const result = await item.operation(ollama);
       lastSharedCallTime = Date.now();
       sharedCooldownUntil = 0;
       item.resolve(result);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('429')) {
-        item.retries++;
-        const backoff = Math.min(45_000 * Math.pow(1.5, item.retries - 1), 180_000);
-        sharedCooldownUntil = Date.now() + backoff;
-        console.warn(`[zai-shared] 429 on [${item.name}], attempt ${item.retries}/${item.maxRetries}, cooldown ${Math.round(backoff / 1000)}s`);
-        if (item.retries < item.maxRetries) {
-          unifiedQueue.unshift(item);
-          continue;
-        }
-        item.reject(new Error(`Rate limited after ${item.maxRetries} retries: ${item.name}`));
-      } else {
-        item.reject(new Error(msg));
+      // Local calls don't hit 429s; treat any error as transient with short backoff
+      item.retries++;
+      const backoff = Math.min(5_000 * Math.pow(1.5, item.retries - 1), 30_000);
+      sharedCooldownUntil = Date.now() + backoff;
+      console.warn(`[ollama-shared] Error on [${item.name}], attempt ${item.retries}/${item.maxRetries}, cooldown ${Math.round(backoff / 1000)}s`);
+      if (item.retries < item.maxRetries) {
+        unifiedQueue.unshift(item);
+        continue;
       }
+      item.reject(new Error(`Failed after ${item.maxRetries} retries: ${item.name}`));
     }
   }
 
@@ -173,36 +157,36 @@ async function processQueue() {
 
 /**
  * Execute an operation through the **shared queue** (Channel 1) with
- * rate limiting, retry on 429, and timeout enforcement.
+ * rate limiting, retry on error, and timeout enforcement.
  *
- * Calls are serialized (one at a time) with a minimum interval of 2 s
- * between them.  If a 429 is received, an exponential backoff cooldown
+ * Calls are serialized (one at a time) with a minimum interval of 1 s
+ * between them.  If an error is received, an exponential backoff cooldown
  * is applied and the operation is re-queued for retry (up to
  * `maxRetries`).  On success the cooldown is cleared.
  *
  * If the current cooldown exceeds `maxQueueWaitMs`, the call is
- * rejected immediately with a `ZAI_RATE_LIMITED` error so callers
- * can surface a "try later" message without waiting.
+ * rejected immediately with a descriptive error so callers can surface a
+ * "try later" message without waiting.
  *
  * @template T - The return type of the operation.
- * @param operation - Async function that receives the Z-AI SDK instance
+ * @param operation - Async function that receives the Ollama client
  *   and returns a result of type `T`.
  * @param options - Configuration for this call.
  * @param options.timeoutMs - Total timeout in ms for this call (including
  *   queue wait time).  Defaults to **120 000** (2 min).
- * @param options.maxRetries - Number of 429 retries before giving up.
+ * @param options.maxRetries - Number of retries before giving up.
  *   Defaults to **2**.
  * @param options.name - Descriptive name used in log messages.
- *   Defaults to `'zai-call'`.
+ *   Defaults to `'ollama-call'`.
  * @param options.maxQueueWaitMs - If the current cooldown exceeds this
  *   value, the call is rejected immediately.  Defaults to **30 000** (30 s).
  * @returns A promise that resolves with the operation's result.
- * @throws {Error} `ZAI_RATE_LIMITED` if cooldown > `maxQueueWaitMs`.
+ * @throws {Error} Cooldown error if cooldown > `maxQueueWaitMs`.
  * @throws {Error} Timeout error if the call exceeds `timeoutMs`.
- * @throws {Error} Rate-limit error after exhausting `maxRetries`.
+ * @throws {Error} Failure error after exhausting `maxRetries`.
  */
-export async function rateLimitedZaiCall<T>(
-  operation: (zai: ZaiType) => Promise<T>,
+export async function rateLimitedOllamaCall<T>(
+  operation: (ollama: OllamaClient) => Promise<T>,
   options: {
     timeoutMs?: number;
     maxRetries?: number;
@@ -213,14 +197,14 @@ export async function rateLimitedZaiCall<T>(
   const {
     timeoutMs = 120_000,
     maxRetries = 2,
-    name = 'zai-call',
+    name = 'ollama-call',
     maxQueueWaitMs = 30_000,
   } = options;
 
   const cooldownMs = getCooldownRemainingMs();
   if (cooldownMs > maxQueueWaitMs) {
     throw new Error(
-      `ZAI_RATE_LIMITED: Cooldown ${Math.round(cooldownMs / 1000)}s. Try after ${Math.round(cooldownMs / 1000)}s.`
+      `Ollama busy: Cooldown ${Math.round(cooldownMs / 1000)}s. Try after ${Math.round(cooldownMs / 1000)}s.`
     );
   }
 
@@ -246,23 +230,23 @@ export async function rateLimitedZaiCall<T>(
 }
 
 /**
- * Fetch a web page's HTML using the Z-AI `page_reader` function through
+ * Fetch a web page's HTML using the Ollama client's page reader through
  * the **shared queue** (Channel 1).
  *
- * This is a convenience wrapper around {@link rateLimitedZaiCall} that
- * invokes `zai.functions.invoke('page_reader', { url })` and validates
+ * This is a convenience wrapper around {@link rateLimitedOllamaCall} that
+ * invokes `ollama.pageReader({ url })` and validates
  * the response contains usable HTML.
  *
  * @param url - The URL of the page to read.
  * @param timeoutMs - Total timeout in ms for this call.  Defaults to **60 000** (1 min).
  * @returns The HTML content of the page as a string.
  * @throws {Error} If the response is empty or shorter than 5 characters.
- * @throws {Error} Propagates any shared-queue timeout or rate-limit errors.
+ * @throws {Error} Propagates any shared-queue timeout or failure errors.
  */
 export async function rateLimitedPageReader(url: string, timeoutMs = 60_000): Promise<string> {
-  return rateLimitedZaiCall<string>(
-    async (zai) => {
-      const result = await zai.functions.invoke('page_reader', { url });
+  return rateLimitedOllamaCall<string>(
+    async (ollama) => {
+      const result = await ollama.pageReader(url);
       const html: string = result.data?.html || '';
       if (!html || html.length < 5) throw new Error('Empty response from page_reader');
       return html;
@@ -285,8 +269,8 @@ export async function rateLimitedPageReader(url: string, timeoutMs = 60_000): Pr
  *   each {@link rateLimitedPageReader} call.
  * @param options.onProgress - Optional callback invoked after each page
  *   completes (whether success or failure).  Receives `(done, total)`
- *   where `done` is the number of pages processed so far and `total`
- *   is the total number of URLs.
+ *   where `done` is the number of pages processed so far and `total` is
+ *   the total number of URLs.
  * @returns An array of the same length as `urls`.  Each element is
  *   `{ url, html }` on success, or `null` if that page failed.
  */
@@ -316,9 +300,9 @@ export async function batchPageReader(
 // This function has its own retry logic and does NOT use the shared queue.
 //
 let aiLastCallTime = 0;
-const AI_MIN_INTERVAL_MS = 5_000; // 5s between AI calls
+const AI_MIN_INTERVAL_MS = 3_000; // 3s between AI calls
 let aiInProgress = false; // Prevent concurrent AI calls
-let aiGlobalCooldownUntil = 0; // Global cooldown: if AI is rate-limited, don't retry for a while
+let aiGlobalCooldownUntil = 0; // Global cooldown: if AI fails, don't retry for a while
 
 /**
  * Execute a chat completion on the **dedicated AI channel** (Channel 2),
@@ -326,59 +310,59 @@ let aiGlobalCooldownUntil = 0; // Global cooldown: if AI is rate-limited, don't 
  *
  * This is the primary function for AI text generation.  It is designed to
  * be patient and persistent so that AI output is never blocked by
- * `page_reader` rate limits.
+ * `page_reader` failures.
  *
  * ### Behavior details
  *
  * - **Independent retry logic** — does not share the shared queue's
  *   cooldown or retry state.
- * - **5 s minimum interval** — enforces at least 5 seconds between
+ * - **3 s minimum interval** — enforces at least 3 seconds between
  *   consecutive AI calls (`AI_MIN_INTERVAL_MS`).
- * - **Global cooldown** — on receiving a 429, sets a **3-minute** global
- *   cooldown (`aiGlobalCooldownUntil`).  Subsequent calls during the
+ * - **Global cooldown** — on receiving an error, sets a **2-minute**
+ *   global cooldown (`aiGlobalCooldownUntil`).  Subsequent calls during the
  *   cooldown fail fast with a descriptive error.  The cooldown is
  *   cleared on the next successful call.
  * - **Concurrent call serialization** — only one AI call runs at a time
  *   (`aiInProgress`).  If a concurrent call is already running, the
  *   caller waits up to 10 s for it to finish before proceeding anyway.
- * - **Exponential backoff** — on 429, retries with backoff of
- *   `10 s × 1.4^(attempt-1)` (i.e. ~10 s, ~14 s, ~20 s, …).
+ * - **Exponential backoff** — on error, retries with backoff of
+ *   `5 s × 1.5^(attempt-1)`.
  * - **Transient error retries** — errors containing keywords like
  *   `'network'`, `'ECONNREFUSED'`, `'fetch'`, etc. are retried up to
  *   2 times with a 5 s delay.
- * - **Total timeout** — defaults to **200 s**.  All retries and waits
- *   must complete within this deadline (with a 30 s buffer reserved
+ * - **Total timeout** — defaults to **120 s**.  All retries and waits
+ *   must complete within this deadline (with a 20 s buffer reserved
  *   for the final API call).
  *
  * @param messages - Chat messages in `{ role, content }` format, passed
- *   directly to `zai.chat.completions.create`.
+ *   directly to `ollama.chatCompletion`.
  * @param options - Configuration for this call.
  * @param options.timeoutMs - Total timeout in ms including all retries
- *   and waits.  Defaults to **200 000** (200 s).
- * @param options.maxRetries - Maximum number of 429 retries.
- *   Defaults to **5**.
+ *   and waits.  Defaults to **120 000** (120 s).
+ * @param options.maxRetries - Maximum number of retries.
+ *   Defaults to **3**.
  * @returns The trimmed text content of the first completion choice.
  * @throws {Error} If the global AI cooldown is active.
  * @throws {Error} If the deadline is exceeded (total timeout).
  * @throws {Error} If the AI response is empty or shorter than 10 characters.
- * @throws {Error} If a non-transient, non-429 error is received.
+ * @throws {Error} If a non-transient error is received.
  */
 export async function dedicatedAIChatCompletion(
   messages: { role: string; content: string }[],
   options: {
-    timeoutMs?: number;    // Total timeout including all retries. Default 200s
-    maxRetries?: number;   // 429 retries. Default 5
+    timeoutMs?: number;    // Total timeout including all retries. Default 120s
+    maxRetries?: number;   // Max retries. Default 3
   } = {}
 ): Promise<string> {
-  const { timeoutMs = 200_000, maxRetries = 5 } = options;
+  const { timeoutMs = 120_000, maxRetries = 3 } = options;
   const startTime = Date.now();
   const deadline = startTime + timeoutMs;
 
-  // Check global AI cooldown (set when 429 was received)
+  // Check global AI cooldown (set when error was received)
   const globalCdRemaining = aiGlobalCooldownUntil - Date.now();
   if (globalCdRemaining > 0) {
     console.log(`[AI-dedicated] Global AI cooldown active, ${Math.round(globalCdRemaining / 1000)}s remaining`);
-    throw new Error(`Rate limited: global AI cooldown ${Math.round(globalCdRemaining / 1000)}s remaining`);
+    throw new Error(`AI temporarily unavailable: global cooldown ${Math.round(globalCdRemaining / 1000)}s remaining`);
   }
 
   // Prevent concurrent AI calls (serialize) — but don't block for too long
@@ -395,7 +379,7 @@ export async function dedicatedAIChatCompletion(
   aiInProgress = true;
 
   try {
-    const zai = await getZai();
+    const ollama = await getOllamaInstance();
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       // Check deadline
@@ -410,9 +394,9 @@ export async function dedicatedAIChatCompletion(
       if (waitMs > 0) {
         console.log(`[AI-dedicated] Waiting ${Math.round(waitMs / 1000)}s (shared_cd=${Math.round(sharedCd / 1000)}s, ai_interval=${Math.round(aiInterval / 1000)}s)...`);
         // Don't wait longer than what we have left
-        const remaining = deadline - Date.now() - 30_000; // keep 30s buffer for the actual call
+        const remaining = deadline - Date.now() - 20_000; // keep 20s buffer for the actual call
         if (waitMs > remaining) {
-          throw new Error(`Rate limited: need ${Math.round(waitMs / 1000)}s but only ${Math.round(remaining / 1000)}s remaining`);
+          throw new Error(`AI temporarily unavailable: need ${Math.round(waitMs / 1000)}s but only ${Math.round(remaining / 1000)}s remaining`);
         }
         await sleep(waitMs);
       }
@@ -420,12 +404,12 @@ export async function dedicatedAIChatCompletion(
       // Make the call
       try {
         console.log(`[AI-dedicated] Attempt ${attempt}/${maxRetries + 1}...`);
-        const completion = await zai.chat.completions.create({
-          messages,
-          thinking: { type: 'disabled' },
+        const completion = await ollama.chatCompletion(messages, {
+          temperature: 0.7,
+          max_tokens: 4096,
         });
         aiLastCallTime = Date.now();
-        const raw = completion.choices[0]?.message?.content;
+        const raw = completion;
         if (!raw || raw.trim().length < 10) {
           throw new Error('AI response too short or empty');
         }
@@ -436,35 +420,20 @@ export async function dedicatedAIChatCompletion(
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
 
-        if (msg.includes('429')) {
-          // Set global cooldown so future calls fail fast
-          // Reduced from 10min to 3min — 10min was too aggressive and caused unnecessary failures
-          const GLOBAL_COOLDOWN_MS = 180_000; // 3 minutes
-          aiGlobalCooldownUntil = Date.now() + GLOBAL_COOLDOWN_MS;
-          console.warn(`[AI-dedicated] 429 on attempt ${attempt}/${maxRetries + 1}, setting global cooldown ${GLOBAL_COOLDOWN_MS / 1000}s`);
-
-          // Retry up to maxRetries with exponential backoff (10s, 25s, ...)
-          if (attempt <= maxRetries && deadline - Date.now() > 30_000) {
-            const backoff = 10_000 * Math.pow(1.4, attempt - 1);
-            console.log(`[AI-dedicated] Backing off ${Math.round(backoff / 1000)}s before retry...`);
-            await sleep(backoff);
-            continue;
-          }
-          throw new Error(`Rate limited after ${attempt} attempts: ${msg}`);
-        }
-
         // Transient errors: retry up to 2 times with short delay
-        const isTransient = msg.includes('too short') || msg.includes('empty')
-          || msg.includes('network') || msg.includes('ECONNREFUSED')
+        const isTransient = msg.includes('network') || msg.includes('ECONNREFUSED')
           || msg.includes('fetch') || msg.includes('socket hang up')
-          || msg.includes('ETIMEDOUT');
+          || msg.includes('ETIMEDOUT') || msg.includes('Ollama API error');
         if (isTransient && attempt <= 2 && deadline - Date.now() > 15_000) {
           console.log(`[AI-dedicated] Transient error, retrying in 5s (attempt ${attempt})...`);
           await sleep(5_000);
           continue;
         }
 
-        // Non-transient, non-429 error: throw immediately
+        // Non-transient error: set global cooldown and throw
+        const GLOBAL_COOLDOWN_MS = 120_000; // 2 minutes
+        aiGlobalCooldownUntil = Date.now() + GLOBAL_COOLDOWN_MS;
+        console.warn(`[AI-dedicated] Error on attempt ${attempt}/${maxRetries + 1}, setting global cooldown ${GLOBAL_COOLDOWN_MS / 1000}s`);
         throw new Error(msg);
       }
     }
@@ -485,18 +454,18 @@ export async function dedicatedAIChatCompletion(
  *
  * Prefer {@link dedicatedAIChatCompletion} for production AI text
  * generation, as it bypasses the shared queue and cannot be blocked by
- * `page_reader` rate limits.  This function remains for backward
+ * `page_reader` failures.  This function remains for backward
  * compatibility but is subject to the shared queue's cooldown and
- * serialization, meaning a `page_reader` 429 will delay AI output.
+ * serialization, meaning a `page_reader` error will delay AI output.
  *
  * @param messages - Chat messages in `{ role, content }` format.
  * @param options - Configuration for this call.
  * @param options.timeoutMs - Total timeout in ms.  Defaults to **120 000** (2 min).
- * @param options.maxRetries - Number of 429 retries.  Defaults to **2**.
+ * @param options.maxRetries - Number of retries.  Defaults to **2**.
  * @param options.maxQueueWaitMs - If cooldown exceeds this, the call is
  *   rejected immediately.  Defaults to **30 000** (30 s).
  * @returns The trimmed text content of the first completion choice.
- * @throws {Error} Propagates any shared-queue timeout or rate-limit errors.
+ * @throws {Error} Propagates any shared-queue timeout or failure errors.
  * @throws {Error} If the AI response is empty or shorter than 10 characters.
  */
 export async function rateLimitedChatCompletion(
@@ -508,10 +477,13 @@ export async function rateLimitedChatCompletion(
   } = {}
 ): Promise<string> {
   const { timeoutMs = 120_000, maxRetries = 2, maxQueueWaitMs = 30_000 } = options;
-  return rateLimitedZaiCall<string>(
-    async (zai) => {
-      const completion = await zai.chat.completions.create({ messages, thinking: { type: 'disabled' } });
-      const raw = completion.choices[0]?.message?.content;
+  return rateLimitedOllamaCall<string>(
+    async (ollama) => {
+      const completion = await ollama.chatCompletion(messages, {
+        temperature: 0.7,
+        max_tokens: 4096,
+      });
+      const raw = completion;
       if (!raw || raw.trim().length < 10) throw new Error('AI response too short or empty');
       return raw.trim();
     },

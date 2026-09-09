@@ -1,14 +1,14 @@
 /**
  * finpy-tse Mini Service — Historical TSE Index Data
  *
- * Uses z-ai SDK page_reader to access cdn.tsetmc.com (Iran-only CDN)
+ * Uses Ollama page_reader to access cdn.tsetmc.com (Iran-only CDN)
  * Endpoint: cdn.tsetmc.com/api/Index/GetIndexB2History/{webId}
  * Jalali date conversion via jalaali-js
  *
  * Port: 3031
  */
 
-import ZAI from 'z-ai-web-dev-sdk';
+import { ollamaPageReader } from '@/lib/ollama-client';
 import { toJalaali } from 'jalaali-js';
 
 // ═══════════════════════════════════════════════════════════════

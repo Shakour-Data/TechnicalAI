@@ -12,7 +12,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import {
   selectNarrativeCombination, buildNarrativeInput,
   selectV10Persona, buildV10NarrativePrompt,
@@ -20,6 +19,7 @@ import {
 import { scanCandlestickPatterns, buildAIPatternPrompt, type PatternScanResult } from '@/lib/candlestick-patterns';
 import { generateBayesianSummary } from '@/lib/bayesian-weights';
 import { predict30Sessions, trainModel, checkMLHealth, convertToMLOHLCV } from '@/lib/ml-predictor';
+import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,11 +32,11 @@ function cacheKey(body: VdesRequest): string {
   return `${ANALYSIS_VERSION}:${body.symbolName}:${body.currentPrice}:${body.trendDirection}:${body.rsi}:${body.adx}`;
 }
 
-// ─── Shared ZAI instance (lazy init) ─────────────────────────────────
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-async function getZAI() {
-  if (!_zai) _zai = await ZAI.create();
-  return _zai;
+// ─── Shared Ollama instance (lazy init) ─────────────────────────────────
+let _ollamaInitialized = false;
+async function getOllama() {
+  if (!_ollamaInitialized) _ollamaInitialized = true;
+  return null;
 }
 
 // ─── 429 Retry (fast: 2s, 5s, 10s) ────────────────────────────────
@@ -341,7 +341,7 @@ function trainModelInBackground(symbol: string, ohlcv: import('@/lib/ml-predicto
   });
 }
 
-/** Detect AI patterns (harmonic + Elliott) via ZAI LLM — 15s hard timeout, best-effort */
+/** Detect AI patterns (harmonic + Elliott) via Ollama LLM — 15s hard timeout, best-effort */
 async function detectAIPatterns(
   body: VdesRequest
 ): Promise<import('@/lib/candlestick-patterns').AIPatternResult | null> {
@@ -354,30 +354,18 @@ async function detectAIPatterns(
   });
 
   try {
-    const zai = await getZAI();
-    const completion = await withTimeout(
-      withRetry(
-        () => zai.chat.completions.create({
-          messages: [
-            {
-              role: 'assistant',
-              content: 'شما یک تحلیلگر الگوهای هارمونیک و موج الیوت هستید. فقط JSON خالص پاسخ دهید. هیچ متن اضافی ننویسید.',
-            },
-            { role: 'user', content: prompt },
-          ],
-          thinking: { type: 'disabled' },
-        }),
-        'AI-Patterns',
-        2 // max 2 attempts for secondary feature
-      ),
-      15000, // 15s hard timeout
-      'AI-Patterns'
+    const analysis = await dedicatedAIChatCompletion(
+      [
+        {
+          role: 'assistant',
+          content: 'شما یک تحلیلگر الگوهای هارمونیک و موج الیوت هستید. فقط JSON خالص پاسخ دهید. هیچ متن اضافی ننویسید.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      { timeoutMs: 15_000, maxRetries: 2 }
     );
 
-    const text = completion.choices[0]?.message?.content;
-    if (!text) return null;
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = analysis.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
 
     const parsed = JSON.parse(jsonMatch[0]);
@@ -480,26 +468,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Step 5: Call ZAI LLM (with 45s hard timeout) ──
+    // ── Step 5: Call Ollama LLM via dedicated channel ──
     console.log(`[VDES v10] Prompt size: ${prompt.length} chars (${(prompt.length / 1024).toFixed(1)} KB)`);
-    const zai = await getZAI();
-    const completion = await withTimeout(
-      withRetry(
-        () => zai.chat.completions.create({
-          messages: [
-            { role: 'assistant', content: SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
-          ],
-          thinking: { type: 'disabled' },
-        }),
-        'V10-Narrative',
-        3 // 3 retry attempts
-      ),
-      45000, // 45s hard timeout for entire LLM call including retries
-      'V10-Narrative'
+    const analysis = await dedicatedAIChatCompletion(
+      [
+        { role: 'assistant', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      { timeoutMs: 45_000, maxRetries: 3 }
     );
-
-    const analysis = completion.choices[0]?.message?.content;
 
     if (!analysis || analysis.trim().length === 0) {
       return NextResponse.json({ error: 'مدل پاسخی تولید نکرد.' }, { status: 500 });

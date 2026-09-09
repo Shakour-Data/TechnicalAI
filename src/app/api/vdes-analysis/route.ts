@@ -25,7 +25,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
+import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
 import { selectNarrativeCombination, buildNarrativeInput } from '@/lib/ml-narrative';
 import type { NarrativeCombination } from '@/lib/ml-narrative';
 
@@ -54,16 +54,11 @@ function cacheKey(body: VdesRequest): string {
   return c;
 }
 
-// ─── Shared ZAI instance (lazy init) ─────────────────────────────────
-/** Singleton ZAI SDK instance, lazily initialised on first call. */
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-/**
- * Get or create the singleton ZAI SDK client.
- * @returns The initialised ZAI instance.
- */
-async function getZAI() {
-  if (!_zai) _zai = await ZAI.create();
-  return _zai;
+// ─── Shared Ollama instance (lazy init) ─────────────────────────────────
+let _ollamaInitialized = false;
+async function getOllama() {
+  if (!_ollamaInitialized) _ollamaInitialized = true;
+  return null;
 }
 
 /**
@@ -490,19 +485,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Step 4: Call ZAI LLM ──
-    const zai = await getZAI();
-    const completion = await withRetry(() =>
-      zai.chat.completions.create({
-        messages: [
-          { role: 'assistant', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        thinking: { type: 'disabled' },
-      })
+    // ── Step 4: Call Ollama LLM ──
+    const analysis = await dedicatedAIChatCompletion(
+      [
+        { role: 'assistant', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      { timeoutMs: 90_000, maxRetries: 3 }
     );
-
-    const analysis = completion.choices[0]?.message?.content;
 
     if (!analysis || analysis.trim().length === 0) {
       return NextResponse.json({ error: 'مدل پاسخی تولید نکرد.' }, { status: 500 });

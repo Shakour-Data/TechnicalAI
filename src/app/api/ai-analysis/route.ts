@@ -601,7 +601,7 @@ export async function POST(req: NextRequest) {
 
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes('Rate limited') || msg.includes('429') || msg.includes('ZAI_RATE_LIMITED')) {
+    if (msg.includes('Rate limited') || msg.includes('429') || msg.includes('Ollama busy') || msg.includes('AI temporarily unavailable')) {
     return 'سرور هوشمند در حال حاضر محدودیت درخواست دارد. لطفاً ۲ تا ۵ دقیقه دیگر دوباره تلاش کنید.';
   }
   if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
@@ -613,7 +613,7 @@ function userFriendlyError(err: unknown): string {
   if (msg.includes('quota') || msg.includes('limit') || msg.includes('capacity')) {
     return 'ظرفیت هوشمند در حال حاضر پر است. لطفاً چند دقیقه دیگر تلاش کنید.';
   }
-  if (msg.includes('network') || msg.includes('fetch') || msg.includes('ECONNREFUSED')) {
+    if (msg.includes('network') || msg.includes('fetch') || msg.includes('ECONNREFUSED') || msg.includes('Ollama')) {
     return 'خطای شبکه در ارتباط با سرور هوشمند. لطفاً اتصال اینترنت خود را بررسی و دوباره تلاش کنید.';
   }
   if (msg.includes('too short') || msg.includes('empty')) {

@@ -10,7 +10,7 @@
 // ‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
+import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
 import {
   selectNarrativeCombination, buildNarrativeInput,
   selectV12Persona, buildV12NarrativePrompt,
@@ -31,11 +31,11 @@ function cacheKey(body: VdesRequest): string {
   return `${ANALYSIS_VERSION}:${body.symbolName}:${body.currentPrice}:${body.trendDirection}:${body.rsi}:${body.adx}`;
 }
 
-// ─── Shared ZAI instance (lazy init) ───────────────────────────────
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-async function getZAI() {
-  if (!_zai) _zai = await ZAI.create();
-  return _zai;
+// ─── Shared Ollama instance (lazy init) ───────────────────────────────
+let _ollamaInitialized = false;
+async function getOllama() {
+  if (!_ollamaInitialized) _ollamaInitialized = true;
+  return null;
 }
 
 // ─── 429 Retry (fast: 2s, 5s, 10s) ─────────────────────────────────────────
@@ -374,30 +374,18 @@ async function detectAIPatterns(
   });
 
   try {
-    const zai = await getZAI();
-    const completion = await withTimeout(
-      withRetry(
-        () => zai.chat.completions.create({
-          messages: [
-            {
-              role: 'assistant',
-              content: 'شما یک تحلیلگر الگوهای هارمونیک و موج الیوت هستید. فقط JSON خالص پاسخ دهید. هیچ متن اضافی ننویسید.',
-            },
-            { role: 'user', content: prompt },
-          ],
-          thinking: { type: 'disabled' },
-        }),
-        'AI-Patterns',
-        2
-      ),
-      15000,
-      'AI-Patterns'
+    const analysis = await dedicatedAIChatCompletion(
+      [
+        {
+          role: 'assistant',
+          content: 'شما یک تحلیلگر الگوهای هارمونیک و موج الیوت هستید. فقط JSON خالص پاسخ دهید. هیچ متن اضافی ننویسید.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      { timeoutMs: 15_000, maxRetries: 2 }
     );
 
-    const text = completion.choices[0]?.message?.content;
-    if (!text) return null;
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = analysis.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
 
     const parsed = JSON.parse(jsonMatch[0]);
