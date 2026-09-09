@@ -52,3 +52,13 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Generated artifacts - screenshots, charts, and test results
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+tool-results/
+e2e-screenshots/
+screenshots/
