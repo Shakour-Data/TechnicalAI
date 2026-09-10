@@ -2,6 +2,7 @@ from fastapi import Request, Response
 import logging
 import time
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -30,6 +31,9 @@ class LoggingMiddleware:
                 user_agent_str = value.decode('utf-8', errors='ignore')
                 break
 
+        # Generate correlation ID for tracing
+        correlation_id = str(uuid.uuid4())[:8]
+
         # Process request
         response_started = False
 
@@ -48,9 +52,10 @@ class LoggingMiddleware:
             if response_started:
                 request_duration = time.time() - request_time
 
-                # Log request details
+                # Log request details with proper ISO format
                 log_data = {
-                    'timestamp': datetime.now(timezone.utc).isoformat()[:-3] + 'Z',
+                    'correlation_id': correlation_id,
+                    'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
                     'method': method,
                     'path': path,
                     'query': query_string.decode('utf-8', errors='ignore'),

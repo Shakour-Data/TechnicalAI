@@ -41,6 +41,8 @@ ERROR_COUNT = Counter('http_errors_total', 'Total errors', ['endpoint', 'error_t
 async def lifespan(app: FastAPI):
     # Startup: Create tables
     Base.metadata.create_all(bind=engine)
+    # Initialize app state
+    app.state.start_time = time.time()
     logger.info("TechnicalAI Backend starting up...")
     yield
     # Shutdown
@@ -98,7 +100,7 @@ async def health_check():
 
 @app.get("/metrics")
 async def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 class StockHistoryRequest(BaseModel):
@@ -273,8 +275,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}")
     return JSONResponse(status_code=500, content={"error": "Internal server error", "detail": str(exc)})
 
-
-app.state.start_time = time.time()
 
 import uvicorn
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 class CacheService:
     def __init__(self, redis_url: str = 'redis://localhost:6379/0'):
-        self.redis_client = None
         self.redis_url = redis_url
+        self.redis_client = None
         self._connect()
 
     def _connect(self):
@@ -108,3 +108,8 @@ class CacheService:
             }
         except Exception as e:
             return {'status': 'error', 'message': str(e)}
+
+    async def reconnect(self):
+        """Attempt to reconnect to Redis."""
+        logger.info("Attempting to reconnect to Redis...")
+        self._connect()
