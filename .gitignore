@@ -5,10 +5,10 @@ node_modules
 /.pnp
 .pnp.*
 .yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+! .yarn/patches
+! .yarn/plugins
+! .yarn/releases
+! .yarn/versions
 
 # testing
 /coverage
@@ -36,7 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -50,6 +49,7 @@ test
 prompt
 
 server.log
+
 # Skills directory
 /skills/
 
@@ -65,3 +65,39 @@ server.log
 tool-results/
 e2e-screenshots/
 screenshots/
+
+# Script and development directories
+.zscripts/
+agent-ctx/
+upload/
+
+# Package lock files (can opt-in for committing if needed)
+bun.lock
+package-lock.json
+pnpm-lock.yaml
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs and caches
+*.logs
+*.cache/
+.log
+
+# Build artifacts
+.next/
+.next/cache/
+.turbopack/
+
+# Vercel / cloud
+.vercel/
+
+# Editor temp files
+*.swp
+*.swo
+*~
+
+# Misc
+.DS_Store

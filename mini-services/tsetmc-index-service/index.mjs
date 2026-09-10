@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // TSETMC Index History Service
-// Uses z-ai-web-dev-sdk page_reader to fetch index data from cdn.tsetmc.com
+// Uses local fetch to access cdn.tsetmc.com (Iran-only CDN)
 // Runs as a standalone Node.js service (port 3032)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -54,26 +54,28 @@ function devenToShamsi(deven) {
   return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
 }
 
-// ── ZAI SDK ────────────────────────────────────────────────────────
-let zai = null;
-async function getZai() {
-  if (!zai) zai = await ZAI.create();
-  return zai;
+// ── Direct fetch (replaces z-ai SDK page_reader) ───────────────────
+let fetchClient = null;
+async function getFetchClient() {
+  if (!fetchClient) fetchClient = {};
+  return fetchClient;
 }
 
 // ── Fetch and parse B2 data from cdn.tsetmc.com ───────────────────
 async function fetchB2History(webId) {
-  const sdk = await getZai();
-  const result = await sdk.functions.invoke('page_reader', {
-    url: `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`,
+  const url = `http://cdn.tsetmc.com/api/Index/GetIndexB2History/${webId}`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml',
+    },
   });
-
-  if (result.code !== 200 || !result.data?.html) {
-    console.error(`[fetchB2] Bad response: code=${result.code}, hasData=${!!result.data}, htmlLen=${result.data?.html?.length ?? 'N/A'}`);
-    throw new Error(`TSETMC API returned status ${result.code}`);
+  if (!response.ok) {
+    console.error(`[fetchB2] Bad response: status=${response.status}`);
+    throw new Error(`TSETMC API returned status ${response.status}`);
   }
-
-  const html = result.data.html;
+  const html = await response.text();
   console.log(`[fetchB2] HTML length: ${html.length}`);
   const preMatch = /<pre[^>]*>([\s\S]*?)<\/pre>/i.exec(html);
   if (!preMatch) {

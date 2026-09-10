@@ -103,23 +103,24 @@ const candleCache = new Map<string, { data: IndexCandle[]; time: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // ═══════════════════════════════════════════════════════════════
-// Z-AI SDK (lazy init, shared across requests)
+// Ollama Client (lazy init, shared across requests)
 // ═══════════════════════════════════════════════════════════════
 
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-let zaiInitPromise: Promise<Awaited<ReturnType<typeof ZAI.create>>> | null = null;
+let ollamaInstance: Awaited<ReturnType<typeof import('@/lib/ollama-client').getOllama>> | null = null;
+let ollamaInitPromise: Promise<Awaited<ReturnType<typeof import('@/lib/ollama-client').getOllama>> | null = null;
 
-function getZai(): Promise<Awaited<ReturnType<typeof ZAI.create>>> {
-  if (zaiInstance) return Promise.resolve(zaiInstance);
-  if (!zaiInitPromise) {
-    console.log('[INFO] Initializing z-ai SDK...');
-    zaiInitPromise = ZAI.create().then((zai) => {
-      zaiInstance = zai;
-      console.log('[INFO] z-ai SDK ready');
-      return zai;
+async function getOllama() {
+  if (ollamaInstance) return ollamaInstance;
+  if (!ollamaInitPromise) {
+    console.log('[INFO] Initializing Ollama client...');
+    ollamaInitPromise = import('@/lib/ollama-client').then((mod) => {
+      const client = mod.getOllama();
+      ollamaInstance = client;
+      console.log('[INFO] Ollama client ready');
+      return client;
     });
   }
-  return zaiInitPromise;
+  return ollamaInitPromise;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -152,8 +153,7 @@ async function fetchCdnB2History(webId: string, maxRetries = 3): Promise<TsetmcB
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[INFO] Fetching webId=${webId} (attempt ${attempt}/${maxRetries})...`);
-      const zai = await getZai();
-      const result = await zai.functions.invoke('page_reader', { url });
+      const result = await ollamaPageReader(url);
       const html: string = result.data?.html || '';
 
       if (!html || html.length < 10) {
