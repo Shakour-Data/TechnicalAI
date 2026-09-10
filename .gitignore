@@ -101,3 +101,8 @@ __pycache__/
 
 # Misc
 .DS_Store
+
+# Database files (runtime data, not source)
+*.db
+*.sqlite
+technical_ai.db
