@@ -128,7 +128,7 @@ function trendDirectionLabel(dir: string, bullColor: string, bearColor: string, 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   const { colors: C } = useTheme();
   return (
-    <div className="text-[10px] font-bold px-1 mb-2" style={{ color: C.cardSubFg }}>
+    <div className="text-[11px] font-bold px-1 mb-2 tracking-wider" style={{ color: C.cardSubFg }}>
       {children}
     </div>
   );
@@ -257,7 +257,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
               </div>
             </div>
             <div
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-bold"
+              className="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold"
               style={{ background: signalBg, border: `1px solid ${signalBorderColor}`, color: signalColor }}
             >
               <SignalIcon className="w-3 h-3" />
@@ -271,7 +271,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
               <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: C.text }} dir="ltr">
                 {toFa(lastPrice)}
               </div>
-              <span className="text-[9px]" style={{ color: C.textDim }}>{info?.currencyUnit || 'ریال'}</span>
+              <span className="text-[10px]" style={{ color: C.textDim }}>{info?.currencyUnit || 'ریال'}</span>
             </div>
             <div className="text-xs font-bold" style={{ color: changeColor }}>
               {changeArrow} {Math.abs(change).toLocaleString('fa-IR', { maximumFractionDigits: 2 })}٪
@@ -281,14 +281,14 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
           {/* Volume & Value */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[8px]" style={{ color: C.textDim }}>حجم</div>
-              <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
+              <div className="text-[10px]" style={{ color: C.textDim }}>حجم</div>
+              <div className="text-[11px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
                 {formatNumber(info?.volume ?? 0)}
               </div>
             </div>
             <div>
-              <div className="text-[8px]" style={{ color: C.textDim }}>ارزش</div>
-              <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
+              <div className="text-[10px]" style={{ color: C.textDim }}>ارزش</div>
+              <div className="text-[11px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
                 {formatNumber(info?.value ?? 0)}
               </div>
             </div>
@@ -303,8 +303,8 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
               { label: 'دیروز', value: info?.yesterdayClose },
             ].map(item => (
               <div key={item.label} className="flex items-center justify-between">
-                <span className="text-[9px]" style={{ color: C.textDim }}>{item.label}</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
+                <span className="text-[10px]" style={{ color: C.textDim }}>{item.label}</span>
+                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">
                   {toFa(item.value ?? 0)}
                 </span>
               </div>
@@ -378,14 +378,14 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bull }}>خرید</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toFa2(ta.bullScore)}</span>
+                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toFa2(ta.bullScore)}</span>
               </div>
               <ProgressBar value={safeNum(ta.bullScore)} max={100} color={C.bull} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bear }}>فروش</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toFa2(ta.bearScore)}</span>
+                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toFa2(ta.bearScore)}</span>
               </div>
               <ProgressBar value={safeNum(ta.bearScore)} max={100} color={C.bear} />
             </div>
@@ -410,7 +410,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
                 <span className="text-[10px] font-medium shrink-0" style={{ color: C.textSec }}>{t.label}</span>
                 <span className="text-[10px] font-bold" style={{ color: dir.color }}>{dir.label}</span>
                 <span className="flex-1" />
-                <div className="flex items-center gap-2 text-[9px] tabular-nums" dir="ltr">
+                <div className="flex items-center gap-2 text-[10px] tabular-nums" dir="ltr">
                   <span style={{ color: C.textDim }}>زاویه</span>
                   <span className="font-bold" style={{ color: C.textSec }}>{toFa1(t.data.angle)}°</span>
                   <span style={{ color: C.textDim }}>R²</span>
@@ -439,7 +439,7 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
               <GlassCard key={ind.label} className="relative px-2.5 py-2">
                 <span className="absolute top-1.5 left-1.5 h-1.5 w-1.5 rounded-full" style={{ background: signalDotBg(ind.signal, C.bull, C.bear, C.neutral, C.textDim) }} />
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[9px]" style={{ color: C.textDim }}>{ind.label}</span>
+                  <span className="text-[10px]" style={{ color: C.textDim }}>{ind.label}</span>
                   <span className="text-xs font-bold tabular-nums" style={{ color: C.text }} dir="ltr">{ind.value}</span>
                 </div>
               </GlassCard>
@@ -455,19 +455,19 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
 
           {/* MACD line / signal / histogram */}
           <div>
-            <div className="text-[9px] font-medium mb-1.5" style={{ color: C.textDim }}>MACD</div>
+            <div className="text-[10px] font-medium mb-1.5" style={{ color: C.textDim }}>MACD</div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <div className="text-[8px]" style={{ color: C.textDim }}>خط</div>
-                <div className="text-[10px] font-bold tabular-nums" style={{ color: ta.macd.line > ta.macd.signal ? C.bull : C.bear }} dir="ltr">{toFa(ta.macd.line)}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>خط</div>
+                <div className="text-[11px] font-bold tabular-nums" style={{ color: ta.macd.line > ta.macd.signal ? C.bull : C.bear }} dir="ltr">{toFa(ta.macd.line)}</div>
               </div>
               <div>
-                <div className="text-[8px]" style={{ color: C.textDim }}>سیگنال</div>
-                <div className="text-[10px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">{toFa(ta.macd.signal)}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>سیگنال</div>
+                <div className="text-[11px] font-bold tabular-nums" style={{ color: C.textSec }} dir="ltr">{toFa(ta.macd.signal)}</div>
               </div>
               <div>
-                <div className="text-[8px]" style={{ color: C.textDim }}>هیستوگرام</div>
-                <div className="text-[10px] font-bold tabular-nums" style={{ color: ta.macd.histogram > 0 ? C.bull : ta.macd.histogram < 0 ? C.bear : C.neutral }} dir="ltr">{toFa(ta.macd.histogram)}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>هیستوگرام</div>
+                <div className="text-[11px] font-bold tabular-nums" style={{ color: ta.macd.histogram > 0 ? C.bull : ta.macd.histogram < 0 ? C.bear : C.neutral }} dir="ltr">{toFa(ta.macd.histogram)}</div>
               </div>
             </div>
           </div>

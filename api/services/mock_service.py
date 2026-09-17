@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 import json
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -257,9 +257,10 @@ class MockService:
         base_price = stock['price']
         for i in range(limit):
             date_offset = limit - i
-            # Calculate date by subtracting offset days from today
-            date = datetime.now(timezone.utc) - timedelta(days=date_offset)
-            date_str = date.strftime('%Y-%m-%d')
+            date = datetime.now(timezone.utc)
+            date_str = (date.replace(hour=0, minute=0, second=0, microsecond=0)
+                       .replace(day=max(1, date.day - date_offset)))
+            date_str = date_str.strftime('%Y-%m-%d')
             
             # Generate realistic price variation
             daily_change = random.uniform(-0.05, 0.05)
@@ -341,9 +342,10 @@ class MockService:
         base_price = index['current_price']
         for i in range(limit):
             date_offset = limit - i
-            # Calculate date by subtracting offset days from today
-            date = datetime.now(timezone.utc) - timedelta(days=date_offset)
-            date_str = date.strftime('%Y-%m-%d')
+            date = datetime.now(timezone.utc)
+            date_str = (date.replace(hour=0, minute=0, second=0, microsecond=0)
+                       .replace(day=max(1, date.day - date_offset)))
+            date_str = date_str.strftime('%Y-%m-%d')
             
             daily_change = random.uniform(-0.03, 0.03)
             price = base_price * (1 + daily_change)
@@ -468,22 +470,16 @@ class MockService:
 
     async def _load_from_cache(self, key: str, max_age_seconds: int = 300) -> Optional[List[Dict[str, Any]]]:
         """Load data from file cache."""
-        import asyncio
-        
         cache_dir = Path("./db/cache")
         cache_dir.mkdir(exist_ok=True)
         
-        # Use positive hash to avoid negative filenames on Windows
-        cache_path = cache_dir / f"{abs(hash(key))}.json"
+        cache_path = cache_dir / f"{hash(key)}.json"
         if not cache_path.exists():
             return None
         
         try:
-            def _read_cache():
-                with open(cache_path, 'r') as f:
-                    return json.load(f)
-            
-            data = await asyncio.to_thread(_read_cache)
+            with open(cache_path, 'r') as f:
+                data = json.load(f)
             
             cached_time = data.get('cached_at', 0)
             if time.time() - cached_time > max_age_seconds:
@@ -499,8 +495,7 @@ class MockService:
         cache_dir = Path("./db/cache")
         cache_dir.mkdir(exist_ok=True)
         
-        # Use positive hash to avoid negative filenames on Windows
-        cache_path = cache_dir / f"{abs(hash(key))}.json"
+        cache_path = cache_dir / f"{hash(key)}.json"
         
         try:
             cache_data = {

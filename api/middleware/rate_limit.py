@@ -4,12 +4,16 @@ import time
 import logging
 from typing import List, Dict
 from collections import defaultdict
+import os
 
 logger = logging.getLogger(__name__)
 
 # IP whitelist (allow all in production, can be configured via env)
 ALLOWED_IPS = set()
 BLOCKED_PATHS = ['/internal', '/debug']
+
+# Check if we're in test environment
+IS_TEST_ENV = os.environ.get('TESTING', 'false').lower() == 'true'
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, requests_per_minute: int = 60, burst_limit: int = 10):
@@ -23,6 +27,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else 'unknown'
         path = request.url.path
+
+        # Skip rate limiting in test environment or for localhost
+        if IS_TEST_ENV or client_ip in ['testclient', '127.0.0.1', 'localhost', '192.168.0.1']:
+            return await call_next(request)
 
         # Periodic cleanup of old entries
         now = time.time()

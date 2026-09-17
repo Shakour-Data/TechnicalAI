@@ -4,12 +4,11 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import random
-import requests
 import time
 
 from sqlalchemy import text
 
-from api.models.database import get_db
+from api.models.database import SessionLocal
 from api.models.analysis import Analysis, AnalysisResult
 
 logger = logging.getLogger(__name__)
@@ -37,10 +36,10 @@ class AnalysisService:
                 status="pending"
             )
             
-            db = next(get_db())
-            db.add(analysis)
-            db.commit()
-            db.refresh(analysis)
+            with SessionLocal() as db:
+                db.add(analysis)
+                db.commit()
+                db.refresh(analysis)
             
             # Run analysis in background
             asyncio.create_task(self._run_analysis_task(analysis_id, symbol, analysis_type, prompt, model))
@@ -53,44 +52,48 @@ class AnalysisService:
 
     async def _run_analysis_task(self, analysis_id: str, symbol: str, analysis_type: str, 
                                 prompt: Optional[str], model: Optional[str]):
+        db = None
         try:
-            db = next(get_db())
-            analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
-            
-            if not analysis:
-                return
+            with SessionLocal() as db:
+                analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
                 
-            analysis.status = "running"
-            db.commit()
-            
-            # Generate mock analysis results based on symbol and type
-            result_data = await self._generate_analysis_result(symbol, analysis_type)
-            
-            # Create analysis result
-            for metric_name, metric_value in result_data.items():
-                analysis_result = AnalysisResult(
-                    id=f"{analysis_id}_{metric_name}",
-                    analysis_id=analysis_id,
-                    metric_name=metric_name,
-                    metric_value=metric_value,
-                    recommendation=self._generate_recommendation(metric_name, metric_value, analysis_type)
-                )
-                db.add(analysis_result)
-            
-            analysis.status = "completed"
-            analysis.completed_at = datetime.now(timezone.utc)
-            db.commit()
-            
+                if not analysis:
+                    return
+                    
+                analysis.status = "running"
+                db.commit()
+                
+                # Generate mock analysis results based on symbol and type
+                result_data = await self._generate_analysis_result(symbol, analysis_type)
+                
+                # Create analysis result
+                for metric_name, metric_value in result_data.items():
+                    analysis_result = AnalysisResult(
+                        id=f"{analysis_id}_{metric_name}",
+                        analysis_id=analysis_id,
+                        metric_name=metric_name,
+                        metric_value=metric_value,
+                        recommendation=self._generate_recommendation(metric_name, metric_value, analysis_type)
+                    )
+                    db.add(analysis_result)
+                
+                analysis.status = "completed"
+                analysis.completed_at = datetime.now(timezone.utc)
+                db.commit()
+                
         except Exception as e:
             logger.error(f"Error running analysis task {analysis_id}: {e}")
             try:
-                db = next(get_db())
-                analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
-                if analysis:
-                    analysis.status = "failed"
-                    db.commit()
-            except:
-                pass
+                with SessionLocal() as db:
+                    analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+                    if analysis:
+                        analysis.status = "failed"
+                        db.commit()
+            except Exception as update_error:
+                logger.error(f"Error marking analysis {analysis_id} as failed: {update_error}")
+        finally:
+            if db is not None:
+                db.close()
 
     async def _generate_analysis_result(self, symbol: str, analysis_type: str) -> Dict[str, Any]:
         # Generate mock technical analysis
@@ -181,23 +184,23 @@ class AnalysisService:
 
     async def get_result(self, analysis_id: str) -> Dict[str, Any]:
         try:
-            db = next(get_db())
-            analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
-            
-            if not analysis:
-                raise ValueError(f"Analysis not found: {analysis_id}")
-            
-            results = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == analysis_id).all()
-            
-            return {
-                'analysis_id': analysis_id,
-                'symbol': analysis.symbol,
-                'type': analysis.analysis_type,
-                'status': analysis.status,
-                'results': [{'metric': r.metric_name, 'value': r.metric_value, 'recommendation': r.recommendation} 
-                           for r in results]
-            }
-            
+            with SessionLocal() as db:
+                analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+                
+                if not analysis:
+                    raise ValueError(f"Analysis not found: {analysis_id}")
+                
+                results = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == analysis_id).all()
+                
+                return {
+                    'analysis_id': analysis_id,
+                    'symbol': analysis.symbol,
+                    'type': analysis.analysis_type,
+                    'status': analysis.status,
+                    'results': [{'metric': r.metric_name, 'value': r.metric_value, 'recommendation': r.recommendation} 
+                               for r in results]
+                }
+                
         except Exception as e:
             logger.error(f"Error getting result for {analysis_id}: {e}")
             raise
