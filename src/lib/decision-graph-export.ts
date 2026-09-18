@@ -58,7 +58,7 @@ function toFaStr(s) {
 }
 
 // ═══ HELPERS ═══
-function getNode(id) { for (var i=0;i<DATA.nodes.length;i++) if (DATA.nodes[i].id===id) return DATA.nodes[i]; return null; }
+function getNode(id) { for (var i=0;i<DATA.decisionGraph.nodes.length;i++) if (DATA.decisionGraph.nodes[i].id===id) return DATA.decisionGraph.nodes[i]; return null; }
 var SCENARIO_KEYS = ['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9'];
 var SCENARIO_LABELS = {SC1:'شوک نزولی',SC2:'نزولی شتاب‌دار',SC3:'نزولی قوی',SC4:'نزولی خفیف',SC5:'رنج',SC6:'صعودی خفیف',SC7:'صعودی قوی',SC8:'صعودی شتاب‌دار',SC9:'شوک صعودی'};
 var SCENARIO_COLORS = {SC1:'#b91c1c',SC2:'#dc2626',SC3:'#ea580c',SC4:'#c2410c',SC5:'#b45309',SC6:'#047857',SC7:'#059669',SC8:'#0e7490',SC9:'#0891b2'};
