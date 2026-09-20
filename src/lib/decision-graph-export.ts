@@ -46,6 +46,26 @@ function buildInlineJS(): string {
 var DATA = window.__DG_DATA__;
 var D = DATA.D;
 
+// ═══ COLORS (matching site vdss-graph.tsx) ═══
+var COLORS = {
+  up: D.green,
+  pullback: D.blue,
+  down: D.orange,
+  risk: D.red,
+  cyan: D.cyan,
+  purple: D.purple,
+  gold: D.gold,
+};
+var EDGE_COLORS = {
+  'branch-trend': COLORS.cyan,
+  'branch-breakout': COLORS.gold,
+  'branch-reversal': COLORS.purple,
+  up: COLORS.up,
+  pullback: COLORS.pullback,
+  down: COLORS.down,
+  risk: COLORS.risk,
+};
+
 // ═══ PERSIAN DIGITS ═══
 function toFa(n) {
   var s = String(Math.round(n)).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
@@ -64,7 +84,6 @@ var SCENARIO_LABELS = {SC1:'شوک نزولی',SC2:'نزولی شتاب‌دار
 var SCENARIO_COLORS = {SC1:'#b91c1c',SC2:'#dc2626',SC3:'#ea580c',SC4:'#c2410c',SC5:'#b45309',SC6:'#047857',SC7:'#059669',SC8:'#0e7490',SC9:'#0891b2'};
 var BRANCH_COLORS = {trend:D.cyan, breakout:D.gold, reversal:D.purple};
 var BRANCH_LABELS = {trend:'پیروی از روند', breakout:'شکست', reversal:'بازگشت'};
-var EDGE_COLORS = {'branch-trend':D.cyan,'branch-breakout':D.gold,'branch-reversal':D.purple,up:D.green,pullback:D.blue,down:D.orange,risk:D.red};
 var LINE_COLORS = {SC1:'#b91c1c',SC2:'#dc2626',SC3:'#ea580c',SC4:'#f97316',SC5:'#f59e0b',SC6:'#65a30d',SC7:'#16a34a',SC8:'#059669',SC9:'#047857'};
 
 var SCENARIO_META_LOCAL = {
@@ -76,17 +95,20 @@ var SCENARIO_META_LOCAL = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// SECTION 1: DECISION GRAPH (Canvas edges + HTML nodes)
+// SECTION 1: DECISION GRAPH (SVG edges + HTML nodes)
 // ═══════════════════════════════════════════════════════════════════
 (function() {
-  var canvas = document.getElementById('dg-canvas');
   var container = document.getElementById('dg-container');
+  var svgEl = document.getElementById('dg-svg');
   var nodesLayer = document.getElementById('dg-nodes');
-  if (!canvas || !container || !nodesLayer) return;
-  var ctx = canvas.getContext('2d');
+  if (!container || !svgEl || !nodesLayer) return;
   var dpr = window.devicePixelRatio || 1;
 
-  var DESIGN_W = 1200, DESIGN_H = 1100;
+  // DESIGN dimensions matching site (vdss-graph.tsx)
+  var DESIGN_W = 1500, DESIGN_H = 1200;
+  var DISPLAY_W = 1200, DISPLAY_H = 1200;
+  var scaleX = DISPLAY_W / DESIGN_W; // 0.8
+  var scaleY = DISPLAY_H / DESIGN_H; // 1.0
   var state = { filter: 'all', selectedNode: null, hoveredNode: null };
 
   // ── Node dimensions ──
@@ -139,35 +161,27 @@ var SCENARIO_META_LOCAL = {
     return { visEdges: arr, visNodes: nSet };
   }
 
-  // ── Scale ──
-  function getScale() {
-    var cw = container.clientWidth;
-    var sx = cw / DESIGN_W;
-    return sx;
-  }
-
-  // ── Resize canvas ──
-  function resizeCanvas() {
-    var w = container.clientWidth;
-    var h = container.clientHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-
-  // ── Draw edges ──
+  // ── Draw SVG edges ──
   function drawEdges() {
-    var w = container.clientWidth, h = container.clientHeight;
-    ctx.clearRect(0, 0, w, h);
-    var sx = getScale();
     var edges = DATA.decisionGraph.edges;
     var pos = DATA.decisionGraph.nodePositions;
     var probs = DATA.decisionGraph.edgeProbabilities;
     var vis = computeVisibility(state.filter);
     var visSet = {}; for (var i=0;i<vis.visEdges.length;i++) visSet[vis.visEdges[i]]=true;
 
+    // Build markers
+    var markersSvg = '';
+    var seenColors = {};
+    for (var ei=0; ei<edges.length; ei++) {
+      var e = edges[ei];
+      var c = EDGE_COLORS[e.type];
+      if (c && !seenColors[e.type]) {
+        seenColors[e.type] = true;
+        markersSvg += '<marker id="arrow-' + e.type + '" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="' + c + '"/></marker>';
+      }
+    }
+
+    var pathsSvg = '';
     for (var ei=0; ei<edges.length; ei++) {
       var e = edges[ei];
       var fp = pos[e.from], tp = pos[e.to];
@@ -175,8 +189,8 @@ var SCENARIO_META_LOCAL = {
       var fn = getNode(e.from), tn = getNode(e.to);
       if (!fn || !tn) continue;
       var fd = nodeDims(fn), td = nodeDims(tn);
-      var ax = (fp.right + fd.w/2)*sx, ay = (fp.top + fd.h/2)*sx;
-      var bx = (tp.right + td.w/2)*sx, by = (tp.top + td.h/2)*sx;
+      var ax = (fp.right + fd.w/2)*scaleX, ay = (fp.top + fd.h/2)*scaleY;
+      var bx = (tp.right + td.w/2)*scaleX, by = (tp.top + td.h/2)*scaleY;
       var dx = bx-ax, dy = by-ay, dist = Math.sqrt(dx*dx+dy*dy);
       if (dist === 0) continue;
       var bend = Math.min(52, Math.max(18, dist*0.11));
@@ -185,57 +199,19 @@ var SCENARIO_META_LOCAL = {
       var cx = mx + nx*bend, cy = my + ny*bend;
       var isVis = visSet[ei];
       var ec = EDGE_COLORS[e.type] || '#6b7280';
+      var prob = probs[ei] || 0;
+      var probLabel = toFa(prob*100) + '٪';
 
-      // Draw curve
-      ctx.save();
-      ctx.globalAlpha = isVis ? 0.72 : 0.06;
-      ctx.strokeStyle = ec;
-      ctx.lineWidth = isVis ? 2 : 0.8;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.quadraticCurveTo(cx, cy, bx, by);
-      ctx.stroke();
+      var dAttr = 'M ' + ax + ' ' + ay + ' Q ' + cx + ' ' + cy + ' ' + bx + ' ' + by;
+      pathsSvg += '<path d="' + dAttr + '" stroke="' + ec + '" stroke-width="' + (isVis ? 2 : 0.8) + '" opacity="' + (isVis ? 0.72 : 0.05) + '" fill="none" marker-end="url(#arrow-' + e.type + ')" data-type="' + e.type + '" data-from="' + e.from + '" data-to="' + e.to + '" class="edge-path" style="transition:opacity .25s,stroke-width .25s"/>';
 
-      // Arrow
-      if (isVis) {
-        var t = 0.92;
-        var arx = (1-t)*(1-t)*ax + 2*(1-t)*t*cx + t*t*bx;
-        var ary = (1-t)*(1-t)*ay + 2*(1-t)*t*cy + t*t*by;
-        var atx = 2*(1-t)*(cx-ax) + 2*t*(bx-cx);
-        var aty = 2*(1-t)*(cy-ay) + 2*t*(by-cy);
-        var ang = Math.atan2(aty, atx);
-        var al = 8;
-        ctx.fillStyle = ec;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(bx - al*Math.cos(ang-0.4), by - al*Math.sin(ang-0.4));
-        ctx.lineTo(bx - al*Math.cos(ang+0.4), by - al*Math.sin(ang+0.4));
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
-
-      // Labels on visible edges (not branch edges)
       if (isVis && ei >= 6) {
-        var prob = probs[ei] || 0;
-        var probLabel = toFa(prob*100) + '٪';
-        ctx.save();
-        ctx.font = '10px Vazirmatn, Tahoma, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.95;
-        ctx.strokeStyle = '#07111b';
-        ctx.lineWidth = 4; ctx.lineJoin = 'round';
-        ctx.strokeText(e.label, cx, cy-5);
-        ctx.fillText(e.label, cx, cy-5);
-        ctx.font = 'bold 9px Vazirmatn, Tahoma, sans-serif';
-        ctx.fillStyle = ec;
-        ctx.globalAlpha = 0.9;
-        ctx.strokeText(probLabel, cx, cy+8);
-        ctx.fillText(probLabel, cx, cy+8);
-        ctx.restore();
+        pathsSvg += '<text x="' + cx + '" y="' + (cy - 5) + '" fill="#ffffff" font-size="10" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="4" stroke-linejoin="round" opacity="0.95" class="edge-label">' + e.label + '</text>';
+        pathsSvg += '<text x="' + cx + '" y="' + (cy + 7) + '" fill="' + ec + '" font-size="9" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#07111b" stroke-width="3" stroke-linejoin="round" opacity="0.9" class="edge-prob">' + probLabel + '</text>';
       }
     }
+
+    svgEl.innerHTML = '<defs>' + markersSvg + '</defs>' + pathsSvg;
   }
 
   // ── Render nodes as HTML ──
@@ -243,7 +219,6 @@ var SCENARIO_META_LOCAL = {
   function renderNodes() {
     nodesLayer.innerHTML = '';
     nodeElements = {};
-    var sx = getScale();
     var vis = computeVisibility(state.filter);
     var pos = DATA.decisionGraph.nodePositions;
     var scProbs = DATA.decisionGraph.scenarioProbabilities;
@@ -263,8 +238,8 @@ var SCENARIO_META_LOCAL = {
 
       var el = document.createElement('div');
       el.style.cssText = 'position:absolute;cursor:pointer;text-align:center;padding:8px 9px;border-radius:13px;transition:transform .2s,filter .2s,opacity .2s,box-shadow .2s;user-select:none;';
-      el.style.right = (p.right * sx) + 'px';
-      el.style.top = (p.top * sx) + 'px';
+      el.style.right = (p.right * scaleX) + 'px';
+      el.style.top = (p.top * scaleY) + 'px';
       el.style.width = dm.w + 'px';
       el.style.minWidth = dm.w + 'px';
       el.style.minHeight = dm.h + 'px';
@@ -298,9 +273,9 @@ var SCENARIO_META_LOCAL = {
       } else if (isSubBr) {
         // Find edge prob from parent
         var ep = 0;
-        for (var ei=0;ei<DATA.decisionGraph.edges.length;ei++) {
-          var ed = DATA.decisionGraph.edges[ei];
-          if (ed.to === n.id) { ep = DATA.decisionGraph.edgeProbabilities[ei] || 0; break; }
+        for (var si=0;si<DATA.decisionGraph.edges.length;si++) {
+          var ed = DATA.decisionGraph.edges[si];
+          if (ed.to === n.id) { ep = DATA.decisionGraph.edgeProbabilities[si] || 0; break; }
         }
         el.innerHTML = '<div style="font-size:12px;font-weight:800;color:#fff;line-height:1.45">' + n.title + '</div>' +
           '<div style="font-size:9px;color:' + col + ';font-weight:700;margin-top:1px">' + n.titleEn + '</div>' +
@@ -404,7 +379,6 @@ var SCENARIO_META_LOCAL = {
 
   // ── Init & Resize ──
   function fullRedraw() {
-    resizeCanvas();
     renderNodes();
     drawEdges();
   }
@@ -939,8 +913,8 @@ export function exportDecisionGraphHTML(data: DecisionGraphExportData): void {
       <button id="dg-reset-btn" style="color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04);padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;transition:.2s ease;margin-right:auto">بازنشانی انتخاب</button>
     </div>
     <div id="dg-container" style="position:relative;overflow:auto;min-height:500px;padding:20px">
-      <canvas id="dg-canvas" style="position:absolute;top:0;right:0;pointer-events:none;z-index:1"></canvas>
-      <div id="dg-nodes" style="position:relative;z-index:2;width:1200px;height:1100px;margin:0 auto"></div>
+      <svg id="dg-svg" style="position:absolute;top:0;right:0;pointer-events:none;z-index:1;width:1200px;height:1200px"></svg>
+      <div id="dg-nodes" style="position:relative;z-index:2;width:1200px;height:1200px;margin:0 auto"></div>
       <!-- Legend -->
       <div style="position:absolute;left:17px;bottom:15px;padding:10px;border:1px solid ${D.line};border-radius:10px;background:rgba(7,17,27,.8);font-size:10px;color:#fff;line-height:2">
         <div style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${D.cyan}"></span>پیروی از روند</div>

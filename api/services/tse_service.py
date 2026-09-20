@@ -106,7 +106,7 @@ class TSEService:
         safe_key = hashlib.md5(key.encode()).hexdigest()
         return self.cache_dir / f"{safe_key}.json"
 
-    def _load_from_cache(self, key: str, max_age_seconds: int = 300) -> Optional[List[Candle]]:
+    def _load_from_cache(self, key: str, max_age_seconds: int = 900) -> Optional[List[Candle]]:
         cache_path = self._get_cache_path(key)
         if not cache_path.exists():
             return None

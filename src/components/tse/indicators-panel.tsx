@@ -1,11 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toPersianDigits } from '@/lib/jalali';
 import { useTheme } from '@/lib/theme-store';
 import { formatPriceFa } from '@/lib/format-price';
 import SemicircleGauge from '@/components/tse/semicircle-gauge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Download, ChevronDown, FileCode } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,6 +75,13 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 const toFa = (n: number) => `\u200E${Math.round(n).toLocaleString('fa-IR')}\u200E`;
+
+const toPercent = (v: number) => Math.round(v * 100);
+
+const getScorePercentages = (bullScoreVal: number) => ({
+  bull: Math.round(bullScoreVal * 100),
+  bear: 100 - Math.round(bullScoreVal * 100),
+});
 
 function rsiSignal(v: number): 'bullish' | 'bearish' | 'neutral' {
   if (v > 70) return 'bearish';
@@ -321,6 +336,7 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
   const risingCount = trendInfos.filter((t) => t.direction === 'rising').length;
   const fallingCount = trendInfos.filter((t) => t.direction === 'falling').length;
   const totalIndicators = trendInfos.length;
+  const { bull: bullPct, bear: bearPct } = getScorePercentages(ta.bullScore);
 
   const fmtKeyVal = (val: number): string => {
     return formatPriceFa(val, priceDecimals ?? 0);
@@ -330,6 +346,141 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
   const fmtPrice = (val: number): string => {
     return formatPriceFa(val, priceDecimals ?? 0);
   };
+
+  // ─── Export HTML+CSS+JS ────────────────────────────────────────
+  const exportHTML = useCallback(() => {
+    const ta = IndicatorsPanel.getExportData(ta);
+    if (!ta) return;
+    const rows: string[] = [];
+    const addSection = (title: string, items: Array<{ label: string; value: string; signal?: string }>) => {
+      rows.push(`<section><h3>${title}</h3>`);
+      items.forEach(it => {
+        rows.push(`<div><span>${it.label}</span><span>${it.value}</span>${it.signal ? `<span>${it.signal}</span>` : ''}</div>`);
+      });
+      rows.push('</section>');
+    };
+
+    addSection('خلاصه اندیکاتورها', [
+      { label: 'RSI', value: String(ta.rsi), signal: ta.rsi > 70 ? 'نزولی' : ta.rsi < 30 ? 'صعودی' : 'خنثی' },
+      { label: 'استوکاستیک %K', value: String(ta.stochK), signal: ta.stochK > 80 ? 'نزولی' : ta.stochK < 20 ? 'صعودی' : 'خنثی' },
+      { label: 'ADX', value: String(ta.adx), signal: ta.adx > 25 ? 'صعودی' : 'خنثی' },
+      { label: 'CCI', value: String(ta.cci), signal: ta.cci > 100 ? 'نزولی' : ta.cci < -100 ? 'صعودی' : 'خنثی' },
+      { label: 'MFI', value: String(ta.mfi), signal: ta.mfi > 80 ? 'نزولی' : ta.mfi < 20 ? 'صعودی' : 'خنثی' },
+      { label: 'ویلیامز %R', value: String(ta.williamsR), signal: ta.williamsR > -20 ? 'نزولی' : ta.williamsR < -80 ? 'صعودی' : 'خنثی' },
+    ]);
+    addSection('مهمترین اندیکاتورها', [
+      { label: 'RSI', value: formatPriceFa(ta.rsi, priceDecimals ?? 0) },
+      { label: 'هیستوگرام MACD', value: formatPriceFa(ta.macd.histogram, priceDecimals ?? 0) },
+      { label: 'استوکاستیک %K', value: formatPriceFa(ta.stochK, priceDecimals ?? 0) },
+      { label: 'باندهای بولینگر', value: `${formatPriceFa(ta.bollingerBands.upper, priceDecimals ?? 0)} - ${formatPriceFa(ta.bollingerBands.lower, priceDecimals ?? 0)}` },
+      { label: 'MFI', value: formatPriceFa(ta.mfi, priceDecimals ?? 0) },
+    ]);
+    addSection('میانگین‌های متحرک', [
+      ...Object.entries(ta.sma).map(([k, v]) => ({ label: k, value: formatPriceFa(v, priceDecimals ?? 0) })),
+      ...Object.entries(ta.ema).map(([k, v]) => ({ label: k, value: formatPriceFa(v, priceDecimals ?? 0) })),
+    ]);
+    addSection('جزئیات تکمیلی', [
+      { label: 'MACD Line', value: formatPriceFa(ta.macd.line, priceDecimals ?? 0) },
+      { label: 'MACD Signal', value: formatPriceFa(ta.macd.signal, priceDecimals ?? 0) },
+      { label: 'Stochastic %D', value: formatPriceFa(ta.stochD, priceDecimals ?? 0) },
+      { label: 'DI+', value: formatPriceFa(ta.diPlus, priceDecimals ?? 0) },
+      { label: 'DI-', value: formatPriceFa(ta.diMinus, priceDecimals ?? 0) },
+      { label: 'Parabolic SAR', value: formatPriceFa(ta.sar, priceDecimals ?? 0) },
+    ]);
+    addSection('نوسان‌پذیری', [
+      { label: 'ATR', value: formatPriceFa(ta.atr, priceDecimals ?? 0) },
+      { label: 'باند بالایی', value: formatPriceFa(ta.bollingerBands.upper, priceDecimals ?? 0) },
+      { label: 'باند میانی', value: formatPriceFa(ta.bollingerBands.middle, priceDecimals ?? 0) },
+      { label: 'باند پایینی', value: formatPriceFa(ta.bollingerBands.lower, priceDecimals ?? 0) },
+    ]);
+    if (ta.hasVolume !== false) {
+      addSection('حجم', [
+        { label: 'OBV', value: formatPriceFa(ta.obv, priceDecimals ?? 0) },
+        { label: 'VWAP', value: formatPriceFa(ta.vwap ?? 0, priceDecimals ?? 0) },
+      ]);
+    }
+    addSection('ابر ایچیموکو', [
+      { label: 'تنکان‌سن', value: formatPriceFa(ta.ichimoku?.tenkan ?? 0, priceDecimals ?? 0) },
+      { label: 'کیجون‌سن', value: formatPriceFa(ta.ichimoku?.kijun ?? 0, priceDecimals ?? 0) },
+      { label: 'سنکو اسپن A', value: formatPriceFa(ta.ichimoku?.senkouA ?? 0, priceDecimals ?? 0) },
+      { label: 'سنکو اسپن B', value: formatPriceFa(ta.ichimoku?.senkouB ?? 0, priceDecimals ?? 0) },
+      { label: 'چیکو اسپن', value: formatPriceFa(ta.ichimoku?.chikou ?? 0, priceDecimals ?? 0) },
+    ]);
+    addSection('حمایت و مقاومت', [
+      ...(ta.resistanceStrengths ?? []).slice(0, 6).map((r, i) => ({ label: `R${i+1}`, value: formatPriceFa(r.price, priceDecimals ?? 0) })),
+      ...(ta.supportStrengths ?? []).slice(0, 6).map((s, i) => ({ label: `S${i+1}`, value: formatPriceFa(s.price, priceDecimals ?? 0) })),
+    ]);
+    addSection('خطوط روند', [
+      { label: 'کوتاه‌مدت', value: `${ta.trend.short.direction === 'up' ? '↑' : ta.trend.short.direction === 'down' ? '↓' : '→'} ${ta.trend.short.angle}°` },
+      { label: 'میان‌مدت', value: `${ta.trend.medium.direction === 'up' ? '↑' : ta.trend.medium.direction === 'down' ? '↓' : '→'} ${ta.trend.medium.angle}°` },
+      { label: 'بلندمدت', value: `${ta.trend.long.direction === 'up' ? '↑' : ta.trend.long.direction === 'down' ? '↓' : '→'} ${ta.trend.long.angle}°` },
+    ]);
+
+    const signalLabel = ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی';
+    const html = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>اندیکاتورها</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;background:#f5f7fa;color:#111827;padding:20px;direction:rtl}.container{max-width:1200px;margin:0 auto;background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.08)}.header{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;padding:20px;border-radius:12px;margin-bottom:20px;text-align:center}.header h1{font-size:1.5rem;margin-bottom:8px}.header p{opacity:0.9}section{margin-bottom:20px}section h3{font-size:1rem;color:#92400e;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}.card{background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid #e5e7eb}.card .label{font-size:0.85rem;color:#6b7280}.card .value{font-size:1rem;font-weight:600;font-family:monospace;direction:ltr}.bull{color:#16a34a}.bear{color:#dc2626}.neutral{color:#6b7280}.score-bar{height:20px;background:#e5e7eb;border-radius:10px;overflow:hidden;display:flex;margin:10px 0}.score-bar .bull-part{background:#16a34a;transition:width 0.5s}.score-bar .bear-part{background:#dc2626;transition:width 0.5s}.gauge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;text-align:center}.gauge{background:#f9fafb;border-radius:8px;padding:12px}.gauge .val{font-size:1.5rem;font-weight:700}.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:700}.badge-bull{background:#dcfce7;color:#16a34a}.badge-bear{background:#fee2e2;color:#dc2626}.badge-neutral{background:#f3f4f6;color:#6b7280}
+</style></head>
+<body><div class="container"><div class="header"><h1>📊 اندیکاتورهای تکنیکال</h1><p>سیگنال غالب: ${signalLabel}</p></div>
+<div class="gauge-grid"><div class="gauge"><div class="val" style="color:${ta.rsi > 70 ? '#dc2626' : ta.rsi < 30 ? '#16a34a' : '#6b7280'}">${ta.rsi}</div><div class="label">RSI</div><span class="badge ${ta.rsi > 70 ? 'badge-bear' : ta.rsi < 30 ? 'badge-bull' : 'badge-neutral'}">${ta.rsi > 70 ? 'نزولی' : ta.rsi < 30 ? 'صعودی' : 'خنثی'}</span></div><div class="gauge"><div class="val" style="color:${ta.stochK > 80 ? '#dc2626' : ta.stochK < 20 ? '#16a34a' : '#6b7280'}">${ta.stochK}</div><div class="label">استوکاستیک %K</div><span class="badge ${ta.stochK > 80 ? 'badge-bear' : ta.stochK < 20 ? 'badge-bull' : 'badge-neutral'}">${ta.stochK > 80 ? 'نزولی' : ta.stochK < 20 ? 'صعودی' : 'خنثی'}</span></div><div class="gauge"><div class="val" style="color:${ta.adx > 25 ? '#16a34a' : '#6b7280'}">${ta.adx}</div><div class="label">ADX</div><span class="badge ${ta.adx > 25 ? 'badge-bull' : 'badge-neutral'}">${ta.adx > 25 ? 'قوی' : 'ضعیف'}</span></div><div class="gauge"><div class="val" style="color:${ta.cci > 100 ? '#dc2626' : ta.cci < -100 ? '#16a34a' : '#6b7280'}">${ta.cci}</div><div class="label">CCI</div><span class="badge ${ta.cci > 100 ? 'badge-bear' : ta.cci < -100 ? 'badge-bull' : 'badge-neutral'}">${ta.cci > 100 ? 'نزولی' : ta.cci < -100 ? 'صعودی' : 'خنثی'}</span></div><div class="gauge"><div class="val" style="color:${ta.mfi > 80 ? '#dc2626' : ta.mfi < 20 ? '#16a34a' : '#6b7280'}">${ta.mfi}</div><div class="label">MFI</div><span class="badge ${ta.mfi > 80 ? 'badge-bear' : ta.mfi < 20 ? 'badge-bull' : 'badge-neutral'}">${ta.mfi > 80 ? 'اشباع خرید' : ta.mfi < 20 ? 'اشباع فروش' : 'عادی'}</span></div><div class="gauge"><div class="val" style="color:${ta.williamsR > -20 ? '#dc2626' : ta.williamsR < -80 ? '#16a34a' : '#6b7280'}">${ta.williamsR}</div><div class="label">ویلیامز %R</div><span class="badge ${ta.williamsR > -20 ? 'badge-bear' : ta.williamsR < -80 ? 'badge-bull' : 'badge-neutral'}">${ta.williamsR > -20 ? 'نزولی' : ta.williamsR < -80 ? 'صعودی' : 'خنثی'}</span></div></div>
+${rows.map(r => `<section>${r}</section>`).join('')}
+<div style="text-align:center;padding:16px;border-top:1px solid #e5e7eb;margin-top:20px;color:#6b7280;font-size:0.8rem">خرید ${Math.round(ta.bullScore * 100)}٪ | فروش ${Math.round(ta.bearScore * 100)}٪</div></div></body></html>`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `indicators_${new Date().toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  }, [ta, priceDecimals]);
+
+  // ─── Export Text ──────────────────────────────────────────────
+  const exportText = useCallback(() => {
+    const ta = IndicatorsPanel.getExportData(ta);
+    if (!ta) return;
+    const signalLabel = ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی';
+    const lines = [
+      'اندیکاتورهای تکنیکال',
+      `سیگنال غالب: ${signalLabel}`,
+      '',
+      '═══ خلاصه اندیکاتورها ═══',
+      `RSI: ${ta.rsi}`,
+      `استوکاستیک %K: ${ta.stochK}`,
+      `ADX: ${ta.adx}`,
+      `CCI: ${ta.cci}`,
+      `MFI: ${ta.mfi}`,
+      `ویلیامز %R: ${ta.williamsR}`,
+      '',
+      '═══ مهمترین اندیکاتورها ═══',
+      `RSI: ${formatPriceFa(ta.rsi, priceDecimals ?? 0)}`,
+      `هیستوگرام MACD: ${formatPriceFa(ta.macd.histogram, priceDecimals ?? 0)}`,
+      `استوکاستیک %K: ${formatPriceFa(ta.stochK, priceDecimals ?? 0)}`,
+      `باندهای بولینگر: ${formatPriceFa(ta.bollingerBands.upper, priceDecimals ?? 0)} - ${formatPriceFa(ta.bollingerBands.lower, priceDecimals ?? 0)}`,
+      `MFI: ${formatPriceFa(ta.mfi, priceDecimals ?? 0)}`,
+      '',
+      '══=== میانگین‌های متحرک ═══',
+      ...Object.entries(ta.sma).map(([k, v]) => `${k}: ${formatPriceFa(v, priceDecimals ?? 0)}`),
+      ...Object.entries(ta.ema).map(([k, v]) => `${k}: ${formatPriceFa(v, priceDecimals ?? 0)}`),
+      '',
+      '═══ خطوط روند ═══',
+      `کوتاه‌مدت: ${ta.trend.short.direction} ${ta.trend.short.angle}°`,
+      `میان‌مدت: ${ta.trend.medium.direction} ${ta.trend.medium.angle}°`,
+      `بلندمدت: ${ta.trend.long.direction} ${ta.trend.long.angle}°`,
+      '',
+      `امتیاز کلی: خرید ${Math.round(ta.bullScore * 100)}٪ | فروش ${Math.round(ta.bearScore * 100)}٪`,
+    ];
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `indicators_${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  }, [ta, priceDecimals]);
 
   return (
     <div className="rounded-2xl p-4 space-y-1" dir="rtl" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
@@ -353,9 +504,9 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
             {ta.overallSignal === 'bullish' ? 'صعودی' : ta.overallSignal === 'bearish' ? 'نزولی' : 'خنثی'}
           </span>
           <span style={{ color: hexToRgba(C.cardSubFg, 0.5) }}>·</span>
-          <span style={{ color: C.bullColor }}>خرید {toPersianDigits(String(ta.bullScore))}٪</span>
+          <span style={{ color: C.bullColor }}>خرید {toPersianDigits(String(toPercent(ta.bullScore)))}٪</span>
           <span style={{ color: hexToRgba(C.cardSubFg, 0.5) }}>|</span>
-          <span style={{ color: C.bearColor }}>فروش {toPersianDigits(String(ta.bearScore))}٪</span>
+          <span style={{ color: C.bearColor }}>فروش {toPersianDigits(String(toPercent(ta.bearScore)))}٪</span>
         </div>
       </div>
 
@@ -551,11 +702,11 @@ export default function IndicatorsPanel({ ta, instrumentCategory, priceDecimals 
       <SectionHeader title="امتیاز کلی" />
       <div className="rounded-xl p-4 space-y-3" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
         <div className="relative h-6 w-full rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
-          <div className="absolute top-0 right-0 h-full rounded-r-full transition-all duration-500" style={{ width: `${ta.bullScore}%`, background: hexToRgba(C.bullColor, 0.5) }} />
-          <div className="absolute top-0 left-0 h-full rounded-l-full transition-all duration-500" style={{ width: `${ta.bearScore}%`, background: hexToRgba(C.bearColor, 0.5) }} />
+          <div className="absolute top-0 right-0 h-full rounded-r-full transition-all duration-500" style={{ width: `${bullPct}%`, background: hexToRgba(C.bullColor, 0.5) }} />
+          <div className="absolute top-0 left-0 h-full rounded-l-full transition-all duration-500" style={{ width: `${bearPct}%`, background: hexToRgba(C.bearColor, 0.5) }} />
           <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px] font-medium">
-            <span style={{ color: C.bullColor }}>خرید {toFa(ta.bullScore)}٪</span>
-            <span style={{ color: C.bearColor }}>فروش {toFa(ta.bearScore)}٪</span>
+            <span style={{ color: C.bullColor }}>خرید {toFa(bullPct)}٪</span>
+            <span style={{ color: C.bearColor }}>فروش {toFa(bearPct)}٪</span>
           </div>
         </div>
       </div>

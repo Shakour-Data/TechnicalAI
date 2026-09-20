@@ -110,6 +110,15 @@ technical_ai.db
 # Database cache
 db/cache/
 
+# Database JSON data files (runtime/generated)
+db/*.json
+
+# Download directory
+download/
+
+# Prompts directory (typo, contains sensitive data)
+docs/promps/
+
 # Editor temp files
 *.swp
 *.swo

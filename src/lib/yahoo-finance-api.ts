@@ -459,7 +459,7 @@ export const ALL_YAHOO_INSTRUMENTS: YahooInstrument[] = [
 
 let quotesCache: YahooQuote[] | null = null;
 let quotesCacheTime = 0;
-const CACHE_TTL = 120_000; // 2 minutes
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 /* ─── Fetch live quotes ──────────────────────────────── */
 

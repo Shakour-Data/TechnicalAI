@@ -177,6 +177,14 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
 
   const ta = data?.ta;
   const info = data?.info;
+  const bullPct = useMemo(() => {
+    if (!ta) return 50;
+    const bull = safeNum(ta.bullScore);
+    const bear = safeNum(ta.bearScore);
+    const totalScore = bull + bear || 1;
+    return Math.round((bull / totalScore) * 100);
+  }, [ta]);
+  const bearPct = 100 - bullPct;
   const lastPrice = info?.lastPrice ?? 0;
   // Derive decimals: explicit prop > data source info > default 0
   const decimals = priceDecimals ?? info?.decimals ?? 0;
@@ -378,16 +386,16 @@ export default function AnalysisSidebar({ data, collapsed, setCollapsed, priceDe
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bull }}>خرید</span>
-                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toFa2(ta.bullScore)}</span>
+                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.bull }} dir="ltr">{toFa2(bullPct)}</span>
               </div>
-              <ProgressBar value={safeNum(ta.bullScore)} max={100} color={C.bull} />
+              <ProgressBar value={bullPct} max={100} color={C.bull} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-medium" style={{ color: C.bear }}>فروش</span>
-                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toFa2(ta.bearScore)}</span>
+                <span className="text-[11px] font-bold tabular-nums" style={{ color: C.bear }} dir="ltr">{toFa2(bearPct)}</span>
               </div>
-              <ProgressBar value={safeNum(ta.bearScore)} max={100} color={C.bear} />
+              <ProgressBar value={bearPct} max={100} color={C.bear} />
             </div>
           </div>
         </GlassCard>

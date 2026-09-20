@@ -130,7 +130,7 @@ export interface HistoryData {
 // Per-type caches
 const symbolsCaches = new Map<number, { data: TseSymbol[]; time: number }>();
 let indicesCache: { data: TseIndex[]; time: number } | null = null;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 // File-based cache for resilience when BrsApi is blocked
 const FILE_CACHE_DIR = join(process.cwd(), 'db');

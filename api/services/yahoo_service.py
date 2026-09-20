@@ -14,7 +14,7 @@ class YahooFinanceService:
     def __init__(self):
         self._yf = None
         self._initialized = False
-        self.default_cache_ttl = 300  # 5 minutes
+        self.default_cache_ttl = 900  # 15 minutes
 
     async def _get_client(self):
         if not self._initialized:

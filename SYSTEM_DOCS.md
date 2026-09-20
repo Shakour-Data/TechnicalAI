@@ -26,7 +26,7 @@
 این سیستم یک **پلتفرم جامع تحلیل تکنیکال بورس ایران** است که با استفاده از الگوریتم‌های پیشرفته و هوش مصنوعی، تحلیل چندلایه‌ای سهام، شاخص‌ها و بازارهای مالی ایران و جهانی ارائه می‌دهد. سیستم بدون وابستگی به سخت‌افزار خارجی یا مدل‌های سنگین پایتون، تمام محاسبات را در TypeScript خالص انجام می‌دهد.
 
 ### ویژگی‌های اصلی:
-- **۶۰+ اندیکاتور تکنیکال**: RSI, MACD, ADX, Stochastic, Bollinger, Ichimoku, VWAP, و غیره
+- **۴۳ اندیکاتور تکنیکال**: RSI, MACD, ADX, Stochastic, Bollinger, Ichimoku, VWAP, و غیره
 - **۷ لایه موتور احتمال VDss**: از نمره خام تا احتمال مسیر
 - **۹ سناریو قیمتی**: از SC1 (شوک نزولی) تا SC9 (شوک صعودی)
 - **۳ موتور تشخیص رژیم**: فازی + مارکوف + رأی‌گیری وزنی
@@ -113,7 +113,7 @@ page.tsx::handleSelect() ──► تشخیص منبع داده (TSE/TGJU/Yahoo/
 page.tsx::renderAnalysisContent()
          │
          ├─► CandlestickChart (نمودار شمعی + اندیکاتورها)
-         ├─► IndicatorsPanel (۶۰+ اندیکاتور با گیج نیم‌دایره)
+         ├─► IndicatorsPanel (۴۳ اندیکاتور با گیج نیم‌دایره)
          ├─► VdssGraph (گراف تصمیم ۹ سناریو)
          ├─► VdesAnalysis (تحلیل متنی هوشمند)
          └─► MLForecast (پیش‌بینی ML)
@@ -147,7 +147,7 @@ VdesAnalysis ──► /api/vdes-analysis (POST)
 | **TSETMC CDN** | شاخص‌های بورس | `tse-index-api.ts` | — | از طریق z-ai page_reader |
 | **TSETMC Proxy** | شاخص‌های بورس | `tsetmc-index-api.ts` | 3033 | سرویس واسط با کش ۴ لایه |
 | **TGJU** | طلا/ارز/کریپتو | `tgju-api.ts` | — | scraping با page_reader |
-| **Yahoo Finance** | بازارهای جهانی | `yahoo-finance-api.ts` | — | ۶۰+ نماد جهانی |
+| **Yahoo Finance** | بازارهای جهانی | `yahoo-finance-api.ts` | — | ۲۶۰+ نماد جهانی |
 
 ## ۱.۵ موتورهای تشخیص رژیم (بدون وابستگی خارجی)
 
@@ -440,7 +440,7 @@ interface WeightRecord {
 بروزرسانی:
   - پیش‌بینی درست: weight += η_effective × 0.1
   - پیش‌بینی نادرست: weight -= η_effective × 0.1
-  - محدود: weight ∈ [0.5, 2.0]
+  - محدود: weight ∈ [0, 1] (نرمال‌سازی softmax، مجموع وزن‌ها برابر 1)
 ```
 
 ### پایدارسازی
@@ -661,7 +661,7 @@ Hammer, Inverted Hammer, Bullish/Bearish Engulfing, Morning/Evening Star, Three 
 ## ۲.۱۱ ماژول گراف تصمیم (`decision-graph.ts`)
 
 ### هدف
-محاسبه احتمال سناریوها با گراف جهت‌دار بدون دور (DAG) شامل ۳۰+ گره و ۵۰+ یال.
+محاسبه احتمال سناریوها با گراف جهت‌دار بدون دور (DAG) شامل ۳۴ گره و ۵۵+ یال.
 
 ### ۳ شاخه اصلی
 
@@ -774,7 +774,7 @@ Hammer, Inverted Hammer, Bullish/Bearish Engulfing, Morning/Evening Star, Three 
 | تابع | شرح |
 |------|------|
 | `fetchYahooData()` | دریافت تاریخچه یاهو با `yahoo-finance2` |
-| `fetchYahooInstruments()` | لیست ۶۰+ نماد جهانی |
+| `fetchYahooInstruments()` | لیست ۲۶۰+ نماد جهانی |
 
 **پشتیبانی**: سهام، شاخص، انرژی، فلزات، کالا، فارکس، کریپتو، ETF
 
@@ -789,7 +789,7 @@ Hammer, Inverted Hammer, Bullish/Bearish Engulfing, Morning/Evening Star, Three 
 - SVG overlay برای ابزار رسم
 
 ### `IndicatorsPanel` (565 خط)
-- نمایش ۶۰+ اندیکاتور با گیج نیم‌دایره (`SemicircleGauge`)
+- نمایش ۴۳ اندیکاتور با گیج نیم‌دایره (`SemicircleGauge`)
 - هر اندیکاتور: مقدار، سیگنال (bullish/bearish/neutral)، ناحیه رنگی
 
 ### `VdesAnalysis` (1,820 خط)
@@ -1229,7 +1229,7 @@ interface EnhancedSRParams {
   در غیر این صورت:
     weight -= η × 0.1
 
-محدودسازی: weight ∈ [0.5, 2.0]
+محدودسازی: weight ∈ [0, 1] (نرمال‌سازی softmax، مجموع وزن‌ها برابر 1)
 ```
 
 #### `getAdaptiveWeights(): Record<string, number>`

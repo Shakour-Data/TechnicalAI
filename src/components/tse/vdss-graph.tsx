@@ -1249,12 +1249,13 @@ function generateAdvancedDGAnalysis(p: {
   }
 
   // Bull score context
-  if (bullScore > 65) {
-    lines.push(`امتیاز صعودی ${toPersianDigits(String(Math.round(bullScore)))} از ${toPersianDigits('100')} تایید می‌کند که فشار خرید بر بازار غالب است. **توصیه عملی:** در صورت تایید ورود به نقطه حمایت، موقعیت خرید با ریسک محدود قابل اتکا است.`);
-  } else if (bullScore < 35) {
-    lines.push(`امتیاز صعودی ${toPersianDigits(String(Math.round(bullScore)))} از ${toPersianDigits('100')} نشان‌دهنده ضعف خریداران و غلبه فشار فروش است. **توصیه عملی:** از ورود به معاملات خرید خودداری کرده و منتظر سیگنال بازگشت بمانید.`);
+  const bullScorePct = Math.round(bullScore * 100);
+  if (bullScorePct > 65) {
+    lines.push(`امتیاز صعودی ${toPersianDigits(String(bullScorePct))} از ${toPersianDigits('100')} تایید می‌کند که فشار خرید بر بازار غالب است. **توصیه عملی:** در صورت تایید ورود به نقطه حمایت، موقعیت خرید با ریسک محدود قابل اتکا است.`);
+  } else if (bullScorePct < 35) {
+    lines.push(`امتیاز صعودی ${toPersianDigits(String(bullScorePct))} از ${toPersianDigits('100')} نشان‌دهنده ضعف خریداران و غلبه فشار فروش است. **توصیه عملی:** از ورود به معاملات خرید خودداری کرده و منتظر سیگنال بازگشت بمانید.`);
   } else {
-    lines.push(`امتیاز صعودی ${toPersianDigits(String(Math.round(bullScore)))} از ${toPersianDigits('100')} نشان‌دهنده **تعادل نسبی** بین خریداران و فروشندگان است.`);
+    lines.push(`امتیاز صعودی ${toPersianDigits(String(bullScorePct))} از ${toPersianDigits('100')} نشان‌دهنده **تعادل نسبی** بین خریداران و فروشندگان است.`);
   }
 
   lines.push('');
