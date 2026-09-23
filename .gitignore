@@ -110,6 +110,9 @@ technical_ai.db
 # Database cache
 db/cache/
 
+# ML model artifacts (binary model files)
+mini-services/ml-trainer/models/
+
 # Database JSON data files (runtime/generated)
 db/*.json
 
