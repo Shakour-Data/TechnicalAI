@@ -1,0 +1,46 @@
+# Common Python dependencies for TechnicalAI ecosystem
+
+# Core packages
+numpy>=1.24.0
+pandas>=2.0.0
+python-dateutil>=2.8.0
+
+# ML/AI libraries
+# Used by ml-trainer
+scikit-learn>=1.3.0
+xgboost>=1.7.0
+lightgbm>=4.1.0
+catboost>=1.2.0
+scipy>=1.10.0
+statsmodels>=0.14.0
+python-telegram-bot>=20.0  # if used
+
+# ONNX runtime and conversion tools
+onnxruntime>=1.16.0
+skl2onnx>=0.6.10
+onnxmltools>=1.8.0
+
+# Web frameworks
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
+
+# Development tools (optional)
+black>=23.11.0  # code formatter
+ruff>=0.1.0      # linter
+mypy>=1.7.0      # type checker
+
+# Monitoring and logging
+watchdog>=2.1.0  # file system monitoring
+
+# Additional common utilities
+requests>=2.31.0
+urllib3>=1.26.0
+psutil>=5.9.0  # system monitoring
+
+# Environment
+python-dotenv>=1.0.0

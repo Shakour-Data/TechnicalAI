@@ -84,7 +84,7 @@ flowchart TB
 
     P1[P1: تحلیل تکنیکال<br/>ta-engine]:::Process
     P2[P2: تشخیص رژیم<br/>regime-engine]:::Process
-    P3[P3: یادگیری/پیش‌بینی ML<br/>ml-engine]:::Process
+    P3[P3: یادگیری/پیش‌بینی ML<br/>ml-trainer (port 3032)]:::Process
     P4[P4: تحلیل S/R<br/>sr-analyzer]:::Process
     P5[P5: تشخیص الگو<br/>pattern-detection]:::Process
     P6[P6: تولید متن AI<br/>ai-analysis]:::Process
@@ -231,7 +231,7 @@ flowchart TB
 
 ---
 
-## ۲.۳ تجزیه P3 — یادگیری/پیش‌بینی ML (ml-engine, ml-logistic)
+## ۲.۳ تجزیه P3 — یادگیری/پیش‌بینی ML (ml-trainer, ml-prediction-service)
 
 ```mermaid
 flowchart TB
@@ -239,14 +239,19 @@ flowchart TB
     classDef Process fill:#1d3557,stroke:#0d1b2a,color:#fff,font-weight:bold
     classDef DataStore fill:#e76f51,stroke:#9e3a22,color:#fff,font-weight:bold
 
+    D1[(D1: کش OHLCV)]:::DataStore
     D2[(D2: نتایج TA)]:::DataStore
     D3[(D3: مدل ML)]:::DataStore
     D4[(D4: بازخورد)]:::DataStore
+    D5[(D5: کش حجم-پروفایل)]:::DataStore
+    D6[(D6: کش نماد)]:::DataStore
 
     P31[P3.1: استخراج ویژگی‌های VDSS<br/>extract-vdss-features]:::Process
     P32[P3.2: آموزش رگرسیون لجستیک<br/>train-logistic]:::Process
     P33[P3.3: محاسبه اجماع گاوی<br/>bull-consensus]:::Process
     P34[P3.4: پیش‌بینی سناریوها<br/>predict-scenarios]:::Process
+    P35[P3.5: آموزش چندرشته‌ای<br/>ml-trainer]:Process
+    P36[P3.6: پیش‌بینی چندرشته‌ای<br/>ml-predict]:Process
 
     D2 -->|نمرات VDss| P31
     D4 -->|وزن‌های تطبیقی| P31
@@ -256,6 +261,13 @@ flowchart TB
     D2 -->|اندیکاتور فعلی| P33
     P33 -->|اجماع صعودی| P34
     P34 -->|احتمال ۹ سناریو| D2
+
+    D1 -->|OHLCV| P35
+    D2 -->|اندیکاتورها| P35
+    P35 -->|مدل‌های آموزش‌دیده ONNX+pickle| D3
+    P35 -->|تشارکت بهترین| P36
+    D6 -->|اطلاعات نماد| P35
+    P36 -->|پیش‌بینی| E1
 ```
 
 ### توضیحات تجزیه P3
@@ -264,6 +276,8 @@ flowchart TB
 - **P3.2 آموزش رگرسیون لجستیک**: بردار ویژگی با برچسب‌های تاریخی (صعودی/نزولی) به رگرسیون لجستیک چندکلاسه تغذیه و پارامترها در D3 ذخیره می‌شود.
 - **P3.3 محاسبه اجماع گاوی**: با رأی‌گیری بین اندیکاتورها و وزن‌های تطبیقی، میزان اجماع صعودی (bull consensus) محاسبه می‌شود.
 - **P3.4 پیش‌بینی سناریوها**: مدل آموزش‌دیده (از D3) روی داده فعلی اعمال و احتمال هر ۹ سناریو محاسبه و در D2 ذخیره می‌شود.
+- **P3.5 آموزش چندرشته‌ای (ml-trainer)**: ۱۶+ مدل طبقه‌بندی + ۱۶+ مدل رگرسیون + ۴ بیس‌لاین + ۴ انسامبل با ۴ هدف (direction دوطرفه، direction سه‌طرفه، log-return، volatility class). استفاده از TimeSeriesSplit CV بدون جاری‌سازی (شافل)، صادقانگی و VIF، توانایی ONNX export با پشتیبانی pickle، و هایپرپارامتر تنظیم با RandomizedSearchCV. مدل‌ها در سیستم فایل‌های pickle و ONNX ذخیره می‌شوند.
+- **P3.6 پیش‌بینی چندرشته‌ای (ml-prediction)**: از مدل‌های آموزش‌دیده ml-trainer (D3) استفاده و پیش‌بینی با بازه اطمینان (confidence interval) و احتمال سناریو ارائه می‌دهد. پورت ۳۰۳۲ (هم‌پوشانی با ml-trainer - تفکیک با مسیر).
 - **اتصال به بازخورد**: وزن‌های تطبیقی از D4 وارد P3.1 می‌شوند — این وزن‌ها توسط P7 بر اساس بازخورد کاربر بروزرسانی می‌شوند.
 
 ---

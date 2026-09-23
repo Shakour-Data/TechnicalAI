@@ -1605,7 +1605,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
 </html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     nativeSaveAs(blob, `${fileBase}.html`);
-  }, [symbolName, candles, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark, resistances, supports, ma21, ma100, sar, bollingerUpper, bollingerMiddle, bollingerLower]);
+  }, [symbolName, candles, currentPrice, targetMin, targetMax, scenarios, totalProb, strategy, strategyType, lastCandleJalali, fileBase, v11Result, v11Map, resistanceStrengths, supportStrengths, isDark, resistances, supports, ma21, ma100, sar, bollingerUpper, bollingerMiddle, bollingerLower, decimals, unit, C]);
 
 
   const exportText = useCallback(() => {
@@ -1642,7 +1642,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     const text = lines.join('\n');
     const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
     nativeSaveAs(blob, `${fileBase}.txt`);
-  }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, strategy, lastCandleJalali, fileBase, v11Result, v11Map, riskInfo]);
+  }, [symbolName, currentPrice, targetMin, targetMax, trendText, rsi, rsiSignal, scenarios, strategy, lastCandleJalali, fileBase, v11Result, v11Map, riskInfo, unit, decimals]);
 
   const exportPDF = useCallback(async () => {
     const el = vdesRef.current;
@@ -1681,7 +1681,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
     } catch (err) {
       console.warn('PDF export failed:', err instanceof Error ? err.message : String(err));
     }
-  }, [fileBase]);
+  }, [fileBase, C]);
 
   const exportExcel = useCallback(async () => {
     try {
@@ -2090,7 +2090,7 @@ body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: ${C.pageB
             <div>
               {aiIsFallback && (
                 <div style={{ fontSize: '0.7rem', color: C.cardSubFg, marginBottom: '8px', opacity: 0.7 }}>
-                  ⚠️ این تحلیل از کش بازیابی شده است. برای تولید تحلیل جدید دکمه «تحلیل جدید» را بزنید.
+                  ⚠️ تحلیل هوشمند در دسترس نبود. متن با روش‌های تحلیلی مبتنی بر قوانین تولید شده است.
                 </div>
               )}
               {/* Cache age indicator and new analysis button */}

@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Download, ChevronDown, FileCode } from 'lucide-react';
+import { Download, ChevronDown, FileCode, FileText } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -484,6 +484,43 @@ ${rows.map(r => `<section>${r}</section>`).join('')}
 
   return (
     <div className="rounded-2xl p-4 space-y-1" dir="rtl" style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}` }}>
+
+      {/* ═══ Export Toolbar ═══ */}
+      <div className="flex items-center justify-between mb-4">
+        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: C.cardFg }}>خروجی اندیکاتورها</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-colors"
+              style={{
+                background: C.cardBg,
+                border: `1px solid ${C.cardBorder}`,
+                color: C.cardFg,
+                fontSize: '0.75rem',
+                fontWeight: 500,
+              }}
+            >
+              <Download className="w-4 h-4" />
+              <span>دانلود / خروجی</span>
+              <ChevronDown className="w-3.5 h-3.5" style={{ color: C.cardSubFg }} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className=""
+            style={{ background: C.cardBg, borderColor: C.cardBorder }}
+          >
+            <DropdownMenuItem onClick={exportHTML} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <FileCode className="w-4 h-4" style={{ color: C.primary }} />
+              <span className="text-xs">HTML</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportText} className="flex items-center gap-3 cursor-pointer" style={{ color: C.cardFg }}>
+              <FileText className="w-4 h-4" style={{ color: C.primary }} />
+              <span className="text-xs">متن (Text)</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {/* ═══ 1. خلاصه اندیکاتورها ═══ */}
       <SectionHeader title="خلاصه اندیکاتورها" />

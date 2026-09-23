@@ -1,14 +1,12 @@
 /**
  * finpy-tse Mini Service — Historical TSE Index Data
  *
- * Uses Ollama page_reader to access cdn.tsetmc.com (Iran-only CDN)
  * Endpoint: cdn.tsetmc.com/api/Index/GetIndexB2History/{webId}
  * Jalali date conversion via jalaali-js
  *
  * Port: 3031
  */
 
-import { ollamaPageReader } from '@/lib/ollama-client';
 import { toJalaali } from 'jalaali-js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -103,25 +101,8 @@ const candleCache = new Map<string, { data: IndexCandle[]; time: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // ═══════════════════════════════════════════════════════════════
-// Ollama Client (lazy init, shared across requests)
+// CDN Client (lazy init, shared across requests)
 // ═══════════════════════════════════════════════════════════════
-
-let ollamaInstance: Awaited<ReturnType<typeof import('@/lib/ollama-client').getOllama>> | null = null;
-let ollamaInitPromise: Promise<Awaited<ReturnType<typeof import('@/lib/ollama-client').getOllama>> | null = null;
-
-async function getOllama() {
-  if (ollamaInstance) return ollamaInstance;
-  if (!ollamaInitPromise) {
-    console.log('[INFO] Initializing Ollama client...');
-    ollamaInitPromise = import('@/lib/ollama-client').then((mod) => {
-      const client = mod.getOllama();
-      ollamaInstance = client;
-      console.log('[INFO] Ollama client ready');
-      return client;
-    });
-  }
-  return ollamaInitPromise;
-}
 
 // ═══════════════════════════════════════════════════════════════
 // Data Fetching — via z-ai SDK page_reader → cdn.tsetmc.com
@@ -153,11 +134,14 @@ async function fetchCdnB2History(webId: string, maxRetries = 3): Promise<TsetmcB
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[INFO] Fetching webId=${webId} (attempt ${attempt}/${maxRetries})...`);
-      const result = await ollamaPageReader(url);
-      const html: string = result.data?.html || '';
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`CDN returned ${response.status}`);
+      }
+      const html: string = await response.text();
 
       if (!html || html.length < 10) {
-        throw new Error('Empty response from page_reader');
+        throw new Error('Empty response from CDN');
       }
 
       const match = /<pre[^>]*>([\s\S]*?)<\/pre>/.exec(html);

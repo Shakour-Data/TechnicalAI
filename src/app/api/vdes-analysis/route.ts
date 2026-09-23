@@ -54,42 +54,6 @@ function cacheKey(body: VdesRequest): string {
   return c;
 }
 
-// ─── Shared Ollama instance (lazy init) ─────────────────────────────────
-let _ollamaInitialized = false;
-async function getOllama() {
-  if (!_ollamaInitialized) _ollamaInitialized = true;
-  return null;
-}
-
-/**
- * Retry wrapper with exponential backoff for ZAI 429 (rate-limit) responses.
- * Delays: 20s → 40s → 80s → 160s with random jitter up to 500ms.
- *
- * @typeParam T - Return type of the wrapped function.
- * @param fn - Async function to execute (typically a ZAI chat completion call).
- * @returns The result of `fn()` on success.
- * @throws Rethrows non-429 errors or after all retry attempts exhausted.
- */
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
-  const delays = [20000, 40000, 80000, 160000];
-  for (let attempt = 0; attempt <= delays.length; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const status = err?.status || err?.statusCode;
-      if (status === 429 && attempt < delays.length) {
-        const jitter = Math.random() * 500;
-        const wait = delays[attempt] + jitter;
-        console.warn(`[VDES v7 429] Retry ${attempt + 1}/${delays.length} after ${Math.round(wait / 1000)}s`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error('unreachable');
-}
-
 /**
  * Format a number with fixed decimal places for Persian display.
  * Falls back to '0' for non-finite values.
@@ -485,7 +449,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Step 4: Call Ollama LLM ──
+    // ── Step 4: Call AI LLM ──
     const analysis = await dedicatedAIChatCompletion(
       [
         { role: 'assistant', content: SYSTEM_PROMPT },

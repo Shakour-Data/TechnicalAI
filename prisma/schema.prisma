@@ -63,3 +63,32 @@ model DecisionGraphAiCache {
   @@index([date])
   @@index([createdAt])
 }
+
+model TimeSeriesAnalysis {
+  id            String   @id @default(cuid())
+  symbol        String
+  requestParams String   // JSON string of request parameters (forecast_steps, confidence, etc.)
+  basicStats    String   // JSON string of basic statistics
+  analysisJson  String   // Full analysis JSON result (decomposition, stationarity, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  results TimeSeriesResult[]
+
+  @@index([symbol])
+  @@index([createdAt])
+}
+
+model TimeSeriesResult {
+  id            String   @id @default(cuid())
+  analysisId    String   // Foreign key to TimeSeriesAnalysis
+  model         String   // Forecast model name (e.g., 'arima', 'sarima', 'ets')
+  forecastJson  String   // JSON array of forecast values with confidence intervals
+  metricsJson   String   // JSON object of in-sample metrics (MAE, RMSE, MAPE, etc.)
+  createdAt     DateTime @default(now())
+
+  analysis TimeSeriesAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId])
+  @@index([model])
+}

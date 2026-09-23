@@ -30,33 +30,6 @@ function cacheKey(body: VdesRequest): string {
   return `${ANALYSIS_VERSION}:${body.symbolName}:${body.currentPrice}:${body.trendDirection}:${body.rsi}:${body.adx}`;
 }
 
-// ─── Shared ZAI instance (lazy init) ─────────────────────────────────
-let _ollamaInitialized = false;
-async function getOllama() {
-  if (!_ollamaInitialized) _ollamaInitialized = true;
-  return null;
-}
-
-// ─── 429 Retry (fast: 2s, 5s, 10s) ────────────────────────────────
-async function withRetry<T>(fn: () => Promise<T>, label: string = 'V9', maxAttempts = 3): Promise<T> {
-  const delays = [2000, 5000, 10000]; // 2s, 5s, 10s — max 17s total wait
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const status = err?.status || err?.statusCode;
-      if (status === 429 && attempt < maxAttempts - 1) {
-        const wait = delays[attempt];
-        console.warn(`[VDES v9 429] ${label} Retry ${attempt + 1}/${maxAttempts} after ${wait / 1000}s`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error(`${label}: max retries exceeded`);
-}
-
 // ─── Timeout helper (cleans up timer when main promise resolves first) ──────────────────────────
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -308,7 +281,7 @@ function trainModelInBackground(symbol: string, ohlcv: import('@/lib/ml-predicto
   });
 }
 
-/** Detect AI patterns (harmonic + Elliott) via Ollama LLM — 15s hard timeout, best-effort */
+/** Detect AI patterns (harmonic + Elliott) via LLM — 15s hard timeout, best-effort */
 async function detectAIPatterns(
   body: VdesRequest
 ): Promise<import('@/lib/candlestick-patterns').AIPatternResult | null> {
@@ -423,7 +396,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Step 5: Call Ollama LLM via dedicated channel ──
+    // ── Step 5: Call AI LLM via dedicated channel ──
     console.log(`[VDES v9] Prompt size: ${prompt.length} chars (${(prompt.length / 1024).toFixed(1)} KB)`);
     const analysis = await dedicatedAIChatCompletion(
       [

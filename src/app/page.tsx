@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, HelpCircle, BookOpen, BrainCircuit, Palette } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, GitBranch, FileText, Coins, RefreshCw, HelpCircle, BookOpen, BrainCircuit, Palette, Settings } from 'lucide-react';
 import { useTheme, THEME_PRESETS } from '@/lib/theme-store';
 import SymbolSearch from '@/components/tse/symbol-search';
 import CandlestickChart from '@/components/tse/candlestick-chart';
@@ -184,8 +185,8 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                 <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
               </div>
             );
-          })}
-        </div>
+              })}
+            </div>
       </section>
 
       {/* HOW IT WORKS */}
@@ -706,14 +707,14 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                       <div className="text-sm font-bold" style={{ color: C.primary }}>TGJU (تارا)</div>
                     </div>
                   )}
-                  {data.isYahoo && (
-                    <div className="rounded-lg px-3 py-2 border" style={{ background: C.primaryBg, borderColor: C.border }}>
-                      <div className="text-[10px] mb-0.5" style={{ color: C.primary }}>منبع داده</div>
-                      <div className="text-sm font-bold" style={{ color: C.primary }}>Yahoo Finance</div>
-                    </div>
-                  )}
-                </div>
-              )}
+                   {data.isYahoo && (
+                     <div className="rounded-lg px-3 py-2 border" style={{ background: C.primaryBg, borderColor: C.border }}>
+                       <div className="text-[10px] mb-0.5" style={{ color: C.primary }}>منبع داده</div>
+                       <div className="text-sm font-bold" style={{ color: C.primary }}>Yahoo Finance</div>
+                     </div>
+                   )}
+                 </div>
+               )}
 
               {/* PANEL: Indicators */}
               {activePanel === 'indicators' && (
@@ -879,9 +880,18 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                   </button>
                 );
               })}
+              <Link
+                href="/settings"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all cursor-pointer"
+                style={{ color: C.cardSubFg }}
+                aria-label="تنظیمات"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تنظیمات</span>
+              </Link>
             </div>
 
-            {/* Theme Switcher */}
+              {/* Theme Switcher */}
             <div className="relative group">
               <button
                 className="flex items-center justify-center w-10 h-10 rounded-lg transition-all cursor-pointer hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"

@@ -361,7 +361,7 @@ function trainModelInBackground(symbol: string, ohlcv: import('@/lib/ml-predicto
   });
 }
 
-/** Detect AI patterns (harmonic + Elliott) via ZAI LLM — 15s hard timeout, best-effort */
+/** Detect AI patterns (harmonic + Elliott) via LLM — 15s hard timeout, best-effort */
 async function detectAIPatterns(
   body: VdesRequest
 ): Promise<import('@/lib/candlestick-patterns').AIPatternResult | null> {

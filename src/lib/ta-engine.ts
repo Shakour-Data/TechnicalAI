@@ -2,14 +2,13 @@
 // TSE Technical Analysis Engine — 7-Layer ML-Based VDss Algorithm
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { clamp } from './ml-model';
 import {
-  AdaptiveWeightModel,
-  clamp,
-  sigmoid,
-  FEATURES_ORDER,
-  NUM_FEATURES,
-  type FeatureKey,
-} from './ml-model';
+  extractVDSSFeatures,
+  trainAdaptiveModel,
+  calculateBullConsensus,
+  type AdaptiveModelResult,
+} from './ml-engine';
 import { buildDecisionGraph, type GraphData } from './decision-graph';
 import { detectRegime, type RegimeResult, type RegimeState } from './regime-engine';
 
@@ -1978,433 +1977,27 @@ function detectDivergenceSimple(data: OHLCV[], barIdx: number): boolean | null {
 /**
  * Computes all 16 ML features at a specific historical bar.
  * Uses data[0..barIdx] (inclusive) for all indicator calculations.
- * Returns an object keyed by feature name matching FEATURES_ORDER.
+ * Returns an object keyed by feature name (16 normalized features).
  */
 function computeFeaturesAtBar(data: OHLCV[], barIdx: number): Record<string, number> {
   // Need at least 30 bars for meaningful indicators
   if (barIdx < 30) {
     const empty: Record<string, number> = {};
-    for (const key of FEATURES_ORDER) empty[key] = 0.5;
+    for (const key of ['rsi', 'mfi', 'cci', 'adx', 'macd', 'stoch', 'bb', 'ma21', 'ma100', 'ema', 'atr', 'trend', 'sr', 'stochCross', 'macdCross', 'div']) empty[key] = 0.5;
     return empty;
   }
 
-  const slice = data.slice(0, barIdx + 1);
-  const closes = slice.map(d => d.close);
-  const price = closes[closes.length - 1];
-  const eps = 1e-10;
-
-  // ── Compute all base indicators ───────────────────────────────────────────
-  const rsiVal = calcRSI(closes);
-  const sliceHasVolume = slice.some(d => d.volume > 0);
-  const mfiVal = sliceHasVolume ? calcMFI(slice) : 50; // neutral when no volume
-  const cciVal = calcCCI(slice);
-  const stoch = calcStochastic(slice);
-  const macd = calcMACD(closes);
-  const adxResult = calcADX(slice);
-  const atrVal = calcATR(slice);
-  const bb = calcBollingerBands(closes);
-  const ma21 = sma(closes, 21);
-  const ma100 = sma(closes, 100);
-  const ema12 = emaCalc(closes, 12);
-  const ema26 = emaCalc(closes, 26);
-  const trendResult = calcTrend(closes, 21);
-  const sr = simplifiedSR(data, barIdx);
-
-  // ── Layer 1: Raw Scores (s_*) ────────────────────────────────────────────
-
-  // s_rsi — RSI mapped to 0-1
-  const s_rsi = rsiVal > 80 ? 0.95
-    : rsiVal > 70 ? 0.85
-    : rsiVal > 60 ? 0.70
-    : rsiVal > 50 ? 0.55
-    : rsiVal > 40 ? 0.45
-    : rsiVal > 30 ? 0.30
-    : rsiVal > 20 ? 0.15
-    : 0.05;
-
-  // s_mfi — MFI mapped to 0-1 (same formula as RSI)
-  const s_mfi = mfiVal > 80 ? 0.95
-    : mfiVal > 70 ? 0.85
-    : mfiVal > 60 ? 0.70
-    : mfiVal > 50 ? 0.55
-    : mfiVal > 40 ? 0.45
-    : mfiVal > 30 ? 0.30
-    : mfiVal > 20 ? 0.15
-    : 0.05;
-
-  // s_cci — CCI mapped to 0-1
-  const s_cci = cciVal > 200 ? 0.90
-    : cciVal > 100 ? 0.75
-    : cciVal > 0 ? 0.60
-    : cciVal > -100 ? 0.40
-    : cciVal > -200 ? 0.25
-    : 0.10;
-
-  // s_adx — Directional bias
-  const s_adx = (adxResult.diPlus - adxResult.diMinus + 100) / 200;
-
-  // s_macd — MACD histogram + signal combined
-  const absMacdLine = Math.abs(macd.line) + 1;
-  const s_macd = macd.line > macd.signal
-    ? 0.5 + Math.min(0.5, macd.histogram / absMacdLine)
-    : 0.5 - Math.min(0.5, Math.abs(macd.histogram) / absMacdLine);
-
-  // s_stoch — Stochastic %K mapped to 0-1
-  const s_stoch = stoch.k / 100;
-
-  // s_bb — Bollinger Band position
-  const bbRange = bb.upper - bb.lower;
-  const s_bb = bbRange > eps
-    ? clamp((price - bb.lower) / bbRange, 0, 1)
-    : 0.5;
-
-  // s_ma21 — Price relative to 21-period SMA
-  const s_ma21 = ma21 > eps
-    ? clamp(0.5 + (price - ma21) / ma21, 0, 1)
-    : 0.5;
-
-  // s_ma100 — Price relative to 100-period SMA
-  const s_ma100 = ma100 > eps
-    ? clamp(0.5 + (price - ma100) / ma100, 0, 1)
-    : 0.5;
-
-  // s_ema — EMA12 vs EMA26 spread
-  const s_ema = ema26 > eps
-    ? clamp(0.5 + (ema12 - ema26) / ema26 * 5, 0, 1)
-    : 0.5;
-
-  // s_atr — Inverse volatility (lower ATR = higher score)
-  const s_atr = price > eps ? 1 - Math.min(atrVal / price * 10, 1) : 0.5;
-
-  // s_trend — R² + angle combination
-  const s_trend = (trendResult.r2 * 0.7) +
-    (Math.max(0, Math.min(1, (trendResult.angle + 45) / 90)) * 0.3);
-
-  // s_sr — Support/Resistance proximity
-  // simplifiedSR() returns { R1, S1 } — use sr.R1 (not sr.SC1 which is undefined → NaN)
-  const dR1 = (sr.R1 - price) / (price > eps ? price : 1);
-  const dS1 = (price - sr.S1) / (price > eps ? price : 1);
-  const s_sr = clamp(0.5 - dR1 * 1.5 + dS1 * 1.0, 0, 1);
-
-  // ── Layer 2: Corrections (f_*) ───────────────────────────────────────────
-
-  // f_rsi — RSI with momentum correction
-  const rsiCurrent = rsiVal;
-  const rsi5ago = barIdx >= 5
-    ? calcRSI(closes.slice(0, barIdx - 5 + 1))
-    : rsiCurrent;
-  const f_rsi = clamp(s_rsi + (rsiCurrent - rsi5ago) / 100 * 0.08, 0, 1);
-
-  // f_mfi — MFI with momentum correction (skip when no volume)
-  const mfiCurrent = mfiVal;
-  const mfi5ago = (barIdx >= 5 && sliceHasVolume)
-    ? calcMFI(data.slice(0, barIdx - 5 + 1))
-    : mfiCurrent;
-  const f_mfi = sliceHasVolume
-    ? clamp(s_mfi + (mfiCurrent - mfi5ago) / 100 * 0.08, 0, 1)
-    : 0.5; // neutral when no volume
-
-  // f_cci — CCI with momentum correction (scale: /200 instead of /100)
-  const cciCurrent = cciVal;
-  const cci5ago = barIdx >= 5
-    ? calcCCI(data.slice(0, barIdx - 5 + 1))
-    : cciCurrent;
-  const f_cci = clamp(s_cci + (cciCurrent - cci5ago) / 200 * 0.08, 0, 1);
-
-  // f_macd — Same as s_macd (no additional correction)
-  const f_macd = s_macd;
-
-  // f_stoch — Same as s_stoch
-  const f_stoch = s_stoch;
-
-  // f_stochCross — Stochastic K/D crossover detection
-  let f_stochCross = 0.1;
-  if (barIdx >= 1) {
-    const prevSlice = data.slice(0, barIdx);
-    const prevStoch = calcStochastic(prevSlice);
-    if (prevStoch.k < prevStoch.d && stoch.k > stoch.d) {
-      f_stochCross = 0.9; // K crossed above D (bullish)
-    }
-  }
-
-  // f_macdCross — MACD/Signal crossover detection
-  let f_macdCross = 0.1;
-  if (barIdx >= 1) {
-    const prevCloses = closes.slice(0, -1);
-    if (prevCloses.length >= 35) {
-      const prevMacd = calcMACD(prevCloses);
-      if (prevMacd.line <= prevMacd.signal && macd.line > macd.signal) {
-        f_macdCross = 0.9; // MACD crossed above signal (bullish)
-      }
-    }
-  }
-
-  // f_div — Divergence detection (bullish div = 0.85, else 0.15)
-  const divResult = detectDivergenceSimple(data, barIdx);
-  const f_div = divResult === true ? 0.85 : 0.15;
-
-  // ── Assemble feature vector matching FEATURES_ORDER ──────────────────────
-  return {
-    rsi: f_rsi,
-    mfi: f_mfi,
-    cci: f_cci,
-    adx: s_adx,
-    macd: f_macd,
-    stoch: f_stoch,
-    bb: s_bb,
-    ma21: s_ma21,
-    ma100: s_ma100,
-    ema: s_ema,
-    atr: s_atr,
-    trend: s_trend,
-    sr: s_sr,
-    stochCross: f_stochCross,
-    macdCross: f_macdCross,
-    div: f_div,
-  };
+  const hasVolume = data.some(d => d.volume > 0);
+  const featureArray = extractVDSSFeatures(data, barIdx, hasVolume);
+  const featureRecord: Record<string, number> = {};
+  const featureNames = ['rsi', 'mfi', 'cci', 'adx', 'macd', 'stoch', 'bb', 'ma21', 'ma100', 'ema', 'atr', 'trend', 'sr', 'stochCross', 'macdCross', 'div'] as const;
+  featureNames.forEach((name, index) => {
+    featureRecord[name] = featureArray[index] ?? 0.5;
+  });
+return featureRecord;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TRAINING DATA CREATION (Layer 0 — Data Preparation)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Creates supervised training data from historical OHLCV data.
- * For each bar, computes features and labels based on future price movement.
- * Label = 1 if price rises >1% within `horizon` bars, else 0.
- * Samples every `sampleStep` bars to reduce computation.
- */
-function createTrainingData(
-  data: OHLCV[],
-  horizon: number = 5,
-  sampleStep: number = 5
-): { X: number[][]; y: number[] } {
-  const X: number[][] = [];
-  const y: number[] = [];
-
-  // Start from horizon+30 to ensure enough data for indicators
-  // End at data.length - horizon - 1 to have future bars for labeling
-  // Sample every sampleStep bars for performance
-  for (let i = horizon + 30; i < data.length - horizon - 1; i += sampleStep) {
-    const features = computeFeaturesAtBar(data, i);
-
-    // Convert to array following FEATURES_ORDER
-    const featureVec: number[] = [];
-    let valid = true;
-    for (const key of FEATURES_ORDER) {
-      const val = features[key];
-      if (val === undefined || val === null || Number.isNaN(val)) {
-        valid = false;
-        break;
-      }
-      featureVec.push(val);
-    }
-    if (!valid) continue;
-
-    // Label: 1 if future close > 1% above current close
-    const currentClose = data[i].close;
-    const futureClose = data[i + horizon].close;
-    const label = futureClose > currentClose * 1.01 ? 1 : 0;
-
-    X.push(featureVec);
-    y.push(label);
-  }
-
-  return { X, y };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// VDss GRAPH STRUCTURE (Layer 5 — State Machine)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * VDss Graph: Each node represents a market state.
- * Edges represent transitions with types: 'up', 'down', 'pullback', 'risk', 'terminal'.
- * Terminal nodes map to scenario results (SC1=strong bullish, SC5=deep correction).
- */
-const VDSS_GRAPH = {
-  // outgoing edges from each node: [target, type]
-  // v11: 9 scenario terminals — SC1(most bullish) to SC9(most bearish)
-  outgoing: {
-    A: [['B', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    B: [['C', 'up'], ['G', 'pullback'], ['A', 'risk'], ['SC3', 'terminal']] as [string, string][],
-    C: [['D', 'up'], ['G', 'pullback'], ['L', 'risk']] as [string, string][],
-    D: [['E', 'up'], ['B', 'pullback'], ['G', 'pullback'], ['L', 'risk'], ['SC3', 'terminal']] as [string, string][],
-    E: [['F', 'up'], ['D', 'pullback'], ['G', 'pullback'], ['H', 'down'], ['SC2', 'terminal']] as [string, string][],
-    F: [['SC1', 'terminal'], ['E', 'pullback'], ['D', 'down'], ['G', 'risk']] as [string, string][],
-    G: [['B', 'up'], ['A', 'pullback'], ['H', 'down'], ['L', 'risk'], ['SC4', 'terminal']] as [string, string][],
-    H: [['G', 'pullback'], ['I', 'down'], ['B', 'up'], ['L', 'risk'], ['SC5', 'terminal']] as [string, string][],
-    I: [['H', 'pullback'], ['J', 'down'], ['G', 'up'], ['L', 'risk'], ['SC6', 'terminal']] as [string, string][],
-    J: [['I', 'pullback'], ['K', 'down'], ['H', 'up'], ['L', 'risk'], ['SC7', 'terminal']] as [string, string][],
-    K: [['J', 'pullback'], ['I', 'up'], ['L', 'risk'], ['SC8', 'terminal'], ['SC9', 'terminal']] as [string, string][],
-    L: [['C', 'up'], ['H', 'pullback'], ['J', 'down'], ['K', 'risk'], ['SC9', 'terminal']] as [string, string][],
-  },
-  // which result scenario each terminal node maps to
-  terminalMap: { SC1: 'SC1', SC2: 'SC2', SC3: 'SC3', SC4: 'SC4', SC5: 'SC5', SC6: 'SC6', SC7: 'SC7', SC8: 'SC8', SC9: 'SC9' } as Record<string, string>,
-  startNode: 'A' as string,
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LAYER 5 — Edge Weight Calculation
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Calculates transition edge weights for the VDss graph.
- * Uses bull/bear consensus, ADX trend strength, and ML-derived coefficients
- * to determine the relative probability of up/down/pullback/risk transitions.
- */
-function calculateEdgeWeights(
-  bullConsensus: number,
-  adx: number,
-  mlModel: AdaptiveWeightModel
-): { up: number; down: number; pullback: number; risk: number } {
-  // Extract ML coefficient insights if model is trained
-  let trend_coef = 1 / 3;
-  let momentum_coef = 1 / 3;
-  let volatility_coef = 1 / 3;
-
-  if (mlModel.isTrained && mlModel.weights) {
-    const coefs = mlModel.getCoefficients();
-    // Map feature indices to coefficient categories
-    // FEATURES_ORDER: ['rsi','mfi','cci','adx','macd','stoch','bb','ma21','ma100','ema','atr','trend','sr','stochCross','macdCross','div']
-    const trendIdx = 11;  // 'trend' in FEATURES_ORDER
-    const rsiIdx = 0;     // 'rsi' in FEATURES_ORDER
-    const atrIdx = 10;    // 'atr' in FEATURES_ORDER
-
-    const absTrend = Math.abs(coefs[trendIdx] ?? 0);
-    const absRsi = Math.abs(coefs[rsiIdx] ?? 0);
-    const absAtr = Math.abs(coefs[atrIdx] ?? 0);
-
-    const coefSum = absTrend + absRsi + absAtr;
-    if (coefSum > 1e-10) {
-      trend_coef = absTrend / coefSum;
-      momentum_coef = absRsi / coefSum;
-      volatility_coef = absAtr / coefSum;
-    }
-  }
-
-  // Base weights driven by bull consensus
-  const up_base = bullConsensus * 0.7 + 0.15;
-  const down_base = (1 - bullConsensus) * 0.7 + 0.15;
-  const pullback_base = 0.25;
-  const risk_base = 0.12 * (1.2 - adx / 100);
-
-  // Apply ML coefficient adjustments
-  const up = clamp(
-    up_base * (1 + (momentum_coef - 1 / 3) * 0.3),
-    0.05, 0.95
-  );
-  const down = clamp(
-    down_base * (1 + (trend_coef - 1 / 3) * 0.3),
-    0.05, 0.95
-  );
-  const pullback = clamp(
-    pullback_base * (1 + (volatility_coef - 1 / 3) * 0.2),
-    0.05, 0.50
-  );
-  const risk = clamp(
-    risk_base * (1 - (trend_coef - 1 / 3) * 0.5),
-    0.02, 0.30
-  );
-
-  return { up, down, pullback, risk };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LAYER 6 — Path Probability Calculation (Graph DFS + Calibration)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Performs iterative DFS from the start node through the VDss graph,
- * computing raw path probabilities, then calibrating them against
- * Layer 4 scenario probabilities.
- *
- * Returns:
- * - calibratedPaths: Map<pathString, probability>
- * - calibrationFactors: per-scenario multiplier used
- * - scenarioSums: raw probability sums per scenario before calibration
- */
-function calculatePathProbabilities(
-  edgeWeights: { up: number; down: number; pullback: number; risk: number },
-  scenarioProbs: Record<string, number>
-): {
-  calibratedPaths: Map<string, number>;
-  calibrationFactors: Record<string, number>;
-  scenarioSums: Record<string, number>;
-} {
-  const { outgoing, terminalMap, startNode } = VDSS_GRAPH;
-  const MAX_PATHS = 200;
-
-  // Type for DFS stack entries: [currentNode, pathString, pathProbability]
-  type StackEntry = [string, string, number];
-
-  // Collect all terminal paths with raw probabilities
-  const rawPaths: { path: string; scenario: string; prob: number }[] = [];
-
-  // Iterative DFS
-  const stack: StackEntry[] = [[startNode, startNode, 1.0]];
-
-  while (stack.length > 0 && rawPaths.length < MAX_PATHS) {
-    const [node, pathStr, pathProb] = stack.pop()!;
-
-    const edges = outgoing[node as keyof typeof outgoing];
-    if (!edges) continue;
-
-    // Normalize outgoing edge weights to probabilities for this node
-    // Map edge types to their weights
-    let totalWeight = 0;
-    const edgeWeightsList: number[] = [];
-    for (const [, edgeType] of edges) {
-      const w = edgeWeights[edgeType as keyof typeof edgeWeights] ?? 0.1;
-      edgeWeightsList.push(w);
-      totalWeight += w;
-    }
-
-    if (totalWeight < 1e-10) continue;
-
-    // Expand edges
-    for (let i = 0; i < edges.length; i++) {
-      const [target, edgeType] = edges[i];
-      const edgeProb = edgeWeightsList[i] / totalWeight;
-      const newProb = pathProb * edgeProb;
-      const newPath = pathStr + '→' + target;
-
-      if (edgeType === 'terminal') {
-        // Reached a terminal node
-        const scenario = terminalMap[target] ?? 'SC3';
-        rawPaths.push({ path: newPath, scenario, prob: newProb });
-      } else {
-        // Continue DFS
-        stack.push([target, newPath, newProb]);
-      }
-    }
-  }
-
-  // Group raw probabilities by scenario
-  const rawSums: Record<string, number> = { SC1: 0, SC2: 0, SC3: 0, SC4: 0, SC5: 0, SC6: 0, SC7: 0, SC8: 0, SC9: 0 };
-  for (const rp of rawPaths) {
-    rawSums[rp.scenario] = (rawSums[rp.scenario] ?? 0) + rp.prob;
-  }
-
-  // Compute calibration factors: scenarioProbs[scenario] / rawSum[scenario]
-  const calibrationFactors: Record<string, number> = {};
-  for (const scenario of ['SC1', 'SC2', 'SC3', 'SC4', 'SC5', 'SC6', 'SC7', 'SC8', 'SC9']) {
-    const rawSum = rawSums[scenario] ?? 0;
-    const targetProb = (scenarioProbs[scenario] ?? 20) / 100; // convert from percentage
-    calibrationFactors[scenario] = rawSum > 1e-10 ? targetProb / rawSum : 1.0;
-  }
-
-  // Apply calibration to each path
-  const calibratedPaths = new Map<string, number>();
-  for (const rp of rawPaths) {
-    const factor = calibrationFactors[rp.scenario] ?? 1.0;
-    calibratedPaths.set(rp.path, rp.prob * factor);
-  }
-
-  return { calibratedPaths, calibrationFactors, scenarioSums: rawSums };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════
 // SCENARIO TARGET BUILDER — ATR-based, S/R levels, max 1 ATR range
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2469,109 +2062,6 @@ function buildRangeTarget(price: number, atr: number, s1: number | undefined, r1
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LAYER 4 — Scenario Probability Calculation (Adaptive with ML)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Calculates the 9 VDss scenario probabilities (SC1-SC9) that sum to 100.
- * Uses bull/bear consensus, key indicator values, S/R levels, and
- * ML-derived adaptive factors for fine-tuning.
- *
- * SC1=شوک صعودی, SC2=صعودی شتاب‌دار, SC3=صعودی قوی, SC4=صعودی خفیف,
- * SC5=رنج,
- * SC6=نزولی خفیف, SC7=نزولی قوی, SC8=نزولی شتاب‌دار, SC9=شوک نزولی
-
- */
-function calculateScenarioProbabilities(
-  bullConsensus: number,
-  price: number,
-  R1: number,
-  S1: number,
-  MA100: number,
-  rsi: number,
-  mfi: number,
-  stochK: number,
-  mlModel: AdaptiveWeightModel
-): { SC1: number; SC2: number; SC3: number; SC4: number; SC5: number; SC6: number; SC7: number; SC8: number; SC9: number; factors: { momentum: number; volatility: number; trend: number } } {
-  // Distance metrics to key levels (spec uses exp(-3 * ...))
-  const distR1 = R1 > 0 ? Math.exp(-3 * Math.abs(price - R1) / R1) : 0;  // R1 = resistance level 1 (parameter renamed from SC1)
-  const distS1 = S1 > 0 ? Math.exp(-3 * Math.abs(price - S1) / S1) : 0;
-
-  const overboughtRisk = (rsi > 70 || (mfi > 80 && mfi !== 50) || stochK > 80) ? 1 : 0;
-  const oversoldBounce = (rsi < 30 || (mfi < 20 && mfi !== 50) || stochK < 20) ? 1 : 0;
-
-  let momentum = 0.7;
-  let volatility = 0.5;
-  let trend = 0.6;
-
-  if (mlModel.isTrained && mlModel.weights) {
-    const coefs = mlModel.getCoefficients();
-    momentum = sigmoid(coefs[0] ?? 0);
-    volatility = sigmoid(coefs[10] ?? 0);
-    trend = sigmoid(coefs[11] ?? 0);
-  }
-
-  const belowMA100 = price < MA100 ? 1 : 0;
-  const bearish = 1 - bullConsensus;
-
-  // ── Raw probabilities ───────────────────────────────────────────────
-
-  // SC1: شوک صعودی — explosive breakout (was old R4)
-  const raw_SC1 = bullConsensus ** 2 * distR1 * 0.25 * (1 - overboughtRisk * 0.6) + oversoldBounce * 0.2 * momentum;
-
-  // SC2: صعودی شتاب‌دار — strong momentum (was old R3)
-  const raw_SC2 = bullConsensus ** 1.6 * 0.35 * momentum * (1 - overboughtRisk * 0.5);
-
-  // SC3: صعودی قوی — solid uptrend (was old R2)
-  const raw_SC3 = bullConsensus ** 1.3 * 0.5 * trend * (1 - overboughtRisk * 0.4);
-
-  // SC4: صعودی خفیف — mild bull, needs confirmation (was old R1)
-  const raw_SC4 = bullConsensus * 0.4 * trend * (1 - overboughtRisk * 0.3);
-
-  // SC5: رنج — neutral
-  const raw_SC5 = (1 - Math.abs(bullConsensus - 0.5) * 2) * 0.45 * (1 + (1 - volatility) * 0.4);
-
-  // SC6: نزولی خفیف — mild bear (was old R6)
-  const raw_SC6 = bearish * 0.4 * trend * (1 - oversoldBounce * 0.3);
-
-  // SC7: نزولی قوی — solid downtrend
-  const raw_SC7 = bearish ** 1.3 * 0.5 * trend * (1 - oversoldBounce * 0.4);
-
-  // SC8: نزولی شتاب‌دار — strong bearish momentum
-  const raw_SC8 = bearish ** 1.6 * 0.35 * momentum * (1 - oversoldBounce * 0.5);
-
-  // SC9: شوک نزولی — crash
-  const raw_SC9 = bearish ** 2 * distS1 * 0.25 * (1 + belowMA100 * 0.5) + overboughtRisk * 0.15 * momentum;
-
-  // ── Normalize to sum = 100, clamp to [2, 35] per spec ──────────
-  const raw = [raw_SC1, raw_SC2, raw_SC3, raw_SC4, raw_SC5, raw_SC6, raw_SC7, raw_SC8, raw_SC9];
-  const sum = raw.reduce((a, b) => a + b, 0) || 1;
-  // First pass: percentage with spec bounds (min 2%, max 35%)
-  let clamped = raw.map(r => Math.min(35, Math.max(2, Math.round(r / sum * 100))));
-  // Adjust to ensure sum = 100
-  const clampedSum = clamped.reduce((a, b) => a + b, 0);
-  const diff = 100 - clampedSum;
-  if (diff !== 0) {
-    // Distribute difference proportionally to values that aren't at bounds
-    const adjustable = clamped.map((v, i) => (diff > 0 ? v < 35 : v > 2) ? i : -1).filter(i => i >= 0);
-    const adjSum = adjustable.reduce((s, i) => s + clamped[i], 0);
-    for (const i of adjustable) {
-      clamped[i] = Math.min(35, Math.max(2, Math.round(clamped[i] + diff * (clamped[i] / (adjSum || 1)))));
-    }
-    // Final adjustment on last element to guarantee sum = 100
-    const finalSum = clamped.reduce((a, b) => a + b, 0);
-    clamped[8] = Math.min(35, Math.max(2, clamped[8] + (100 - finalSum)));
-  }
-  const [pSC1, pSC2, pSC3, pSC4, pSC5, pSC6, pSC7, pSC8, pSC9] = clamped;
-
-  return {
-    SC1: pSC1, SC2: pSC2, SC3: pSC3, SC4: pSC4, SC5: pSC5,
-    SC6: pSC6, SC7: pSC7, SC8: pSC8, SC9: pSC9,
-    factors: { momentum, volatility, trend },
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ANALYSIS FUNCTION
 // ═══════════════════════════════════════════════════════════════════════════════
 /**
@@ -2596,8 +2086,8 @@ function calculateScenarioProbabilities(
  *    (touches, volume, overlap, freshness, distance); grade assigned from score
  *
  * 5. **Calculate scenarios (7-Layer VDss Probability Engine)**:
- *    - Layer 1+2: Compute 14 normalized features at current bar
- *    - Layer 3:   Train AdaptiveWeightModel (70 epochs, 10-fold) on historical data;
+ *    - Layer 1+2: Compute 16 normalized features at current bar
+ *    - Layer 3:   Train adaptive logistic model on historical data;
  *                compute bullConsensus via weighted feature sum, blended with ML prediction
  *    - Layer 4-6: Build 35+ node Decision Graph (trend→momentum→vol→S/R→pattern→ML branches)
  *                to derive SC1–SC9 scenario probabilities (sum = 100)
@@ -2746,42 +2236,26 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
 
   // ── Layer 1+2: Compute features at current bar ───────────────────────────
   const currentFeatures = computeFeaturesAtBar(data, data.length - 1);
-  const featureArray = FEATURES_ORDER.map(k => currentFeatures[k] ?? 0.5);
+  const featureArray = extractVDSSFeatures(data, data.length - 1, hasVolume);
 
-  // ── Layer 3: ML Training & Bull Consensus ─────────────────────────────────
-  const mlModel = new AdaptiveWeightModel(70, 10);
-  const { X: trainX, y: trainY } = createTrainingData(data);
-  const trained = mlModel.train(trainX, trainY);
-
+  // ── Layer 3: ML Training & Bull Consensus ─────────────────────────
+  const mlResult = trainAdaptiveModel(data, '_legacy', 70);
   let bullConsensus: number;
-  const fallbackWeights: Record<string, number> = {
-    rsi: 0.15, mfi: 0.12, cci: 0.10, adx: 0.08,
-    macd: 0.14, stoch: 0.10, bb: 0.08,
-    ma21: 0.10, ma100: 0.08, ema: 0.10,
-    atr: 0.05, trend: 0.10, sr: 0.05,
-    stochCross: 0.06, macdCross: 0.06, div: 0.08,
-  };
-
-  if (trained && mlModel.isTrained && mlModel.weights) {
-    // Use ML-derived weights
-    const weights = mlModel.weights;
-    let weightedSum = 0;
-    for (let i = 0; i < NUM_FEATURES; i++) {
-      weightedSum += weights[i] * featureArray[i];
-    }
-    bullConsensus = weightedSum;
-
-    // Blend with ML direct prediction (weight based on accuracy)
-    const mlScore = mlModel.predictScore(featureArray);
-    if (mlScore !== null) {
-      const mlWeight = clamp(mlModel.recentAccuracy * 0.30, 0, 0.30);
-      bullConsensus = bullConsensus * (1 - mlWeight) + mlScore * mlWeight;
-    }
+  if (mlResult && mlResult.isTrained) {
+    const consensusResult = calculateBullConsensus(featureArray, mlResult, hasVolume);
+    bullConsensus = consensusResult.bullConsensus;
   } else {
     // Fallback: fixed weights
+    const fallbackWeights: Record<string, number> = {
+      rsi: 0.15, mfi: 0.12, cci: 0.10, adx: 0.08,
+      macd: 0.14, stoch: 0.10, bb: 0.08,
+      ma21: 0.10, ma100: 0.08, ema: 0.10,
+      atr: 0.05, trend: 0.10, sr: 0.05,
+      stochCross: 0.06, macdCross: 0.06, div: 0.08,
+    };
     const wTotal = Object.values(fallbackWeights).reduce((a, b) => a + b, 0);
     let sum = 0;
-    for (const key of FEATURES_ORDER) {
+    for (const key of ['rsi', 'mfi', 'cci', 'adx', 'macd', 'stoch', 'bb', 'ma21', 'ma100', 'ema', 'atr', 'trend', 'sr', 'stochCross', 'macdCross', 'div'] as const) {
       sum += (fallbackWeights[key] ?? 0) * (currentFeatures[key] ?? 0.5);
     }
     bullConsensus = sum / wTotal;
@@ -2799,16 +2273,10 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
     ? [...resistanceStrengths, ...supportStrengths].reduce((s, l) => s + l.score, 0) / ([...resistanceStrengths, ...supportStrengths].length || 1) / 10
     : 0.3;
 
-  // Extract ML adaptive factors directly from ML model
-  let mlMomentumFactor = 0.7;
-  let mlVolatilityFactor = 0.5;
-  let mlTrendFactor = 0.6;
-  if (mlModel.isTrained && mlModel.weights) {
-    const coefs = mlModel.getCoefficients();
-    mlMomentumFactor = sigmoid(coefs[0] ?? 0);
-    mlVolatilityFactor = sigmoid(coefs[10] ?? 0);
-    mlTrendFactor = sigmoid(coefs[11] ?? 0);
-  }
+  // Extract ML adaptive factors from the trained model result
+  const mlMomentumFactor = mlResult?.adaptiveParams?.momentumFactor ?? 0.7;
+  const mlVolatilityFactor = mlResult?.adaptiveParams?.volatilityFactor ?? 0.5;
+  const mlTrendFactor = mlResult?.adaptiveParams?.trendFactor ?? 0.6;
 
   const graphData = buildDecisionGraph({
     price,
@@ -2866,12 +2334,8 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
     risk: 0.15 * (1.2 - adxResult.adx / 100),
   };
 
-  // Layer 7: Adaptive model update
-  if (data.length > 6) {
-    const futureReturn = (price - data[data.length - 6].close) / data[data.length - 6].close;
-    const label = futureReturn > 0.01 ? 1 : 0;
-    mlModel.update(featureArray, label);
-  }
+  // Layer 7: Adaptive model update — removed since trainAdaptiveModel handles caching
+  // and the new ml-engine pipeline updates weights via its own mechanisms.
 
   // ── Overall Signal ──────────────────────────────────────────────────────
   const overallSignal: 'bullish' | 'bearish' | 'neutral' =
@@ -3028,9 +2492,9 @@ export function analyze(data: OHLCV[], currencyUnit?: string): TAResult {
     overallSignal,
     // ── VDss ML Metadata ──
     bullConsensus,
-    isMLTrained: mlModel.isTrained,
-    mlAccuracy: mlModel.recentAccuracy,
-    mlWeights: mlModel.weights,
+    isMLTrained: mlResult?.isTrained ?? false,
+    mlAccuracy: mlResult?.recentAccuracy ?? 0.5,
+    mlWeights: mlResult?.weights ?? null,
     edgeWeights,
     calibrationFactors: {} as Record<string, number>,
     scenarioSums: graphData.scenarioProbabilities,

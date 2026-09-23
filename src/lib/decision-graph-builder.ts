@@ -191,73 +191,85 @@ export function buildDecisionGraph(
     srLevels.length > 0
       ? srLevels.reduce((sum, v) => sum + (v > 0 ? 1 : 0), 0) / srLevels.length
       : 0.5;
-  // ML signals
-  indicatorValues.mlMomentum = ta.adaptiveFactors.momentum ?? 0.7;
-  indicatorValues.mlVolatility = ta.adaptiveFactors.volatility ?? 0.5;
-  indicatorValues.mlTrend = ta.adaptiveFactors.trend ?? 0.6;
+  // ML signals (will be updated after ML training if available)
+   indicatorValues.mlMomentum = ta.adaptiveFactors.momentum ?? 0.7;
+   indicatorValues.mlVolatility = ta.adaptiveFactors.volatility ?? 0.5;
+   indicatorValues.mlTrend = ta.adaptiveFactors.trend ?? 0.6;
 
   // 5. Pattern signals from registry
   const patternSignals = computePatternSignals(ohlcv);
 
-  // 6. ML prediction (optional)
-  let mlResult: AdaptiveModelResult | null = null;
-  if (useML && ohlcv.length >= 70) {
-    try {
-      mlResult = trainAdaptiveModel(ohlcv, symbol, 70);
-    } catch {
-      mlResult = null;
-    }
-  }
+// 6. ML prediction (optional)
+   let mlResult: AdaptiveModelResult | null = null;
+   let mlWeightedBullConsensus = ta.bullConsensus; // fallback to TA consensus
+   if (useML && ohlcv.length >= 70) {
+     try {
+       mlResult = trainAdaptiveModel(ohlcv, symbol, 70);
+       if (mlResult && ohlcv.length > 0) {
+         const hasVolume = ohlcv.some(d => d.volume > 0);
+         const latestFeatures = extractVDSSFeatures(ohlcv, ohlcv.length - 1, hasVolume);
+         const consensusResult = calculateBullConsensus(latestFeatures, mlResult, hasVolume);
+         mlWeightedBullConsensus = consensusResult.bullConsensus;
+       }
+     } catch { mlResult = null; }
+   }
 
-  // 7. Bayesian adjustment (optional)
-  let bayesianResult: BayesianSystemResult | null = null;
-  if (useBayesian) {
-    try {
-      const weights = getNormalizedWeights(symbol);
-      // Need raw scenario probabilities – we can get from decision graph later
-      // For now compute placeholder; will replace after graph build
-      bayesianResult = weights;
-    } catch {
-      bayesianResult = null;
-    }
-  }
+   // Update ML signals from the trained model's adaptive params
+   if (mlResult?.adaptiveParams) {
+     indicatorValues.mlMomentum = mlResult.adaptiveParams.momentumFactor;
+     indicatorValues.mlVolatility = mlResult.adaptiveParams.volatilityFactor;
+     indicatorValues.mlTrend = mlResult.adaptiveParams.trendFactor;
+   }
 
-  // 8. Build core decision graph using existing engine
-  const graphInput: GraphInput = {
-    price,
-    bullConsensus: ta.bullConsensus,
-    rsi: ta.rsi,
-    mfi: ta.mfi,
-    cci: ta.cci,
-    stochK: ta.stochK,
-    stochD: ta.stochD,
-    adx: ta.adx,
-    diPlus: ta.diPlus,
-    diMinus: ta.diMinus,
-    macdHist: ta.macd.histogram,
-    atr: ta.atr,
-    bbUpper: ta.bollingerBands.upper,
-    bbMiddle: ta.bollingerBands.middle,
-    bbLower: ta.bollingerBands.lower,
-    sar: ta.sar,
-    ichimokuTenkan: ta.ichimoku.tenkan,
-    ichimokuKijun: ta.ichimoku.kijun,
-    ichimokuSenkouA: ta.ichimoku.senkouA,
-    ichimokuSenkouB: ta.ichimoku.senkouB,
-    maAlignment: ta.extendedIndicators.maAlignment ?? 0,
-    momentum: ta.extendedIndicators.momentum ?? 0,
-    awesomeOsc: ta.extendedIndicators.awesomeOsc ?? 0,
-    fisherTransform: ta.extendedIndicators.fisherTransform ?? 0,
-    confidenceIndex: ta.extendedIndicators.confidenceIndex ?? 0,
-    strengthIndex: ta.extendedIndicators.strengthIndex ?? 0,
-    hasVolume: ta.hasVolume,
-    distToR1: indicatorValues.distToR1,
-    distToS1: indicatorValues.distToS1,
-    srAvgStrength: indicatorValues.srAvgStrength,
-    mlMomentum: indicatorValues.mlMomentum,
-    mlVolatility: indicatorValues.mlVolatility,
-    mlTrend: indicatorValues.mlTrend,
-  };
+   // 7. Bayesian adjustment (optional)
+   let bayesianResult: BayesianSystemResult | null = null;
+   if (useBayesian) {
+     try {
+       const weights = getNormalizedWeights(symbol);
+       // Need raw scenario probabilities – we can get from decision graph later
+       // For now compute placeholder; will replace after graph build
+       bayesianResult = weights;
+     } catch {
+       bayesianResult = null;
+     }
+   }
+
+   // 8. Build core decision graph using existing engine
+   const graphInput: GraphInput = {
+     price,
+     bullConsensus: mlWeightedBullConsensus, // Use ML-weighted consensus
+     rsi: ta.rsi,
+     mfi: ta.mfi,
+     cci: ta.cci,
+     stochK: ta.stochK,
+     stochD: ta.stochD,
+     adx: ta.adx,
+     diPlus: ta.diPlus,
+     diMinus: ta.diMinus,
+     macdHist: ta.macd.histogram,
+     atr: ta.atr,
+     bbUpper: ta.bollingerBands.upper,
+     bbMiddle: ta.bollingerBands.middle,
+     bbLower: ta.bollingerBands.lower,
+     sar: ta.sar,
+     ichimokuTenkan: ta.ichimoku.tenkan,
+     ichimokuKijun: ta.ichimoku.kijun,
+     ichimokuSenkouA: ta.ichimoku.senkouA,
+     ichimokuSenkouB: ta.ichimoku.senkouB,
+     maAlignment: ta.extendedIndicators.maAlignment ?? 0,
+     momentum: ta.extendedIndicators.momentum ?? 0,
+     awesomeOsc: ta.extendedIndicators.awesomeOsc ?? 0,
+     fisherTransform: ta.extendedIndicators.fisherTransform ?? 0,
+     confidenceIndex: ta.extendedIndicators.confidenceIndex ?? 0,
+     strengthIndex: ta.extendedIndicators.strengthIndex ?? 0,
+     hasVolume: ta.hasVolume,
+     distToR1: indicatorValues.distToR1,
+     distToS1: indicatorValues.distToS1,
+     srAvgStrength: indicatorValues.srAvgStrength,
+     mlMomentum: indicatorValues.mlMomentum,
+     mlVolatility: indicatorValues.mlVolatility,
+     mlTrend: indicatorValues.mlTrend,
+   };
 
   const graphData = buildDecisionGraph(graphInput);
 

@@ -989,18 +989,19 @@ async function tryDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
 }
 
 /**
- * Fetch TGJU historical data via queued page_reader with retry and rate limiting.
+ * Fetch TGJU historical data via queued direct fetch with retry and rate limiting.
  * This prevents 429 errors by serializing requests and adding delays between calls.
+ * Uses direct HTTP fetch as the primary method (no z-ai SDK dependency).
  */
 async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
-  // Enqueue this request — ensures only one page_reader call at a time
+  // Enqueue this request — ensures only one fetch at a time
   let result: TgjuOHLC[] | null = null;
   const taskPromise = (async () => {
     // Rate limit: wait if last call was too recent
     const timeSinceLastCall = Date.now() - lastPageReaderCall;
     if (timeSinceLastCall < PAGE_READER_MIN_INTERVAL) {
       const waitTime = PAGE_READER_MIN_INTERVAL - timeSinceLastCall;
-      console.log(`[TGJU] Rate limiting page_reader: waiting ${waitTime}ms...`);
+      console.log(`[TGJU] Rate limiting fetch: waiting ${waitTime}ms...`);
       await new Promise(r => setTimeout(r, waitTime));
     }
 
@@ -1008,14 +1009,14 @@ async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | n
     for (let attempt = 1; attempt <= PAGE_READER_MAX_RETRIES; attempt++) {
       try {
         lastPageReaderCall = Date.now();
-        const fetchResult = await fetchTgjuHistoryViaPageReader(tgjuKey);
+        const fetchResult = await fetchTgjuHistoryViaDirectFetch(tgjuKey);
         if (fetchResult && fetchResult.length >= 30) {
           result = fetchResult;
           return; // success
         }
         // Got data but not enough candles — don't retry
         if (fetchResult && fetchResult.length > 0) {
-          console.warn(`[TGJU] page_reader returned only ${fetchResult.length} candles for ${tgjuKey}`);
+          console.warn(`[TGJU] fetch returned only ${fetchResult.length} candles for ${tgjuKey}`);
           return;
         }
       } catch (err) {
@@ -1023,11 +1024,11 @@ async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | n
         const isRateLimit = errMsg.includes('429') || errMsg.includes('Too many requests');
         if (isRateLimit && attempt < PAGE_READER_MAX_RETRIES) {
           const delay = PAGE_READER_RETRY_BASE_DELAY * Math.pow(3, attempt - 1); // 3s, 9s, 27s
-          console.warn(`[TGJU] page_reader 429 for ${tgjuKey}, retry ${attempt}/${PAGE_READER_MAX_RETRIES} in ${delay}ms...`);
+          console.warn(`[TGJU] fetch 429 for ${tgjuKey}, retry ${attempt}/${PAGE_READER_MAX_RETRIES} in ${delay}ms...`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
-        console.error(`[TGJU] page_reader error for ${tgjuKey} (attempt ${attempt}):`, errMsg);
+        console.error(`[TGJU] fetch error for ${tgjuKey} (attempt ${attempt}):`, errMsg);
         return;
       }
     }
@@ -1040,45 +1041,46 @@ async function fetchViaQueuedPageReader(tgjuKey: string): Promise<TgjuOHLC[] | n
 }
 
 /**
- * Single page_reader call to fetch TGJU historical data.
- * Uses z-ai SDK to bypass Cloudflare challenges.
+ * Single direct fetch call to fetch TGJU historical data.
+ * Uses direct HTTP fetch — no z-ai SDK dependency.
  * Throws on failure so the caller (fetchViaQueuedPageReader) can retry.
  */
-async function fetchTgjuHistoryViaPageReader(tgjuKey: string): Promise<TgjuOHLC[] | null> {
+async function fetchTgjuHistoryViaDirectFetch(tgjuKey: string): Promise<TgjuOHLC[] | null> {
   // CRITICAL: order_dir=desc to get the MOST RECENT candles, not the oldest.
   const apiUrl = `${TGJU_CHART_API}/${tgjuKey}?lang=fa&order_dir=desc&start=0&length=365`;
 
-  const ZAI = (await import('z-ai-web-dev-sdk')).default;
-  const zai = await ZAI.create();
-  console.log(`[TGJU] Using z-ai SDK page_reader for ${tgjuKey}...`);
-  const invokeResult = await zai.functions.invoke('page_reader', { url: apiUrl });
+  const res = await fetch(apiUrl, {
+    headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+  });
 
-  if (invokeResult.code !== 200 || !invokeResult.data?.html) {
-    const errMsg = invokeResult.error || `code=${invokeResult.code}`;
-    throw new Error(errMsg);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  const jsonStr = await res.text();
+  if (!jsonStr.startsWith('{')) {
+    throw new Error('response is not JSON');
   }
 
   // Extract JSON from <pre> tag in the HTML
-  const html = invokeResult.data.html;
-  const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
-  if (!preMatch) {
-    throw new Error('no <pre> block found in page_reader response');
+  const preMatch = jsonStr.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
+  if (preMatch) {
+    const html = preMatch[1];
+    const jsonStr2 = html
+      .replace(/<[^>]*>/g, '')        // Strip ALL HTML tags first
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')           // Normalize whitespace
+      .trim();
+
+    if (jsonStr2.startsWith('{')) {
+      return parseTgjuChartData(tgjuKey, jsonStr2);
+    }
   }
 
-  // Unescape HTML entities and strip HTML tags from values
-  const jsonStr = preMatch[1]
-    .replace(/<[^>]*>/g, '')        // Strip ALL HTML tags first
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')           // Normalize whitespace
-    .trim();
-
-  if (!jsonStr.startsWith('{')) {
-    throw new Error('extracted content is not JSON');
-  }
-
+  // No <pre> tag — try parsing as raw JSON
   return parseTgjuChartData(tgjuKey, jsonStr);
 }
 

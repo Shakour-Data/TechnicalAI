@@ -491,6 +491,72 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 29. **قانون آهن:** هر عدد ذکرشده در متن باید دقیقاً از داده‌های ارائه‌شده گرفته شده باشد. هیچ عددی از خود نسازید. این شامل قیمت فعلی، سطوح حمایت/مقاومت، اهداف سناریو، مقادیر اندیکاتور، و درصدهای احتمال می‌شود.
 `;
 
+// ─── Rule-Based Persian Text Generator (fallback when no API key) ──────────────────────────────────────────────────────
+function generatePersianText(body: Record<string, unknown>, mlSelection: { school: string; style: string; tone: string; reasoning: string }, mslResult: { school_of_analysis: { primary: { id: string } }; analysis_style: { primary: { id: string } }; analysis_tone: { primary: { id: string } } }, methods: string[], priceRefs: ReturnType<typeof buildPriceReferences>): string {
+  const symbolName = String(body.symbolName || 'نماد');
+  const currentPrice = Number(body.currentPrice) || 0;
+  const trendDir = String(body.trendDirection || 'range');
+  const rsi = Number(body.rsi) || 50;
+  const adx = Number(body.adx) || 0;
+  const macdHist = Number(body.macdHist) || 0;
+  const stochK = Number(body.stochK) || 50;
+  const stochD = Number(body.stochD) || 50;
+  const diPlus = Number(body.diPlus) || 0;
+  const diMinus = Number(body.diMinus) || 0;
+  const scenarios = body.scenarios as Record<string, { name?: string; probability: number }> | undefined;
+  const resistance = (body.resistanceStrengths as Array<{ price: number; strength: number }> | undefined)?.[0];
+  const support = (body.supportStrengths as Array<{ price: number; strength: number }> | undefined)?.[0];
+
+  let trendText = 'خنثی';
+  if (trendDir === 'up') trendText = 'صعودی';
+  else if (trendDir === 'down') trendText = 'نزولی';
+
+  let rsiText = 'خنثی';
+  if (rsi > 70) rsiText = 'اشباع خرید';
+  else if (rsi > 60) rsiText = 'اشباع خرید';
+  else if (rsi < 30) rsiText = 'اشباع فروش';
+  else if (rsi < 40) rsiText = 'اشباع فروش';
+
+  let momentumText = 'نرمالی';
+  if (macdHist > 0 && macdHist > 0) momentumText = 'صعودی';
+  else if (macdHist < 0) momentumText = 'نزولی';
+  if (stochK > stochD) momentumText += ' و مومنتوم فعال است';
+  else momentumText += ' و مومنتوم کمیری است';
+
+  let directionText = 'نرمالی';
+  if (diPlus > diMinus) directionText = 'فشار خرید غاب';
+  else if (diMinus > diPlus) directionText = 'فشار فروش غاب';
+
+  const dominantScenario = Object.entries(scenarios || {}).sort((a, b) => (b[1].probability ?? 0) - (a[1].probability ?? 0))[0];
+
+  const r1 = resistance?.price ?? Math.round(currentPrice * 1.05);
+  const s1 = support?.price ?? Math.round(currentPrice * 0.95);
+  const unit = 'ریال';
+
+  const priceToFa = (n: number) => n.toLocaleString('fa-IR');
+
+  let recommendation = 'احتیاط و نظاره';
+  if (trendDir === 'up' && momentumText.includes('صعودی')) recommendation = 'فرصه خرید موفق به حد ضرر در نزدیکی';
+  else if (trendDir === 'down' || momentumText.includes('نزولی')) recommendation = 'از بخش برای و نظاره برای تغییر روند';
+  else if (dominantScenario && (dominantScenario[0] === 'SC5')) recommendation = 'ارتقاب به حفظ پوست و ارتقاب از برشهای بنی';
+
+  const lines: string[] = [];
+  lines.push(`تحلیل تازه برای ${symbolName}`);
+  lines.push(`قیمت حاضری: ${priceToFa(currentPrice)} ${unit}`);
+  lines.push(`روند کلی: ${trendText}`);
+  lines.push(`رده نسبت: ${adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف'}`);
+  lines.push(`شاخص قدرت نسبی: ${rsi} (${rsiText})`);
+  lines.push(`شاخص کاهششت نوسان: ${stochK} / ${stochD}`);
+  lines.push(`ماکت: ${macdHist > 0 ? 'صعودی' : 'نزولی'} | ${momentumText}`);
+  lines.push(`فشار اردو: ${directionText}`);
+  lines.push(`نقطه مقاومت اصلی ولی: ${priceToFa(r1)} ${unit} | نقطه حمایت اصلی ارت: ${priceToFa(s1)} ${unit}`);
+  if (dominantScenario) lines.push(`سناریوی غاب: ${dominantScenario[1].name || dominantScenario[0]} | احتمال: ${(dominantScenario[1].probability ?? 0) * 100}%`);
+  lines.push(`توصیه عملیهاردی: ${recommendation}`);
+  lines.push(`روش های تحلیل: ${methods.join('، ')}`);
+
+  return lines.join('\n');
+}
+
 // ─── POST Handler ────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
@@ -539,6 +605,7 @@ export async function POST(req: NextRequest) {
     // 4. Build prompt with unique context
     const mslSystemPrompt = buildMSLV4PromptSection(mslResult);
     const userMessage = buildPrompt(body, mlSelection, methods);
+    const priceRefs = buildPriceReferences(body);
 
     // Add unique prompt elements to force diversity and human-like output
     const uniquenessBlock = `
@@ -560,22 +627,30 @@ export async function POST(req: NextRequest) {
 
     console.log(`[AI] Generating for ${symbolName} (seed=${uniqueSeed}, angle=${analysisAngle.slice(0, 30)}...) [${Date.now() - startTime}ms]`);
 
-    // 5. Call AI through dedicated channel — fail fast on 429
-    //    Only retry 2 times max (3 total attempts) to avoid wasting time.
-    //    If rate-limited, the previous-day fallback above already returned.
-    const content = await dedicatedAIChatCompletion(
-      [
-        { role: 'system', content: dynamicSystemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      {
-        timeoutMs: 120_000,  // 120s max since no cache — every call goes to LLM
-        maxRetries: 2,
-      }
-    );
+    // 5. Try to call AI through dedicated channel — fall back to Persian text generation if no API key
+    let content: string;
+    try {
+      // Only retry 2 times max (3 total attempts) to avoid wasting time.
+      // If rate-limited, the previous-day fallback above already returned.
+      content = await dedicatedAIChatCompletion(
+        [
+          { role: 'system', content: dynamicSystemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        {
+          timeoutMs: 120_000,  // 120s max since no cache — every call goes to LLM
+          maxRetries: 2,
+        }
+      );
+    } catch (err) {
+      // No API key or external AI service error — fall back to Persian text generation
+      console.log(`[AI] No API key or service unavailable, using fallback text for ${symbolName}`);
+      // Use existing Persian text generation logic from the file
+      const fallbackText = generatePersianText(body, mlSelection, mslResult, methods, priceRefs);
+      return NextResponse.json({ text: fallbackText, ml: { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods }, isFallback: true });
+    }
 
     // Post-process: validate prices, fix Persian text, strip technical codes
-    const priceRefs = buildPriceReferences(body);
     const { text: cleaned, priceValid, hallucinationCount } = postProcessAIOutput(content, priceRefs);
 
     // If prices are severely hallucinated, log but still return (don't crash)

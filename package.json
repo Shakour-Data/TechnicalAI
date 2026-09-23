@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=3072' next dev -p 3000 2>&1 | tee dev.log",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "build": "next build && node -e \"const fs = require('fs'); const path = require('path'); function copyRecursive(src, dst) { if (!fs.existsSync(src)) return; if (!fs.existsSync(dst)) fs.mkdirSync(dst, { recursive: true }); const items = fs.readdirSync(src); items.forEach(item => { const srcPath = path.join(src, item); const dstPath = path.join(dst, item); if (fs.statSync(srcPath).isDirectory()) { copyRecursive(srcPath, dstPath); } else { fs.copyFileSync(srcPath, dstPath); } }); } copyRecursive('.next/static', '.next/standalone/.next/'); copyRecursive('public', '.next/standalone/public');\"",
+  "prebuild": "node -e \"console.log('Build started')\"",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "db:push": "prisma db push --accept-data-loss",
@@ -49,6 +50,8 @@
     "@reactuses/core": "^6.0.5",
     "@tanstack/react-query": "^5.82.0",
     "@tanstack/react-table": "^8.21.3",
+    "chart.js": "^4.5.1",
+    "chartjs-adapter-date-fns": "^3.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -85,12 +88,12 @@
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5",
     "yahoo-finance2": "^4.0.2",
-    "z-ai-web-dev-sdk": "^0.0.18",
     "zod": "^4.0.2",
     "zustand": "^5.0.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/chart.js": "^4.0.1",
     "@types/file-saver": "^2.0.7",
     "@types/react": "^19",
     "@types/react-dom": "^19",

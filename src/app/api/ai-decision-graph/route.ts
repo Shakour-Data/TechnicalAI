@@ -3,6 +3,150 @@ import { dedicatedAIChatCompletion } from '@/lib/zai-shared';
 import { db } from '@/lib/db';
 import { buildPriceReferences, postProcessAIOutput } from '@/lib/ai-postprocess';
 
+// ─── Rule-Based Persian Text Generator for Decision Graph (fallback when no API key) ──────────────────────────────────────────────────────
+function generateDecisionGraphPersianText(body: Record<string, unknown>): string {
+  const symbolName = String(body.symbolName || 'نماد');
+  const currentPrice = Number(body.currentPrice) || 0;
+  const currencyUnit = String(body.currencyUnit || 'ریال');
+  const trendDirection = String(body.trendDirection || 'خنثی');
+  const rsi = Number(body.rsi) || 50;
+  const adx = Number(body.adx) || 0;
+  const atr = Number(body.atr) || 0;
+  const bullScore = Number(body.bullScore) || 50;
+
+  const scenarios = body.scenarios as Record<string, {
+    name?: string; nameEn?: string; probability: number;
+    targetMin: number; targetMax: number; description?: string;
+  }> | undefined;
+
+  const decisionGraph = body.decisionGraph as {
+    branchProbabilities?: { trend: number; breakout: number; reversal: number };
+    pathContributions?: Record<string, { trend: number; breakout: number; reversal: number }>;
+    scenarioProbabilities?: Record<string, number>;
+  } | undefined;
+
+  const probabilityTrend = body.probabilityTrend as {
+    scenarios?: { scenarioKey: string; label: string; group: string;
+      trendDirection: string; currentProbability: number;
+      peakDay?: number; peakProb?: number;
+      trend: { individualProb: number; cumulativeProb: number; day: number }[];
+    }[];
+    groups?: { group: string; label: string; trendDirection: string;
+      trend: { cumulativeProb: number; day: number }[];
+    }[];
+  } | undefined;
+
+  // ── Scenario names in Persian (no SC codes) ──
+  const scNames: Record<string, string> = {
+    SC1: 'شوک نزولی', SC2: 'نزولی شتاب‌دار', SC3: 'نزولی قوی',
+    SC4: 'نزولی خفیف', SC5: 'رنج',
+    SC6: 'صعودی خفیف', SC7: 'صعودی قوی', SC8: 'صعودی شتاب‌دار', SC9: 'شوک صعودی',
+  };
+  const scGroups: Record<string, string> = {
+    SC1: 'خرسی', SC2: 'خرسی', SC3: 'خرسی', SC4: 'خرسی',
+    SC5: 'خنثی',
+    SC6: 'گاوی', SC7: 'گاوی', SC8: 'گاوی', SC9: 'گاوی',
+  };
+
+  const trendLabel = trendDirection === 'up' ? 'صعودی' : trendDirection === 'down' ? 'نزولی' : 'خنثی';
+  const adxStrength = adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف';
+  const rsiZone = rsi > 70 ? 'اشباع خرید شدید' : rsi > 60 ? 'اشباع خرید' : rsi > 40 ? 'خنثی' : rsi > 30 ? 'اشباع فروش' : 'اشباع فروش شدید';
+
+  // ── Sort scenarios by probability ──
+  const sortedScenarios = ['SC1','SC2','SC3','SC4','SC5','SC6','SC7','SC8','SC9']
+    .map(k => ({
+      key: k, name: scNames[k],
+      prob: scenarios?.[k]?.probability ?? 0,
+      min: scenarios?.[k]?.targetMin ?? 0,
+      max: scenarios?.[k]?.targetMax ?? 0,
+      group: scGroups[k],
+    }))
+    .sort((a, b) => b.prob - a.prob);
+
+  const scenarioLines = sortedScenarios.map(s =>
+    `- ${s.name} (${s.group}): احتمال ${Math.round(s.prob)} درصد | بازه هدف: ${Math.round(s.min)} تا ${Math.round(s.max)} ${currencyUnit}`
+  ).join('\n');
+
+  // ── Branch probabilities ──
+  const branchProbs = decisionGraph?.branchProbabilities ?? { trend: 0.33, breakout: 0.33, reversal: 0.34 };
+  const branchBlock = `
+**سهم استراتژی‌ها (شاخه‌های گراف):**
+- پیروی از روند: ${Math.round(branchProbs.trend * 100)} درصد
+- شکست: ${Math.round(branchProbs.breakout * 100)} درصد
+- بازگشت: ${Math.round(branchProbs.reversal * 100)} درصد`;
+
+  // ── Path contributions for top 3 scenarios ──
+  const pathContrib = decisionGraph?.pathContributions ?? {};
+  const contribLines = sortedScenarios.slice(0, 3).map(s => {
+    const c = pathContrib[s.key] ?? { trend: 0, breakout: 0, reversal: 0 };
+    return `- ${s.name}: سهم پیروی از روند ${Math.round(c.trend)} درصد، شکست ${Math.round(c.breakout)} درصد، بازگشت ${Math.round(c.reversal)} درصد`;
+  }).join('\n');
+
+  // ── Group probabilities ──
+  const bullishProb = ['SC6','SC7','SC8','SC9'].reduce((s, k) => s + (scenarios?.[k]?.probability ?? 0), 0);
+  const bearishProb = ['SC1','SC2','SC3','SC4'].reduce((s, k) => s + (scenarios?.[k]?.probability ?? 0), 0);
+  const neutralProb = scenarios?.SC5?.probability ?? 0;
+
+  // ── Probability trend (30-day) ──
+  let trendBlock = '';
+  if (probabilityTrend?.scenarios && probabilityTrend.scenarios.length > 0) {
+    const dirLabel: Record<string, string> = {
+      rising: 'صعودی \u2191', falling: 'نزولی \u2193', stable: 'ثابت \u2192', volatile: 'ناپایدار',
+    };
+
+    const groupLines = (probabilityTrend.groups || []).map(g => {
+      const today = g.trend[0]?.cumulativeProb;
+      const weekAgo = g.trend.length >= 7 ? g.trend[6].cumulativeProb : null;
+      const change = weekAgo !== null ? ((today - weekAgo) * 100).toFixed(1) : null;
+      const changeStr = change !== null ? (Number(change) >= 0 ? '+' : '') + change + '%' : '';
+      return `- ${g.label}: تجمعی امروز ${Math.round((today ?? 0) * 100)} درصد | روند: ${dirLabel[g.trendDirection] || g.trendDirection}${changeStr ? ' (' + changeStr + ' تغییر در 7 روز)' : ''}`;
+    }).join('\n');
+
+    const topScTrends = [...probabilityTrend.scenarios]
+      .sort((a, b) => b.currentProbability - a.currentProbability)
+      .slice(0, 5);
+    const scTrendLines = topScTrends.map(s => {
+      const name = scNames[s.scenarioKey] || s.label;
+      const todayCum = s.trend[0]?.cumulativeProb;
+      const weekAgoCum = s.trend.length >= 7 ? s.trend[6].cumulativeProb : null;
+      const cumChange = weekAgoCum !== null ? ((todayCum - weekAgoCum) * 100).toFixed(1) : null;
+      return `- ${name}: تجمعی امروز ${Math.round((todayCum ?? 0) * 100)} درصد | روند: ${dirLabel[s.trendDirection] || s.trendDirection}${cumChange !== null ? ' (' + (Number(cumChange) >= 0 ? '+' : '') + cumChange + '% در 7 روز)' : ''}`;
+    }).join('\n');
+
+    trendBlock = `
+**روند احتمالات تجمعی (30 روزه):**
+گروه‌ها:\n${groupLines}
+سناریوهای برتر:\n${scTrendLines}`;
+  }
+
+  // ── Support/Resistance ──
+  const resistances = (body.resistances as number[]) || [];
+  const supports = (body.supports as number[]) || [];
+  const r1 = resistances[0] || Math.round(currentPrice * 1.05);
+  const s1 = supports[0] || Math.round(currentPrice * 0.95);
+
+  return `
+**داده‌های گراف تصمیم — ${symbolName}:**
+- قیمت فعلی: **${Math.round(currentPrice)}** ${currencyUnit}
+- روند: **${trendLabel}** | شدت روند: ${adx} (${adxStrength}) | وضعیت اشباع: ${rsiZone}
+- امتیاز گاوی: ${Math.round(bullScore)} از 100 | دامنه تلواتی: ${Math.round(atr)} ${currencyUnit}
+- اولین مقاومت: ${Math.round(r1)} ${currencyUnit} | اولین حمایت: ${Math.round(s1)} ${currencyUnit}
+
+**احتمالات 9 سناریو (مرتب بر اساس احتمال):**
+${scenarioLines}
+
+**گروه‌بندی:**
+- مجموع صعودی: ${Math.round(bullishProb)} درصد
+- خنثی (رنج): ${Math.round(neutralProb)} درصد
+- مجموع نزولی: ${Math.round(bearishProb)} درصد
+${branchBlock}
+
+**سهم استراتژی‌ها در 3 سناریوی برتر:**
+${contribLines}
+${trendBlock}
+`;
+}
+
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
@@ -258,14 +402,21 @@ export async function POST(req: NextRequest) {
 
     console.log(`[DG-AI] Generating for ${symbolName} (cache miss) [${Date.now() - startTime}ms]`);
 
-    // 3. Call AI
-    const content = await dedicatedAIChatCompletion(
-      [
-        { role: 'system', content: DG_SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ],
-      { timeoutMs: 90_000, maxRetries: 2 }
-    );
+    // 3. Call AI with fallback to text generation on failure
+    let content: string;
+    try {
+      content = await dedicatedAIChatCompletion(
+        [
+          { role: 'system', content: DG_SYSTEM_PROMPT },
+          { role: 'user', content: userMessage },
+        ],
+        { timeoutMs: 90_000, maxRetries: 2 }
+      );
+    } catch (err) {
+      // Fallback to rule-based text generation when AI service is unavailable
+      console.log(`[DG-AI] AI service unavailable, using fallback text for ${symbolName}:`, err);
+      content = generateDecisionGraphPersianText(body);
+    }
 
     // 4. Post-process
     const priceRefs = buildPriceReferences(body);

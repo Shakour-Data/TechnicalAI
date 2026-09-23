@@ -27,34 +27,6 @@ function cacheKey(body: VdesRequest): string {
   return c;
 }
 
-// ─── Shared Ollama instance (lazy init) ─────────────────────────────────
-let _ollamaInitialized = false;
-async function getOllama() {
-  if (!_ollamaInitialized) _ollamaInitialized = true;
-  return null;
-}
-
-// ─── 429 Retry with exponential backoff ─────────────────────────────
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
-  const delays = [20000, 40000, 80000, 160000];
-  for (let attempt = 0; attempt <= delays.length; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const status = err?.status || err?.statusCode;
-      if (status === 429 && attempt < delays.length) {
-        const jitter = Math.random() * 500;
-        const wait = delays[attempt] + jitter;
-        console.warn(`[VDES v8 429] Retry ${attempt + 1}/${delays.length} after ${Math.round(wait / 1000)}s`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error('unreachable');
-}
-
 // ─── Helper: format number for Persian display ───────────────────────
 function fmt(n: number, d = 0): string {
   if (!isFinite(n) || isNaN(n)) return '0';
@@ -348,7 +320,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Step 4: Call Ollama LLM ──
+    // ── Step 4: Call AI LLM via dedicated channel ──
     const analysis = await dedicatedAIChatCompletion(
       [
         { role: 'assistant', content: SYSTEM_PROMPT },

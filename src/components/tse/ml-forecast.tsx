@@ -86,6 +86,8 @@ const MODEL_LABELS: Record<string, string> = {
 
 const SESSION_OPTIONS = [5, 10, 15, 20, 30];
 
+const AVAILABLE_MODELS = ['rf', 'xgboost', 'svr', 'gbr'] as const;
+
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
 // Price formatter: uses priceDecimals for price values, 0 default (integers)
@@ -156,8 +158,9 @@ export default function MLForecast({ symbolName, candles, currentPrice, priceDec
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState(10);
-  const [selectedModels, setSelectedModels] = useState<string[]>(['rf', 'xgboost', 'lightgbm', 'svr', 'gbr']);
+  const [selectedModels, setSelectedModels] = useState<string[]>([...AVAILABLE_MODELS]);
   const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(null);
+  const [serviceModels, setServiceModels] = useState<string[]>([...AVAILABLE_MODELS]);
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
 
@@ -170,7 +173,13 @@ export default function MLForecast({ symbolName, candles, currentPrice, priceDec
   useEffect(() => {
     fetch('/api/ml-predict')
       .then(r => r.json())
-      .then(data => setServiceAvailable(data.status === 'ok'))
+      .then(data => {
+        setServiceAvailable(data.status === 'ok');
+        if (data.models_available) {
+          setServiceModels(data.models_available);
+          setSelectedModels(prev => prev.filter(m => data.models_available.includes(m)));
+        }
+      })
       .catch(() => setServiceAvailable(false));
   }, []);
 
@@ -297,25 +306,28 @@ export default function MLForecast({ symbolName, candles, currentPrice, priceDec
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] text-gray-500 font-medium">مدل‌ها</label>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {Object.entries(MODEL_LABELS).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedModels(prev =>
-                    prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-                  )}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all cursor-pointer ${
-                    selectedModels.includes(key)
-                      ? 'border-current/30'
-                      : 'border-gray-200 text-gray-400 opacity-50'
-                  }`}
-                  style={{
-                    color: selectedModels.includes(key) ? MODEL_COLORS[key] : undefined,
-                    background: selectedModels.includes(key) ? MODEL_COLORS[key] + '10' : undefined,
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+              {serviceModels.map((key) => {
+                const label = MODEL_LABELS[key] || key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedModels(prev =>
+                      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                    )}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all cursor-pointer ${
+                      selectedModels.includes(key)
+                        ? 'border-current/30'
+                        : 'border-gray-200 text-gray-400 opacity-50'
+                    }`}
+                    style={{
+                      color: selectedModels.includes(key) ? MODEL_COLORS[key] : undefined,
+                      background: selectedModels.includes(key) ? MODEL_COLORS[key] + '10' : undefined,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
