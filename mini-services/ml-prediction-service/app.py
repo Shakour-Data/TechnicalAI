@@ -78,7 +78,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # --- SMA ratios (4 features) ---
     for period in [5, 10, 20, 50]:
-        sma = c.rolling(window=period, min_periods=period).mean()
+        sma = c.rolling(window=period, min_periods=1).mean()
         df[f"close_sma{period}"] = c / sma
 
     # --- EMA ratios (2 features) ---
@@ -91,8 +91,8 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
         delta = c.diff()
         gain = delta.clip(lower=0)
         loss = (-delta).clip(lower=0)
-        avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+        avg_gain = gain.ewm(alpha=1.0 / period, min_periods=1, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1.0 / period, min_periods=1, adjust=False).mean()
         rs = avg_gain / (avg_loss + 1e-10)
         df[f"rsi_{period}"] = 100.0 - (100.0 / (1.0 + rs))
 
@@ -106,23 +106,23 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     df["macd_hist"] = (macd_line - macd_signal) / (c + 1e-10)
 
     # --- Stochastic K & D (2 features) ---
-    lowest_low = l.rolling(window=14, min_periods=14).min()
-    highest_high = h.rolling(window=14, min_periods=14).max()
+    lowest_low = l.rolling(window=14, min_periods=1).min()
+    highest_high = h.rolling(window=14, min_periods=1).max()
     stoch_k = 100.0 * (c - lowest_low) / (highest_high - lowest_low + 1e-10)
     df["stoch_k"] = stoch_k
-    df["stoch_d"] = stoch_k.rolling(window=3, min_periods=3).mean()
+    df["stoch_d"] = stoch_k.rolling(window=3, min_periods=1).mean()
 
     # --- CCI(20) (1 feature) ---
     tp = (h + l + c) / 3.0
-    sma_tp = tp.rolling(window=20, min_periods=20).mean()
-    mad = tp.rolling(window=20, min_periods=20).apply(
+    sma_tp = tp.rolling(window=20, min_periods=1).mean()
+    mad = tp.rolling(window=20, min_periods=1).apply(
         lambda x: np.mean(np.abs(x - x.mean())), raw=True
     )
     df["cci"] = (tp - sma_tp) / (0.015 * mad + 1e-10)
 
     # --- Williams %R (1 feature) ---
-    hh14 = h.rolling(window=14, min_periods=14).max()
-    ll14 = l.rolling(window=14, min_periods=14).min()
+    hh14 = h.rolling(window=14, min_periods=1).max()
+    ll14 = l.rolling(window=14, min_periods=1).min()
     df["williams_r"] = -100.0 * (hh14 - c) / (hh14 - ll14 + 1e-10)
 
     # --- ADX, DI+, DI- (3 features) ---
@@ -130,18 +130,18 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # --- ATR normalized (1 feature) ---
     tr = pd.concat([h - l, (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
-    atr = tr.rolling(window=14, min_periods=14).mean()
+    atr = tr.rolling(window=14, min_periods=1).mean()
     df["atr_norm"] = atr / (c + 1e-10)
 
     # --- Bollinger Band position (1 feature) ---
-    sma20 = c.rolling(window=20, min_periods=20).mean()
-    std20 = c.rolling(window=20, min_periods=20).std()
+    sma20 = c.rolling(window=20, min_periods=1).mean()
+    std20 = c.rolling(window=20, min_periods=1).std()
     bb_upper = sma20 + 2.0 * std20
     bb_lower = sma20 - 2.0 * std20
     df["bb_pos"] = (c - bb_lower) / (bb_upper - bb_lower + 1e-10)
 
     # --- Volume features (2 features) ---
-    vol_sma20 = v.rolling(window=20, min_periods=20).mean()
+    vol_sma20 = v.rolling(window=20, min_periods=1).mean()
     df["vol_ratio"] = v / (vol_sma20 + 1e-10)
 
     # OBV
@@ -169,8 +169,8 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     df["roc_10"] = (c - c.shift(10)) / (c.shift(10) + 1e-10) * 100.0
 
     # --- Price position in 20-session range (1 feature) ---
-    low20 = l.rolling(window=20, min_periods=20).min()
-    high20 = h.rolling(window=20, min_periods=20).max()
+    low20 = l.rolling(window=20, min_periods=1).min()
+    high20 = h.rolling(window=20, min_periods=1).max()
     df["price_pos_20"] = (c - low20) / (high20 - low20 + 1e-10)
 
     return df
@@ -179,56 +179,34 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
 def _compute_adx(
     high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14
 ) -> Tuple[pd.Series, pd.Series, pd.Series]:
-    """Compute ADX, DI+ and DI-."""
+    """Compute ADX, DI+ and DI- using Wilder's smoothing."""
     n = len(close)
     adx = pd.Series(np.nan, index=close.index)
     di_plus = pd.Series(np.nan, index=close.index)
     di_minus = pd.Series(np.nan, index=close.index)
 
-    if n < period + 1:
+    if n < 2:
         return adx, di_plus, di_minus
 
-    plus_dm = pd.Series(0.0, index=close.index)
-    minus_dm = pd.Series(0.0, index=close.index)
-    tr = pd.Series(0.0, index=close.index)
+    up_move = high.diff()
+    down_move = low.shift(1).sub(low)
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
 
-    for i in range(1, n):
-        up_move = high.iloc[i] - high.iloc[i - 1]
-        down_move = low.iloc[i - 1] - low.iloc[i]
-        plus_dm.iloc[i] = up_move if (up_move > down_move and up_move > 0) else 0.0
-        minus_dm.iloc[i] = down_move if (down_move > up_move and down_move > 0) else 0.0
-        tr_val = max(
-            high.iloc[i] - low.iloc[i],
-            abs(high.iloc[i] - close.iloc[i - 1]),
-            abs(low.iloc[i] - close.iloc[i - 1]),
-        )
-        tr.iloc[i] = tr_val
+    tr = pd.concat(
+        [high - low, (high - close.shift(1)).abs(), (low - close.shift(1)).abs()],
+        axis=1,
+    ).max(axis=1)
 
-    # Smooth using Wilder's method
-    atr_smooth = tr.copy()
-    smooth_plus = plus_dm.copy()
-    smooth_minus = minus_dm.copy()
-
-    for i in range(period, n):
-        if i == period:
-            atr_smooth.iloc[i] = tr.iloc[1 : i + 1].sum()
-            smooth_plus.iloc[i] = plus_dm.iloc[1 : i + 1].sum()
-            smooth_minus.iloc[i] = minus_dm.iloc[1 : i + 1].sum()
-        else:
-            atr_smooth.iloc[i] = (atr_smooth.iloc[i - 1] * (period - 1) + tr.iloc[i]) / period
-            smooth_plus.iloc[i] = (smooth_plus.iloc[i - 1] * (period - 1) + plus_dm.iloc[i]) / period
-            smooth_minus.iloc[i] = (smooth_minus.iloc[i - 1] * (period - 1) + minus_dm.iloc[i]) / period
+    atr_smooth = tr.rolling(window=period, min_periods=1).mean()
+    smooth_plus = plus_dm.rolling(window=period, min_periods=1).mean()
+    smooth_minus = minus_dm.rolling(window=period, min_periods=1).mean()
 
     di_plus = 100.0 * smooth_plus / (atr_smooth + 1e-10)
     di_minus = 100.0 * smooth_minus / (atr_smooth + 1e-10)
     dx = 100.0 * (di_plus - di_minus).abs() / (di_plus + di_minus + 1e-10)
 
-    adx = pd.Series(np.nan, index=close.index)
-    for i in range(2 * period - 1, n):
-        if i == 2 * period - 1:
-            adx.iloc[i] = dx.iloc[period : i + 1].mean()
-        else:
-            adx.iloc[i] = (adx.iloc[i - 1] * (period - 1) + dx.iloc[i]) / period
+    adx = dx.rolling(window=period, min_periods=1).mean()
 
     return adx, di_plus, di_minus
 

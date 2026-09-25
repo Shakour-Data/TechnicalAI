@@ -88,9 +88,13 @@ from config import (
     DIRECTION_THRESHOLD, PREDICTION_STEPS, TS_CV_N_SPLITS, RANDOM_SEED,
     N_ITER_RANDOM_SEARCH, CV_SCORING_CLASSIFICATION, CV_SCORING_REGRESSION,
     MODEL_TYPES, CLASSIFICATION_MODELS, REGRESSION_MODELS, ENSEMBLE_MODELS,
-    BASELINE_MODELS, TARGET_CONFIGS,
+    BASELINE_MODELS, TARGET_CONFIGS, USE_WALK_FORWARD_CV,
+    WALK_FORWARD_INITIAL_TRAIN_RATIO, WALK_FORWARD_TEST_SIZE, WALK_FORWARD_STEP_SIZE,
 )
-from feature_engineering import extract_enhanced_features
+from feature_engineering import (
+    extract_enhanced_features, get_cv_splits, create_walk_forward_splits,
+    fill_nan_values,
+)
 from model_catalog import (
     build_classification_model, build_regression_model,
     build_ensemble_classifier, build_ensemble_regressor,
@@ -634,38 +638,54 @@ def _train_model_cv(
     model_type: str,
     n_splits: int,
     feature_cols: List[str],
+    scaler: Optional[StandardScaler] = None,
+    use_raw_features: bool = True,
 ) -> Tuple[Dict[str, Any], Any, Dict[str, float], List[Dict[str, float]], List[Dict[str, Any]]]:
     """
     Train a model with TimeSeriesSplit cross-validation and feature selection.
-    
-    Returns
-    -------
-    Tuple[Dict[str, Any], Any, Dict[str, float], List[Dict[str, float]], List[Dict[str, Any]]]
-        (metrics, best_model, feature_importance, fold_feature_importance, fold_metrics)
+
+    The scaler is fitted inside each fold (on training data only) to prevent
+    data leakage. This is critical for time-series data where future data
+    must never influence the training distribution.
     """
     # Apply feature selection to reduce noise from irrelevant features
-    X = _select_features(X, y, model_type, n_splits, max_features=60)
-    
-    tscv = TimeSeriesSplit(n_splits=n_splits)
+    if use_raw_features:
+        X = _select_features(X, y, model_type, n_splits, max_features=60)
+
+    cv_method = 'walk_forward' if USE_WALK_FORWARD_CV else 'time_series'
+    splits = get_cv_splits(
+        len(X), cv_method, n_splits,
+        initial_train_size=max(int(len(X) * WALK_FORWARD_INITIAL_TRAIN_RATIO), 30),
+        test_size=WALK_FORWARD_TEST_SIZE,
+        step_size=WALK_FORWARD_STEP_SIZE,
+    )
+
     fold_metrics = []
     fold_feature_importance = []
     best_model = None
     best_score = -np.inf
-    
-    for train_idx, test_idx in tscv.split(X):
+    fold_scalers = []
+
+    for train_idx, test_idx in splits:
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
-        
+
+        # Fit scaler on training fold only (no leakage from test fold)
+        fold_scaler = StandardScaler()
+        X_train_scaled = fold_scaler.fit_transform(X_train)
+        X_test_scaled = fold_scaler.transform(X_test)
+        fold_scalers.append(fold_scaler)
+
         model_fold = _make_model(model_key, model_type)
         model_fold, _ = _train_fold(
-            model_fold, X_train, y_train, X_test, y_test, model_type, n_splits
+            model_fold, X_train_scaled, y_train, X_test_scaled, y_test, model_type, n_splits
         )
-        fold_metric = _compute_fold_metrics(model_fold, X_test, y_test, model_type)
+        fold_metric = _compute_fold_metrics(model_fold, X_test_scaled, y_test, model_type)
         fold_metrics.append(fold_metric)
-        
+
         imp = _get_feature_importance(model_fold, feature_cols[:X.shape[1]])
         fold_feature_importance.append(imp)
-        
+
         # Track best model
         if model_type == 'classification':
             score = fold_metric.get('f1', fold_metric.get('accuracy', 0.0))
@@ -673,14 +693,14 @@ def _train_model_cv(
             score = fold_metric.get('mae', fold_metric.get('r2', 0.0))
             if model_type == 'regression' and 'mae' in fold_metric:
                 score = -fold_metric['mae']
-        
+
         if score > best_score:
             best_score = score
             best_model = model_fold
-    
+
     # Aggregate fold metrics
     aggregated = _aggregate_fold_metrics(fold_metrics, model_type)
-    
+
     # Aggregate feature importance
     agg_imp = {}
     for imp in fold_feature_importance:
@@ -689,10 +709,10 @@ def _train_model_cv(
     if agg_imp:
         total = sum(agg_imp.values())
         agg_imp = {k: round(v / total, 6) for k, v in agg_imp.items()}
-    
+
     stable_features = compute_stable_features(fold_feature_importance)
-    
-    return aggregated, best_model, agg_imp, fold_feature_importance, fold_metrics
+
+    return aggregated, best_model, agg_imp, fold_feature_importance, fold_metrics, fold_scalers
 
 
 def _train_model_final(model_key: str, model_type: str, X: np.ndarray, y: np.ndarray, n_splits: int):
@@ -815,6 +835,9 @@ def train_models(
     features_df = extract_features(df)
     feature_cols = [c for c in features_df.columns]
     
+    # Fill NaN values instead of dropping rows
+    features_df = fill_nan_values(features_df)
+    
     # Build targets
     targets = {
         'binary_direction': build_direction_target(df),
@@ -823,31 +846,27 @@ def train_models(
         'volatility_class': build_volatility_class_target(df),
     }
     
-    # Drop rows with NaN in features
-    valid_mask = features_df[feature_cols].notna().all(axis=1)
-    X = features_df.loc[valid_mask, feature_cols].astype(float)
-    X = X.replace([np.inf, -np.inf], np.nan).dropna()
+    # Fill NaN in targets (forward fill for last known, then 0)
+    for target_name in targets:
+        targets[target_name] = targets[target_name].ffill().bfill().fillna(0)
     
-    # Drop rows where targets are NaN
+    # Align targets to features_df index
     for target_name, target in targets.items():
-        target = target.loc[X.index]
-        valid_target = target.notna()
-        X = X.loc[valid_target]
-        targets[target_name] = target.loc[valid_target]
+        targets[target_name] = target.reindex(features_df.index).ffill().bfill().fillna(0)
+    
+    X = features_df[feature_cols].astype(float)
+    X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    
+    # Drop any remaining NaN rows (shouldn't happen after fill)
+    X = X.dropna()
+    for target_name, target in targets.items():
+        targets[target_name] = target.loc[X.index]
     
     if len(X) < MIN_CANDLES:
         raise ValueError(f"After cleaning, only {len(X)} valid samples (need {MIN_CANDLES})")
     
-    # Scale features - fit scaler on training data only (no leakage)
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    X_scaled_df = pd.DataFrame(X_scaled, columns=feature_cols, index=X.index)
-    input_dim = X_scaled.shape[1]
-    
-    # Save scaler
-    _save_scaler(scaler, symbol)
-    cache_scaler(symbol, scaler)
-    
+    input_dim = X.shape[1]
+
     # TimeSeriesSplit
     tscv = TimeSeriesSplit(n_splits=TS_CV_N_SPLITS)
     metrics: Dict[str, Dict] = {}
@@ -858,44 +877,50 @@ def train_models(
     sym_dir = os.path.join(MODELS_DIR, symbol)
     os.makedirs(sym_dir, exist_ok=True)
     
-    # Target selection for training
+# Target selection for training
     primary_classification_target = targets['binary_direction']
     primary_regression_target = targets['log_return']
-    
+
     for mn in model_names:
         log("INFO", f"  Training model: {mn}")
-        
+
         model_type = 'classification' if mn in CLASSIFICATION_MODELS + BASELINE_MODELS + ENSEMBLE_MODELS[:2] else 'regression'
         if mn in ('voting_classifier', 'stacking_classifier'):
             model_type = 'classification'
         elif mn in ('voting_regressor', 'stacking_regressor'):
             model_type = 'regression'
-        
+
         target = primary_classification_target if model_type == 'classification' else primary_regression_target
-        X_fold = X_scaled_df.copy()
-        y_fold = target.loc[X_fold.index]
-        
+        X_raw = X.copy()  # Use raw features (no global scaling before CV)
+        y_fold = target.loc[X_raw.index]
+
         fold_metrics[mn] = []
         fold_feature_importance[mn] = []
-        
+
         try:
-            # Train with CV
-            cv_metrics, best_model, imp, fold_imp, fold_metric_list = _train_model_cv(
-                None, X_fold.values, y_fold.values, mn, model_type, TS_CV_N_SPLITS, feature_cols
+            # Train with CV - scaler fitted inside each fold to prevent leakage
+            cv_metrics, best_model, imp, fold_imp, fold_metric_list, fold_scalers = _train_model_cv(
+                None, X_raw.values, y_fold.values, mn, model_type, TS_CV_N_SPLITS, feature_cols,
+                scaler=None, use_raw_features=True
             )
             fold_metrics[mn] = fold_metric_list
             fold_feature_importance[mn] = fold_imp
-            
-            # Train final model on all data
-            final_model = _train_model_final(mn, model_type, X_fold.values, y_fold.values, TS_CV_N_SPLITS)
-            
+
+            # Train final model on all data with a fresh scaler fitted on all data
+            final_scaler = StandardScaler()
+            X_all_scaled = final_scaler.fit_transform(X_raw)
+            final_model = _train_model_final(mn, model_type, X_all_scaled, y_fold.values, TS_CV_N_SPLITS)
+            # Store the final scaler with the model for predictions
+            _save_scaler(final_scaler, symbol)
+            cache_scaler(symbol, final_scaler)
+
             # Cache final model
             cache_model(symbol, mn, final_model, cv_metrics)
-            
+
             # Save model artifact
             onnx_path = os.path.join(sym_dir, f"{mn}.onnx")
             _save_model_artifact(final_model, onnx_path, input_dim)
-            
+
             # Save metadata
             meta = {
                 "model_type": mn,
@@ -903,20 +928,20 @@ def train_models(
                 "metrics": cv_metrics,
                 "feature_cols": feature_cols,
                 "input_dim": input_dim,
-                "training_samples": int(len(X_fold)),
+                "training_samples": int(len(X_raw)),
                 "date_range": [str(df["date"].iloc[0]), str(df["date"].iloc[-1])],
                 "trained_at": datetime.now(timezone.utc).isoformat() + "Z",
                 "confusion_matrix": cv_metrics.get('confusion_matrix') if model_type == 'classification' else None,
                 "feature_importance": imp,
                 "stable_features": compute_stable_features(fold_imp) if fold_imp else [],
                 "fold_metrics": fold_metrics.get(mn, []),
-                "permutation_importance": _permutation_importance(final_model, X_fold.values, y_fold.values),
+                "permutation_importance": _permutation_importance(final_model, X_raw.values, y_fold.values),
                 "config": {
                     "target": "binary_direction" if model_type == 'classification' else "log_return",
-                    "cv": "TimeSeriesSplit",
+                    "cv": "TimeSeriesSplit" if not USE_WALK_FORWARD_CV else "WalkForwardSplit",
                     "n_splits": TS_CV_N_SPLITS,
                     "random_seed": RANDOM_SEED,
-                    "scaler": "StandardScaler",
+                    "scaler": "StandardScaler (fit per fold)",
                     "model_type": model_type,
                 },
             }
@@ -1040,12 +1065,9 @@ def predict_sessions(
     
     # Extract current features for the last candle
     features_df = extract_features(df)
+    features_df = fill_nan_values(features_df)
     feature_cols = list(features_df.columns)
     last_row = features_df.iloc[-1:].values
-    if np.any(np.isnan(last_row)):
-        col_means = features_df.mean().values
-        nan_mask = np.isnan(last_row)
-        last_row[nan_mask] = np.take(col_means, np.where(nan_mask)[1])
     
     current_features = {}
     for i, col in enumerate(feature_cols):
@@ -1062,14 +1084,9 @@ def predict_sessions(
         steps = min(PREDICTION_STEPS, remaining)
         
         feat_df = extract_features(working_df)
+        feat_df = fill_nan_values(feat_df)
         feat_cols = list(feat_df.columns)
         last_features = feat_df.iloc[-1:].values
-        
-        if np.any(np.isnan(last_features)):
-            col_means = feat_df.mean().values
-            for j in range(last_features.shape[1]):
-                if np.isnan(last_features[0, j]):
-                    last_features[0, j] = col_means[j]
         
         scaled = scaler.transform(last_features)
         

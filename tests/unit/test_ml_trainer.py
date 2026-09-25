@@ -758,8 +758,71 @@ class TestCrossValidation:
 
 
 # ─────────────────────────────────────────────────────────────
-# Run Tests
+# Time-Series-Aware CV Tests
 # ─────────────────────────────────────────────────────────────
 
+class TestWalkForwardCV:
+    """Tests for walk-forward time-series cross-validation."""
+
+    def test_create_walk_forward_splits_basic(self):
+        """Walk-forward splits must be chronological with no overlap."""
+        from feature_engineering import create_walk_forward_splits
+        n_samples = 100
+        splits = create_walk_forward_splits(n_samples, n_splits=5)
+        assert len(splits) > 0, "Must produce at least one split"
+        for train_idx, test_idx in splits:
+            assert train_idx.max() < test_idx.min(), "Train must be before test"
+
+    def test_create_walk_forward_splits_increasing_train(self):
+        """Training window must expand (or stay same) across folds."""
+        from feature_engineering import create_walk_forward_splits
+        n_samples = 100
+        splits = create_walk_forward_splits(n_samples, n_splits=5)
+        train_sizes = [len(train) for train, _ in splits]
+        for i in range(1, len(train_sizes)):
+            assert train_sizes[i] >= train_sizes[i - 1], "Training window must not shrink"
+
+    def test_create_walk_forward_splits_with_params(self):
+        """Walk-forward splits must respect initial_train_size, test_size, step_size."""
+        from feature_engineering import create_walk_forward_splits
+        n_samples = 100
+        splits = create_walk_forward_splits(
+            n_samples, n_splits=10, initial_train_size=30, test_size=5, step_size=2
+        )
+        assert len(splits) > 0
+        for train_idx, test_idx in splits:
+            assert train_idx.max() < test_idx.max()
+            assert len(test_idx) <= 5
+
+    def test_get_cv_splits_time_series(self):
+        """get_cv_splits with time_series method must return valid splits."""
+        from feature_engineering import get_cv_splits
+        n_samples = 100
+        splits = get_cv_splits(n_samples, cv_method="time_series", n_splits=5)
+        assert len(splits) > 0
+        for train_idx, test_idx in splits:
+            assert train_idx.max() < test_idx.min()
+
+    def test_get_cv_splits_walk_forward(self):
+        """get_cv_splits with walk_forward method must return valid splits."""
+        from feature_engineering import get_cv_splits
+        n_samples = 100
+        splits = get_cv_splits(
+            n_samples, cv_method="walk_forward", n_splits=5, initial_train_size=60
+        )
+        assert len(splits) > 0
+        for train_idx, test_idx in splits:
+            assert train_idx.max() < test_idx.min()
+
+    def test_get_cv_splits_invalid_method(self):
+        """Invalid cv_method must fall back to time_series."""
+        from feature_engineering import get_cv_splits
+        splits = get_cv_splits(50, cv_method="invalid", n_splits=3)
+        assert len(splits) > 0
+
+
+# ─────────────────────────────────────────────────────────────
+# Run Tests
+# ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

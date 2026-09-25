@@ -1,7 +1,51 @@
 import numpy as np
 import pandas as pd
 from scipy import stats
-from typing import List, Optional
+from typing import List, Optional, Tuple, Any
+
+
+def fill_nan_values(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Fill NaN values in feature DataFrame with appropriate defaults.
+    
+    Strategy:
+    - Return/log-return columns: 0.0 (no expected change)
+    - RSI/MACD/Stochastic: neutral values (50, 0)
+    - Volume features: 0.0
+    - Correlation features: 0.0
+    - Rolling statistics: forward fill, then 0.0
+    - Remaining: backward/forward fill, then 0.0
+    
+    This preserves all data points while providing sensible defaults
+    for the early rows where technical indicators haven't warmed up yet.
+    """
+    df = df.copy()
+    
+    for col in df.columns:
+        if df[col].isna().sum() == 0:
+            continue
+            
+        if df[col].dtype in ('float64', 'float32', 'int64', 'int32') or np.issubdtype(df[col].dtype, np.number):
+            if 'return' in col.lower() or 'log_return' in col.lower() or 'roc' in col.lower():
+                df[col] = df[col].fillna(0.0)
+            elif 'rsi' in col.lower() or 'stoch' in col.lower() or 'cci' in col.lower():
+                df[col] = df[col].fillna(50.0)
+            elif 'macd' in col.lower() or 'momentum' in col.lower() or 'trend' in col.lower() or 'squeeze' in col.lower():
+                df[col] = df[col].fillna(0.0)
+            elif 'adx' in col.lower() or 'di_' in col.lower():
+                df[col] = df[col].fillna(25.0)
+            elif 'volume' in col.lower() or 'obv' in col.lower() or 'vwap' in col.lower() or 'vol_' in col.lower():
+                df[col] = df[col].fillna(0.0)
+            elif 'autocorr' in col.lower():
+                df[col] = df[col].fillna(0.0)
+            elif 'hurst' in col.lower():
+                df[col].fillna(0.5, inplace=True)
+            else:
+                df[col] = df[col].ffill().bfill().fillna(0.0)
+        else:
+            df[col] = df[col].ffill().bfill()
+    
+    return df
 
 
 def _safe_div(a, b, fill=0.0):
@@ -365,3 +409,104 @@ def extract_enhanced_features(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return out
+
+
+def create_walk_forward_splits(
+    n_samples: int,
+    n_splits: int = 5,
+    initial_train_size: Optional[int] = None,
+    test_size: int = 1,
+    step_size: int = 1,
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Create walk-forward (expanding window) train/test splits for time series.
+
+    Unlike TimeSeriesSplit which creates fixed-size train folds, WalkForwardSplit
+    mimics real-world deployment: train on all available history, test on the
+    next step(s), then expand the training window.
+
+    Parameters
+    ----------
+    n_samples : int
+        Total number of samples.
+    n_splits : int
+        Number of walk-forward folds to generate.
+    initial_train_size : int, optional
+        Size of the initial training window. If None, uses n_samples // 3.
+    test_size : int
+        Number of test samples per fold.
+    step_size : int
+        How many samples to advance the test window each fold.
+
+    Returns
+    -------
+    List[Tuple[np.ndarray, np.ndarray]]
+        List of (train_indices, test_indices) tuples.
+    """
+    if initial_train_size is None:
+        initial_train_size = max(n_samples // 3, 30)
+
+    splits = []
+    train_end = initial_train_size
+
+    for i in range(n_splits):
+        test_start = train_end
+        test_end = min(test_start + test_size, n_samples)
+
+        if test_end > n_samples:
+            break
+
+        train_idx = np.arange(0, train_end)
+        test_idx = np.arange(test_start, test_end)
+
+        splits.append((train_idx, test_idx))
+
+        # Expand training window for next fold
+        train_end = test_start + step_size
+        if train_end > n_samples:
+            break
+
+    return splits
+
+
+def get_cv_splits(
+    n_samples: int,
+    cv_method: str = "time_series",
+    n_splits: int = 5,
+    initial_train_size: Optional[int] = None,
+    test_size: int = 1,
+    step_size: int = 1,
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Unified CV split generator supporting both TimeSeriesSplit and WalkForwardSplit.
+
+    Parameters
+    ----------
+    n_samples : int
+        Total number of samples.
+    cv_method : str
+        "time_series" for TimeSeriesSplit, "walk_forward" for expanding window.
+    n_splits : int
+        Number of splits.
+    initial_train_size : int, optional
+        Initial training window size (walk-forward only).
+    test_size : int
+        Test window size per fold (walk-forward only).
+    step_size : int
+        Step between folds (walk-forward only).
+
+    Returns
+    -------
+    List[Tuple[np.ndarray, np.ndarray]]
+        List of (train_indices, test_indices) tuples.
+    """
+    if cv_method == "walk_forward":
+        return create_walk_forward_splits(
+            n_samples, n_splits, initial_train_size, test_size, step_size
+        )
+
+    # Default: TimeSeriesSplit
+    from sklearn.model_selection import TimeSeriesSplit
+
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    return list(tscv.split(np.arange(n_samples).reshape(-1, 1)))

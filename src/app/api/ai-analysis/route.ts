@@ -491,9 +491,50 @@ const SYSTEM_PROMPT = `شما یک تحلیلگر ارشد بازارهای ما
 29. **قانون آهن:** هر عدد ذکرشده در متن باید دقیقاً از داده‌های ارائه‌شده گرفته شده باشد. هیچ عددی از خود نسازید. این شامل قیمت فعلی، سطوح حمایت/مقاومت، اهداف سناریو، مقادیر اندیکاتور، و درصدهای احتمال می‌شود.
 `;
 
-// ─── Rule-Based Persian Text Generator (fallback when no API key) ──────────────────────────────────────────────────────
-function generatePersianText(body: Record<string, unknown>, mlSelection: { school: string; style: string; tone: string; reasoning: string }, mslResult: { school_of_analysis: { primary: { id: string } }; analysis_style: { primary: { id: string } }; analysis_tone: { primary: { id: string } } }, methods: string[], priceRefs: ReturnType<typeof buildPriceReferences>): string {
-  const symbolName = String(body.symbolName || 'نماد');
+// ─── Rule-Based English Text Generator (fallback when no API key) ──────────────────────────────────────────────────────
+function stripPersian(str: string): string {
+  return str.replace(/[\u0600-\u06FF]/g, '').trim();
+}
+
+function translateScenario(name?: string): string {
+  if (!name) return 'Scenario';
+  const persianToEnglish: Record<string, string> = {
+    'صعودی خفیف': 'Mild bullish',
+    'نزولی خفیف': 'Mild bearish',
+    'رنج': 'Range',
+    'صعودی': 'Bullish',
+    'نزولی': 'Bearish',
+    'شوک صعودی': 'Bullish shock',
+    'نزولی شتاب‌دار': 'Bearish acceleration',
+    'شوک نزولی': 'Bearish shock',
+    'صعودی شتاب‌دار': 'Bullish acceleration',
+  };
+  return persianToEnglish[name] || stripPersian(name) || 'Scenario';
+}
+
+function translateMethods(methods: string[]): string[] {
+  const translated: string[] = [];
+  for (const m of methods) {
+    let eng = m;
+    eng = eng.replace(/فیبوناچی اصلاحی/g, 'Fibonacci corrective');
+    eng = eng.replace(/واگرایی منفی RSI\/MACD/g, 'Negative RSI/MACD divergence');
+    eng = eng.replace(/الگوهای برگشتی نزولی/g, 'Bearish reversal patterns');
+    eng = eng.replace(/RSI/g, 'RSI');
+    eng = eng.replace(/MACD/g, 'MACD');
+    eng = eng.replace(/کمربند بولینگر/g, 'Bollinger Band');
+    eng = eng.replace(/باند بولینگر/g, 'Bollinger Band');
+    eng = eng.replace(/استوکاستیک/g, 'Stochastic');
+    eng = eng.replace(/سطوح کلیدی/g, 'Key levels');
+    eng = eng.replace(/خط روند میان‌مدت/g, 'Medium-term trend line');
+    eng = eng.replace(/ولوم/gi, 'Volume');
+    eng = eng.replace(/مهار\/روب\u0130/gi, 'automated');
+    translated.push(eng);
+  }
+  return translated;
+}
+
+function generateEnglishText(body: Record<string, unknown>, mlSelection: { school: string; style: string; tone: string; reasoning: string }, mslResult: { school_of_analysis: { primary: { id: string } }; analysis_style: { primary: { id: string } }; analysis_tone: { primary: { id: string } } }, methods: string[], priceRefs: ReturnType<typeof buildPriceReferences>): string {
+  const symbolName = stripPersian(String(body.symbolName || 'Symbol'));
   const currentPrice = Number(body.currentPrice) || 0;
   const trendDir = String(body.trendDirection || 'range');
   const rsi = Number(body.rsi) || 50;
@@ -507,52 +548,50 @@ function generatePersianText(body: Record<string, unknown>, mlSelection: { schoo
   const resistance = (body.resistanceStrengths as Array<{ price: number; strength: number }> | undefined)?.[0];
   const support = (body.supportStrengths as Array<{ price: number; strength: number }> | undefined)?.[0];
 
-  let trendText = 'خنثی';
-  if (trendDir === 'up') trendText = 'صعودی';
-  else if (trendDir === 'down') trendText = 'نزولی';
+  let trendText = 'Neutral';
+  if (trendDir === 'up') trendText = 'Bullish';
+  else if (trendDir === 'down') trendText = 'Bearish';
 
-  let rsiText = 'خنثی';
-  if (rsi > 70) rsiText = 'اشباع خرید';
-  else if (rsi > 60) rsiText = 'اشباع خرید';
-  else if (rsi < 30) rsiText = 'اشباع فروش';
-  else if (rsi < 40) rsiText = 'اشباع فروش';
+  let rsiText = 'Neutral';
+  if (rsi > 70) rsiText = 'Overbought';
+  else if (rsi > 60) rsiText = 'Approaching Overbought';
+  else if (rsi < 30) rsiText = 'Oversold';
+  else if (rsi < 40) rsiText = 'Approaching Oversold';
 
-  let momentumText = 'نرمالی';
-  if (macdHist > 0 && macdHist > 0) momentumText = 'صعودی';
-  else if (macdHist < 0) momentumText = 'نزولی';
-  if (stochK > stochD) momentumText += ' و مومنتوم فعال است';
-  else momentumText += ' و مومنتوم کمیری است';
+  let momentumText = 'Normal';
+  if (macdHist > 0) momentumText = 'Bullish';
+  else if (macdHist < 0) momentumText = 'Bearish';
+  if (stochK > stochD) momentumText += ' with decreasing momentum';
+  else momentumText += ' with active momentum';
 
-  let directionText = 'نرمالی';
-  if (diPlus > diMinus) directionText = 'فشار خرید غاب';
-  else if (diMinus > diPlus) directionText = 'فشار فروش غاب';
+  let directionText = 'Normal';
+  if (diPlus > diMinus) directionText = 'Buying pressure';
+  else if (diMinus > diPlus) directionText = 'Selling pressure';
 
   const dominantScenario = Object.entries(scenarios || {}).sort((a, b) => (b[1].probability ?? 0) - (a[1].probability ?? 0))[0];
+  const scenarioProb = Math.min(Math.max((dominantScenario?.[1]?.probability ?? 0) * 100, 0), 100);
 
   const r1 = resistance?.price ?? Math.round(currentPrice * 1.05);
   const s1 = support?.price ?? Math.round(currentPrice * 0.95);
-  const unit = 'ریال';
 
-  const priceToFa = (n: number) => n.toLocaleString('fa-IR');
-
-  let recommendation = 'احتیاط و نظاره';
-  if (trendDir === 'up' && momentumText.includes('صعودی')) recommendation = 'فرصه خرید موفق به حد ضرر در نزدیکی';
-  else if (trendDir === 'down' || momentumText.includes('نزولی')) recommendation = 'از بخش برای و نظاره برای تغییر روند';
-  else if (dominantScenario && (dominantScenario[0] === 'SC5')) recommendation = 'ارتقاب به حفظ پوست و ارتقاب از برشهای بنی';
+  let recommendation = 'Exercise caution';
+  if (trendDir === 'up' && momentumText.includes('Bullish')) recommendation = 'Buying opportunity near stop-loss';
+  else if (trendDir === 'down' || momentumText.includes('Bearish')) recommendation = 'Wait for trend change';
+  else if (dominantScenario && (dominantScenario[0] === 'SC5')) recommendation = 'Monitor trend preservation and breakdowns';
 
   const lines: string[] = [];
-  lines.push(`تحلیل تازه برای ${symbolName}`);
-  lines.push(`قیمت حاضری: ${priceToFa(currentPrice)} ${unit}`);
-  lines.push(`روند کلی: ${trendText}`);
-  lines.push(`رده نسبت: ${adx > 40 ? 'بسیار قوی' : adx > 25 ? 'قوی' : adx > 15 ? 'متوسط' : 'ضعیف'}`);
-  lines.push(`شاخص قدرت نسبی: ${rsi} (${rsiText})`);
-  lines.push(`شاخص کاهششت نوسان: ${stochK} / ${stochD}`);
-  lines.push(`ماکت: ${macdHist > 0 ? 'صعودی' : 'نزولی'} | ${momentumText}`);
-  lines.push(`فشار اردو: ${directionText}`);
-  lines.push(`نقطه مقاومت اصلی ولی: ${priceToFa(r1)} ${unit} | نقطه حمایت اصلی ارت: ${priceToFa(s1)} ${unit}`);
-  if (dominantScenario) lines.push(`سناریوی غاب: ${dominantScenario[1].name || dominantScenario[0]} | احتمال: ${(dominantScenario[1].probability ?? 0) * 100}%`);
-  lines.push(`توصیه عملیهاردی: ${recommendation}`);
-  lines.push(`روش های تحلیل: ${methods.join('، ')}`);
+  lines.push(`Fresh analysis for ${symbolName}`);
+  lines.push(`Current price: ${currentPrice.toLocaleString()} units`);
+  lines.push(`General trend: ${trendText}`);
+  lines.push(`Ratio rank: ${adx > 40 ? 'Very strong' : adx > 25 ? 'Strong' : adx > 15 ? 'Moderate' : 'Weak'}`);
+  lines.push(`Relative strength index: ${rsi} (${rsiText})`);
+  lines.push(`Volatility index: ${stochK} / ${stochD}`);
+  lines.push(`Pattern: ${macdHist > 0 ? 'Bullish' : 'Bearish'} | ${momentumText}`);
+  lines.push(`Pressure: ${directionText}`);
+  lines.push(`Main resistance level: ${r1} units | main support level: ${s1} units`);
+  if (dominantScenario) lines.push(`Market scenario: ${translateScenario(dominantScenario[1].name)} | probability: ${scenarioProb.toFixed(1)}%`);
+  lines.push(`Operation advice: ${recommendation}`);
+  lines.push(`Analysis methods: ${translateMethods(methods).join(', ')}`);
 
   return lines.join('\n');
 }
@@ -565,10 +604,10 @@ export async function POST(req: NextRequest) {
 
     // ─── Input validation ─────────────────────────────────────────
     if (!body.currentPrice || typeof body.currentPrice !== 'number' || body.currentPrice <= 0) {
-      return NextResponse.json({ error: 'currentPrice باید یک عدد مثبت باشد.' }, { status: 400 });
+      return NextResponse.json({ error: 'currentPrice must be a positive number.' }, { status: 400 });
     }
     if (!body.symbolName || typeof body.symbolName !== 'string' || body.symbolName.trim().length === 0) {
-      return NextResponse.json({ error: 'symbolName باید یک رشته غیرخالی باشد.' }, { status: 400 });
+      return NextResponse.json({ error: 'symbolName must be a non-empty string.' }, { status: 400 });
     }
     // Validate at least some key indicator values are present
     const indicatorKeys = ['rsi', 'adx', 'macdHist', 'stochK', 'bollingerUpper', 'bollingerLower'];
@@ -643,14 +682,14 @@ export async function POST(req: NextRequest) {
         }
       );
     } catch (err) {
-      // No API key or external AI service error — fall back to Persian text generation
+      // No API key or external AI service error — fall back to English text generation
       console.log(`[AI] No API key or service unavailable, using fallback text for ${symbolName}`);
-      // Use existing Persian text generation logic from the file
-      const fallbackText = generatePersianText(body, mlSelection, mslResult, methods, priceRefs);
+      // Use existing English text generation logic from the file
+      const fallbackText = generateEnglishText(body, mlSelection, mslResult, methods, priceRefs);
       return NextResponse.json({ text: fallbackText, ml: { school: mlSelection.school, style: mlSelection.style, tone: mlSelection.tone, reasoning: mlSelection.reasoning, methods }, isFallback: true });
     }
 
-    // Post-process: validate prices, fix Persian text, strip technical codes
+    // Post-process: validate prices, fix Persian text if present, strip technical codes
     const { text: cleaned, priceValid, hallucinationCount } = postProcessAIOutput(content, priceRefs);
 
     // If prices are severely hallucinated, log but still return (don't crash)
@@ -677,32 +716,32 @@ export async function POST(req: NextRequest) {
 function userFriendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('Rate limited') || msg.includes('429') || msg.includes('Ollama busy') || msg.includes('AI temporarily unavailable')) {
-    return 'سرور هوشمند در حال حاضر محدودیت درخواست دارد. لطفاً ۲ تا ۵ دقیقه دیگر دوباره تلاش کنید.';
+    return 'Smart analysis server is currently rate limited. Please try again in 2-5 minutes.';
   }
   if (msg.includes('Timed out') || msg.includes('timeout') || msg.includes('Timeout')) {
-    return 'زمان پاسخدهی هوشمند به پایان رسید. این مشکل معمولاً موقتی است — لطفاً دوباره تلاش کنید.';
+    return 'Smart analysis response timed out. This is usually temporary — please try again.';
   }
   if (msg.includes('concurrent')) {
-    return 'درخواست تحلیل قبلی هنوز در حال اجراست. لطفاً چند ثانیه صبر کنید.';
+    return 'Previous analysis request is still running. Please wait a few seconds.';
   }
   if (msg.includes('quota') || msg.includes('limit') || msg.includes('capacity')) {
-    return 'ظرفیت هوشمند در حال حاضر پر است. لطفاً چند دقیقه دیگر تلاش کنید.';
+    return 'Smart analysis capacity is currently full. Please try again in a few minutes.';
   }
     if (msg.includes('network') || msg.includes('fetch') || msg.includes('ECONNREFUSED') || msg.includes('Ollama')) {
-    return 'خطای شبکه در ارتباط با سرور هوشمند. لطفاً اتصال اینترنت خود را بررسی و دوباره تلاش کنید.';
+    return 'Network error communicating with smart analysis server. Please check your internet connection and try again.';
   }
   if (msg.includes('too short') || msg.includes('empty')) {
-    return 'پاسخ هوشمند ناقص بود. لطفاً دوباره تلاش کنید — این مشکل معمولاً با تلاش مجدد برطرف می‌شود.';
+    return 'Smart analysis response was incomplete. Please try again — this usually resolves on retry.';
   }
   if (msg.includes('AI response too short')) {
-    return 'پاسخ هوشمند ناقص بود. لطفاً دوباره تلاش کنید.';
+    return 'Smart analysis response was incomplete. Please try again.';
   }
   if (msg.includes('ReferenceError') || msg.includes('TypeError') || msg.includes('SyntaxError')) {
     // Internal error - don't expose details to user
     console.error('[AI] Internal error (hidden from user):', msg);
-    return 'خطای داخلی سیستم. لطفاً چند لحظه دیگر دوباره تلاش کنید.';
+    return 'Internal system error. Please try again in a moment.';
   }
   // Log unhandled errors for debugging
   console.error('[AI] Unhandled error type:', msg);
-  return 'خطا در تولید تحلیل. این مشکل معمولاً موقتی است — لطفاً چند لحظه دیگر دوباره تلاش کنید.';
+  return 'Error generating analysis. This is usually temporary — please try again in a moment.';
 }

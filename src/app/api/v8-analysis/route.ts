@@ -359,7 +359,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[VDES v8 Error]:', err);
     return NextResponse.json(
-      { error: 'خطا در تولید تحلیل هوشمند. لطفاً دوباره تلاش کنید.' },
+      { error: 'Error generating smart analysis. Please try again.' },
       { status: 500 },
     );
   }

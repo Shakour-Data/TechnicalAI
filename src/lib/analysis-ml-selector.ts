@@ -7,7 +7,7 @@
  * - 6 Analytical Tones (لحن تحلیلی)
  * - 24 Writing Personas (شخصیت نوشتاری)
  *
- * Selection is based on rule-based ML inference from technical indicator data.
+ * This module selects the optimal analytical approach for financial markets by applying machine learning to identify the most relevant features, deriving scenario-specific cumulative probabilities, and synthesizing technical indicators into a coherent market assessment.
  * This module runs on the server side only.
  */
 

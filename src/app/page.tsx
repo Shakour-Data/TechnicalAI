@@ -10,10 +10,11 @@ import CandlestickChart from '@/components/tse/candlestick-chart';
 import IndicatorsPanel from '@/components/tse/indicators-panel';
 import AnalysisSidebar, { CollapsedSidebarExpand } from '@/components/tse/analysis-sidebar';
 import VdssGraph from '@/components/tse/vdss-graph';
-import VdesAnalysis from '@/components/tse/vdes-analysis';
-import MLForecast from '@/components/tse/ml-forecast';
-import HelpPage from '@/components/help-page';
-import DocsPage from '@/components/docs-page';
+import VdesAnalysis from "@/components/tse/vdes-analysis";
+import MLForecast from "@/components/tse/ml-forecast";
+import TimeSeriesPanel from "@/components/tse/time-series-panel";
+import HelpPage from "@/components/help-page";
+import DocsPage from "@/components/docs-page";
 import { toPersianDigits } from '@/lib/jalali';
 import { formatPriceFa } from '@/lib/format-price';
 
@@ -96,6 +97,7 @@ const SIDEBAR_ITEMS = [
   { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-400', activeBg: 'bg-amber-400/10 border-amber-400/20', hoverBg: 'hover:bg-amber-400/5' },
   { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-400', activeBg: 'bg-purple-400/10 border-purple-400/20', hoverBg: 'hover:bg-purple-400/5' },
   { id: 'forecast', label: 'پیش‌بینی ML', icon: BrainCircuit, color: 'text-violet-400', activeBg: 'bg-violet-400/10 border-violet-400/20', hoverBg: 'hover:bg-violet-400/5' },
+  { id: 'time-series', label: 'تحلیل سری زمانی', icon: Activity, color: 'text-blue-400', activeBg: 'bg-blue-400/10 border-blue-400/20', hoverBg: 'hover:bg-blue-400/5' },
 ] as const;
 
 type SidebarItem = typeof SIDEBAR_ITEMS[number]['id'];
@@ -756,6 +758,16 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                 />
               )}
 
+              {/* PANEL: Time Series Analysis */}
+              {activePanel === 'time-series' && (
+                <TimeSeriesPanel
+                  symbol={data.info?.name ?? data.symbol}
+                  candles={data.candles}
+                  currentPrice={lastPrice}
+                  priceDecimals={decimals}
+                />
+              )}
+
               {/* PANEL: Visual Describer */}
               {activePanel === 'visual' && (
                 <div className="space-y-4">
@@ -860,7 +872,7 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
             <SymbolSearch onSelect={handleSelect} placeholder="جستجوی نماد، ارز، طلا، کریپتو، شاخص ..." />
           </div>
 
-          {/* Page Navigation + Theme Switcher */}
+{/* Page Navigation + Theme Switcher */}
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: C.primaryBg, borderWidth: '1px', borderStyle: 'solid', borderColor: C.border }}>
               {NAV_ITEMS.map((item) => {
@@ -995,12 +1007,12 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
             )}
       </header>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
-        {currentPage === 'help' && <HelpPage />}
-        {currentPage === 'docs' && <DocsPage />}
-        {currentPage === 'analysis' && renderAnalysisContent()}
-      </main>
+{/* MAIN CONTENT */}
+       <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
+         {currentPage === 'help' && <HelpPage />}
+         {currentPage === 'docs' && <DocsPage />}
+{currentPage === 'analysis' && renderAnalysisContent()}
+        </main>
 
       <footer className={`mt-auto py-3 text-center text-[10px] ${data ? 'lg:mb-14' : ''}`} style={{ borderTop: `1px solid ${C.footerBorder}`, color: C.footerFg }}>
         داده‌های بورس از TSETMC (تعدیل‌شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v6.0

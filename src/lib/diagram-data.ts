@@ -1267,7 +1267,7 @@ export const UML_STRUCT_DIAGRAMS = [
   DecisionGraph به‌صورت تجمیع شامل MLEngine و ProbabilityTrend است.
   MLEngine با BayesianWeights ارتباط ترکیب دارد.
   CompositeScores از چند موتور نمرات مرکب محاسبه می‌کند.
-  AnalysisMLSelector ترکیب روش‌های تحلیلی را انتخاب می‌کند.
+  AnalysisMLSelector selects the optimal analytical approach for financial markets by applying machine learning to identify the most relevant features, deriving scenario-specific cumulative probabilities, and synthesizing technical indicators into a coherent market assessment.
   VolumeProfile و CandlestickPatterns بخش‌های تحلیلی هستند.
   چندگانگی و جهت ارتباطات به‌دقت مشخص شده‌اند.`,
     level: 2,

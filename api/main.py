@@ -27,11 +27,6 @@ from api.middleware.security_headers import SecurityHeadersMiddleware
 from api.security import verify_token, get_user_by_id, User
 from api.errors import ErrorResponse, setup_exception_handlers
 from api.auth import get_current_user, get_current_active_user, require_role, require_any_role
-from api.models.timeSeries import (
-    TimeSeriesAnalysis, TimeSeriesResult,
-    create_time_series_analysis, create_time_series_result,
-    get_time_series_analysis, get_time_series_results,
-)
 
 # Setup logging
 logging.basicConfig(
@@ -53,23 +48,6 @@ REQUEST_DURATION = Histogram('http_request_duration_seconds', 'Request duration'
 ERROR_COUNT = Counter('http_errors_total', 'Total errors', ['endpoint', 'error_type'])
 
 # Pydantic models for request/response
-class TimeSeriesAnalysisRequest(BaseModel):
-    symbol: str
-    forecast_steps: int = 30
-    confidence_level: float = 0.95
-    include_decomposition: bool = False
-    include_stationarity: bool = False
-    include_spectrum: bool = False
-    include_regime_detection: bool = False
-
-class TimeSeriesResultResponse(BaseModel):
-    id: str
-    symbol: str
-    request_params: str
-    basic_stats: str
-    analysis_json: str
-    results: list
-    created_at: datetime
 
 # Setup logging
 logging.basicConfig(
@@ -81,12 +59,6 @@ logger = logging.getLogger(__name__)
 # Initialize services
 mock_service = MockService()
 cache_service = CacheService()
-
-# Metrics
-REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-REQUEST_DURATION = Histogram('http_request_duration_seconds', 'Request duration')
-ERROR_COUNT = Counter('http_errors_total', 'Total errors', ['endpoint', 'error_type'])
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -654,197 +626,22 @@ async def market_summary(current_user: User = Depends(get_current_active_user)):
                 "role": current_user.role
             }
         }
+    @app.get("/api/v1/dashboard/market-summary", tags=["Dashboard"])
+async def market_summary(current_user: User = Depends(get_current_active_user)):
+    try:
+        summary = await mock_service.get_market_summary()
+        return {
+            **summary,
+            "metadata": {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "authenticated_as": current_user.username,
+                "role": current_user.role
+            }
+        }
     except Exception as e:
         logger.error(f"Error fetching market summary: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-class TimeSeriesAnalysisResponse(BaseModel):
-    id: str
-    symbol: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    basic_stats: Optional[str] = None
-    analysis_json: Optional[str] = None
-
-class TimeSeriesAnalysisRoute(BaseModel):
-    symbol: str
-    forecast_steps: int = 30
-    confidence_level: float = 0.95
-    include_decomposition: bool = False
-    include_stationarity: bool = False
-    include_spectrum: bool = False
-    include_regime_detection: bool = False
-
-
-@app.post("/api/v1/time-series/analysis", tags=["Time Series"], response_model=TimeSeriesAnalysisResponse)
-async def create_time_series_analysis(
-    background_tasks: BackgroundTasks,
-    request: TimeSeriesAnalysisRoute,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-):
-    """Create a time series analysis for a symbol."""
-    try:
-        # Check if symbol exists (basic validation)
-        symbol = request.symbol.upper()
-        
-        # Create analysis request params
-        request_params = {
-            "symbol": symbol,
-            "forecast_steps": request.forecast_steps,
-            "confidence_level": request.confidence_level,
-            "include_decomposition": request.include_decomposition,
-            "include_stationarity": request.include_stationarity,
-            "include_spectrum": request.include_spectrum,
-            "include_regime_detection": request.include_regime_detection,
-        }
-        
-        # Create analysis record
-        analysis = create_time_series_analysis(
-            db,
-            symbol=symbol,
-            request_params=request_params,
-            basic_stats={},
-            analysis_json={},
-        )
-        
-        # Process time series analysis in background
-        background_tasks.add_task(
-            _process_time_series_analysis,
-            analysis_id=analysis.id,
-            symbol=symbol,
-            request_params=request_params,
-            user_id=current_user.user_id,
-        )
-        
-        return {
-            "analysis_id": analysis.id,
-            "symbol": analysis.symbol,
-            "created_at": analysis.created_at,
-            "updated_at": analysis.updated_at,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating time series analysis for {request.symbol}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.get("/api/v1/time-series/analysis/{analysis_id}", tags=["Time Series"], response_model=dict)
-async def get_time_series_analysis(
-    analysis_id: str,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-):
-    """Get a time series analysis by ID."""
-    try:
-        analysis = get_time_series_analysis(db, analysis_id)
-        if not analysis:
-            raise HTTPException(status_code=404, detail="Time series analysis not found")
-        
-        # Get results
-        results = get_time_series_results(db, analysis_id)
-        
-        return {
-            "analysis_id": analysis.id,
-            "symbol": analysis.symbol,
-            "request_params": analysis.request_params,
-            "basic_stats": analysis.basic_stats,
-            "analysis_json": analysis.analysis_json,
-            "results": [
-                {
-                    "id": r.id,
-                    "model": r.model,
-                    "forecast": json.loads(r.forecast_json),
-                    "metrics": json.loads(r.metrics_json),
-                    "created_at": r.created_at,
-                }
-                for r in results
-            ],
-            "created_at": analysis.created_at,
-            "updated_at": analysis.updated_at,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching time series analysis {analysis_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-async def _process_time_series_analysis(analysis_id, symbol, request_params, user_id):
-    """Background task to process time series analysis."""
-    try:
-        logger.info(f"Processing time series analysis {analysis_id} for {symbol}")
-        
-        # Call mini-service
-        ts_service_url = "http://localhost:3033/analyze"
-        payload = {
-            "symbol": symbol,
-            "forecast_steps": request_params.get("forecast_steps", 30),
-            "confidence_level": request_params.get("confidence_level", 0.95),
-            "include_decomposition": request_params.get("include_decomposition", False),
-            "include_stationarity": request_params.get("include_stationarity", False),
-            "include_spectrum": request_params.get("include_spectrum", False),
-            "include_regime_detection": request_params.get("include_regime_detection", False)
-        }
-        
-        try:
-            response = requests.post(ts_service_url, json=payload, timeout=120)
-            response.raise_for_status()
-            result = response.json()
-        except requests.exceptions.ConnectionError:
-            logger.warning(f"Mini-service not available, using mock data for {analysis_id}")
-            result = {
-                "symbol": symbol,
-                "analysis_id": analysis_id,
-                "basic_stats": {"mean": 0, "std": 0, "current_price": 0},
-                "models": {
-                    "arima": {"forecast": {"forecast": [], "lower_bound": [], "upper_bound": []}, "metrics": {}},
-                    "sarima": {"forecast": {"forecast": [], "lower_bound": [], "upper_bound": []}, "metrics": {}},
-                    "ets": {"forecast": {"forecast": [], "lower_bound": [], "upper_bound": []}, "metrics": {}}
-                }
-            }
-        
-        # Save results to database
-        from api.models.database import SessionLocal
-        from api.models.timeSeries import create_time_series_result
-        
-        db = SessionLocal()
-        try:
-            # Update basic_stats and analysis_json
-            from api.models.timeSeries import TimeSeriesAnalysis
-            analysis = db.query(TimeSeriesAnalysis).filter(TimeSeriesAnalysis.id == analysis_id).first()
-            if analysis:
-                analysis.basic_stats = str(result.get("basic_stats", {}))
-                analysis.analysis_json = str({
-                    "decomposition": result.get("decomposition"),
-                    "stationarity": result.get("stationarity"),
-                    "spectrum": result.get("spectrum"),
-                    "regime_detection": result.get("regime_detection")
-                })
-                db.commit()
-            
-            # Save model results
-            models_data = result.get("models", {})
-            for model_name, model_data in models_data.items():
-                if "error" not in model_data:
-                    forecast = model_data.get("forecast", {})
-                    metrics = model_data.get("metrics", {})
-                    create_time_series_result(
-                        db,
-                        analysis_id=analysis_id,
-                        model=model_name,
-                        forecast=forecast,
-                        metrics=metrics
-                    )
-            db.commit()
-        finally:
-            db.close()
-        
-        logger.info(f"Time series analysis {analysis_id} completed and saved")
-    except Exception as e:
-        logger.error(f"Error processing time series analysis {analysis_id}: {e}")
 
 
 import uvicorn

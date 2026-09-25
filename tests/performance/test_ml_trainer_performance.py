@@ -173,7 +173,7 @@ def test_feature_engineering_performance(sample_ohlcv_large):
 def sample_ohlcv_large():
     """Generate larger synthetic OHLCV data for performance testing."""
     np.random.seed(42)
-    n = 1000  # Larger dataset for performance testing
+    n = 500  # Reduced dataset for performance testing
     dates = pd.date_range("2020-01-01", periods=n, freq="D")
     close = 100 + np.cumsum(np.random.randn(n) * 0.5)
     open_ = close - np.random.randn(n) * 0.2

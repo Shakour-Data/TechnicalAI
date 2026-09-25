@@ -11,20 +11,10 @@ MODELS_DIR = BASE_DIR / "models"
 MODELS_DIR.mkdir(exist_ok=True)
 
 # Feature engineering parameters
-MIN_CANDLES = 120
 FORWARD_DAYS = 1  # Changed from 5 to 1 for better R² performance (1-day forward return is more predictable)
 VOLATILITY_WINDOW = 10
 DIRECTION_THRESHOLD = 0.005  # 0.5%
 PREDICTION_STEPS = 5
-
-# Cross-validation parameters
-TS_CV_N_SPLITS = 5
-RANDOM_SEED = 42
-
-# Model training parameters
-N_ITER_RANDOM_SEARCH = 20  # For RandomizedSearchCV
-CV_SCORING_CLASSIFICATION = 'f1_weighted'
-CV_SCORING_REGRESSION = 'neg_mean_absolute_error'
 
 # Feature engineering - technical indicators to compute
 FEATURE_PERIODS = {
@@ -43,6 +33,20 @@ FEATURE_PERIODS = {
     'price_patterns': [10],
     'lag_features': [1, 2, 3, 4, 5]
 }
+
+# Calculate minimum candles needed based on feature engineering warmup
+# Based on maximum indicator period + forward days + safety buffer
+periods = []
+for v in FEATURE_PERIODS.values():
+    if isinstance(v, list):
+        if v:
+            periods.append(max(v))
+        else:
+            periods.append(0)
+    else:
+        periods.append(v)
+MAX_FEATURE_PERIOD = max(periods)
+MIN_CANDLES = max(MAX_FEATURE_PERIOD + FORWARD_DAYS + 30, 120)
 
 # Model catalog - expanded to 16+ models + ensembles
 CLASSIFICATION_MODELS = [
@@ -130,6 +134,21 @@ TARGET_CONFIGS = {
         'n_classes': 3
     }
 }
+
+# Cross-validation parameters
+TS_CV_N_SPLITS = 5
+RANDOM_SEED = 42
+
+# Model training parameters
+N_ITER_RANDOM_SEARCH = 20  # For RandomizedSearchCV
+CV_SCORING_CLASSIFICATION = 'f1_weighted'
+CV_SCORING_REGRESSION = 'neg_mean_absolute_error'
+
+# Walk-forward CV parameters (for time-series-aware training)
+USE_WALK_FORWARD_CV = False  # Set True to use walk-forward split instead of TimeSeriesSplit
+WALK_FORWARD_INITIAL_TRAIN_RATIO = 0.6  # Initial training ratio for walk-forward
+WALK_FORWARD_TEST_SIZE = 1  # Samples per test fold
+WALK_FORWARD_STEP_SIZE = 1  # Samples to advance between folds
 
 # HTTP server configuration
 PORT = int(os.environ.get("ML_TRAINER_PORT", 3032))

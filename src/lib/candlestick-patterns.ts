@@ -18,7 +18,7 @@ export type PatternReliability = 'strong' | 'moderate' | 'weak';
  * A detected candlestick pattern with bilingual metadata.
  */
 export interface CandlestickPattern {
-  /** Persian pattern name (e.g. 'دوجی', 'چکش', 'پوشای صعودی') */
+  /** English pattern name (e.g. 'Doji', 'Hammer', 'Bullish Engulfing') */
   name: string;
   /** English pattern name (e.g. 'Doji', 'Hammer', 'Bullish Engulfing') */
   nameEn: string;
@@ -28,7 +28,7 @@ export interface CandlestickPattern {
   reliability: PatternReliability;
   /** Numeric reliability score from 0 to 1 */
   reliabilityScore: number;
-  /** Persian description of the pattern and its implications */
+  /** English description of the pattern and its implications */
   description: string;
   /** English description of the pattern and its implications */
   descriptionEn: string;
@@ -127,16 +127,16 @@ function detectDoji(data: OHLCV[], i: number): CandlestickPattern | null {
   const isLongLegged = range > avgR * 1.5;
 
   return {
-    name: isLongLegged ? 'دوجی پا بلند' : 'دوجی',
+    name: isLongLegged ? 'Long-Legged Doji' : 'Doji',
     nameEn: isLongLegged ? 'Long-Legged Doji' : 'Doji',
     direction: 'neutral',
     reliability: 'moderate',
     reliabilityScore: 0.6,
     description: isLongLegged
-      ? 'دوجی پا بلند — بلاتکلیفی شدید بازار، احتمال تغییر روند'
-      : 'دوجی — تعادل بین خریداران و فروشندگان، سیگنال بازگشتی احتمالی',
+      ? 'Long-legged doji — extreme market indecision, potential trend change'
+      : 'Doji — equilibrium between buyers and sellers, potential reversal',
     descriptionEn: isLongLegged
-      ? 'Long-legged doji — extreme indecision, potential trend change'
+      ? 'Long-legged doji — extreme market indecision, potential trend change'
       : 'Doji — equilibrium between buyers and sellers, potential reversal',
     index: i,
   };
@@ -172,14 +172,14 @@ function detectHammer(data: OHLCV[], i: number): CandlestickPattern | null {
   const score = isDowntrend ? 0.82 : 0.45;
 
   return {
-    name: 'چکش',
+    name: 'Hammer',
     nameEn: 'Hammer',
     direction: 'bullish',
     reliability,
     reliabilityScore: score,
     description: isDowntrend
-      ? 'الگوی چکش در انتهای روند نزولی — سیگنال بازگشت صعودی قوی'
-      : 'الگوی چکش — بدون تأیید روند نزولی قبلی، سیگنال ضعیف',
+      ? 'Hammer at the end of a downtrend — strong bullish reversal signal'
+      : 'Hammer — without confirmation of a prior downtrend, weak signal',
     descriptionEn: isDowntrend
       ? 'Hammer at bottom of downtrend — strong bullish reversal signal'
       : 'Hammer — no prior downtrend confirmation, weak signal',
@@ -214,12 +214,12 @@ function detectInvertedHammer(data: OHLCV[], i: number): CandlestickPattern | nu
   // In downtrend = Inverted Hammer (bullish), in uptrend = Shooting Star (bearish)
   if (isDowntrend) {
     return {
-      name: 'چکش وارونه',
+      name: 'Inverted Hammer',
       nameEn: 'Inverted Hammer',
       direction: 'bullish',
       reliability: 'moderate',
       reliabilityScore: 0.62,
-      description: 'چکش وارونه در روند نزولی — فشار خرید در قیمت‌های بالا، سیگنال بازگشتی',
+      description: 'Inverted hammer in a downtrend — buying pressure at high prices, reversal signal',
       descriptionEn: 'Inverted hammer in downtrend — buying pressure at highs, reversal signal',
       index: i,
     };
@@ -256,14 +256,14 @@ function detectBullishEngulfing(data: OHLCV[], i: number): CandlestickPattern | 
   const score = isDowntrend ? 0.85 : 0.6;
 
   return {
-    name: 'پوشای صعودی',
+    name: 'Bullish Engulfing',
     nameEn: 'Bullish Engulfing',
     direction: 'bullish',
     reliability,
     reliabilityScore: score,
     description: isDowntrend
-      ? 'پوشای صعودی در روند نزولی — سیگنال بازگشت بسیار قوی، خریداران کنترل را گرفته‌اند'
-      : 'پوشای صعودی — بلع کندل قبلی، احتمال ادامه صعود',
+      ? 'Bullish engulfing in a downtrend — very strong reversal signal, buyers in control'
+      : 'Bullish engulfing — previous candle engulfed, likely continuation',
     descriptionEn: isDowntrend
       ? 'Bullish engulfing in downtrend — very strong reversal, buyers in control'
       : 'Bullish engulfing — previous candle engulfed, likely continuation',
@@ -295,14 +295,14 @@ function detectBearishEngulfing(data: OHLCV[], i: number): CandlestickPattern | 
   const score = isUptrend ? 0.85 : 0.6;
 
   return {
-    name: 'پوشای نزولی',
+    name: 'Bearish Engulfing',
     nameEn: 'Bearish Engulfing',
     direction: 'bearish',
     reliability,
     reliabilityScore: score,
     description: isUptrend
-      ? 'پوشای نزولی در روند صعودی — سیگنال بازگشت نزولی قوی، فروشندگان وارد شده‌اند'
-      : 'پوشای نزولی — بلع کندل قبلی، احتمال ادامه نزول',
+      ? 'Bearish engulfing in an uptrend — strong bearish reversal signal, sellers have entered'
+      : 'Bearish engulfing — previous candle engulfed, likely decline continuation',
     descriptionEn: isUptrend
       ? 'Bearish engulfing in uptrend — strong bearish reversal signal'
       : 'Bearish engulfing — previous candle engulfed, likely decline continuation',
@@ -344,12 +344,12 @@ function detectMorningStar(data: OHLCV[], i: number): CandlestickPattern | null 
   if (c3.close < c1Mid) return null;
 
   return {
-    name: 'ستاره صبحگاهی',
+    name: 'Morning Star',
     nameEn: 'Morning Star',
     direction: 'bullish',
     reliability: 'strong',
     reliabilityScore: 0.88,
-    description: 'ستاره صبحگاهی — الگوی سه کندلی بازگشتی صعودی قوی، تأیید تغییر روند',
+    description: 'Morning Star — strong 3-candle bullish reversal pattern, trend change confirmed',
     descriptionEn: 'Morning Star — 3-candle strong bullish reversal pattern, trend change confirmed',
     index: i,
   };
@@ -386,12 +386,12 @@ function detectEveningStar(data: OHLCV[], i: number): CandlestickPattern | null 
   if (c3.close > c1Mid) return null;
 
   return {
-    name: 'ستاره شامگاهی',
+    name: 'Evening Star',
     nameEn: 'Evening Star',
     direction: 'bearish',
     reliability: 'strong',
     reliabilityScore: 0.88,
-    description: 'ستاره شامگاهی — الگوی سه کندلی بازگشتی نزولی قوی، هشدار تغییر روند',
+    description: 'Evening Star — strong 3-candle bearish reversal pattern, trend change warning',
     descriptionEn: 'Evening Star — 3-candle strong bearish reversal pattern, trend change warning',
     index: i,
   };
@@ -423,12 +423,12 @@ function detectShootingStar(data: OHLCV[], i: number): CandlestickPattern | null
   if (!isUptrend) return null; // Only valid in uptrend
 
   return {
-    name: 'ستاره دنباله‌دار',
+    name: 'Shooting Star',
     nameEn: 'Shooting Star',
     direction: 'bearish',
     reliability: 'strong',
     reliabilityScore: 0.82,
-    description: 'ستاره دنباله‌دار در انتهای روند صعودی — فشار فروش قوی در سقف، سیگنال بازگشت',
+    description: 'Shooting Star at the end of an uptrend — strong selling pressure at the high, reversal signal',
     descriptionEn: 'Shooting Star at top of uptrend — strong selling pressure at high, reversal signal',
     index: i,
   };
@@ -461,14 +461,14 @@ function detectBullishHarami(data: OHLCV[], i: number): CandlestickPattern | nul
   const score = isDowntrend ? 0.65 : 0.4;
 
   return {
-    name: 'هارامی صعودی',
+    name: 'Bullish Harami',
     nameEn: 'Bullish Harami',
     direction: 'bullish',
     reliability,
     reliabilityScore: score,
     description: isDowntrend
-      ? 'هارامی صعودی در روند نزولی — کاهش فشار فروش، احتمال تثبیت یا بازگشت'
-      : 'هارامی صعودی — کندل کوچک درون کندل بزرگ قبلی',
+      ? 'Bullish harami in a downtrend — selling pressure decreasing, consolidation or reversal likely'
+      : 'Bullish harami — small candle inside the previous large candle',
     descriptionEn: isDowntrend
       ? 'Bullish harami in downtrend — selling pressure decreasing, consolidation/reversal likely'
       : 'Bullish harami — small body inside previous large body',
@@ -501,14 +501,14 @@ function detectBearishHarami(data: OHLCV[], i: number): CandlestickPattern | nul
   const score = isUptrend ? 0.65 : 0.4;
 
   return {
-    name: 'هارامی نزولی',
+    name: 'Bearish Harami',
     nameEn: 'Bearish Harami',
     direction: 'bearish',
     reliability,
     reliabilityScore: score,
     description: isUptrend
-      ? 'هارامی نزولی در روند صعودی — کاهش مومنتوم خرید، احتمال اصلاح'
-      : 'هارامی نزولی — کندل کوچک نزولی درون کندل صعودی قبلی',
+      ? 'Bearish harami in an uptrend — buying momentum decreasing, correction likely'
+      : 'Bearish harami — small bearish candle inside the previous bullish candle',
     descriptionEn: isUptrend
       ? 'Bearish harami in uptrend — buying momentum decreasing, correction likely'
       : 'Bearish harami — small bearish body inside previous bullish body',
@@ -623,30 +623,30 @@ function generatePatternSummary(
   score: number
 ): string {
   if (patterns.length === 0) {
-    return 'الگوی کندل‌استیک قابل اعتمادی در کندل‌های اخیر شناسایی نشد.';
+    return 'No reliable candlestick pattern identified in recent candles.';
   }
 
-  const names = patterns.map(p => p.name).join('، ');
+  const names = patterns.map(p => p.nameEn).join(', ');
   const strongPatterns = patterns.filter(p => p.reliability === 'strong');
 
   let trendNote = '';
   if (dominant === 'bullish') {
     trendNote = score > 0.7
-      ? `سیگنال صعودی قوی با اطمینان ${Math.round(score * 100)}٪`
-      : `سیگنال صعودی با اطمینان ${Math.round(score * 100)}٪`;
+      ? `Strong bullish signal with ${Math.round(score * 100)}% confidence`
+      : `Bullish signal with ${Math.round(score * 100)}% confidence`;
   } else if (dominant === 'bearish') {
     trendNote = score > 0.7
-      ? `سیگنال نزولی قوی با اطمینان ${Math.round(score * 100)}٪`
-      : `سیگنال نزولی با اطمینان ${Math.round(score * 100)}٪`;
+      ? `Strong bearish signal with ${Math.round(score * 100)}% confidence`
+      : `Bearish signal with ${Math.round(score * 100)}% confidence`;
   } else {
-    trendNote = 'سیگنال‌های متضاد، بلاتکلیفی بازار';
+    trendNote = 'Conflicting signals, market indecision';
   }
 
   const strongNote = strongPatterns.length > 0
-    ? ` | الگوهای قوی: ${strongPatterns.map(p => p.name).join('، ')}`
+    ? ` | Strong patterns: ${strongPatterns.map(p => p.nameEn).join(', ')}`
     : '';
 
-  return `الگوهای شناسایی‌شده: ${names}. ${trendNote}.${strongNote}`;
+  return `Identified patterns: ${names}. ${trendNote}.${strongNote}`;
 }
 
 // ─── AI-Powered Harmonic & Elliott Detection (uses LLM) ─────────────────────
@@ -695,36 +695,36 @@ export function buildAIPatternPrompt(req: AIPatternRequest): string {
   const recentLow = Math.min(...lows.slice(-20));
   const swingPoints = identifySwingPoints(last50);
 
-  return `شما یک تحلیلگر حرفه‌ای الگوهای هارمونیک و موج الیوت هستید.
+  return `You are a professional analyst of harmonic patterns and Elliott waves.
 
-نماد: ${req.symbolName}
-قیمت فعلی: ${req.currentPrice}
-بازه اخیر: ${last50[0]?.open ?? 0} — ${req.currentPrice}
-بالاترین ۲۰ کندل اخیر: ${recentHigh}
-پایین‌ترین ۲۰ کندل اخیر: ${recentLow}
+Symbol: ${req.symbolName}
+Current price: ${req.currentPrice}
+Recent range: ${last50[0]?.open ?? 0} — ${req.currentPrice}
+Highest 20 recent candles: ${recentHigh}
+Lowest 20 recent candles: ${recentLow}
 
-داده‌های ۵۰ کندل اخیر:
+Data of 50 recent candles:
 ${priceData}
 
-نقاط چرخش شناسایی‌شده:
-${swingPoints.map((p, i) => `${i + 1}. ${p.type} در قیمت ${p.price} (کندل ${p.index})`).join('\n') || 'نقطه چرخش مشخصی یافت نشد'}
+Identified swing points:
+${swingPoints.map((p, i) => `${i + 1}. ${p.type} at price ${p.price} (candle ${p.index})`).join('\n') || 'No specific swing point found'}
 
-مأموریت شما:
-1. الگوهای هارمونیک (gartley, butterfly, bat, crab, shark) را بررسی کنید
-2. موج‌گذاری الیوت را تحلیل کنید (آیا در موج ۳، ۵ یا C هستیم؟)
-3. فقط الگوهایی را گزارش دهید که حداقل ۶۰٪ تطابق داشته باشند
+Your mission:
+1. Examine harmonic patterns (gartley, butterfly, bat, crab, shark)
+2. Analyze Elliott wave positioning (are we in wave 3, 5, or C?)
+3. Report only patterns that match with at least 60% accuracy
 
-پاسخ را فقط در فرمت JSON زیر بدهید، بدون هیچ متن اضافی:
+Return ONLY the following JSON format, without any additional text:
 {
   "harmonicPatterns": [
-    {"name": "نام فارسی", "type": "gartley|butterfly|bat|crab|shark", "reliability": "high|medium|low", "description": "توضیح مختصر فارسی"}
+    {"name": "English pattern name", "type": "gartley|butterfly|bat|crab|shark", "reliability": "high|medium|low", "description": "Brief English explanation"}
   ],
   "elliottWave": {
-    "currentWave": "موج فعلی (مثلاً موج ۳ صعودی)",
-    "position": "موقعیت در چرخه (ابتدایی/میانی/پایانی)",
-    "nextMove": "حرکت بعدی مورد انتظار",
+    "currentWave": "Current wave (e.g., wave 3 bullish)",
+    "position": "Position in cycle (beginning/middle/end)",
+    "nextMove": "Expected next movement",
     "confidence": 0.0-1.0,
-    "description": "توضیح مختصر فارسی"
+    "description": "Brief English explanation"
   } | null
 }`;
 }

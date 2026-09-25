@@ -133,9 +133,9 @@ export function validatePricesInText(
 
 /**
  * Comprehensive list of compound word fixes.
- * **Persian orthography standard (فرهنگستان زبان و ادب فارسی):**
- * - نیم‌فاصله (ZWNJ) is MANDATORY for compound words (کوتاه‌مدت, نشان‌دهنده, انجام‌شده)
- * - Regular space is used for separate words (نقطه ورود, فشار خرید, حدّ ضرر)
+ * **Persian orthography standard:**
+ * - ZWNJ (Zero Width Non-Joiner) is MANDATORY for compound words (e.g., کوتاه‌مدت, نشان‌دهنده, انجام‌شده)
+ * - Regular space is used for separate words (e.g., نقطه ورود, فشار خرید, حدّ ضرر)
  * Each entry: [regex for wrong form, correct form]
  */
 const COMPOUND_WORD_FIXES: [RegExp, string][] = [
@@ -267,8 +267,7 @@ const STUCK_WORDS: [RegExp, string][] = [
 ];
 
 /**
- * Fix ZWNJ (نیم‌فاصله) spacing according to Persian orthography standards
- * (فرهنگستان زبان و ادب فارسی).
+ * Fix ZWNJ (Zero Width Non-Joiner) spacing according to Persian orthography standards
  *
  * Two categories of fixes:
  * 1. Compound words that REQUIRE ZWNJ — convert regular space to ZWNJ
@@ -347,7 +346,7 @@ function fixZwnjSpacing(text: string): string {
  * Fix Persian text quality issues in AI-generated output.
  *
  * Applies 5 categories of fixes:
- * 1. **ZWNJ spacing** — Correct نیم‌فاصله usage per Persian orthography standards
+ * 1. **ZWNJ spacing** — Correct ZWNJ usage per Persian orthography standards
  *    (فرهنگستان زبان و ادب فارسی): compound words get ZWNJ, separate words get space
  * 2. **Stuck words** — Split incorrectly concatenated words (e.g. کوتاهمدت → کوتاه‌مدت)
  * 3. **Mixed Persian-English** — Replace hybrid words (e.g. بولیnger → بولینگر)
@@ -464,10 +463,6 @@ function fixNumberDirection(text: string): string {
  * Performs the following cleanups:
  * - Removes Chinese/CJK characters (often leaked by multilingual models)
  * - Strips internal code references: SC###, R###, MA###, DI+/DI-
- * - Replaces English technical acronyms with Persian equivalents:
- *   RSI → شاخص قدرت نسبی, MACD → واگراف هیستوگرام, MFI → شاخص جریان نقدی,
- *   CCI → شاخص کانال کالا, ADX → شاخص شدت روند, ATR → دامنه تلواتی,
- *   SAR → حمایت پویا, OBV → جریان تجمعی حجم
  * - Removes R² = N statistical artifacts
  * - Fixes double spaces and trims whitespace
  *

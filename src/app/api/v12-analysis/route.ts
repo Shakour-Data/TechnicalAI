@@ -482,10 +482,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: isTimeout
-          ? `زمان پاسخگویی به پایان رسید (${elapsed / 1000}s). لطفاً دوباره تلاش کنید.`
+          ? `Response timed out (${elapsed / 1000}s). Please try again.`
           : is429
-          ? 'درخواست‌ها زیاد است. لطفاً ۱۰ ثانیه صبر کنید و دوباره تلاش کنید.'
-          : 'خطا در تولید تحلیل هوشمند. لطفاً دوباره تلاش کنید.',
+          ? 'Too many requests. Please wait 10 seconds and try again.'
+          : 'Error generating smart analysis. Please try again.',
         retryAfter: isTimeout ? 3 : is429 ? 10 : 5,
       },
       { status: 503 },
