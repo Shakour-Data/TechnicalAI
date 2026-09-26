@@ -195,7 +195,9 @@ function ema(values: number[], period: number): number {
 
 /** Fibonacci & derived ratios used in harmonic pattern detection. */
 const PHI = 0.618;       // φ (golden ratio conjugate)
+const PHI_618 = 0.618;   // φ (for clarity in harmonic patterns)
 const PHI_EXT = 1.618;   // φ extended (1/φ)
+const PHI_1618 = 1.618;  // φ extended (for clarity in harmonic patterns)
 const PHI_386 = 0.382;   // 1 − φ
 const PHI_786 = 0.786;   // √φ
 const PHI_886 = 0.886;   // √(φ × 0.618 + φ)
@@ -2593,7 +2595,7 @@ function computeSchoolScores(classic: PatternResult[], harmonic: PatternResult[]
   };
 }
 
-// ─── Main Detection Function ────────────────────────────────────────────────
+// ─── Main Detection Function ────────────────────────────────────────
 
 /**
  * Main entry point — scan OHLCV data for all technical analysis patterns.

@@ -14,6 +14,9 @@ import {
   Legend,
   Filler,
   Tooltip,
+  BarController,
+  BarElement,
+  CategoryScale,
 } from "chart.js";
 import "chartjs-adapter-date-fns";
 import {
@@ -48,11 +51,14 @@ import {
   BarChart3,
   LineChart,
   Zap,
-  RefreshCw,
   Download,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import { formatPriceFa } from "@/lib/format-price";
-import { toPersianDigits } from "@/lib/jalali";
+import { toast } from "@/hooks/use-toast";
 
 Chart.register(
   LineController,
@@ -63,25 +69,98 @@ Chart.register(
   Title,
   Legend,
   Filler,
-  Tooltip
+  Tooltip,
+  BarController,
+  BarElement,
+  CategoryScale
 );
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
 
 interface ForecastPoint {
   date: string;
+  session: number;
   value: number;
-  upperBound?: number;
   lowerBound?: number;
+  upperBound?: number;
+  change_pct?: number;
 }
 
-interface AnalysisResult {
-  model: string;
-  forecast: ForecastPoint[];
-  metrics: {
-    mae?: number;
-    rmse?: number;
-    mape?: number;
-    r2?: number;
+interface ModelForecast {
+  model_name: string;
+  cv_r2: number;
+  cv_rmse_pct: number;
+  predictions: ForecastPoint[];
+}
+
+interface EnsemblePrediction {
+  session: number;
+  price: number;
+  change_pct: number;
+  lower: number;
+  upper: number;
+}
+
+interface MLForecastResponse {
+  status: string;
+  symbol: string | null;
+  training_samples: number;
+  features_count: number;
+  forecasts: Record<string, ModelForecast>;
+  ensemble: {
+    model_name: string;
+    weights: Record<string, number>;
+    predictions: EnsemblePrediction[];
   };
+  feature_importance?: Record<string, number>;
+  fallback?: boolean;
+}
+
+interface DecompositionData {
+  trend: number[];
+  seasonal: number[];
+  residual: number[];
+  window: number;
+  method: string;
+}
+
+interface VolatilityData {
+  annualized_volatility: number;
+  regime: "low" | "medium" | "high";
+  rolling_volatility: number[];
+  volatility_quantiles: { q33: number; q66: number };
+}
+
+interface TrendData {
+  direction: "bullish" | "bearish" | "neutral";
+  strength: number;
+  short_ma: number[];
+  long_ma: number[];
+  crossovers: number;
+}
+
+interface SeasonalityData {
+  has_seasonality: boolean;
+  seasonal_strength: number;
+  period: number | null;
+  method: string;
+}
+
+interface DetailedAnalysisResponse {
+  id: string;
+  symbol: string;
+  status: string;
+  analysis_type: string;
+  candles_used: number;
+  date_range: string[];
+  forecast: MLForecastResponse;
+  decomposition: DecompositionData;
+  volatility: VolatilityData;
+  trend: TrendData;
+  seasonality: SeasonalityData;
+  generated_at: string;
 }
 
 interface TimeSeriesPanelProps {
@@ -91,139 +170,47 @@ interface TimeSeriesPanelProps {
   priceDecimals?: number;
 }
 
-const MODELS = ["arima", "sarima", "ets"] as const;
-type ModelName = typeof MODELS[number];
+type ModelName = "rf" | "xgboost" | "lightgbm" | "gbr" | "svr" | "ensemble";
+type AnalysisMode = "quick" | "detailed";
 
-function mean(arr: number[]): number {
-  return arr.reduce((s, v) => s + v, 0) / arr.length;
-}
-
-function stdDev(arr: number[]): number {
-  const m = mean(arr);
-  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
-}
-
-function arimaFit(series: number[]): { residuals: number[]; forecast: number[] } {
-  const n = series.length;
-  if (n < 5) return { residuals: [], forecast: [] };
-
-  const diffs = series.slice(1).map((v, i) => v - series[i]);
-  const mu = mean(diffs);
-
-  let num = 0, den = 0;
-  for (let i = 1; i < diffs.length; i++) {
-    num += (diffs[i] - mu) * (diffs[i - 1] - mu);
-    den += (diffs[i - 1] - mu) ** 2;
-  }
-  const phi = den !== 0 ? Math.max(-0.9, Math.min(0.9, num / den)) : 0;
-
-  const residuals = diffs.map((d, i) => {
-    if (i === 0) return d - mu;
-    return d - (mu + phi * (diffs[i - 1] - mu));
-  });
-
-  const forecastSteps = 30;
-  const forecast: number[] = [];
-  let pred = series[n - 1];
-  for (let i = 0; i < forecastSteps; i++) {
-    pred = pred + mu + phi * (diffs[diffs.length - 1] - mu);
-    forecast.push(pred);
-  }
-
-  return { residuals, forecast };
-}
-
-function etsForecast(series: number[], alpha: number = 0.3, steps: number = 30): number[] {
-  if (series.length < 2) return new Array(steps).fill(series[0] || 0);
-  let level = series[0];
-  for (let i = 0; i < series.length; i++) {
-    level = alpha * series[i] + (1 - alpha) * level;
-  }
-  return new Array(steps).fill(level);
-}
-
-function linearTrendForecast(series: number[], steps: number = 30): { forecast: number[]; slope: number; intercept: number } {
-  const n = series.length;
-  if (n < 2) return { forecast: new Array(steps).fill(series[0] || 0), slope: 0, intercept: series[0] || 0 };
-
-  const xMean = (n - 1) / 2;
-  const yMean = mean(series);
-
-  let num = 0, den = 0;
-  for (let i = 0; i < n; i++) {
-    num += (i - xMean) * (series[i] - yMean);
-    den += (i - xMean) ** 2;
-  }
-  const slope = den !== 0 ? num / den : 0;
-  const intercept = yMean - slope * xMean;
-
-  const forecast: number[] = [];
-  for (let i = 0; i < steps; i++) {
-    forecast.push(intercept + slope * (n + i));
-  }
-  return { forecast, slope, intercept };
-}
-
-function isFiniteNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
-}
-
-function buildForecastWithCI(
-  pointForecast: number[],
-  residuals: number[],
-  confidence: number
-): { forecast: ForecastPoint[]; lowerBound: number[]; upperBound: number[] } {
-  const cleanResiduals = residuals.filter(isFiniteNumber);
-  const s = stdDev(cleanResiduals.length > 0 ? cleanResiduals : [0]);
-  const z = confidence === 0.99 ? 2.576 : confidence === 0.90 ? 1.645 : 1.96;
-  const margin = s * z;
-
-  const forecast: ForecastPoint[] = [];
-  const lowerBound: number[] = [];
-  const upperBound: number[] = [];
-
-  for (let i = 0; i < pointForecast.length; i++) {
-    const fv = pointForecast[i];
-    if (!isFiniteNumber(fv)) continue;
-    const mult = 1 + i * 0.05;
-    const lb = fv - margin * mult;
-    const ub = fv + margin * mult;
-    lowerBound.push(lb);
-    upperBound.push(ub);
-    forecast.push({
-      date: new Date(Date.now() + (i + 1) * 86400000).toISOString().split("T")[0],
-      value: fv,
-      lowerBound: isFiniteNumber(lb) ? lb : undefined,
-      upperBound: isFiniteNumber(ub) ? ub : undefined,
-    });
-  }
-
-  return { forecast, lowerBound, upperBound };
-}
+const ML_MODELS: Array<{ key: ModelName; label: string; color: string }> = [
+  { key: "rf", label: "Random Forest", color: "rgb(59, 130, 246)" },
+  { key: "xgboost", label: "XGBoost", color: "rgb(16, 185, 129)" },
+  { key: "lightgbm", label: "LightGBM", color: "rgb(245, 158, 11)" },
+  { key: "gbr", label: "Gradient Boosting", color: "rgb(139, 92, 246)" },
+  { key: "svr", label: "SVR", color: "rgb(239, 68, 68)" },
+  { key: "ensemble", label: "Ensemble (Weighted)", color: "rgb(236, 72, 153)" },
+];
 
 export default function TimeSeriesPanel({ symbol, candles, currentPrice, priceDecimals = 0 }: TimeSeriesPanelProps) {
   const [forecastSteps, setForecastSteps] = useState(30);
   const [confidenceLevel, setConfidenceLevel] = useState(0.95);
+  const [selectedModel, setSelectedModel] = useState<ModelName>("ensemble");
+  const [selectedModels, setSelectedModels] = useState<ModelName[]>(["rf", "xgboost", "lightgbm", "gbr"]);
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("quick");
 
-  const [analysisStatus, setAnalysisStatus] = useState<{ results: AnalysisResult[]; basic_stats: Record<string, any>; analysis_id: string } | null>(null);
+  const [mlResult, setMlResult] = useState<MLForecastResponse | null>(null);
+  const [detailedResult, setDetailedResult] = useState<DetailedAnalysisResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(null);
 
-  const [selectedModel, setSelectedModel] = useState<ModelName>("arima");
-  const chartRef = useRef<HTMLCanvasElement>(null);
-  const chartInstanceRef = useRef<Chart | null>(null);
+  const mainChartRef = useRef<HTMLCanvasElement>(null);
+  const mainChartInstanceRef = useRef<Chart | null>(null);
   const decompositionChartRef = useRef<HTMLCanvasElement>(null);
   const decompositionChartInstanceRef = useRef<Chart | null>(null);
+  const featureChartRef = useRef<HTMLCanvasElement>(null);
+  const featureChartInstanceRef = useRef<Chart | null>(null);
+  const volatilityChartRef = useRef<HTMLCanvasElement>(null);
+  const volatilityChartInstanceRef = useRef<Chart | null>(null);
 
   const cleanup = useCallback(() => {
-    if (chartInstanceRef.current) {
-      chartInstanceRef.current.destroy();
-      chartInstanceRef.current = null;
-    }
-    if (decompositionChartInstanceRef.current) {
-      decompositionChartInstanceRef.current.destroy();
-      decompositionChartInstanceRef.current = null;
-    }
+    [mainChartInstanceRef, decompositionChartInstanceRef, featureChartInstanceRef, volatilityChartInstanceRef].forEach((ref) => {
+      if (ref.current) {
+        ref.current.destroy();
+        ref.current = null;
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -237,9 +224,25 @@ export default function TimeSeriesPanel({ symbol, candles, currentPrice, priceDe
     return [];
   }, [candles]);
 
-  const runAnalysis = useCallback(() => {
-    if (candleData.length < 10) {
-      setError("حداقل ۱۰ کندل داده برای تحلیل سری زمانی نیاز است");
+  const checkMLService = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/ml-predict", { method: "GET" });
+      setServiceAvailable(resp.ok);
+      return resp.ok;
+    } catch {
+      setServiceAvailable(false);
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    checkMLService();
+  }, [checkMLService]);
+
+  const runAnalysis = useCallback(async () => {
+    if (candleData.length < 60) {
+      setError("حداقل ۶۰ کندل برای تحلیل سری زمانی نیاز است");
+      toast({ title: "خطا", description: "داده کافی نیست", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -247,102 +250,116 @@ export default function TimeSeriesPanel({ symbol, candles, currentPrice, priceDe
     cleanup();
 
     try {
-      const series = candleData;
-      const results: AnalysisResult[] = [];
-
-      // ARIMA
-      try {
-        const arima = arimaFit(series);
-        const arimaCI = buildForecastWithCI(arima.forecast, arima.residuals, confidenceLevel);
-        results.push({
-          model: "arima",
-          forecast: arimaCI.forecast,
-          metrics: { rmse: stdDev(arima.residuals) },
-        });
-      } catch (e) {
-        results.push({ model: "arima", forecast: [], metrics: {} });
-      }
-
-      // ETS
-      try {
-        const etsPred = etsForecast(series, 0.3, forecastSteps);
-        const etsResiduals = series.map((v, i) => {
-          if (i === 0) return 0;
-          return v - (0.3 * v + 0.7 * etsPred[i - 1]);
-        });
-        const etsCI = buildForecastWithCI(etsPred, etsResiduals, confidenceLevel);
-        results.push({
-          model: "ets",
-          forecast: etsCI.forecast,
-          metrics: { rmse: stdDev(etsResiduals) },
-        });
-      } catch (e) {
-        results.push({ model: "ets", forecast: [], metrics: {} });
-      }
-
-      // Linear Trend (displayed as SARIMA)
-      try {
-        const trend = linearTrendForecast(series, forecastSteps);
-        const trendResiduals = series.map((v, i) => v - (trend.intercept + trend.slope * i));
-        const trendCI = buildForecastWithCI(trend.forecast, trendResiduals, confidenceLevel);
-        results.push({
-          model: "sarima",
-          forecast: trendCI.forecast,
-          metrics: { rmse: stdDev(trendResiduals) },
-        });
-      } catch (e) {
-        results.push({ model: "sarima", forecast: [], metrics: {} });
-      }
-
-      const basicStats = {
-        mean: mean(series),
-        std: stdDev(series),
-        min: Math.min(...series),
-        max: Math.max(...series),
-        current_price: series[series.length - 1],
-        volatility: stdDev(series) / mean(series),
+      const payload: Record<string, unknown> = {
+        candles: candles,
+        sessions: forecastSteps,
+        models: selectedModels,
       };
 
-      setAnalysisStatus({
-        analysis_id: `tsa_${symbol}_${Date.now()}`,
-        results,
-        basic_stats: basicStats,
-      });
+      let response;
+      if (analysisMode === "detailed") {
+        // For detailed analysis, call the backend time series service
+        response = await fetch("/api/analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol, type: "time_series", horizon: forecastSteps }),
+        });
+      } else {
+        response = await fetch("/api/ml-predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (analysisMode === "detailed" && data.status === "completed") {
+        setDetailedResult(data);
+        setMlResult(data.forecast);
+      } else {
+        setMlResult(data);
+        setDetailedResult(null);
+      }
 
       setTimeout(() => {
-        renderMainChart(results);
+        renderMainChart(data);
+        if (data.feature_importance && Object.keys(data.feature_importance).length > 0) {
+          renderFeatureChart(data.feature_importance);
+        }
       }, 100);
+
+      toast({ title: "موفق", description: "تحلیل سری زمانی انجام شد" });
     } catch (err: any) {
-      setError(err.message || "تحلیل ناموفق بود");
+      const msg = err?.message || "تحلیل ناموفق بود";
+      setError(msg);
+      toast({ title: "خطا", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [candleData, symbol, forecastSteps, confidenceLevel, cleanup]);
+  }, [candleData, candles, symbol, forecastSteps, selectedModels, analysisMode, cleanup]);
 
   // Auto-run when data is available
   useEffect(() => {
-    if (candleData.length > 10) {
-      runAnalysis();
+    if (candleData.length >= 60 && serviceAvailable !== false) {
+      const timer = setTimeout(() => runAnalysis(), 500);
+      return () => clearTimeout(timer);
     }
-  }, [candleData, symbol]);
+  }, [candleData, symbol, runAnalysis, serviceAvailable]);
 
-  const renderMainChart = (results: AnalysisResult[]) => {
-    if (!chartRef.current) return;
-    if (chartInstanceRef.current) {
-      chartInstanceRef.current.destroy();
+  const renderMainChart = (data: MLForecastResponse | DetailedAnalysisResponse) => {
+    if (!mainChartRef.current) return;
+    if (mainChartInstanceRef.current) {
+      mainChartInstanceRef.current.destroy();
     }
 
-    const result = results.find((r) => r.model === selectedModel) || results[0];
-    if (!result || !result.forecast.length) return;
+    const forecasts = data.forecasts || (data.ensemble ? { ensemble: data.ensemble as any } : {});
+    let forecast: ForecastPoint[] = [];
+    let modelName = "";
+    let color = "rgb(59, 130, 246)";
 
-    const forecast = result.forecast;
+    if (selectedModel === "ensemble" && data.ensemble?.predictions) {
+      forecast = data.ensemble.predictions.map((p, i) => ({
+        date: new Date(Date.now() + (i + 1) * 86400000).toISOString().split("T")[0],
+        session: i + 1,
+        value: p.price,
+        lowerBound: p.lower,
+        upperBound: p.upper,
+        change_pct: p.change_pct,
+      }));
+      modelName = "Ensemble";
+      color = "rgb(236, 72, 153)";
+    } else {
+      const modelKey = selectedModel;
+      const modelForecast = forecasts[modelKey];
+      if (modelForecast?.predictions) {
+        forecast = modelForecast.predictions.map((p, i) => ({
+          date: new Date(Date.now() + (i + 1) * 86400000).toISOString().split("T")[0],
+          session: i + 1,
+          value: p.price,
+          lowerBound: p.lower,
+          upperBound: p.upper,
+          change_pct: p.change_pct,
+        }));
+        modelName = modelForecast.model_name;
+        const modelDef = ML_MODELS.find((m) => m.key === modelKey);
+        color = modelDef?.color || "rgb(59, 130, 246)";
+      }
+    }
+
+    if (!forecast.length) return;
+
     const labels = forecast.map((p) => p.date);
-
     const dataset: any = {
-      label: `${selectedModel.toUpperCase()} Forecast`,
+      label: `${modelName} Forecast`,
       data: forecast.map((p) => p.value),
-      borderColor: "rgb(59, 130, 246)",
-      backgroundColor: "rgba(59, 130, 246, 0.1)",
+      borderColor: color,
+      backgroundColor: color.replace("rgb", "rgba").replace(")", ", 0.1)"),
       borderWidth: 2,
       pointRadius: 1,
       tension: 0.3,
@@ -352,9 +369,11 @@ export default function TimeSeriesPanel({ symbol, candles, currentPrice, priceDe
     if (forecast[0].upperBound && forecast[0].lowerBound) {
       dataset.upperBound = forecast.map((p) => p.upperBound);
       dataset.lowerBound = forecast.map((p) => p.lowerBound);
+      dataset.fill = "-1";
+      dataset.backgroundColor = color.replace("rgb", "rgba").replace(")", ", 0.05)");
     }
 
-    const data: ChartData<any, any> = {
+    const chartData: ChartData<"line"> = {
       labels,
       datasets: [dataset],
     };
@@ -365,7 +384,7 @@ export default function TimeSeriesPanel({ symbol, candles, currentPrice, priceDe
       plugins: {
         title: {
           display: true,
-          text: `${symbol} - ${selectedModel.toUpperCase()} Forecast (${forecast.length} steps)`,
+          text: `${symbol} - ${modelName} Forecast (${forecast.length} steps)`,
         },
         legend: { display: true },
         tooltip: { mode: "index", intersect: false },
@@ -380,25 +399,160 @@ export default function TimeSeriesPanel({ symbol, candles, currentPrice, priceDe
           grid: { color: "rgba(0,0,0,0.05)" },
         },
       },
-      interaction: {
-        mode: "nearest",
-        axis: "x",
-        intersect: false,
-      },
+      interaction: { mode: "nearest", axis: "x", intersect: false },
     };
 
-    chartInstanceRef.current = new Chart(chartRef.current, {
+    mainChartInstanceRef.current = new Chart(mainChartRef.current, { type: "line", data: chartData, options });
+  };
+
+  const renderDecompositionChart = () => {
+    if (!decompositionChartRef.current || !detailedResult) return;
+    if (decompositionChartInstanceRef.current) {
+      decompositionChartInstanceRef.current.destroy();
+    }
+
+    const decomp = detailedResult.decomposition;
+    if (!decomp.trend.length) return;
+
+    const labels = decomp.trend.map((_, i) => i.toString());
+
+    const chartData: ChartData<"line"> = {
+      labels,
+      datasets: [
+        { label: "Trend", data: decomp.trend, borderColor: "rgb(59, 130, 246)", backgroundColor: "rgba(59, 130, 246, 0.1)", borderWidth: 2, pointRadius: 0, fill: true },
+        { label: "Seasonal", data: decomp.seasonal, borderColor: "rgb(16, 185, 129)", backgroundColor: "rgba(16, 185, 129, 0.1)", borderWidth: 2, pointRadius: 0, fill: true },
+        { label: "Residual", data: decomp.residual, borderColor: "rgb(239, 68, 68)", backgroundColor: "rgba(239, 68, 68, 0.1)", borderWidth: 2, pointRadius: 0, fill: true },
+      ],
+    };
+
+    decompositionChartInstanceRef.current = new Chart(decompositionChartRef.current, {
       type: "line",
-      data,
-      options,
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { title: { display: true, text: "Decomposition (Trend/Seasonal/Residual)" }, legend: { display: true } },
+        scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(0,0,0,0.05)" } } },
+      },
     });
   };
 
-  const result = analysisStatus;
-  const activeResult = result?.results.find((r) => r.model === selectedModel) || result?.results[0];
+  const renderFeatureChart = (featureImportance: Record<string, number>) => {
+    if (!featureChartRef.current) return;
+    if (featureChartInstanceRef.current) {
+      featureChartInstanceRef.current.destroy();
+    }
+
+    const sorted = Object.entries(featureImportance).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    const labels = sorted.map(([k]) => k);
+    const values = sorted.map(([, v]) => v);
+
+    const chartData: ChartData<"bar"> = {
+      labels,
+      datasets: [{ label: "Feature Importance", data: values, backgroundColor: "rgba(59, 130, 246, 0.6)", borderColor: "rgb(59, 130, 246)", borderWidth: 1 }],
+    };
+
+    featureChartInstanceRef.current = new Chart(featureChartRef.current, {
+      type: "bar",
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: "y",
+        plugins: { title: { display: true, text: "Top 15 Feature Importance" }, legend: { display: false } },
+        scales: { x: { grid: { color: "rgba(0,0,0,0.05)" } }, y: { grid: { display: false } } },
+      },
+    });
+  };
+
+  const renderVolatilityChart = () => {
+    if (!volatilityChartRef.current || !detailedResult) return;
+    if (volatilityChartInstanceRef.current) {
+      volatilityChartInstanceRef.current.destroy();
+    }
+
+    const vol = detailedResult.volatility.rolling_volatility;
+    const labels = vol.map((_, i) => i.toString());
+    const q33 = detailedResult.volatility.volatility_quantiles.q33;
+    const q66 = detailedResult.volatility.volatility_quantiles.q66;
+
+    const chartData: ChartData<"line"> = {
+      labels,
+      datasets: [
+        { label: "Rolling Volatility", data: vol, borderColor: "rgb(245, 158, 11)", backgroundColor: "rgba(245, 158, 11, 0.1)", borderWidth: 2, pointRadius: 0, fill: true },
+        { label: "Q33", data: Array(labels.length).fill(q33), borderColor: "rgba(16, 185, 129, 0.5)", borderWidth: 1, borderDash: [5, 5], pointRadius: 0, fill: false },
+        { label: "Q66", data: Array(labels.length).fill(q66), borderColor: "rgba(239, 68, 68, 0.5)", borderWidth: 1, borderDash: [5, 5], pointRadius: 0, fill: false },
+      ],
+    };
+
+    volatilityChartInstanceRef.current = new Chart(volatilityChartRef.current, {
+      type: "line",
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { title: { display: true, text: `Volatility Regime: ${detailedResult.volatility.regime.toUpperCase()}` }, legend: { display: true } },
+        scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(0,0,0,0.05)" } } },
+      },
+    });
+  };
+
+  useEffect(() => {
+    if (detailedResult) {
+      renderDecompositionChart();
+      renderVolatilityChart();
+    }
+  }, [detailedResult]);
+
+  useEffect(() => {
+    if (mlResult) {
+      renderMainChart(mlResult);
+      if (mlResult.feature_importance && Object.keys(mlResult.feature_importance).length > 0) {
+        renderFeatureChart(mlResult.feature_importance);
+      }
+    }
+  }, [mlResult, selectedModel]);
+
+  const result = mlResult || detailedResult;
+  const activeForecast = result?.forecast?.predictions || result?.ensemble?.predictions || [];
+  const activeModelName = selectedModel === "ensemble" ? "Ensemble" : selectedModel;
+
+  const featureImportance = mlResult?.feature_importance || {};
+  const volatility = detailedResult?.volatility;
+  const trend = detailedResult?.trend;
+  const seasonality = detailedResult?.seasonality;
 
   const decimals = priceDecimals ?? 0;
-const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
+  const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
+
+  const exportCSV = useCallback(() => {
+    if (!activeForecast.length) return;
+    const rows = ["session,date,price,change_pct,lower,upper"];
+    activeForecast.forEach((p) => {
+      rows.push(`${p.session},${p.date || ""},${p.value},${p.change_pct || ""},${p.lowerBound || ""},${p.upperBound || ""}`);
+    });
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${symbol}_forecast.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "دانلود", description: "فایل CSV دانلود شد" });
+  }, [activeForecast, symbol]);
+
+  const exportJSON = useCallback(() => {
+    if (!result) return;
+    const data = analysisMode === "detailed" ? detailedResult : mlResult;
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${symbol}_analysis.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "دانلود", description: "فایل JSON دانلود شد" });
+  }, [result, detailedResult, mlResult, analysisMode]);
 
   return (
     <div className="space-y-4">
@@ -410,23 +564,64 @@ const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
             تحلیل سری زمانی
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            پیش‌بینی با ARIMA، ETS و رگرسیون خطی برای {symbol}
+            پیش‌بینی ML (RF/XGB/LightGBM/GBR/SVR) + Ensemble برای {symbol}
           </p>
         </div>
-        <Button onClick={runAnalysis} disabled={loading || candleData.length < 10} size="sm">
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-              تحلیل...
-            </>
-          ) : (
-            <>
-              <Zap className="mr-2 h-3 w-3" />
-              اجرای تحلیل
-            </>
+        <div className="flex items-center gap-2">
+          {serviceAvailable === false && (
+            <Badge variant="destructive" className="flex items-center gap-1">
+              <XCircle className="h-3 w-3" />
+              سرویس ML در دسترس نیست
+            </Badge>
           )}
-        </Button>
+          {serviceAvailable === true && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              سرویس ML فعال
+            </Badge>
+          )}
+          <Button onClick={runAnalysis} disabled={loading || candleData.length < 60} size="sm">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                تحلیل...
+              </>
+            ) : (
+              <>
+                <Zap className="mr-2 h-3 w-3" />
+                اجرای تحلیل
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {/* Analysis Mode */}
+      <Card>
+        <CardHeader>
+          <CardTitle>حالت تحلیل</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              variant={analysisMode === "quick" ? "default" : "outline"}
+              onClick={() => setAnalysisMode("quick")}
+              className="justify-start"
+            >
+              <Clock className="h-4 w-4 ml-2" />
+              سریع (Quick) — فقط Ensemble
+            </Button>
+            <Button
+              variant={analysisMode === "detailed" ? "default" : "outline"}
+              onClick={() => setAnalysisMode("detailed")}
+              className="justify-start"
+            >
+              <BarChart3 className="h-4 w-4 ml-2" />
+              دقیق (Detailed) — تحلیل کامل
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Configuration */}
       <Card>
@@ -447,13 +642,9 @@ const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
                 onChange={(e) => setForecastSteps(Number(e.target.value))}
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="ts-conf">سطح اطمینان</Label>
-              <Select
-                value={String(confidenceLevel)}
-                onValueChange={(value) => setConfidenceLevel(Number(value))}
-              >
+              <Select value={String(confidenceLevel)} onValueChange={(value) => setConfidenceLevel(Number(value))}>
                 <SelectTrigger id="ts-conf">
                   <SelectValue />
                 </SelectTrigger>
@@ -464,21 +655,43 @@ const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="ts-model">مدل</Label>
+              <Label htmlFor="ts-model">مدل‌ها</Label>
               <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as ModelName)}>
                 <SelectTrigger id="ts-model">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="arima">ARIMA</SelectItem>
-                  <SelectItem value="sarima">رگرسیون خطی</SelectItem>
-                  <SelectItem value="ets">ETS</SelectItem>
+                  {ML_MODELS.map((m) => (
+                    <SelectItem key={m.key} value={m.key}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
+          {analysisMode === "quick" && (
+            <div className="mt-4">
+              <Label>مدل‌های فعال برای Ensemble</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {ML_MODELS.slice(0, 4).map((m) => (
+                  <Badge
+                    key={m.key}
+                    variant={selectedModels.includes(m.key) ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setSelectedModels((prev) =>
+                        prev.includes(m.key) ? prev.filter((x) => x !== m.key) : [...prev, m.key]
+                      );
+                    }}
+                  >
+                    {m.label}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -486,7 +699,10 @@ const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
       {error && (
         <Card className="border-red-500">
           <CardContent className="pt-6">
-            <p className="text-red-600 font-medium">خطا: {error}</p>
+            <p className="text-red-600 font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              خطا: {error}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -500,144 +716,244 @@ const fmtPrice = (n: number): string => formatPriceFa(n, decimals);
               <div className="flex items-center gap-3">
                 <TrendingUp className="h-5 w-5 text-green-600" />
                 <span className="text-lg font-medium">تحلیل کامل شد</span>
-                <Badge variant="secondary">{result.results.length} مدل</Badge>
+                <Badge variant="secondary">{Object.keys(result.forecasts || {}).length} مدل</Badge>
+                <Badge variant={result.fallback ? "destructive" : "default"}>
+                  {result.fallback ? "Fallback" : "ML Service"}
+                </Badge>
                 <span className="text-xs text-muted-foreground font-mono ml-auto">
-                  {result.analysis_id}
+                  Samples: {result.training_samples} | Features: {result.features_count}
                 </span>
               </div>
             </CardContent>
           </Card>
 
+          {/* Detailed Stats */}
+          {detailedResult && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Regime Volatilit</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{volatility?.annualized_volatility.toFixed(2)}%</div>
+                  <Badge variant={volatility?.regime === "high" ? "destructive" : volatility?.regime === "medium" ? "default" : "secondary"}>
+                    {volatility?.regime}
+                  </Badge>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Trend</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold capitalize">{trend?.direction}</div>
+                  <div className="text-xs text-muted-foreground">Strength: {trend?.strength}</div>
+                  <div className="text-xs text-muted-foreground">Crossovers: {trend?.crossovers}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Seasonality</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{seasonality?.has_seasonality ? "Yes" : "No"}</div>
+                  <div className="text-xs text-muted-foreground">Strength: {seasonality?.seasonal_strength}</div>
+                  <div className="text-xs text-muted-foreground">Period: {seasonality?.period}</div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Model Tabs */}
-          <Tabs
-            defaultValue={selectedModel}
-            value={selectedModel}
-            onValueChange={(value) => {
-              setSelectedModel(value as ModelName);
-              setTimeout(() => {
-                renderMainChart(result.results);
-              }, 100);
-            }}
-          >
-            <TabsList>
-              {result.results.map((r) => (
-                <TabsTrigger key={r.model} value={r.model}>
-                  {r.model.toUpperCase()}
+          <Tabs value={selectedModel} onValueChange={(value) => setSelectedModel(value as ModelName)}>
+            <TabsList className="flex-wrap">
+              {ML_MODELS.map((m) => (
+                <TabsTrigger key={m.key} value={m.key}>
+                  {m.label}
                 </TabsTrigger>
               ))}
             </TabsList>
 
-            {result.results.map((r) => (
-              <TabsContent key={r.model} value={r.model} className="space-y-6">
-                {/* Main Chart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <LineChart className="h-5 w-5" />
-                      {r.model.toUpperCase()} Forecast
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <canvas ref={chartRef} />
-                    </div>
-                  </CardContent>
-                </Card>
+            {ML_MODELS.map((m) => {
+              const modelForecast = result?.forecasts?.[m.key];
+              const predictions = modelForecast?.predictions || [];
+              const cvR2 = modelForecast?.cv_r2 ?? 0;
+              const cvRmse = modelForecast?.cv_rmse_pct ?? 0;
 
-                {/* Metrics */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              return (
+                <TabsContent key={m.key} value={m.key} className="space-y-6">
                   <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-sm text-muted-foreground">MAE</div>
-                      <div className="text-2xl font-bold mt-1">
-                        {r.metrics.mae?.toFixed(4) || "N/A"}
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <LineChart className="h-5 w-5" />
+                        {m.label} Forecast
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[300px]">
+                        <canvas ref={mainChartRef} />
                       </div>
                     </CardContent>
                   </Card>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-sm text-muted-foreground">RMSE</div>
-                      <div className="text-2xl font-bold mt-1">
-                        {r.metrics.rmse?.toFixed(4) || "N/A"}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-sm text-muted-foreground">MAPE</div>
-                      <div className="text-2xl font-bold mt-1">
-                        {r.metrics.mape?.toFixed(2) ? `${r.metrics.mape.toFixed(2)}%` : "N/A"}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-sm text-muted-foreground">R²</div>
-                      <div className="text-2xl font-bold mt-1">
-                        {r.metrics.r2?.toFixed(4) || "N/A"}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-            ))}
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-sm text-muted-foreground">R² (CV)</div>
+                        <div className="text-2xl font-bold mt-1">{cvR2.toFixed(4)}</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-sm text-muted-foreground">RMSE %</div>
+                        <div className="text-2xl font-bold mt-1">{cvRmse.toFixed(2)}%</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-sm text-muted-foreground">Direction</div>
+                        <div className="text-2xl font-bold mt-1 capitalize">
+                          {predictions.length > 0 && predictions[0].change_pct !== undefined
+                            ? predictions[0].change_pct > 0
+                              ? "up"
+                              : "down"
+                            : "N/A"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-sm text-muted-foreground">Last Predicted</div>
+                        <div className="text-2xl font-bold mt-1 font-mono">
+                          {predictions.length > 0 ? fmtPrice(predictions[predictions.length - 1].value) : "N/A"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              );
+            })}
           </Tabs>
 
-          {/* Stats */}
-          {result.basic_stats && (
+          {/* Feature Importance */}
+          {featureImportance && Object.keys(featureImportance).length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>آمار توصیفی</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Feature Importance (Top 15)
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[200px]">
-                  <pre className="text-sm">
-                    {JSON.stringify(result.basic_stats, null, 2)}
-                  </pre>
-                </ScrollArea>
+                <div className="h-[300px]">
+                  <canvas ref={featureChartRef} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Decomposition */}
+          {detailedResult && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LineChart className="h-5 w-5" />
+                  STL Decomposition (Trend / Seasonal / Residual)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <canvas ref={decompositionChartRef} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Volatility Chart */}
+          {detailedResult && volatility && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Volatility Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[200px]">
+                  <canvas ref={volatilityChartRef} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ensemble Weights */}
+          {mlResult?.ensemble?.weights && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ensemble Weights</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(mlResult.ensemble.weights).map(([model, weight]) => (
+                    <Badge key={model} variant="outline" className="text-sm">
+                      {model}: {(weight * 100).toFixed(1)}%
+                    </Badge>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
 
           {/* Forecast Table */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Download className="h-5 w-5" />
                 داده‌های پیش‌بینی
               </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={exportCSV}>
+                  <Download className="h-4 w-4 ml-1" />
+                  CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportJSON}>
+                  <Download className="h-4 w-4 ml-1" />
+                  JSON
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-                <ScrollArea className="h-[300px]">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-4">تاریخ</th>
-                        <th className="text-right py-2 px-4 font-mono">پیش‌بینی</th>
-                        {activeResult?.forecast?.length && isFiniteNumber(activeResult.forecast[0].upperBound) && (
+              <ScrollArea className="h-[300px]">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-4">Session</th>
+                      <th className="text-right py-2 px-4 font-mono">پیش‌بینی</th>
+                      <th className="text-right py-2 px-4 font-mono">Δ%</th>
+                      {activeForecast.length && isFiniteNumber(activeForecast[0].lowerBound) && (
+                        <>
+                          <th className="text-right py-2 px-4 font-mono">حد بالا</th>
+                          <th className="text-right py-2 px-4 font-mono">حد پایین</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activeForecast || []).map((point, idx) => (
+                      <tr key={idx} className="border-b hover:bg-muted/50">
+                        <td className="py-2 px-4">{point.session}</td>
+                        <td className="text-right py-2 px-4 font-mono">{fmtPrice(point.value)}</td>
+                        <td className="text-right py-2 px-4 font-mono">
+                          {point.change_pct !== undefined ? `${point.change_pct.toFixed(2)}%` : "N/A"}
+                        </td>
+                        {isFiniteNumber(point.lowerBound) && isFiniteNumber(point.upperBound) && (
                           <>
-                            <th className="text-right py-2 px-4 font-mono">حد بالا</th>
-                            <th className="text-right py-2 px-4 font-mono">حد پایین</th>
+                            <td className="text-right py-2 px-4 font-mono">{fmtPrice(point.upperBound as number)}</td>
+                            <td className="text-right py-2 px-4 font-mono">{fmtPrice(point.lowerBound as number)}</td>
                           </>
                         )}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {(activeResult?.forecast || []).map((point, idx) => (
-                        <tr key={idx} className="border-b hover:bg-muted/50">
-                          <td className="py-2 px-4">{point.date}</td>
-                          <td className="text-right py-2 px-4 font-mono">{fmtPrice(point.value)}</td>
-                          {isFiniteNumber(point.upperBound) && isFiniteNumber(point.lowerBound) && (
-                            <>
-                              <td className="text-right py-2 px-4 font-mono">{fmtPrice(point.upperBound as number)}</td>
-                              <td className="text-right py-2 px-4 font-mono">{fmtPrice(point.lowerBound as number)}</td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </ScrollArea>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollArea>
             </CardContent>
           </Card>
         </>

@@ -1,6 +1,9 @@
 {
   "name": "ml-service",
+  "version": "2.0.0",
+  "description": "Unified ML Service — VDES Machine Learning + Time Series Analysis (port 3040)",
   "scripts": {
-    "dev": "while true; do python3 -u server.py; echo \"Restarting ML service in 2s...\"; sleep 2; done"
+    "start": "python3 server.py",
+    "dev": "python3 server.py"
   }
 }

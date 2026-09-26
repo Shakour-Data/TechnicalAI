@@ -48,58 +48,42 @@ for v in FEATURE_PERIODS.values():
 MAX_FEATURE_PERIOD = max(periods)
 MIN_CANDLES = max(MAX_FEATURE_PERIOD + FORWARD_DAYS + 30, 120)
 
-# Model catalog - expanded to 16+ models + ensembles
+# Model catalog - expanded to 17+ classification models + 17+ regression models + 4 baselines + 4 ensembles
 CLASSIFICATION_MODELS = [
-    'logistic_regression',
-    'linear_svc',
-    'lda',
-    'qda',
-    'random_forest_classifier',
-    'extra_trees_classifier',
-    'gradient_boosting_classifier',
-    'hist_gradient_boosting_classifier',
-    'xgb_classifier',
-    'lightgbm_classifier',
-    'catboost_classifier',
-    'ada_boost_classifier',
-    'k_neighbors_classifier',
-    'svc',
-    'mlp_classifier'
+    'logistic_regression', 'linear_svc', 'lda', 'qda',
+    'random_forest_classifier', 'extra_trees_classifier',
+    'gradient_boosting_classifier', 'hist_gradient_boosting_classifier',
+    'xgb_classifier', 'lightgbm_classifier', 'catboost_classifier',
+    'ada_boost_classifier', 'k_neighbors_classifier', 'svc', 'mlp_classifier',
+    # Online/incremental learning
+    'sgd_classifier', 'perceptron', 'passive_aggressive_classifier'
 ]
 
 REGRESSION_MODELS = [
-    'bayesian_ridge',
-    'ridge',
-    'lasso',
-    'elastic_net',
-    'huber_regressor',
-    'random_forest_regressor',
-    'extra_trees_regressor',
-    'hist_gradient_boosting_regressor',
-    'gradient_boosting_regressor',
-    'xgb_regressor',
-    'lightgbm_regressor',
-    'catboost_regressor',
-    'svr',
-    'k_neighbors_regressor',
-    'mlp_regressor'
+    'bayesian_ridge', 'ridge', 'lasso', 'elastic_net', 'huber_regressor',
+    'random_forest_regressor', 'extra_trees_regressor',
+    'hist_gradient_boosting_regressor', 'gradient_boosting_regressor',
+    'xgb_regressor', 'lightgbm_regressor', 'catboost_regressor',
+    'svr', 'k_neighbors_regressor', 'mlp_regressor',
+    # Online/incremental learning
+    'sgd_regressor', 'passive_aggressive_regressor'
 ]
 
 # Ensemble models
 ENSEMBLE_MODELS = [
-    'voting_classifier',
-    'voting_regressor',
-    'stacking_classifier',
-    'stacking_regressor'
+    'voting_classifier', 'voting_regressor',
+    'stacking_classifier', 'stacking_regressor'
 ]
 
 # Baseline models
 BASELINE_MODELS = [
-    'naive_last',
-    'drift',
-    'rolling_mean',
-    'seasonal_naive'
+    'naive_last', 'drift', 'rolling_mean', 'seasonal_naive'
 ]
+
+# Model versioning
+MODEL_VERSION = "2.0.0"
+MODEL_REGISTRY_ENABLED = True
+MODEL_REGISTRY_PATH = MODELS_DIR / "registry"
 
 # All model types (for backward compatibility)
 MODEL_TYPES = (

@@ -13,6 +13,7 @@ import VdssGraph from '@/components/tse/vdss-graph';
 import VdesAnalysis from "@/components/tse/vdes-analysis";
 import MLForecast from "@/components/tse/ml-forecast";
 import TimeSeriesPanel from "@/components/tse/time-series-panel";
+import PatternsPanel from "@/components/tse/patterns-panel";
 import HelpPage from "@/components/help-page";
 import DocsPage from "@/components/docs-page";
 import { toPersianDigits } from '@/lib/jalali';
@@ -94,6 +95,7 @@ const TGJU_CATEGORIES = new Set([
 // Sidebar items
 const SIDEBAR_ITEMS = [
   { id: 'indicators', label: 'اندیکاتورها', icon: Activity, color: 'text-cyan-400', activeBg: 'bg-cyan-400/10 border-cyan-400/20', hoverBg: 'hover:bg-cyan-400/5' },
+  { id: 'patterns', label: 'الگوهای تکنیکال', icon: Activity, color: 'text-pink-400', activeBg: 'bg-pink-400/10 border-pink-400/20', hoverBg: 'hover:bg-pink-400/5' },
   { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-400', activeBg: 'bg-amber-400/10 border-amber-400/20', hoverBg: 'hover:bg-amber-400/5' },
   { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-400', activeBg: 'bg-purple-400/10 border-purple-400/20', hoverBg: 'hover:bg-purple-400/5' },
   { id: 'forecast', label: 'پیش‌بینی ML', icon: BrainCircuit, color: 'text-violet-400', activeBg: 'bg-violet-400/10 border-violet-400/20', hoverBg: 'hover:bg-violet-400/5' },
@@ -723,6 +725,11 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                 <IndicatorsPanel ta={data.ta} instrumentCategory={data.info?.category} priceDecimals={decimals} />
               )}
 
+              {/* PANEL: Patterns */}
+              {activePanel === 'patterns' && (
+                <PatternsPanel data={data} priceDecimals={decimals} instrumentCategory={data.info?.category} />
+              )}
+
               {/* PANEL: Decision Graph */}
               {activePanel === 'graph' && (
                 <VdssGraph
@@ -1009,10 +1016,10 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
 
 {/* MAIN CONTENT */}
        <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 py-4">
-         {currentPage === 'help' && <HelpPage />}
-         {currentPage === 'docs' && <DocsPage />}
-{currentPage === 'analysis' && renderAnalysisContent()}
-        </main>
+ {currentPage === 'help' && <HelpPage />}
+           {currentPage === 'docs' && <DocsPage />}
+           {currentPage === 'analysis' && renderAnalysisContent()}
+         </main>
 
       <footer className={`mt-auto py-3 text-center text-[10px] ${data ? 'lg:mb-14' : ''}`} style={{ borderTop: `1px solid ${C.footerBorder}`, color: C.footerFg }}>
         داده‌های بورس از TSETMC (تعدیل‌شده) | داده‌های شاخص‌ها از finpy-tse | داده‌های ارز، طلا، کریپتو، فارکس، بورس جهانی از TGJU (tgju.org) — صرفاً جنبه تحلیلی دارد و توصیه سرمایه‌گذاری نیست. | v6.0

@@ -1,9 +1,0 @@
-{
-  "name": "ml-prediction-service",
-  "version": "1.0.0",
-  "description": "ML-based multi-session price forecasting microservice",
-  "scripts": {
-    "start": "python3 app.py",
-    "dev": "python3 app.py"
-  }
-}

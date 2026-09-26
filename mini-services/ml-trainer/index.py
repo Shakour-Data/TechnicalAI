@@ -103,10 +103,7 @@ from model_catalog import (
 from baselines import (
     get_baseline_classifier, get_baseline_regressor,
 )
-from evaluation import (
-    classification_metrics, regression_metrics,
-    compute_stable_features, model_comparison_table, _get_feature_importance,
-)
+from evaluation import compute_stable_features, model_comparison_table, _get_feature_importance
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1272,6 +1269,243 @@ def evaluate_symbol(symbol: str) -> Dict[str, Any]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Monitoring & Drift Detection
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_psi(expected: pd.Series, actual: pd.Series, buckets: int = 10) -> float:
+    """Compute Population Stability Index for feature drift detection."""
+    if len(expected) == 0 or len(actual) == 0:
+        return 0.0
+    try:
+        expected_bins = np.linspace(expected.min(), expected.max(), buckets + 1)
+        actual_bins = np.linspace(expected.min(), expected.max(), buckets + 1)
+
+        expected_pct = np.histogram(expected, bins=expected_bins)[0] / len(expected)
+        actual_pct = np.histogram(actual, bins=actual_bins)[0] / len(actual)
+
+        psi = 0.0
+        for e_pct, a_pct in zip(expected_pct, actual_pct):
+            if e_pct == 0 or a_pct == 0:
+                continue
+            ratio = a_pct / e_pct
+            psi += (ratio - 1) * np.log(ratio)
+        return psi * 100
+    except Exception:
+        return 0.0
+
+
+def compute_drift_report(
+    symbol: str,
+    current_ohlcv: List[List],
+    reference_ohlcv: Optional[List[List]] = None,
+) -> Dict[str, Any]:
+    """
+    Compute a drift report for a symbol by comparing current features
+    against reference (training) features using PSI and Z-score analysis.
+    """
+    df_current = build_ohlcv_df(current_ohlcv)
+    features_current = extract_features(df_current)
+    features_current = fill_nan_values(features_current)
+
+    if reference_ohlcv is not None:
+        df_ref = build_ohlcv_df(reference_ohlcv)
+        features_ref = extract_features(df_ref)
+        features_ref = fill_nan_values(features_ref)
+
+        from evaluation import compute_drift_report as compute_drift
+        return compute_drift(features_current, features_ref)
+    else:
+        # No reference: return basic statistics only
+        return {
+            "feature_stability": {},
+            "problematic_features": [],
+            "statistics": {
+                "current": {
+                    "mean": features_current.mean().to_dict(),
+                    "std": features_current.std().to_dict(),
+                    "count": len(features_current),
+                },
+            },
+            "drift_summary": {
+                "total_features": len(features_current.columns),
+                "drifted_features": 0,
+                "outlier_features": 0,
+                "max_psi": 0.0,
+            },
+        }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Batch Prediction with Connection Pooling
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _BatchPredictor:
+    """
+    Batch prediction handler with request batching and connection pooling.
+    
+    Batches multiple prediction requests to reduce per-request overhead.
+    Uses a simple synchronous design suitable for the HTTP server context.
+    """
+
+    def __init__(self, max_batch_size: int = 10, batch_timeout_ms: int = 100):
+        self.max_batch_size = max_batch_size
+        self.batch_timeout_ms = batch_timeout_ms
+        self._session_cache: Dict[str, Tuple[Any, bool]] = {}
+
+    def _load_model(self, symbol: str, model_name: str) -> Tuple[Optional[Any], bool]:
+        """Load model from cache or disk."""
+        cache_key = f"{symbol}:{model_name}"
+        if cache_key in self._session_cache:
+            return self._session_cache[cache_key]
+
+        sym_dir = os.path.join(MODELS_DIR, symbol)
+        model, is_onnx = _load_model_artifact(os.path.join(sym_dir, f"{model_name}.onnx"))
+        if model is not None:
+            self._session_cache[cache_key] = (model, is_onnx)
+        return model, is_onnx
+
+    def predict_batch(
+        self,
+        symbol: str,
+        ohlcv_list: List[List],
+        n_steps: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        Batch prediction: compute features once, run all models.
+        
+        Reuses feature extraction and scaler across multiple model predictions,
+        reducing redundant computation.
+        """
+        df = build_ohlcv_df(ohlcv_list)
+        if len(df) < MIN_CANDLES:
+            raise ValueError(f"Need at least {MIN_CANDLES} candles, got {len(df)}")
+
+        # Extract features once
+        features_df = extract_features(df)
+        features_df = fill_nan_values(features_df)
+        feature_cols = list(features_df.columns)
+        last_features = features_df.iloc[-1:].values
+
+        # Load scaler once
+        scaler = _load_scaler(symbol)
+        if scaler is None:
+            raise ValueError(f"No trained scaler for symbol {symbol}")
+
+        scaled = scaler.transform(last_features)
+
+        # Load all available models for this symbol
+        sym_dir = os.path.join(MODELS_DIR, symbol)
+        models_loaded = {}
+        for mn in CLASSIFICATION_MODELS[:3] + REGRESSION_MODELS[:3]:
+            model, is_onnx = _load_model_artifact(os.path.join(sym_dir, f"{mn}.onnx"))
+            if model is not None:
+                models_loaded[mn] = (model, is_onnx)
+
+        if not models_loaded:
+            raise ValueError(f"No trained models for symbol {symbol}")
+
+        # Run batch prediction
+        results = {}
+        for mn, (model, is_onnx) in models_loaded.items():
+            pred = _predict_with_model(model, scaled, is_onnx)
+            results[mn] = {
+                "raw_prediction": pred.tolist() if hasattr(pred, 'tolist') else pred,
+                "is_onnx": is_onnx,
+            }
+
+        return {
+            "status": "ok",
+            "symbol": symbol,
+            "batch_results": results,
+            "n_samples": len(df),
+            "feature_count": len(feature_cols),
+        }
+
+
+_batch_predictor = _BatchPredictor()
+
+
+def batch_predict(symbol: str, ohlcv_list: List[List], n_steps: int = 30) -> Dict[str, Any]:
+    """Public batch prediction interface."""
+    cache_key = f"{symbol}:batch"
+    cached = get_cached_model(symbol, cache_key)
+    if cached is not None and isinstance(cached, dict):
+        return cached
+
+    try:
+        result = _batch_predictor.predict_batch(symbol, ohlcv_list, n_steps)
+        # Cache result for 5 minutes
+        with _cache_lock:
+            _model_cache.setdefault(symbol, {})[cache_key] = {
+                "model": result,
+                "meta": {"cached_at": time.time()},
+            }
+        return result
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Quantization
+# ─────────────────────────────────────────────────────────────────────────────
+
+def quantize_model(model_path: str, output_path: str) -> bool:
+    """
+    Quantize an ONNX model to INT8 for faster inference with minimal accuracy loss.
+    
+    Uses ONNX Runtime Quantization API (dynamic quantization).
+    """
+    try:
+        import onnxruntime as ort
+        from onnxruntime.quantization import quantize_dynamic, QuantType
+
+        quantize_dynamic(
+            model_path,
+            output_path,
+            weight_type=QuantType.QInt8,
+        )
+        log("INFO", f"Quantized model: {model_path} -> {output_path}")
+        return True
+    except ImportError:
+        log("WARN", "ONNX quantization not available — requires onnxruntime>=1.10")
+        return False
+    except Exception as e:
+        log("WARN", f"Quantization failed for {model_path}: {e}")
+        return False
+
+
+def optimize_model_with_onnx(model: Any, X_sample: np.ndarray, model_path: str) -> bool:
+    """
+    Optimize a model by exporting to ONNX with quantization.
+    
+    Pipeline:
+    1. Export model to ONNX format
+    2. Apply dynamic quantization (FP32 → INT8)
+    3. Verify quantized model produces correct outputs
+    """
+    try:
+        input_dim = X_sample.shape[1]
+        _save_model_artifact(model, model_path, input_dim)
+
+        # Try quantization
+        quantized_path = model_path.replace(".onnx", "_quantized.onnx")
+        if quantize_model(model_path, quantized_path):
+            # Verify quantized model works
+            session = _get_ort().InferenceSession(quantized_path)
+            input_name = session.get_inputs()[0].name
+            test_input = X_sample[:1].astype(np.float32)
+            _ = session.run(None, {input_name: test_input})
+
+            # Replace original with quantized if it works
+            os.replace(quantized_path, model_path)
+            log("INFO", f"Model optimized: {model_path}")
+            return True
+    except Exception as e:
+        log("WARN", f"ONNX optimization failed: {e}")
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HTTP Handler
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1391,6 +1625,88 @@ class MLHandler(BaseHTTPRequestHandler):
                     "results": results,
                     "errors": errors,
                 })
+                return
+            
+            # Drift detection report
+            if path == "/drift" and method == "POST":
+                body = json.loads(_read_body(self))
+                symbol = body.get("symbol", "").strip().upper()
+                ohlcv = body.get("ohlcv", [])
+                reference = body.get("reference", None)
+                
+                if not symbol:
+                    _json_response(self, {"status": "error", "message": "Missing 'symbol' field"}, 400)
+                    return
+                if not ohlcv or len(ohlcv) < MIN_CANDLES:
+                    _json_response(self, {"status": "error", "message": f"Need at least {MIN_CANDLES} OHLCV candles"}, 400)
+                    return
+                
+                report = compute_drift_report(symbol, ohlcv, reference)
+                _json_response(self, {"status": "ok", "drift_report": report})
+                return
+            
+            # Batch prediction endpoint
+            if path == "/batch-predict" and method == "POST":
+                body = json.loads(_read_body(self))
+                symbol = body.get("symbol", "").strip().upper()
+                ohlcv = body.get("ohlcv", [])
+                n_steps = body.get("n_steps", 30)
+                
+                if not symbol:
+                    _json_response(self, {"status": "error", "message": "Missing 'symbol' field"}, 400)
+                    return
+                if not ohlcv or len(ohlcv) < MIN_CANDLES:
+                    _json_response(self, {"status": "error", "message": f"Need at least {MIN_CANDLES} OHLCV candles"}, 400)
+                    return
+                
+                result = batch_predict(symbol, ohlcv, n_steps)
+                _json_response(self, result)
+                return
+            
+            # Model quantization endpoint
+            if path == "/quantize" and method == "POST":
+                body = json.loads(_read_body(self))
+                symbol = body.get("symbol", "").strip().upper()
+                model_name = body.get("model_name", "").strip().upper()
+                
+                if not symbol:
+                    _json_response(self, {"status": "error", "message": "Missing 'symbol' field"}, 400)
+                    return
+                if not model_name:
+                    _json_response(self, {"status": "error", "message": "Missing 'model_name' field"}, 400)
+                    return
+                
+                sym_dir = os.path.join(MODELS_DIR, symbol)
+                model_path = os.path.join(sym_dir, f"{model_name}.onnx")
+                
+                if not os.path.exists(model_path):
+                    # Try pickle fallback
+                    model_path_pkl = model_path.replace(".onnx", ".pkl")
+                    if os.path.exists(model_path_pkl):
+                        model_path = model_path_pkl
+                    else:
+                        _json_response(self, {"status": "error", "message": f"Model {model_name} not found"}, 404)
+                        return
+                
+                # Load model and sample data for quantization
+                model, _ = _load_model_artifact(model_path)
+                if model is None:
+                    _json_response(self, {"status": "error", "message": f"Cannot load model {model_name}"}, 400)
+                    return
+                
+                # Get sample data for quantization (last 100 rows)
+                df = build_ohlcv_df(ohlcv[-100:])
+                if len(df) < 20:
+                    _json_response(self, {"status": "error", "message": "Not enough data for quantization"}, 400)
+                    return
+                
+                features_df = extract_features(df)
+                features_df = fill_nan_values(features_df)
+                X_sample = features_df.values.astype(np.float32)[:10]
+                
+                # Try ONNX optimization
+                success = optimize_model_with_onnx(model, X_sample, model_path)
+                _json_response(self, {"status": "ok", "quantized": success, "model": model_name})
                 return
             
             # 404

@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from api.models.database import SessionLocal
 from api.models.analysis import Analysis, AnalysisResult
+from api.services.timeseries_analysis_service import TimeSeriesAnalysisService
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +19,16 @@ class AnalysisService:
     def __init__(self):
         self.ollama_base_url = 'http://localhost:11434'
         self.tse_base_url = 'http://localhost:3031'
+        self.ts_service = TimeSeriesAnalysisService()
 
     async def analyze(self, symbol: str, analysis_type: str = "technical", prompt: Optional[str] = None,
-                      model: Optional[str] = None) -> Dict[str, Any]:
+                      model: Optional[str] = None, horizon: int = 30, model_keys: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
-            # Generate analysis ID
+            if analysis_type == "time_series":
+                return await self._run_timeseries_analysis(symbol, horizon, model_keys)
+            
             analysis_id = f"analysis_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{symbol}"
             
-            # Create analysis record
             analysis = Analysis(
                 id=analysis_id,
                 symbol=symbol,
@@ -41,7 +44,6 @@ class AnalysisService:
                 db.commit()
                 db.refresh(analysis)
             
-            # Run analysis in background
             asyncio.create_task(self._run_analysis_task(analysis_id, symbol, analysis_type, prompt, model))
             
             return {"id": analysis_id, "status": "completed", "message": "Analysis started"}
@@ -49,6 +51,40 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"Error starting analysis for {symbol}: {e}")
             raise
+
+    async def _run_timeseries_analysis(self, symbol: str, horizon: int, model_keys: Optional[List[str]]) -> Dict[str, Any]:
+        analysis_id = f"tsa_{symbol}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        
+        try:
+            result = await self.ts_service.analyze(symbol, analysis_type="time_series", horizon=horizon, model_keys=model_keys)
+            result["id"] = analysis_id
+            result["analysis_type"] = "time_series"
+            return result
+        except Exception as e:
+            logger.error(f"Time series analysis failed for {symbol}: {e}")
+            return {
+                "id": analysis_id,
+                "symbol": symbol,
+                "status": "failed",
+                "error": str(e),
+                "analysis_type": "time_series"
+            }
+
+    async def analyze_detailed(self, symbol: str, horizon: int = 30) -> Dict[str, Any]:
+        analysis_id = f"tsa_detailed_{symbol}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        
+        try:
+            result = await self.ts_service.analyze_with_detailed_decomposition(symbol, horizon)
+            result["id"] = analysis_id
+            return result
+        except Exception as e:
+            logger.error(f"Detailed analysis failed for {symbol}: {e}")
+            return {
+                "id": analysis_id,
+                "symbol": symbol,
+                "status": "failed",
+                "error": str(e)
+            }
 
     async def _run_analysis_task(self, analysis_id: str, symbol: str, analysis_type: str, 
                                 prompt: Optional[str], model: Optional[str]):
@@ -63,23 +99,39 @@ class AnalysisService:
                 analysis.status = "running"
                 db.commit()
                 
-                # Generate mock analysis results based on symbol and type
-                result_data = await self._generate_analysis_result(symbol, analysis_type)
+                if analysis_type == "time_series":
+                    result = await self.ts_service.analyze(symbol, analysis_type="time_series")
+                else:
+                    result_data = await self._generate_analysis_result(symbol, analysis_type)
                 
-                # Create analysis result
-                for metric_name, metric_value in result_data.items():
-                    analysis_result = AnalysisResult(
-                        id=f"{analysis_id}_{metric_name}",
-                        analysis_id=analysis_id,
-                        metric_name=metric_name,
-                        metric_value=metric_value,
-                        recommendation=self._generate_recommendation(metric_name, metric_value, analysis_type)
-                    )
-                    db.add(analysis_result)
-                
-                analysis.status = "completed"
-                analysis.completed_at = datetime.now(timezone.utc)
-                db.commit()
+                if analysis_type == "time_series":
+                    for metric_name, metric_value in result.get("ml_forecast", {}).items():
+                        analysis_result = AnalysisResult(
+                            id=f"{analysis_id}_{metric_name}",
+                            analysis_id=analysis_id,
+                            metric_name=metric_name,
+                            metric_value=json.dumps(metric_value),
+                            recommendation=self._generate_recommendation(metric_name, 0, analysis_type)
+                        )
+                        db.add(analysis_result)
+                    analysis.status = "completed"
+                    analysis.completed_at = datetime.now(timezone.utc)
+                    analysis.response = json.dumps(result)
+                    db.commit()
+                else:
+                    for metric_name, metric_value in result_data.items():
+                        analysis_result = AnalysisResult(
+                            id=f"{analysis_id}_{metric_name}",
+                            analysis_id=analysis_id,
+                            metric_name=metric_name,
+                            metric_value=metric_value,
+                            recommendation=self._generate_recommendation(metric_name, metric_value, analysis_type)
+                        )
+                        db.add(analysis_result)
+                    
+                    analysis.status = "completed"
+                    analysis.completed_at = datetime.now(timezone.utc)
+                    db.commit()
                 
         except Exception as e:
             logger.error(f"Error running analysis task {analysis_id}: {e}")
@@ -96,7 +148,6 @@ class AnalysisService:
                 db.close()
 
     async def _generate_analysis_result(self, symbol: str, analysis_type: str) -> Dict[str, Any]:
-        # Generate mock technical analysis
         if analysis_type == "technical":
             base_price = random.uniform(100, 1000)
             trend = random.choice(['bullish', 'bearish', 'neutral'])
@@ -127,7 +178,7 @@ class AnalysisService:
                 'target_price': round(random.uniform(100, 500), 2),
             }
         
-        else:  # sentiment
+        else:
             return {
                 'sentiment_score': round(random.uniform(-1, 1), 3),
                 'news_sentiment': random.choice(['positive', 'negative', 'neutral']),
@@ -157,7 +208,7 @@ class AnalysisService:
             else:
                 return 'Evaluate based on industry standards'
         
-        else:  # sentiment
+        else:
             if metric_name == 'sentiment_score' and metric_value > 0.5:
                 return 'Positive market sentiment'
             elif metric_name == 'sentiment_score' and metric_value < -0.5:
@@ -174,7 +225,6 @@ class AnalysisService:
             return 'stock'
 
     async def _select_best_model(self, analysis_type: str, symbol: str) -> str:
-        # Mock model selection
         models = {
             'technical': 'ollama/deepseek-coder:6.7b',
             'fundamental': 'ollama/llama2:13b',

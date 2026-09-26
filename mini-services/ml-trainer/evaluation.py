@@ -369,3 +369,300 @@ def model_comparison_table(models_metrics: Dict[str, Dict[str, Any]]) -> List[Di
         item["rank"] = i + 1
     
     return comparison
+
+
+def compute_psi(expected: pd.Series, actual: pd.Series, buckets: int = 10) -> float:
+    """
+    Compute Population Stability Index (PSI) for feature drift detection.
+    
+    Parameters
+    ----------
+    expected : pd.Series
+        Expected distribution
+    actual : pd.Series
+        Actual distribution
+    buckets : int
+        Number of quantile buckets for binning
+        
+    Returns
+    -------
+    PSI value (higher indicates more drift)
+    """
+    # Handle empty or invalid data
+    if len(expected) == 0 or len(actual) == 0:
+        return 0.0
+    
+    try:
+        # Create quantile bins from expected distribution
+        expected_bins = np.percentile(expected, np.linspace(0, 100, buckets + 1))
+        actual_bins = np.percentile(actual, np.linspace(0, 100, buckets + 1))
+        
+        # Ensure bins are strictly increasing
+        expected_bins = np.unique(expected_bins)
+        actual_bins = np.unique(actual_bins)
+        
+        if len(expected_bins) < 2 or len(actual_bins) < 2:
+            return 0.0
+        
+        # Count percentages in each bin
+        expected_counts = np.histogram(expected, bins=expected_bins)[0] / len(expected)
+        actual_counts = np.histogram(actual, bins=expected_bins)[0] / len(actual)
+        
+        # Calculate PSI
+        psi = 0.0
+        for exp_pct, act_pct in zip(expected_counts, actual_counts):
+            if exp_pct == 0 and act_pct == 0:
+                continue
+            if exp_pct == 0:
+                exp_pct = 0.0001
+            if act_pct == 0:
+                act_pct = 0.0001
+            
+            ratio = act_pct / exp_pct
+            psi += (ratio - 1) * np.log(ratio)
+        
+        return psi * 100  # Return as percentage
+    
+    except Exception:
+        return 0.0
+
+
+def compute_drift_report(
+    features_df: pd.DataFrame,
+    reference_features: Optional[pd.DataFrame] = None,
+    psi_threshold: float = 0.25,
+    zscore_threshold: float = 3.0,
+) -> Dict[str, Any]:
+    """
+    Compute comprehensive drift report for feature stability monitoring.
+    
+    Parameters
+    ----------
+    features_df : pd.DataFrame
+        Current features data
+    reference_features : pd.DataFrame, optional
+        Reference (training) features for comparison
+    psi_threshold : float
+        PSI threshold for drift detection
+    zscore_threshold : float
+        Z-score threshold for outlier detection
+        
+    Returns
+    -------
+    Dictionary with drift analysis results including:
+    - feature_stability: Dict of drift scores per feature
+    - problematic_features: List of features with significant drift
+    - statistics: Descriptive statistics for all features
+    """
+    if reference_features is None:
+        # If no reference, compute basic statistics
+        statistics = {
+            "mean": features_df.mean().to_dict(),
+            "std": features_df.std().to_dict(),
+            "min": features_df.min().to_dict(),
+            "max": features_df.max().to_dict(),
+            "count": len(features_df),
+        }
+        
+        return {
+            "feature_stability": {},
+            "problematic_features": [],
+            "statistics": statistics,
+        }
+    
+    # Align data
+    common_cols = list(set(features_df.columns) & set(reference_features.columns))
+    if not common_cols:
+        return {
+            "feature_stability": {},
+            "problematic_features": [],
+            "statistics": {},
+        }
+    
+    features_aligned = features_df[common_cols]
+    reference_aligned = reference_features[common_cols]
+    
+    # Compute feature stability metrics
+    feature_stability = {}
+    problematic_features = []
+    
+    for col in common_cols:
+        # Remove NaN values
+        ref_series = reference_aligned[col].dropna()
+        curr_series = features_aligned[col].dropna()
+        
+        if len(ref_series) < 10 or len(curr_series) < 10:
+            continue
+        
+        # Compute PSI for numeric features
+        if ref_series.dtype in [np.float64, np.int64]:
+            psi = compute_psi(ref_series, curr_series)
+            
+            # Detect outliers using Z-score
+            ref_mean = ref_series.mean()
+            ref_std = ref_series.std()
+            zscores = np.abs((curr_series - ref_mean) / (ref_std + 1e-12))
+            max_zscore = zscores.max() if len(zscores) > 0 else 0
+            
+            # Flag problematic features
+            has_drift = psi > psi_threshold
+            has_outliers = max_zscore > zscore_threshold
+            
+            if has_drift or has_outliers:
+                problematic_features.append({
+                    "feature": col,
+                    "psi": round(psi, 4),
+                    "zscore": round(max_zscore, 4),
+                    "has_drift": has_drift,
+                    "has_outliers": has_outliers,
+                    "ref_mean": round(ref_mean, 4),
+                    "ref_std": round(ref_std, 4),
+                    "current_mean": round(curr_series.mean(), 4),
+                    "current_std": round(curr_series.std(), 4),
+                })
+            
+            feature_stability[col] = {
+                "psi": round(psi, 4),
+                "zscore": round(max_zscore, 4),
+                "ref_mean": round(ref_mean, 4),
+                "ref_std": round(ref_std, 4),
+                "current_mean": round(curr_series.mean(), 4),
+                "current_std": round(curr_series.std(), 4),
+                "has_drift": has_drift,
+                "has_outliers": has_outliers,
+            }
+    
+    # Compute overall statistics
+    statistics = {
+        "reference": {
+            "mean": reference_aligned.mean().to_dict(),
+            "std": reference_aligned.std().to_dict(),
+            "count": len(reference_aligned),
+        },
+        "current": {
+            "mean": features_aligned.mean().to_dict(),
+            "std": features_aligned.std().to_dict(),
+            "count": len(features_aligned),
+        },
+        "correlation": reference_aligned.corrwith(features_aligned).to_dict(),
+    }
+    
+    return {
+        "feature_stability": feature_stability,
+        "problematic_features": problematic_features,
+        "statistics": statistics,
+        "drift_summary": {
+            "total_features": len(common_cols),
+            "drifted_features": len([f for f in problematic_features if f["has_drift"]]),
+            "outlier_features": len([f for f in problematic_features if f["has_outliers"]]),
+            "max_psi": max([f["psi"] for f in problematic_features] if problematic_features else [0]),
+        }
+    }
+
+
+def calculate_prediction_intervals(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    confidence: float = 0.95,
+    method: str = "residual",
+) -> Dict[str, Any]:
+    """
+    Calculate prediction intervals for regression models.
+    
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True target values
+    y_pred : np.ndarray
+        Predicted target values
+    confidence : float
+        Confidence level (0.95 = 95%)
+    method : str
+        Method for interval calculation ('residual', 'quantile', 'bootstrap')
+        
+    Returns
+    -------
+    Dictionary with prediction intervals including:
+    - lower: Lower bound
+    - upper: Upper bound
+    - mean_error: Mean absolute error
+    - confidence_level: Confidence level used
+    - method: Method used
+    - residuals: Residual statistics
+    """
+    residuals = y_true - y_pred
+    alpha = (1 - confidence) / 2
+    
+    if method == "residual":
+        # Simple residual-based intervals
+        residual_mean = np.mean(residuals)
+        residual_std = np.std(residuals)
+        
+        lower = y_pred + residual_mean - 1.96 * residual_std
+        upper = y_pred + residual_mean + 1.96 * residual_std
+        
+    elif method == "quantile":
+        # Quantile-based intervals from residuals
+        lower_quantile = np.percentile(residuals, alpha * 100)
+        upper_quantile = np.percentile(residuals, (1 - alpha) * 100)
+        
+        lower = y_pred + lower_quantile
+        upper = y_pred + upper_quantile
+        
+    elif method == "bootstrap":
+        # Bootstrap prediction intervals
+        try:
+            from sklearn.utils import resample
+            n_boot = min(100, len(residuals))
+            boot_residuals = resample(residuals, n_samples=len(residuals), replace=True, random_state=42)
+            
+            lower = np.zeros_like(y_pred)
+            upper = np.zeros_like(y_pred)
+            
+            for i in range(len(y_pred)):
+                boot_pred = y_pred[i] + boot_residuals[:, i]
+                lower[i] = np.percentile(boot_pred, alpha * 100)
+                upper[i] = np.percentile(boot_pred, (1 - alpha) * 100)
+                
+        except Exception:
+            # Fallback to residual method
+            return calculate_prediction_intervals(y_true, y_pred, confidence, "residual")
+    else:
+        raise ValueError(f"Unknown method: {method}")
+    
+    # Compute residual statistics
+    residual_stats = {
+        "mean": float(np.mean(residuals)),
+        "std": float(np.std(residuals)),
+        "median": float(np.median(residuals)),
+        "iqr": float(np.percentile(residuals, 75) - np.percentile(residuals, 25)),
+        "min": float(np.min(residuals)),
+        "max": float(np.max(residuals)),
+        "skew": float(stats.skew(residuals) if len(residuals) > 2 else 0.0),
+        "kurtosis": float(stats.kurtosis(residuals) if len(residuals) > 2 else 0.0),
+    }
+    
+    # Compute overall interval width and coverage
+    interval_width = upper - lower
+    avg_width = float(np.mean(interval_width))
+    max_width = float(np.max(interval_width))
+    
+    # Coverage (if true values available)
+    coverage = None
+    within_interval = np.logical_and(y_true >= lower, y_true <= upper)
+    if len(within_interval) > 0:
+        coverage = float(np.mean(within_interval)) * 100
+    
+    return {
+        "lower": lower,
+        "upper": upper,
+        "mean_error": float(np.mean(np.abs(residuals))),
+        "confidence_level": confidence,
+        "method": method,
+        "residuals": residual_stats,
+        "interval_summary": {
+            "avg_width": avg_width,
+            "max_width": max_width,
+            "coverage": coverage,
+        }
+    }

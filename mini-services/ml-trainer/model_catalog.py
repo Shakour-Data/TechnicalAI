@@ -1,6 +1,6 @@
 from sklearn.linear_model import (
     LogisticRegression, Ridge, Lasso, ElasticNet, HuberRegressor,
-    BayesianRidge,
+    BayesianRidge, SGDClassifier, SGDRegressor, Perceptron, PassiveAggressiveClassifier, PassiveAggressiveRegressor
 )
 from sklearn.ensemble import (
     RandomForestClassifier, ExtraTreesClassifier,
@@ -22,7 +22,7 @@ import lightgbm as lgb
 from catboost import CatBoostClassifier, CatBoostRegressor
 from typing import Dict, Any, Optional, Tuple
 
-# Classification model keys (14 base models)
+# Classification model keys (14 base models + 3 online models)
 CLASSIFICATION_MODELS = [
     "logistic_regression",
     "linear_svc",
@@ -39,9 +39,13 @@ CLASSIFICATION_MODELS = [
     "k_neighbors_classifier",
     "svc",
     "mlp_classifier",
+    # Online/incremental learning models
+    "sgd_classifier",
+    "perceptron",
+    "passive_aggressive_classifier",
 ]
 
-# Regression model keys (14 base models)
+# Regression model keys (14 base models + 2 online models)
 REGRESSION_MODELS = [
     "bayesian_ridge",
     "ridge",
@@ -58,6 +62,9 @@ REGRESSION_MODELS = [
     "svr",
     "k_neighbors_regressor",
     "mlp_regressor",
+    # Online/incremental learning models
+    "sgd_regressor",
+    "passive_aggressive_regressor",
 ]
 
 # Ensemble models
@@ -83,7 +90,7 @@ ALL_MODEL_KEYS = CLASSIFICATION_MODELS + REGRESSION_MODELS + ENSEMBLE_MODELS + B
 def build_classification_model(model_key: str) -> Optional[Any]:
     """Build a classification model by key."""
     builders = {
-"logistic_regression": lambda: LogisticRegression(
+        "logistic_regression": lambda: LogisticRegression(
              max_iter=1000, C=1.0, solver='lbfgs', random_state=42
          ),
         "linear_svc": lambda: LinearSVC(
@@ -129,6 +136,17 @@ def build_classification_model(model_key: str) -> Optional[Any]:
         ),
         "mlp_classifier": lambda: MLPClassifier(
             hidden_layer_sizes=(100, 50), max_iter=500, random_state=42, early_stopping=True
+        ),
+        # Online learning models
+        "sgd_classifier": lambda: SGDClassifier(
+            loss='log_loss', penalty='l2', alpha=0.0001,
+            max_iter=1000, tol=1e-3, random_state=42, early_stopping=True
+        ),
+        "perceptron": lambda: Perceptron(
+            max_iter=1000, eta0=0.01, random_state=42, shuffle=True
+        ),
+        "passive_aggressive_classifier": lambda: PassiveAggressiveClassifier(
+            max_iter=1000, tol=1e-3, random_state=42, early_stopping=True
         ),
     }
     builder = builders.get(model_key)
@@ -181,6 +199,14 @@ def build_regression_model(model_key: str) -> Optional[Any]:
         "k_neighbors_regressor": lambda: KNeighborsRegressor(n_neighbors=5),
         "mlp_regressor": lambda: MLPRegressor(
             hidden_layer_sizes=(100, 50), max_iter=500, random_state=42, early_stopping=True
+        ),
+        # Online learning models
+        "sgd_regressor": lambda: SGDRegressor(
+            loss='squared_error', penalty='l2', alpha=0.0001,
+            max_iter=1000, tol=1e-3, random_state=42, early_stopping=True
+        ),
+        "passive_aggressive_regressor": lambda: PassiveAggressiveRegressor(
+            max_iter=1000, tol=1e-3, random_state=42, early_stopping=True
         ),
     }
     builder = builders.get(model_key)

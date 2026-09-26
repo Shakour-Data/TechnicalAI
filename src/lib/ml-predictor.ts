@@ -4,7 +4,7 @@
 // Handles: training requests, 30-session predictions, model management
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const ML_SERVICE_BASE = 'http://localhost:3032';
+const ML_SERVICE_BASE = 'http://localhost:3040';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -176,20 +176,248 @@ export async function checkMLHealth(): Promise<{ status: string; cached_symbols?
   return mlFetch('/health');
 }
 
+// ─── Batch Prediction API ────────────────────────────────────────────────────
+
+/**
+ * Batch prediction result containing multiple model predictions.
+ * Optimized to reuse feature extraction and scaling across models.
+ */
+export interface BatchPredictionResult {
+  status: 'ok' | 'error';
+  symbol: string;
+  batch_results: Record<string, {
+    raw_prediction: number[];
+    is_onnx: boolean;
+  }>;
+  n_samples: number;
+  feature_count: number;
+  message?: string;
+}
+
+/**
+ * Batch prediction for a symbol using multiple models at once.
+ * Reuses feature extraction to reduce redundant computation.
+ *
+ * @param symbol - Ticker/symbol identifier
+ * @param ohlcv - OHLCV data (up to 120 most recent candles used)
+ * @param nSteps - Prediction horizon (1-90 steps)
+ * @returns Batch prediction results from all available models
+ */
+export async function batchPredict(
+  symbol: string,
+  ohlcv: OHLCVRow[],
+  nSteps: number = 30
+): Promise<BatchPredictionResult | null> {
+  try {
+    const res = await callMLService<BatchPredictionResult>('/batch-predict', {
+      symbol,
+      ohlcv: ohlcv.slice(-120),
+      n_steps: Math.min(nSteps, 90),
+    });
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compute Population Stability Index for drift detection.
+ */
+export interface DriftReport {
+  feature_stability: Record<string, {
+    psi: number;
+    zscore: number;
+    ref_mean: number;
+    ref_std: number;
+    current_mean: number;
+    current_std: number;
+    has_drift: boolean;
+    has_outliers: boolean;
+  }>;
+  problematic_features: Array<{
+    feature: string;
+    psi: number;
+    zscore: number;
+    has_drift: boolean;
+    has_outliers: boolean;
+    ref_mean: number;
+    ref_std: number;
+    current_mean: number;
+    current_std: number;
+  }>;
+  drift_summary: {
+    total_features: number;
+    drifted_features: number;
+    outlier_features: number;
+    max_psi: number;
+  };
+  statistics?: {
+    reference: { mean: Record<string, number>; std: Record<string, number>; count: number };
+    current: { mean: Record<string, number>; std: Record<string, number>; count: number };
+    correlation: Record<string, number>;
+  };
+}
+
+/**
+ * Compute drift report comparing current data to reference distribution.
+ */
+export async function computeDriftReport(
+  symbol: string,
+  ohlcv: OHLCVRow[],
+  reference?: OHLCVRow[]
+): Promise<DriftReport | null> {
+  try {
+    const res = await callMLService<DriftReport>('/drift', {
+      symbol,
+      ohlcv: ohlcv.slice(-120),
+      reference: reference || undefined,
+    });
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Quantize a model for faster inference (INT8 quantization).
+ */
+export interface QuantizeResult {
+  status: 'ok' | 'error';
+  quantized: boolean;
+  model: string;
+}
+
+/**
+ * Request model quantization to INT8 for faster inference.
+ */
+export async function quantizeModel(
+  symbol: string,
+  modelName: string
+): Promise<QuantizeResult | null> {
+  try {
+    const res = await callMLService<QuantizeResult>('/quantize', {
+      symbol,
+      model_name: modelName,
+    });
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Model Registry & Versioning ────────────────────────────────────────────
+
+/**
+ * Model metadata from the registry.
+ */
+export interface ModelRegistryEntry {
+  symbol: string;
+  model_name: string;
+  version: string;
+  stage: 'development' | 'staging' | 'production';
+  metrics: TrainingMetrics;
+  trained_at: string;
+  feature_count: number;
+  training_samples: number;
+}
+
+/**
+ * List models from the registry with stage information.
+ */
+export interface ModelsListResponse {
+  status: 'ok' | 'error';
+  models?: ModelRegistryEntry[];
+  symbols?: string[];
+  total_models?: number;
+}
+
+/**
+ * List all models in the registry with versioning info.
+ */
+export async function listRegistryModels(): Promise<ModelsListResponse> {
+  return mlFetch<ModelsListResponse>('/models/registry');
+}
+
+/**
+ * Promote a model to a specific stage (staging/production).
+ */
+export interface PromoteModelResult {
+  status: 'ok' | 'error';
+  symbol: string;
+  model_name: string;
+  stage: string;
+  message?: string;
+}
+
+/**
+ * Promote a model version to a stage (staging/production).
+ */
+export async function promoteModel(
+  symbol: string,
+  modelName: string,
+  stage: 'staging' | 'production'
+): Promise<PromoteModelResult | null> {
+  try {
+    const res = await mlFetch<PromoteModelResult>('/models/promote', {
+      method: 'POST',
+      body: JSON.stringify({ symbol, model_name: modelName, stage }),
+    });
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compare two model versions for A/B testing.
+ */
+export interface ModelComparisonResult {
+  status: 'ok' | 'error';
+  model_a: ModelRegistryEntry;
+  model_b: ModelRegistryEntry;
+  comparison: {
+    metric: string;
+    model_a_score: number;
+    model_b_score: number;
+    winner: 'A' | 'B' | 'TIE';
+    improvement_pct: number;
+  }[];
+}
+
+/**
+ * Compare two model versions for A/B testing.
+ */
+export async function compareModels(
+  symbol: string,
+  modelA: string,
+  modelB: string
+): Promise<ModelComparisonResult | null> {
+  try {
+    const res = await callMLService<ModelComparisonResult>('/models/compare', {
+      symbol,
+      model_a: modelA,
+      model_b: modelB,
+    });
+    return res;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Integration Helpers ────────────────────────────────────────────────────
 
 /**
  * Convert ta-engine OHLCV to ML service format.
  */
-export function convertToMLOHLCV(data: { date: string; open: number; high: number; low: number; close: number; volume: number }[]): OHLCVRow[] {
+export function convertOHLCVForML(data: { date: Date | string; open: number; high: number; low: number; close: number; volume: number }[]): { date: string; open: number; high: number; low: number; close: number; volume: number }[] {
   return data.map(d => ({
-    date: typeof d.date === 'string' ? d.date : new Date(d.date).toISOString().split('T')[0],
-    open: d.open,
-    high: d.high,
-    low: d.low,
-    close: d.close,
-    volume: d.volume || 0,
-  }));
+     date: typeof d.date === 'string' ? d.date : new Date(d.date).toISOString().split('T')[0],
+     open: d.open,
+     high: d.high,
+     low: d.low,
+     close: d.close,
+     volume: d.volume || 0,
+   }));
 }
 
 /**
