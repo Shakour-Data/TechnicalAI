@@ -1,1 +1,0 @@
-cd "E:\Shakour\MyProjects\TechnicalAI" && $env:PYTHONPATH="mini-services/ml-trainer" && python -m pytest tests/ --ignore=tests/unit/test_api.py -v 2>&1

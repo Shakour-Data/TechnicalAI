@@ -3,6 +3,8 @@
 import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { computeV11Probabilities, type V11Result } from '@/lib/ml-narrative-v11';
+import { type GraphData } from '@/lib/decision-graph';
+import { type ProbabilityTrendResult } from '@/lib/probability-trend';
 // Chart is rendered in page.tsx with id="chart-export-wrapper"
 // Heavy export libs (jspdf, html-to-image, xlsx, file-saver) are loaded lazily via dynamic import
 // to avoid ChunkLoadError on low-memory environments with Turbopack.
@@ -178,20 +180,8 @@ export interface VdesAnalysisProps {
   instrumentCategory?: string;
   currencyUnit?: string;
   priceDecimals?: number;
-  probabilityTrend?: {
-    scenarios: { scenarioKey: string; label: string; group: string; currentProbability: number; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
-    groups: { group: string; label: string; trendDirection: string; trend: { individualProb: number; cumulativeProb: number }[] }[];
-  };
-  decisionGraph?: {
-    nodes: { id: string; title: string; titleEn: string; type: string; desc: string; color: string; branch?: string; isTerminal?: boolean }[];
-    edges: { from: string; to: string; label: string; type: string }[];
-    nodePositions: Record<string, { right: number; top: number }>;
-    edgeProbabilities: Record<number, number>;
-    nodeValues: Record<string, string>;
-    branchProbabilities: { trend: number; breakout: number; reversal: number };
-    scenarioProbabilities: Record<string, number>;
-    pathContributions: Record<string, { trend: number; breakout: number; reversal: number }>;
-  };
+  probabilityTrend?: ProbabilityTrendResult | null;
+  decisionGraph?: GraphData | null;
   // Regime detection result (from regime-engine.ts: rule-based + Markov + weighted voting)
   regimeResult?: {
     regime: string;

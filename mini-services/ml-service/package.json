@@ -1,9 +1,0 @@
-{
-  "name": "ml-service",
-  "version": "2.0.0",
-  "description": "Unified ML Service — VDES Machine Learning + Time Series Analysis (port 3040)",
-  "scripts": {
-    "start": "python3 server.py",
-    "dev": "python3 server.py"
-  }
-}

@@ -11,13 +11,14 @@ import IndicatorsPanel from '@/components/tse/indicators-panel';
 import AnalysisSidebar, { CollapsedSidebarExpand } from '@/components/tse/analysis-sidebar';
 import VdssGraph from '@/components/tse/vdss-graph';
 import VdesAnalysis from "@/components/tse/vdes-analysis";
+import PatternsPanel from "@/components/tse/patterns-panel";
 import MLForecast from "@/components/tse/ml-forecast";
 import TimeSeriesPanel from "@/components/tse/time-series-panel";
-import PatternsPanel from "@/components/tse/patterns-panel";
 import HelpPage from "@/components/help-page";
 import DocsPage from "@/components/docs-page";
 import { toPersianDigits } from '@/lib/jalali';
 import { formatPriceFa } from '@/lib/format-price';
+import { type ProbabilityTrendResult } from '@/lib/probability-trend';
 
 interface AnalysisData {
   symbol: string;
@@ -44,6 +45,7 @@ interface AnalysisData {
     currency?: string;
   } | null;
   ta: import('@/lib/ta-engine').TAResult;
+  probabilityTrend?: ProbabilityTrendResult | null;
   isTgju?: boolean;
   isYahoo?: boolean;
 }
@@ -96,10 +98,10 @@ const TGJU_CATEGORIES = new Set([
 const SIDEBAR_ITEMS = [
   { id: 'indicators', label: 'اندیکاتورها', icon: Activity, color: 'text-cyan-400', activeBg: 'bg-cyan-400/10 border-cyan-400/20', hoverBg: 'hover:bg-cyan-400/5' },
   { id: 'patterns', label: 'الگوهای تکنیکال', icon: Activity, color: 'text-pink-400', activeBg: 'bg-pink-400/10 border-pink-400/20', hoverBg: 'hover:bg-pink-400/5' },
+  { id: 'ml-forecast', label: 'یادگیری ماشین', icon: BrainCircuit, color: 'text-orange-400', activeBg: 'bg-orange-400/10 border-orange-400/20', hoverBg: 'hover:bg-orange-400/5' },
+  { id: 'time-series', label: 'تحلیل سری زمان', icon: TrendingUp, color: 'text-green-400', activeBg: 'bg-green-400/10 border-green-400/20', hoverBg: 'hover:bg-green-400/5' },
   { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-400', activeBg: 'bg-amber-400/10 border-amber-400/20', hoverBg: 'hover:bg-amber-400/5' },
   { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-400', activeBg: 'bg-purple-400/10 border-purple-400/20', hoverBg: 'hover:bg-purple-400/5' },
-  { id: 'forecast', label: 'پیش‌بینی ML', icon: BrainCircuit, color: 'text-violet-400', activeBg: 'bg-violet-400/10 border-violet-400/20', hoverBg: 'hover:bg-violet-400/5' },
-  { id: 'time-series', label: 'تحلیل سری زمانی', icon: Activity, color: 'text-blue-400', activeBg: 'bg-blue-400/10 border-blue-400/20', hoverBg: 'hover:bg-blue-400/5' },
 ] as const;
 
 type SidebarItem = typeof SIDEBAR_ITEMS[number]['id'];
@@ -725,10 +727,30 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                 <IndicatorsPanel ta={data.ta} instrumentCategory={data.info?.category} priceDecimals={decimals} />
               )}
 
-              {/* PANEL: Patterns */}
-              {activePanel === 'patterns' && (
-                <PatternsPanel data={data} priceDecimals={decimals} instrumentCategory={data.info?.category} />
-              )}
+               {/* PANEL: Patterns */}
+               {activePanel === 'patterns' && (
+                 <PatternsPanel data={data} priceDecimals={decimals} instrumentCategory={data.info?.category} />
+               )}
+
+               {/* PANEL: ML Forecast */}
+               {activePanel === 'ml-forecast' && (
+                 <MLForecast 
+                   symbolName={data.info?.name ?? data.symbol} 
+                   candles={data.candles} 
+                   currentPrice={lastPrice} 
+                   priceDecimals={decimals} 
+                 />
+               )}
+
+               {/* PANEL: Time Series Analysis */}
+               {activePanel === 'time-series' && (
+                 <TimeSeriesPanel 
+                   symbol={data.symbol} 
+                   candles={data.candles} 
+                   currentPrice={lastPrice} 
+                   priceDecimals={decimals} 
+                 />
+               )}
 
               {/* PANEL: Decision Graph */}
               {activePanel === 'graph' && (
@@ -751,26 +773,6 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                   atr={data.ta.atr}
                   instrumentType={data.isTgju ? 'tgju' : data.isYahoo ? 'yahoo' : 'tse'}
                   instrumentCategory={data.info?.category}
-                  priceDecimals={decimals}
-                />
-              )}
-
-              {/* PANEL: ML Forecast */}
-              {activePanel === 'forecast' && (
-                <MLForecast
-                  symbolName={data.info?.name ?? data.symbol}
-                  candles={data.candles}
-                  currentPrice={lastPrice}
-                  priceDecimals={decimals}
-                />
-              )}
-
-              {/* PANEL: Time Series Analysis */}
-              {activePanel === 'time-series' && (
-                <TimeSeriesPanel
-                  symbol={data.info?.name ?? data.symbol}
-                  candles={data.candles}
-                  currentPrice={lastPrice}
                   priceDecimals={decimals}
                 />
               )}
@@ -903,10 +905,10 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                 href="/settings"
                 className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all cursor-pointer"
                 style={{ color: C.cardSubFg }}
-                aria-label="تنظیمات"
+                aria-label=" Configure "
               >
                 <Settings className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">تنظیمات</span>
+                <span className="hidden sm:inline">Settings</span>
               </Link>
             </div>
 

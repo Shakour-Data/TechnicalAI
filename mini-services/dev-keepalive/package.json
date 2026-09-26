@@ -1,8 +1,0 @@
-{
-  "name": "dev-keepalive",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "node --watch-path /home/z/my-project/src --import tsx index.ts"
-  }
-}

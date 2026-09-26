@@ -1,6 +1,0 @@
-{
-  "name": "ml-trainer",
-  "scripts": {
-    "dev": "while true; do python3 -u index.py; echo \"Restarting ML trainer in 2s...\"; sleep 2; done"
-  }
-}
