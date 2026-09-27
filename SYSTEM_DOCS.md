@@ -1713,4 +1713,40 @@ function isGoldEtf(symbol: string, name: string): boolean
 
 ---
 
+### Unified Time Series Analysis Architecture (v2.1)
+
+As of version 2.1, the ML Forecast and Time Series Analysis panels have been
+merged into a single unified component.
+
+#### Architecture
+```
+Frontend (Next.js)
+  └── TimeSeriesAnalysis component
+      ├── Quick mode → /api/analysis POST (mode: "quick")
+      └── Detailed mode → /api/analysis POST (mode: "detailed")
+          │
+          ▼
+Next.js API (/api/analysis POST)
+  │
+  ▼
+Python Backend (/analysis/time-series)
+  └── AnalysisService
+      ├── analyze_time_series_quick()
+      ├── analyze_time_series_detailed()
+      ├── _fetch_candles()
+      ├── _call_ml_prediction_service()
+      ├── _fallback_prediction()
+      ├── _compute_decomposition()
+      ├── _compute_volatility_analysis()
+      ├── _compute_trend_analysis()
+      └── _detect_seasonality()
+```
+
+#### API Contract
+- POST /api/analysis — Unified endpoint
+  - Body: { symbol, analysis_type: "time_series", horizon, mode, model_keys }
+  - Response: { analysis_id, status: "processing" }
+
+---
+
 *پایان مستندات سیستم — سطح ۱ تا سطح ۳*

@@ -3,14 +3,19 @@
  * @description ML prediction proxy endpoint. Forwards prediction requests to the
  *   Python ML microservice running on localhost:3032 and relays the response back.
  *
+ * ⚠️ DEPRECATED: This endpoint is maintained for backward compatibility during
+ * the transition to the unified /api/analysis endpoint. Use /api/analysis POST
+ * with mode='quick' instead.
+ *
  * Supports two methods:
  *   - **POST** — Submit candle data for ML prediction (proxied to port 3032 /api/predict).
  *   - **GET**  — Health check for the ML service (proxied to port 3032 /health).
  */
-import { NextRequest, NextResponse } from 'next/server';
 
 /** Force dynamic rendering — never cache at the Next.js edge. */
 export const dynamic = 'force-dynamic';
+
+import { NextRequest, NextResponse } from 'next/server';
 
 /** Base URL of the Python ML prediction microservice. */
 const ML_SERVICE_URL = 'http://localhost:3032';

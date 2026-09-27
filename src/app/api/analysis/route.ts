@@ -258,3 +258,77 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: userMsg }, { status });
   }
 }
+
+// ─── POST: Time Series Analysis ────────────────────────────
+
+interface TimeSeriesRequestBody {
+  symbol: string;
+  analysis_type?: string;
+  horizon?: number;
+  mode?: 'quick' | 'detailed';
+  model_keys?: string[];
+}
+
+/**
+ * POST /api/analysis — Run time series analysis via Python backend.
+ *
+ * @description
+ * Processing steps:
+ *   1. Parse JSON body — expects `symbol` (required), `analysis_type` (must be 'time_series'),
+ *      `horizon` (1-90, default 30), `mode` ('quick' or 'detailed'), optional `model_keys`.
+ *   2. Validate symbol and analysis_type.
+ *   3. Forward to Python backend at /analysis/time-series endpoint.
+ *   4. Return the Python backend response or an appropriate error.
+ *
+ * @param req - Next.js incoming request with JSON body.
+ *
+ * @requestBody
+ *   - `symbol`      {string} — (required) TSE symbol string.
+ *   - `analysis_type` {string} — Must be 'time_series'.
+ *   - `horizon`     {number} — Forecast horizon 1-90, default 30.
+ *   - `mode`        {string} — 'quick' or 'detailed', default 'quick'.
+ *   - `model_keys`  {string[]} — (optional) ML models for quick mode.
+ *
+ * @returns JSON response:
+ *   - **200** — Python backend analysis response.
+ *   - **400** `{ error }` — Invalid input.
+ *   - **500** `{ error }` — Internal server error.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const {
+      symbol,
+      analysis_type = 'time_series',
+      horizon = 30,
+      mode = 'quick',
+      model_keys,
+    }: TimeSeriesRequestBody = body;
+
+    if (analysis_type !== 'time_series') {
+      return NextResponse.json({ error: 'Only time_series analysis_type supported' }, { status: 400 });
+    }
+
+    if (!symbol) {
+      return NextResponse.json({ error: 'symbol is required' }, { status: 400 });
+    }
+
+    // Call Python backend
+    const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
+    const resp = await fetch(`${pythonBackendUrl}/analysis/time-series`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, horizon, mode, model_keys }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      return NextResponse.json({ error: data.detail || 'Analysis failed' }, { status: resp.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error('[analysis] POST error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

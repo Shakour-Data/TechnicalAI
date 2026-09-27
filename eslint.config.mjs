@@ -7,6 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
+  languageOptions: {
+    parserOptions: {
+      projectService: true
+    }
+  },
   rules: {
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-unused-vars": [
@@ -20,9 +25,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "@typescript-eslint/no-non-null-assertion": "warn",
     "@typescript-eslint/ban-ts-comment": "error",
     "@typescript-eslint/prefer-as-const": "error",
-    "@typescript-eslint/no-unused-disable-directive": "error",
     "@typescript-eslint/strict-boolean-expressions": "warn",
-    "@typescript-eslint/no-base-object-extra": "warn",
     
     "react-hooks/exhaustive-deps": "warn",
     "react-hooks/purity": "warn",
@@ -50,11 +53,11 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-undef": "error",
     "no-unreachable": "error",
     "no-useless-escape": "error",
-    "no-unsafety-negation": "error",
+    "no-unsafe-negation": "error",
     "no-implicit-globals": "error",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "src/lib/ta-engine.ts", "src/lib/ml-engine.ts"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "src/lib/ta-engine.ts", "src/lib/ml-engine.ts", ".kilo/**", ".kilo/worktrees/**", "commitlint.config.js", "eslint.config.mjs", "postcss.config.mjs", "scripts/prewarm-indices.mjs", "scripts/prefetch-all-indices.ts"]
 }];
 
 export default eslintConfig;
