@@ -102,6 +102,9 @@ __pycache__/
 # Misc
 .DS_Store
 
+# Backup files
+*.backup
+
 # Database files (runtime data, not source)
 *.db
 *.sqlite
