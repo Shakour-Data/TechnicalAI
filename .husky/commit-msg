@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+
+const { execSync } = require('child_process');
+
+const message = execSync('cat ', { input: process.argv[2] })
+  .toString()
+  .trim();
+
+const conventionalCommitPattern = /^(feat|fix|docs|style|refactor|test|chore|build|ci|revert): .+$/;
+
+if (!conventionalCommitPattern.test(message)) {
+  console.error('ERROR: Commit message does not follow Conventional Commits format!');
+  console.error('Expected format: type: description');
+  console.error('Types: feat, fix, docs, style, refactor, test, chore, build, ci, revert');
+  process.exit(1);
+}
+
+console.log('Commit message follows Conventional Commits format');
