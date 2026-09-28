@@ -13,6 +13,7 @@ from api.models.database import SessionLocal
 from api.models.analysis import Analysis, AnalysisResult
 from api.services.tse_service import TSEService, Candle, TSE_INDICES, SECTOR_INDICES
 from api.services.ml_models import run_ml_analysis
+from api.services.data_source import DataSourceService
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,13 @@ def _get_correlation_id() -> str:
 
 
 class AnalysisService:
+    _shared_cache = TTLCache(ttl_seconds=300)
+
     def __init__(self):
         self.ollama_base_url = 'http://localhost:11434'
         self.tse_service = TSEService()
-        self._cache = TTLCache(ttl_seconds=300)
+        self.data_source = DataSourceService()
+        self._cache = AnalysisService._shared_cache
 
     async def analyze(self, symbol: str, analysis_type: str = "technical", prompt: Optional[str] = None,
                       model: Optional[str] = None, horizon: int = 30, model_keys: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -395,7 +399,43 @@ class AnalysisService:
             elif symbol in SECTOR_INDICES:
                 return self.tse_service.fetch_sector_history(symbol, limit=200)
             else:
-                return self.tse_service.fetch_index_history("CWI", limit=200)
+                # Try to fetch actual stock data for non-index/sector symbols
+                try:
+                    candles_data = await self.data_source._get_tse_history(
+                        symbol, 'tse', None, None, 200
+                    )
+                    # Convert dict candles to Candle objects
+                    candles = []
+                    for c in candles_data:
+                        candles.append(Candle(
+                            date=c['date'],
+                            open_price=float(c['open']) if c.get('open') else 0.0,
+                            high=float(c['high']) if c.get('high') else 0.0,
+                            low=float(c['low']) if c.get('low') else 0.0,
+                            close=float(c['close']) if c.get('close') else 0.0,
+                            volume=float(c['volume']) if c.get('volume') else 0.0,
+                        ))
+                    return candles
+                except Exception:
+                    # Fall back to Yahoo Finance if TSE data not available
+                    try:
+                        candles_data = await self.data_source._get_yfinance_history(
+                            symbol, None, None, 200
+                        )
+                        # Convert dict candles to Candle objects
+                        candles = []
+                        for c in candles_data:
+                            candles.append(Candle(
+                                date=c['date'],
+                                open_price=float(c['open']) if c.get('open') else 0.0,
+                                high=float(c['high']) if c.get('high') else 0.0,
+                                low=float(c['low']) if c.get('low') else 0.0,
+                                close=float(c['close']) if c.get('close') else 0.0,
+                                volume=float(c['volume']) if c.get('volume') else 0.0,
+                            ))
+                        return candles
+                    except Exception:
+                        return []
         except Exception as e:
             logger.error(f"Error fetching candles for {symbol}: {e}")
             raise

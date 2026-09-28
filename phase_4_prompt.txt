@@ -1,0 +1,135 @@
+# TechnicalAI Phase 4: Monte Carlo + Conditional What-If + Bootstrap Cone
+
+## Objective
+Implement Monte Carlo simulation for probabilistic price forecasting, conditional what-if analysis for scenario exploration, and bootstrap confidence intervals for all probabilistic outputs.
+
+## Tasks
+
+### 4.1 Monte Carlo Price Simulation
+- Implement geometric Brownian motion (GBM) with drift calibration:
+  * Daily drift = mean daily return from historical data
+  * Daily volatility = std(daily returns) * sqrt(252) annualized, using Kalman-filtered volatility estimates from Phase 2
+- Simulate 5,000 paths for 5-day forward projection and 10,000 paths for 30-day projection
+- Model multiple sources of randomness:
+  * Brownian motion shock at each time step
+  * Regime-switching with transition probabilities from Phase 2 Kalman filter states
+  * Volatility clustering using regime-dependent volatility (high-vol / low-vol regimes)
+- Implement Merton jump-diffusion as optional component (add Poisson arrival of jumps with magnitude N(0, σ_jump²))
+- Output: Distribution of terminal prices with percentiles
+
+### 4.2 Confidence Intervals from Monte Carlo
+- Calculate 95% confidence intervals for all price predictions
+- Calculate 99% confidence intervals for risk management
+- **DO NOT apply transaction cost to probability distributions.** Transaction cost affects P&L, not price distributions. Price movement is independent of transaction cost. See Phase 0.5 Notes: transaction cost does not shift probability.
+- Compute Value at Risk (VaR) at multiple levels:
+  * VaR 95%, 99%, 99.5% from Monte Carlo terminal price distribution
+- Compute Expected Shortfall (ES) / Conditional VaR
+- Generate probability distributions for each scenario
+- Add skew and kurtosis analysis to distributions
+- Output: Full distribution statistics and risk metrics (without distorting probabilities with transaction costs)
+
+### 4.3 Bootstrap Confidence Intervals
+- Implement stationary bootstrap (from Phase 0.5 task 0.9):
+  * Block resampling with geometrically distributed block sizes
+  * Preserve temporal dependence structure
+  * Minimum block size: 5 days, Maximum block size: 25 days
+  * Default: 10,000 bootstrap samples
+- Calculate percentile bootstrap CIs:
+  * 2.5th and 97.5th percentiles (95% CI)
+  * 0.5th and 99.5th percentiles (99% CI)
+- Implement bias-corrected approach when appropriate, but prefer percentile for block bootstrap
+- Apply bootstrap to:
+  * Scenario probabilities (SC1-SC9)
+  * Model performance metrics
+  * Feature importance rankings
+  * Return predictions
+- **BCa NOT compatible with block bootstrap** — use percentile method only for stationary bootstrap results
+- Output: Bootstrap confidence intervals for all metrics
+
+### 4.4 Conditional What-If Analysis
+- Implement what-if scenario modification:
+  * Change input features and recompute predictions
+  * Feature perturbation analysis:
+    * Increase/decrease each feature by 10%, 20%, 50%
+    * Quantify prediction sensitivity per feature
+  * Implement conditional probability updates:
+    * P(SC_i | condition_feature_j = value) — compute scenario probabilities under feature constraints
+  * What-if for regime changes:
+    * Condition on bull/bear/neutral/volatile regimes (from Phase 2 Kalman filter states)
+    * Recalculate probabilities per regime
+  * What-if for transaction cost changes:
+    * Model 0%, 0.2% (TSE default), 0.5%, 1.0%
+    * Recalculate **P&L outcomes**, NOT scenario probabilities (probabilities remain unchanged)
+    * Output: Scenario probabilities WITHOUT probability distortion; P&L distribution with different transaction cost levels
+- What-if for volatility regime changes:
+  * Switch between high-vol and low-vol regimes
+  * Re-simulate Monte Carlo with new volatility parameter
+- Output: What-if sensitivity tables and conditional probability updates
+
+### 4.5 Bootstrap Cone (Bootstrap Prediction Intervals)
+- Implement "bootstrap cone" visualization data structure:
+  * Lower bound: 5th percentile from stationary bootstrap
+  * Median: 50th percentile from stationary bootstrap
+  * Upper bound: 95th percentile from stationary bootstrap
+  * Width: 90th percentile - 10th percentile
+- Generate cones for:
+  * 5-day price predictions
+  * 30-day price predictions
+  * Scenario probability ranges
+  * Return predictions
+- Ensure cones respect TSE constraints (no short selling)
+- Add regime-dependent widening to cones (use Kalman-filtered volatility states from Phase 2)
+- Output: Bootstrap cone data for all predictions
+
+### 4.6 Risk Metrics Integration
+- Integrate Monte Carlo results with TSE constraints:
+  * Position sizing under 0.2% transaction cost
+  * Maximum exposure limits per regime
+  * Drawdown limits and circuit breakers
+- Calculate risk-adjusted performance metrics:
+  * Sortino ratio, Calmar ratio, Omega ratio
+- Implement drawdown probability from Monte Carlo paths
+- Output: Risk metrics integrated with simulation results
+
+### 4.7 Parallel Monte Carlo Computing
+- Implement multiprocessing for Monte Carlo simulations:
+  * Use multiprocessing.Pool or concurrent.futures
+  * Distribute across available CPU cores
+  * Memory-efficient path generation
+  * Progress tracking and cancellation
+- Benchmark single-thread vs. multi-thread performance
+- Output: Parallel computing infrastructure
+
+## Acceptance Criteria
+- [ ] Monte Carlo simulates 5,000 paths for 5-day and 10,000 paths for 30-day horizon
+- [ ] 95% and 99% CIs calculated correctly
+- [ ] VaR and Expected Shortfall computed at multiple levels
+- [ ] Stationary bootstrap CIs for all metrics (percentile method only)
+- [ ] What-if analysis works for all feature modifications
+- [ ] Transaction cost affects P&L outcomes, NOT scenario probabilities (probabilities unchanged)
+- [ ] TSE constraints enforced in all risk calculations
+- [ ] Parallel computing achieves >3x speedup
+- [ ] Unit tests with >80% coverage
+- [ ] Performance: Monte Carlo < 5 seconds per symbol
+- [ ] Bootstrap resampling converges with 10,000 samples
+- [ ] BCa NOT used with stationary bootstrap (percentile method only)
+
+## Dependencies
+- Phase 0.5 (feature extraction, calibration, stationary bootstrap)
+- Phase 1.0 (parameter calibration, backtest framework)
+- Phase 2.0 (Kalman-filtered volatility, change points, regime states)
+- Phase 3.0 (LightGBM predictions, SHAP outputs)
+- Python libraries: numpy, scipy, pandas
+- Existing ML pipeline and feature infrastructure
+- Historical data from Phase 0.5
+
+## Notes
+- Monte Carlo must use GBM with calibrated drift/volatility from historical data
+- Bootstrap must use stationary bootstrap from Phase 0.5 task 0.9
+- What-if must respect 37-feature input limit
+- Transaction cost does NOT distort probability distributions — only affects P&L
+- All cones must widen with higher transaction cost impact on P&L, not on probabilities
+- Regime conditions from Phase 2 Kalman filter states
+- Probability distributions must be normalized to sum to 100
+- BCa incompatible with block stationary bootstrap — use percentile method only
+- Two forecast horizons maintained separately (5-day and 30-day), not merged

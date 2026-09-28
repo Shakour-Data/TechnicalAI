@@ -24,6 +24,7 @@ from api.routes.commodities import router as commodities_router
 from api.routes.analysis import router as analysis_router
 from api.routes.dashboard import router as dashboard_router
 from api.routes.health import router as health_router, HealthResponse
+from api.routes.features import router as features_router
 
 # Setup logging
 logging.basicConfig(
@@ -96,6 +97,7 @@ setup_exception_handlers(app)
 
 # Register routers
 app.include_router(health_router)
+app.include_router(features_router)
 app.include_router(stocks_router, prefix="/api/v1")
 app.include_router(indices_router, prefix="/api/v1")
 app.include_router(sectors_router, prefix="/api/v1")

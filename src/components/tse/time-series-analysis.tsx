@@ -99,18 +99,36 @@ function MiniSparkline({ predictions, color, width = 120, height = 40 }: {
   width?: number;
   height?: number;
 }) {
-  if (predictions.length < 2) return null;
-  const prices = predictions.map((p) => p.price);
-  const min = Math.min(...prices, ...predictions.map((p) => p.lower));
-  const max = Math.max(...prices, ...predictions.map((p) => p.upper));
-  const range = max - min || 1;
+  // Filter out predictions with invalid price, lower, or upper values
+  const validPredictions = predictions.filter(
+    p => typeof p.price === 'number' && Number.isFinite(p.price) &&
+         typeof p.lower === 'number' && Number.isFinite(p.lower) &&
+         typeof p.upper === 'number' && Number.isFinite(p.upper)
+  );
+
+  if (validPredictions.length < 2) return null;
+
+  const prices = validPredictions.map((p) => p.price);
+  const lowerValues = validPredictions.map((p) => p.lower);
+  const upperValues = validPredictions.map((p) => p.upper);
+  
+  const allValues = [...prices, ...lowerValues, ...upperValues];
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
+  const range = max - min;
+  
+  // Handle case where all values are the same (range = 0)
+  const safeRange = range !== 0 ? range : 1;
+  
   const pad = 4;
-  const toX = (i: number) => pad + (i / (predictions.length - 1)) * (width - 2 * pad);
-  const toY = (v: number) => pad + (1 - (v - min) / range) * (height - 2 * pad);
-  const linePoints = predictions.map((p, i) => `${toX(i)},${toY(p.price)}`).join(" ");
-  const upperPoints = predictions.map((p, i) => `${toX(i)},${toY(p.upper)}`).join(" ");
-  const lowerPoints = predictions.map((p, i) => `${toX(i)},${toY(p.lower)}`).reverse().join(" ");
+  const toX = (i: number) => pad + (i / (validPredictions.length - 1)) * (width - 2 * pad);
+  const toY = (v: number) => pad + (1 - (v - min) / safeRange) * (height - 2 * pad);
+  
+  const linePoints = validPredictions.map((p, i) => `${toX(i)},${toY(p.price)}`).join(" ");
+  const upperPoints = validPredictions.map((p, i) => `${toX(i)},${toY(p.upper)}`).join(" ");
+  const lowerPoints = validPredictions.map((p, i) => `${toX(i)},${toY(p.lower)}`).reverse().join(" ");
   const fillPath = `M${upperPoints} L${lowerPoints} Z`;
+  
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-10" style={{ minWidth: width }}>
       <defs>
@@ -121,9 +139,9 @@ function MiniSparkline({ predictions, color, width = 120, height = 40 }: {
       </defs>
       <path d={fillPath} fill={`url(#fill-${color.replace("#", "")})`} />
       <polyline points={upperPoints} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" strokeDasharray="2,2" />
-      <polyline points={predictions.map((p, i) => `${toX(i)},${toY(p.lower)}`).join(" ")} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" strokeDasharray="2,2" />
+      <polyline points={lowerPoints} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" strokeDasharray="2,2" />
       <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      {predictions.map((p, i) => (
+      {validPredictions.map((p, i) => (
         <circle key={i} cx={toX(i)} cy={toY(p.price)} r="1.5" fill={color} />
       ))}
     </svg>

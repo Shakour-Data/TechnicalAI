@@ -1,0 +1,105 @@
+# TechnicalAI Phase 3: LightGBM Scenario Prediction + SHAP + Anomaly Detection
+
+## Objective
+Implement LightGBM-based scenario probability prediction with feature importance analysis (SHAP), anomaly detection for outlier identification, and integration with the existing decision graph system.
+
+## Tasks
+
+### 3.1 LightGBM Scenario Prediction Model
+- Train LightGBM model to predict 9-scenario probabilities (SC1-SC9)
+- Input features: exactly 37 VDSS-derived features (replacing any features from Phase 2)
+- Output: 9-class probability distribution summing to 100
+- Hyperparameters (dataset-appropriate for ~500 daily observations):
+  * n_estimators: 200-500 (not 2000 — too many for 500 samples, risk of overfitting)
+  * learning_rate: 0.05-0.1 (higher for faster convergence)
+  * max_depth: 3-5 (shallow to prevent overfitting on limited data)
+  * num_leaves: 7-15 (must be < 2^max_depth)
+  * min_child_samples: 10-20
+  * subsample: 0.7-0.8
+  * colsample_bytree: 0.7-0.8
+  * reg_alpha: 0.1-0.5 (stronger regularization)
+  * reg_lambda: 0.1-0.5
+- Implement custom objective function (weighted categorical cross-entropy)
+- Use categorical features properly (regime, pattern)
+- Implement early stopping with validation set (patience=20, min_delta=0.001)
+- Output: Trained LightGBM model with SC1-SC9 predictions
+
+### 3.2 SHAP Feature Importance Analysis
+- Implement SHAP (SHapley Additive exPlanations) values
+- Use TreeExplainer for LightGBM model interpretability
+- Generate SHAP values for all 37 features
+- Compute feature importance rankings
+- Create SHAP summary plots and force plots
+- Identify top 5 most important features for each scenario
+- Implement SHAP interaction values for feature pairs
+- Output: SHAP-based feature importance rankings and explanations
+
+### 3.3 Anomaly Detection System
+- Implement isolation forest for outlier detection (unsupervised, no training labels needed)
+- Add Local Outlier Factor (LOF) for density-based anomalies (local context aware)
+- Define anomaly thresholds:
+  * Critical: top 1% anomaly score
+  * Warning: top 5% anomaly score
+  * Normal: below threshold
+- Anomaly types to detect:
+  * Price anomalies (unexpected jumps/drops)
+  * Volume anomalies (unusual trading activity)
+  * Feature anomalies (outlier VDSS values)
+  * Model confidence anomalies (sudden prediction confidence drops)
+- **NO autoencoder** — autoencoder is a neural network, violates "no deep learning" constraint. Isolation Forest + LOF provide sufficient coverage.
+- Output: Anomaly alerts with severity levels
+
+### 3.4 Scenario Probability Calibration
+- Implement Platt scaling for probability calibration (sigmoid on raw scores)
+- Add isotonic regression for monotonic calibration (non-parametric, more flexible)
+- Validate calibration with Expected Calibration Error (ECE)
+- Ensure calibrated probabilities sum to exactly 100
+- **NO temperature scaling** — temperature scaling is for neural networks with logits; LightGBM outputs are tree-based probabilities, not logits. Platt + isotonic are the correct methods for tree-based models.
+- Output: Calibrated scenario probabilities with confidence intervals
+
+### 3.5 Feature Importance Stability Testing
+- Test SHAP stability across different time windows
+- Implement permutation importance as alternative
+- Compare SHAP vs. permutation importance rankings
+- Detect feature importance drift over time (rolling window importance tracking)
+- Output: Stable importance rankings with drift detection
+
+### 3.6 Model Comparison and Selection
+- Compare LightGBM vs. existing logistic regression baseline
+- Use walk-forward validation for fair comparison
+- Track metrics: accuracy, precision, recall, F1, log-likelihood, CRPS
+- Implement model selection criteria (AIC, BIC, MASE)
+- Add ensembling of LightGBM + logistic regression (inverse-variance weighting)
+- Output: Comprehensive model comparison report
+
+## Acceptance Criteria
+- [ ] LightGBM model predicts SC1-SC9 with >55% accuracy
+- [ ] SHAP feature importance identifies top drivers correctly
+- [ ] Anomaly detection flags >90% of known outliers
+- [ ] Probability calibration achieves ECE < 0.05
+- [ ] All features within 37-feature limit
+- [ ] Model comparison shows LightGBM improvement over baseline
+- [ ] Unit tests for all components with >80% coverage
+- [ ] Prediction latency < 100ms per symbol
+- [ ] SHAP values explain model behavior for all scenarios
+- [ ] Anomaly detection works in real-time mode
+- [ ] No deep learning models used (LightGBM + Isolation Forest + LOF only)
+- [ ] n_estimators appropriate for dataset size (200-500, not 2000)
+- [ ] Calibrated probabilities sum to exactly 100
+
+## Dependencies
+- Phase 0.5 and 1.0 completed (feature builder, calibration)
+- Phase 2 completed (change points, Kalman, entropy features, 37-feature replacement)
+- Python libraries: lightgbm, shap, scikit-learn, numpy, scipy
+- Existing ML pipeline and feature infrastructure
+- Historical data from Phase 0.5
+
+## Notes
+- LightGBM is the ONLY tree-based model allowed
+- DO NOT use XGBoost, CatBoost, Random Forest, neural networks, or autoencoders
+- SHAP calculations must use TreeExplainer (not KernelExplainer for speed)
+- Anomaly detection must work with streaming data (Isolation Forest + LOF)
+- All probability outputs must respect 37-feature input limit
+- Feature importance must be computed using only historical data
+- Calibrated probabilities must sum to exactly 100
+- n_estimators must be proportional to dataset size (~500 samples → 200-500 trees)

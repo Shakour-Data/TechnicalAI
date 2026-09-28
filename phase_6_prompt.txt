@@ -1,0 +1,181 @@
+# TechnicalAI Phase 6: Database Migrations + Integration Tests + API Docs + Cleanup
+
+## Objective
+Finalize the TechnicalAI system with database migrations for new features, comprehensive integration tests, complete API documentation, and codebase cleanup for production readiness.
+
+## Tasks
+
+### 6.1 Database Schema Migrations
+- Create Alembic migrations for all new data structures:
+  * Historical OHLCV data tables with proper indexing
+  * Historical probability snapshots table (Phase 0.5 Task 0.3) — stores daily SC1-SC9 probabilities
+  * Calibrated parameter storage (drift, Kalman, regime)
+  * Scenario label storage (SC1-SC9 per symbol per date)
+  * Feature vector storage (37 features per data point)
+  * Model persistence tables (LightGBM, logistic regression, ensembles)
+  * Backtest result storage with full metrics
+  * Alert configuration and history tables
+  * User preferences and watchlist tables
+  * Report generation logs and delivery tracking
+- Migration versioning with semantic versioning
+- Rollback scripts for each migration
+- Migration testing on staging database
+- Seed data scripts for development environments
+- Output: Complete database schema with migrations
+
+### 6.2 Comprehensive Integration Test Suite
+- End-to-end integration tests for:
+  * Data pipeline (TSE fetch → feature extraction → model training → prediction)
+  * Walk-forward backtest pipeline (Phase 1)
+  * Change point detection → Kalman filter → entropy → cross-correlation pipeline (Phase 2)
+  * LightGBM training → SHAP → anomaly detection pipeline (Phase 3)
+  * Monte Carlo → what-if → bootstrap cone pipeline (Phase 4)
+  * API endpoints for all analysis types
+  * Alert triggering and delivery
+  * Report generation and email delivery
+- Test data fixtures with known outcomes (use historical probability snapshots from Phase 0.5)
+- Mock external services (TSE API, email service)
+- Performance benchmarks for each pipeline stage
+- Concurrency and load testing
+- Test coverage target: >85% for new code
+- Output: Full integration test suite with CI/CD integration
+
+### 6.3 API Documentation (OpenAPI/Swagger)
+- Document all REST API endpoints:
+  * /api/v1/analysis/timeseries
+  * /api/v1/analysis/detailed
+  * /api/v1/ml/predict
+  * /api/v1/ml/calibrate
+  * /api/v1/ml/backtest
+  * /api/v1/features/extract
+  * /api/v1/scenarios/probabilities
+  * /api/v1/montecarlo/simulate
+  * /api/v1/whatif/analyze
+  * /api/v1/alerts/configure
+  * /api/v1/reports/generate
+  * /api/v1/performance/metrics
+- Request/response schemas with examples
+- Authentication and authorization documentation
+- Rate limiting and error code reference
+- Interactive Swagger UI deployment
+- Code-generated client SDKs (Python, TypeScript)
+- Output: Complete API documentation with Swagger UI
+
+### 6.4 Model Registry and Versioning
+- Implement model registry for all ML models:
+  * Model metadata (training date, features, hyperparameters)
+  * Performance metrics per version
+  * A/B testing framework for model comparison
+  * Automated model promotion/demotion
+  * Shadow mode deployment for new models
+- Model lineage tracking (parent models, feature sets)
+- Automated retraining triggers based on performance decay
+- Model rollback capabilities
+- Output: Production-ready model registry
+
+### 6.5 Code Quality and Cleanup
+- Run linters and formatters:
+  * Python: ruff, black, isort, mypy
+  * TypeScript: eslint, prettier, tsc
+- Remove deprecated/unused code:
+  * External ML service calls (ml-engine.ts ML service client)
+  * Legacy weight formats (MLWeights interface)
+  * Deprecated price prediction functions
+  * Unused imports and dead code paths
+- Consolidate duplicate implementations:
+  * VDSS feature extraction (Python and TypeScript)
+  * Scenario probability calculation
+  * Decision graph probability engine
+- Resolve all TODOs and FIXMEs
+- Update all docstrings and type hints
+- Output: Clean, lint-free codebase
+
+### 6.6 Security Hardening
+- Security audit of all new endpoints:
+  * Input validation and sanitization
+  * SQL injection prevention
+  * XSS protection in UI
+  * Rate limiting on all public endpoints
+  * Authentication/authorization on protected endpoints
+- Dependency vulnerability scanning (pip-audit, npm audit)
+- Secure model serialization (no pickle, use joblib/ONNX)
+- Environment variable validation
+- Audit logging for sensitive operations
+- Output: Security-hardened application
+
+### 6.7 Performance Optimization
+- Profile and optimize bottlenecks:
+  * Feature extraction (vectorize with numpy)
+  * Model inference (batch predictions, caching)
+  * Database queries (proper indexes, query optimization)
+  * Monte Carlo simulation (parallel processing)
+  * Report generation (async, streaming)
+- Implement caching strategies:
+  * Redis for model predictions
+  * In-memory for feature vectors
+  * CDN for static assets
+- Database connection pooling optimization
+- Memory usage profiling and optimization
+- Output: Optimized system meeting performance targets
+
+### 6.8 Production Deployment Preparation
+- Create Docker images for all services
+- Docker Compose for local development
+- Kubernetes manifests for production:
+  * Deployments, Services, Ingress
+  * ConfigMaps and Secrets
+  * Horizontal Pod Autoscalers
+  * PersistentVolumes for database
+- CI/CD pipeline configuration:
+  * Automated testing on PR
+  * Staging deployment on merge
+  * Production deployment with approval
+  * Rollback procedures
+- Monitoring and alerting setup:
+  * Prometheus metrics export
+  * Grafana dashboards
+  * Log aggregation (ELK/Loki)
+  * Health check endpoints
+- Runbook documentation for operations
+- Output: Production-ready deployment artifacts
+
+## Acceptance Criteria
+- [ ] All database migrations apply cleanly and rollback correctly
+- [ ] Integration test suite passes with >85% coverage
+- [ ] API documentation complete with interactive Swagger UI
+- [ ] Model registry functional with versioning and A/B testing
+- [ ] Zero linting errors in codebase
+- [ ] No deprecated/unused code remaining
+- [ ] Security audit passes with no critical/high findings
+- [ ] Performance targets met (API < 200ms, Monte Carlo < 5s)
+- [ ] Docker images build successfully
+- [ ] Kubernetes manifests deploy to staging successfully
+- [ ] CI/CD pipeline functional
+- [ ] Monitoring and alerting operational
+- [ ] Runbooks complete for common operations
+- [ ] Load testing shows system handles 100 concurrent users
+- [ ] All TODOs/FIXMEs resolved
+- [ ] Documentation updated for all new features
+
+## Dependencies
+- All previous phases (0.5 through 5.0) completed
+- Existing CI/CD infrastructure
+- PostgreSQL database
+- Redis for caching
+- Docker/Kubernetes environment
+- Prometheus/Grafana monitoring stack
+- Email service (SendGrid/SMTP)
+
+## Notes
+- This is the final phase - ensure production readiness
+- All code must follow established patterns in codebase
+- Backward compatibility maintained for existing API consumers
+- Migration scripts must be idempotent
+- Test data must be realistic but not contain PII
+- Documentation must be kept in sync with implementation
+- Performance benchmarks must be reproducible
+- Security practices must follow OWASP guidelines
+- Final system uses exactly 37 features (enforced by Phases 0.5, 2, 4)
+- Final system uses scenario thresholds defined in Phase 0.5 Task 0.3
+- Final system uses Kalman filter local linear trend model only (Phase 2 Task 2.2)
+- Final system uses stationary bootstrap with percentile CIs (Phase 0.5 Task 0.9, Phase 4 Task 4.3)

@@ -18,14 +18,16 @@ jobs:
         run: |
           cd api && pip install -r requirements.txt
           npm ci
-      - name: Lint Python
+      - name: Lint Python with ruff
         run: |
-          cd api && pip install pylint black isort
-          pylint api/ --fail-under=7.0
+          cd api && pip install ruff black isort
+          ruff check api/
+          ruff format --check api/
           black --check api/
           isort --check api/
-      - name: Lint TypeScript
+      - name: Lint TypeScript with prettier and eslint
         run: |
+          npx prettier --check .
           npx eslint . --ext .ts,.tsx
 
   typecheck:
@@ -38,6 +40,8 @@ jobs:
       - run: npm ci
       - name: TypeScript check
         run: npx tsc --noEmit
+      - name: Prisma validate
+        run: npx prisma validate
 
   test:
     runs-on: ubuntu-latest
@@ -51,7 +55,7 @@ jobs:
           cd api && pip install -r requirements.txt
       - name: Run Python tests
         run: |
-          cd api && pytest tests/ -v --cov=api --cov-report=xml --cov-fail-under=70
+          cd api && pytest tests/ -v --cov=api --cov-report=xml --cov-fail-under=80
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -75,8 +79,10 @@ jobs:
     needs: [lint, typecheck, test, security]
     steps:
       - uses: actions/checkout@v4
-      - name: Build Docker
-        run: docker build -t technicalai:latest .
+      - name: Build API Docker image
+        run: docker build -t technicalai-api:latest .
+      - name: Build Frontend Docker image
+        run: docker build -f Dockerfile.frontend -t technicalai-frontend:latest .
 
   deploy:
     needs: build

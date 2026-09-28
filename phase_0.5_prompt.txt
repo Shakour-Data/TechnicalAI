@@ -1,0 +1,159 @@
+# TechnicalAI Phase 0.5: Foundation Implementation
+
+## Objective
+Establish the foundational infrastructure for ML/Time Series Analysis features including data backfill, calibration, scenario labeling, feature engineering, baseline calculation, model persistence, async job management, class imbalance handling, stationary bootstrap, regime classification, and validation pipeline.
+
+## CRITICAL DESIGN DECISIONS (must be settled before any phase)
+- Scenario label definition is the single source of truth. All components (labeler, decision graph, probability trend) MUST use identical thresholds. See Task 0.3 for final definition.
+- Feature limit is exactly 37. Any new features from Phase 2 must REPLACE existing features, not augment. Explicit replacement mapping required.
+- Ensemble weighting method: inverse-variance weighting based on out-of-sample performance.
+- Path contribution aggregation: simple average of 3 branch path contributions per scenario.
+
+## Tasks
+
+### 0.1 Historical Data Backfill
+- Implement data collection for all TSE indices and sectors
+- Create cron job to fetch and store OHLCV data daily
+- Ensure data completeness for at least 2 years of history
+- Store data in PostgreSQL with proper indexing
+- Add data validation and gap-filling mechanisms
+- Implement retry logic for failed API calls
+- **Required for downstream tasks**: Generate historical daily probability snapshots (SC1-SC9) for all symbols covering the full 2-year period. These snapshots feed calibration (Task 1.2), probability trend analysis, and model training.
+- Output: Complete historical dataset for all symbols + historical probability snapshots
+
+### 0.2 Branch Drift Calibration
+- Calculate historical drift parameters from price data
+- Implement rolling window calibration (30-day window)
+- Store calibrated parameters per symbol/sector
+- Ensure parameters are updated weekly
+- Validate against out-of-sample performance
+- Output: Calibrated drift parameters for decision graph edges
+
+### 0.3 Mutual Exclusive Scenario Labeler (SC1-SC9) — FINAL DEFINITION
+- This is the single source of truth for all scenario labels. Every other phase MUST use these exact thresholds.
+- Implement scenario labeling based on 5-day forward returns:
+  * SC1: < -10% (Bearish Shock)
+  * SC2: -10% to -5% (Accelerating Bear)
+  * SC3: -5% to -2% (Strong Bear)
+  * SC4: -2% to -0.5% (Weak Bear)
+  * SC5: -0.5% to +0.5% (Range-bound)
+  * SC6: +0.5% to +2% (Weak Bull)
+  * SC7: +2% to +5% (Strong Bull)
+  * SC8: +5% to +10% (Accelerating Bull)
+  * SC9: > +10% (Bullish Shock)
+- Thresholds selected to match existing decision-graph.ts node semantics (SC1=most bearish, SC9=most bullish, SC5=neutral)
+- Ensure no overlap between scenarios (mutually exclusive and collectively exhaustive)
+- Output: Scenario labels for all historical data points + historical probability snapshots
+
+### 0.4 VDSS Feature Builder v2 (Exactly 37 Features)
+- Feature extraction MUST output exactly 37 features. Any new features must REPLACE existing ones (see Phase 2 Task 2.5 for replacement mapping).
+- Composition:
+  * 16 VDSS features (f_rsi, f_mfi, f_cci, s_adx, f_macd, f_stoch, s_bb, s_ma21, s_ma100, s_ema, s_atr, s_trend, s_sr, f_stoch_cross, f_macd_cross, f_div)
+  * 12 distance features (normalized price distances to key levels)
+  * 4 edge probability features (up, down, pullback, risk — computed from decision graph edge weights)
+  * 3 group path contributions: simple average of path contributions across the 3 branches (trend, breakout, reversal). Method: arithmetic mean of all 9 pathContributions per group.
+  * 1 regime feature (current market regime: bull/bear/neutral/volatile)
+  * 1 pattern feature (detected candlestick pattern)
+- Aggregation method for path contributions MUST be simple average, not weighted or selective.
+- Ensure feature extraction is deterministic and reproducible
+- Add feature validation and normalization
+- Output: Feature vectors with exactly 37 elements
+
+### 0.5 Baseline Calculator Implementation
+- Implement baseline prediction using historical averages
+- Create multiple baseline models (naive, seasonal, trend-based)
+- Ensure baseline uses only historical data (no look-ahead)
+- Add baseline confidence intervals
+- Output: Baseline predictions with uncertainty estimates
+
+### 0.6 Model Persistence System
+- Implement model saving/loading to disk
+- Create model versioning system
+- Add metadata storage (training date, features, performance)
+- Implement model cleanup policies
+- Ensure thread-safe model access
+- Output: Persisted models accessible via API
+
+### 0.7 Async Job Manager
+- Implement job queue for ML training tasks
+- Add job prioritization and scheduling
+- Implement worker pool for parallel processing
+- Add job status tracking and monitoring
+- Implement retry mechanisms for failed jobs
+- Output: Functional async job processing system
+
+### 0.8 Class Imbalance Handler — TIME SERIES SAFE
+- **DO NOT use SMOTE, ADASYN, or any interpolation-based oversampling.** These methods assume i.i.d. data and create artificial samples that violate temporal structure, introducing data leakage.
+- Use class weighting only: pass class_weight='balanced' to logistic regression and LightGBM.
+- Add threshold moving for probability calibration (adjust decision threshold based on validation performance).
+- Add evaluation metrics for imbalanced data (precision, recall, F1, PR-AUC).
+- Output: Calibrated models with class weighting
+
+### 0.9 Stationary Bootstrap Validator
+- Implement stationary bootstrap for time series validation
+- Add block bootstrap with geometrically distributed block sizes (min 5, max 25)
+- Ensure temporal dependence is preserved
+- Implement confidence interval calculation using **percentile method only** (NOT BCa — BCa assumes i.i.d. bootstrap samples and is invalid for block bootstrap)
+- Output: Statistically valid performance estimates
+
+### 0.10 Regime Classification Engine
+- Implement regime detection using multiple methods:
+  * Fuzzy clustering (existing)
+  * Markov switching models
+  * Voting ensemble of regime detectors
+- Ensure regime detection uses only historical data
+- Add regime persistence modeling
+- Output: Market regime classifications (bull/bear/neutral/volatile)
+
+### 0.11 Ensemble Model Saving
+- Implement saving of ensemble models (multiple model types)
+- Use **inverse-variance weighting** based on out-of-sample validation performance for ensemble weights
+- Create ensemble prediction aggregation
+- Implement ensemble uncertainty quantification
+- Output: Saved ensemble models with performance metrics
+
+### 0.12 Validation Pipeline Implementation
+- Implement walk-forward validation only (no random splits)
+- Add expanding window and sliding window options
+- Implement proper train/validation/test separation
+- Add performance tracking over time
+- Ensure no data leakage in validation
+- Output: Validation results with statistical significance
+
+## Acceptance Criteria
+- [ ] All 16 VDSS features extractable and validated
+- [ ] Feature count exactly 37 for all data points
+- [ ] Scenario labels mutually exclusive and collectively exhaustive, matching decision-graph.ts semantics
+- [ ] Historical data backfilled for minimum 2 years with probability snapshots
+- [ ] Models persist and load correctly with versioning
+- [ ] Async job manager processes jobs without loss
+- [ ] Class imbalance handled with class weighting only (no SMOTE/ADASYN)
+- [ ] Stationary bootstrap with percentile CIs functional
+- [ ] Regime classification produces stable regimes
+- [ ] Validation pipeline prevents data leakage
+- [ ] Baseline calculator provides meaningful predictions
+- [ ] Ensemble uses inverse-variance weighting
+- [ ] Path contributions aggregated by simple average
+- [ ] All components integrate without errors
+- [ ] Unit tests achieve >80% coverage for new code
+- [ ] Performance benchmarks meet minimum thresholds
+- [ ] Documentation updated for all new components
+
+## Dependencies
+- TechnicalAI core services (TSE, analysis, ml_models)
+- PostgreSQL database for storage
+- Python 3.9+ with numpy, scikit-learn, statsmodels, ruptures
+- Redis for job queuing (optional)
+- Existing decision graph and probability trend systems
+
+## Notes
+- Do NOT use Prophet, N-BEATS, TFT, or deep learning models
+- Do NOT use SMOTE or ADASYN for time series — they violate i.i.d. assumption
+- Use ONLY scikit-learn, statsmodels, ruptures, lightgbm
+- Prevent data leakage at all costs
+- Use walk-forward validation exclusively
+- Respect TSE constraints: no short selling, 0.2% transaction cost
+- Calibrate branch drift parameters from historical data (not hardcoded)
+- Scenario thresholds in Task 0.3 are FINAL — all downstream phases must match
+- Ensemble weighting: inverse-variance based on validation performance
+- Path contribution aggregation: simple arithmetic mean across branches

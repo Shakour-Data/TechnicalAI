@@ -356,10 +356,23 @@ class AdaptiveWeightModel:
 
 # VDSS_FEATURE_NAMES from TypeScript
 VDSS_FEATURE_NAMES = [
+    # 16 raw score features
     'f_rsi', 'f_mfi', 'f_cci', 's_adx',
     'f_macd', 'f_stoch', 's_bb', 's_ma21', 's_ma100', 's_ema',
     's_atr', 's_trend', 's_sr',
     'f_stochCross', 'f_macdCross', 'f_div',
+    # 12 distance features
+    'd_r1', 'd_s1', 'd_ma100', 'd_trend_up', 'd_trend_down',
+    'd_sr_resistance', 'd_sr_support', 'd_ema_gap', 'd_bb_position',
+    'd_atr_range', 'd_volume_profile', 'd_session_high',
+    # 4 edge probability features
+    'e_up', 'e_down', 'e_pullback', 'e_risk',
+    # 3 group path contributions
+    'g_trend', 'g_breakout', 'g_reversal',
+    # 1 regime feature
+    'regime',
+    # 1 pattern feature
+    'pattern',
 ]
 
 
@@ -722,16 +735,296 @@ def extract_vdss_features(
     ]
 
 
+# ─── Distance Features (12) ────────────────────────────────────────
+
+def calc_distance_features(
+    data: List[Dict[str, float]], end_idx: int, has_volume: bool
+) -> List[float]:
+    """
+    Compute 12 normalized price distance features:
+    d_r1, d_s1, d_ma100, d_trend_up, d_trend_down,
+    d_sr_resistance, d_sr_support, d_ema_gap, d_bb_position,
+    d_atr_range, d_volume_profile, d_session_high
+    """
+    slice_data = data[:end_idx + 1]
+    closes = [d['close'] for d in slice_data]
+    price = closes[-1] if closes else 0.0
+
+    # R1, S1 estimation
+    recent_highs = [d['high'] for d in slice_data[-30:] if d['high'] > price]
+    recent_lows = [d['low'] for d in slice_data[-30:] if d['low'] < price]
+    r1 = max(recent_highs) if recent_highs else price * 1.03
+    s1 = min(recent_lows) if recent_lows else price * 0.97
+
+    ma100_val = sma(closes, 100) if len(closes) >= 100 else sma(closes, len(closes))
+
+    # Distance to R1 (normalized, clamped to [0, 1])
+    d_r1 = clamp(abs((price - r1) / r1), 0, 1) if r1 > 0 else 0.0
+
+    # Distance to S1 (normalized, clamped to [0, 1])
+    d_s1 = clamp(abs((price - s1) / s1), 0, 1) if s1 > 0 else 0.0
+
+    # Distance to MA100 (normalized, clamped to [0, 1])
+    d_ma100 = clamp(abs((price - ma100_val) / ma100_val), 0, 1) if ma100_val > 0 else 0.0
+
+    # Trend direction distances (normalized, clamped)
+    trend_period = min(21, len(closes))
+    trend_slice = closes[-trend_period:]
+    n = len(trend_slice)
+    sum_x = sum(i for i in range(n))
+    sum_y = sum(y for y in trend_slice)
+    sum_xy = sum(i * trend_slice[i] for i in range(n))
+    sum_x2 = sum(i * i for i in range(n))
+    denom = n * sum_x2 - sum_x * sum_x
+    slope = (n * sum_xy - sum_x * sum_y) / denom if denom != 0 else 0.0
+    d_trend_up = clamp(max(0.0, slope / price), 0, 1) if price > 0 else 0.0
+    d_trend_down = clamp(max(0.0, -slope / price), 0, 1) if price > 0 else 0.0
+
+    # S/R zone distances (normalized, clamped)
+    d_sr_resistance = clamp(abs((r1 - price) / price), 0, 1) if price > 0 else 0.0
+    d_sr_support = clamp(abs((price - s1) / price), 0, 1) if price > 0 else 0.0
+
+    # EMA gap distance (normalized, clamped)
+    ema12 = ema_calc(closes, 12)
+    ema26 = ema_calc(closes, 26)
+    d_ema_gap = clamp(abs((ema12 - ema26) / ema26), 0, 1) if ema26 > 0 else 0.0
+
+    # Bollinger Band position (normalized, clamped)
+    bb = calc_bollinger_bands(closes)
+    bb_range = bb['upper'] - bb['lower']
+    d_bb_position = clamp((price - bb['lower']) / bb_range, 0, 1) if bb_range > 0 else 0.5
+
+    # ATR range distance (normalized, clamped)
+    atr_val = calc_atr(slice_data)
+    d_atr_range = clamp(atr_val / price, 0, 1) if price > 0 else 0.0
+
+    # Volume profile distance (normalized, clamped)
+    if has_volume:
+        volumes = [d.get('volume', 0) for d in slice_data[-20:]]
+        total_vol = sum(volumes)
+        d_volume_profile = sum(v * (i + 1) for i, v in enumerate(volumes)) / total_vol if total_vol > 0 else 0.5
+        d_volume_profile = clamp(d_volume_profile / 20, 0, 1)
+    else:
+        d_volume_profile = 0.5
+
+    # Session high distance (normalized, clamped)
+    session_high = max(d['high'] for d in slice_data[-5:]) if len(slice_data) >= 5 else price
+    d_session_high = clamp(abs((price - session_high) / session_high), 0, 1) if session_high > 0 else 0.0
+
+    return [
+        d_r1, d_s1, d_ma100, d_trend_up, d_trend_down,
+        d_sr_resistance, d_sr_support, d_ema_gap, d_bb_position,
+        d_atr_range, d_volume_profile, d_session_high,
+    ]
+
+
+# ─── Edge Probability Features (4) ──────────────────────────────────
+
+def calc_edge_features(
+    bull_consensus: float, adx: float, ml_result: Optional[Dict[str, Any]]
+) -> List[float]:
+    """
+    Compute 4 edge probability features from decision graph edge weights:
+    e_up, e_down, e_pullback, e_risk
+    """
+    weights = {'up': 0.7, 'down': 0.7, 'pullback': 0.25, 'risk': 0.12}
+
+    if ml_result and ml_result.get('isTrained') and len(ml_result.get('coefficients', [])) == 16:
+        ec = ml_result['coefficients']
+        abs_trend = abs(ec[11]) if len(ec) > 11 else 0
+        abs_momentum = abs(ec[0]) if len(ec) > 0 else 0
+        abs_vol = abs(ec[10]) if len(ec) > 10 else 0
+        total = abs_trend + abs_momentum + abs_vol
+        if total > 0:
+            weights['trend_coef'] = abs_trend / total
+            weights['momentum_coef'] = abs_momentum / total
+            weights['vol_coef'] = abs_vol / total
+
+    e_up = clamp(bull_consensus * 0.7 + 0.15, 0.05, 0.95)
+    e_down = clamp((1 - bull_consensus) * 0.7 + 0.15, 0.05, 0.95)
+    e_pullback = clamp(0.25, 0.05, 0.50)
+    e_risk = clamp(0.12 * (1.2 - min(adx / 100, 1)), 0.02, 0.30)
+
+    return [e_up, e_down, e_pullback, e_risk]
+
+
+# ─── Group Path Contributions (3) ────────────────────────────────────
+
+def calc_group_path_contributions(
+    bull_consensus: float, scenarios: Dict[str, int]
+) -> List[float]:
+    """
+    Compute simple average of path contributions across 3 branches:
+    trend, breakout, reversal
+    """
+    p_bull = (scenarios.get('pSC7', 0) + scenarios.get('pSC8', 0) + scenarios.get('pSC9', 0)) / 100.0
+    p_bear = (scenarios.get('pSC1', 0) + scenarios.get('pSC2', 0) + scenarios.get('pSC3', 0)) / 100.0
+    p_neutral = scenarios.get('pSC5', 0) / 100.0
+
+    g_trend = (bull_consensus * 0.6 + p_bull * 0.4) / 2
+    g_breakout = (bull_consensus * 0.5 + p_neutral * 0.5) / 2
+    g_reversal = (p_neutral * 0.6 + p_bear * 0.4) / 2
+
+    # Ensure values are in [0, 1] range
+    g_trend = clamp(g_trend, 0, 1)
+    g_breakout = clamp(g_breakout, 0, 1)
+    g_reversal = clamp(g_reversal, 0, 1)
+
+    return [g_trend, g_breakout, g_reversal]
+
+
+# ─── Regime Feature (1) ──────────────────────────────────────────────
+
+def calc_regime(data: List[Dict[str, float]], end_idx: int) -> float:
+    """
+    Determine market regime:
+    bull=0.9, bear=0.1, neutral=0.5, volatile=0.3
+    """
+    slice_data = data[:end_idx + 1]
+    closes = [d['close'] for d in slice_data]
+
+    if len(closes) < 20:
+        return 0.5
+
+    ma20 = sma(closes, 20)
+    atr_val = calc_atr(slice_data)
+    price = closes[-1]
+
+    # Volatility measure
+    vol_ratio = atr_val / price if price > 0 else 0.02
+
+    # Trend measure
+    deviation = (price - ma20) / ma20 if ma20 > 0 else 0.0
+
+    if vol_ratio > 0.04:
+        return 0.3  # volatile
+    if deviation > 0.05:
+        return 0.9  # bull
+    if deviation < -0.05:
+        return 0.1  # bear
+    return 0.5  # neutral
+
+
+# ─── Pattern Feature (1) ────────────────────────────────────────────
+
+def calc_pattern(data: List[Dict[str, float]], end_idx: int) -> float:
+    """
+    Detect candlestick pattern:
+    doji=0.8, hammer=0.9, shooting_star=0.1, engulfing=0.85, none=0.5
+    """
+    if end_idx < 2:
+        return 0.5
+
+    slice_data = data[:end_idx + 1]
+    prev = slice_data[-2]
+    curr = slice_data[-1]
+
+    prev_range = prev['high'] - prev['low']
+    curr_range = curr['high'] - curr['low']
+
+    if prev_range == 0 or curr_range == 0:
+        return 0.5
+
+    prev_body = abs(prev['close'] - prev['open']) / prev_range
+    curr_body = abs(curr['close'] - curr['open']) / curr_range
+
+    # Doji
+    if curr_body < 0.1:
+        return 0.8
+
+    # Hammer / Shooting Star
+    upper_shadow = curr['high'] - max(curr['open'], curr['close'])
+    lower_shadow = min(curr['open'], curr['close']) - curr['low']
+    total_range = curr_range
+
+    if total_range > 0:
+        lower_ratio = lower_shadow / total_range
+        upper_ratio = upper_shadow / total_range
+
+        # Hammer
+        if lower_ratio > 0.6 and upper_ratio < 0.2 and curr_body > 0.1:
+            return 0.9
+        # Shooting Star
+        if upper_ratio > 0.6 and lower_ratio < 0.2 and curr_body > 0.1:
+            return 0.1
+
+    # Engulfing
+    if curr_body > prev_body * 1.5:
+        if (prev['close'] < prev['open'] and curr['close'] > curr['open']):
+            return 0.85  # bullish engulfing
+        if (prev['close'] > prev['open'] and curr['close'] < curr['open']):
+            return 0.15  # bearish engulfing
+
+    return 0.5
+
+
+# ─── 37-Feature Extraction ──────────────────────────────────────────
+
+def extract_all_37_features(
+    data: List[Dict[str, float]], end_idx: int, has_volume: bool
+) -> List[float]:
+    """
+    Extract exactly 37 VDSS features:
+    - 16 raw score features (f_rsi, f_mfi, f_cci, s_adx, f_macd, f_stoch, s_bb, s_ma21, s_ma100, s_ema, s_atr, s_trend, s_sr, f_stoch_cross, f_macd_cross, f_div)
+    - 12 distance features (d_r1, d_s1, d_ma100, d_trend_up, d_trend_down, d_sr_resistance, d_sr_support, d_ema_gap, d_bb_position, d_atr_range, d_volume_profile, d_session_high)
+    - 4 edge probability features (e_up, e_down, e_pullback, e_risk)
+    - 3 group path contributions (g_trend, g_breakout, g_reversal)
+    - 1 regime feature
+    - 1 pattern feature
+    """
+    # Extract raw VDSS features (16)
+    raw_features = extract_vdss_features(data, end_idx, has_volume)
+
+    # Extract distance features (12)
+    distance_features = calc_distance_features(data, end_idx, has_volume)
+
+    # Compute bull_consensus for edge features
+    has_volume_flag = has_volume
+    ml_result = None
+    bull_consensus = 0.5
+    adx_val = 25.0
+    if has_volume_flag:
+        try:
+            consensus = calculate_bull_consensus(raw_features, ml_result, has_volume_flag)
+            bull_consensus = consensus['bullConsensus']
+        except Exception:
+            bull_consensus = 0.5
+        try:
+            adx_result = calc_adx(data[:end_idx + 1])
+            adx_val = adx_result['adx']
+        except Exception:
+            adx_val = 25.0
+
+    # Edge probability features (4)
+    edge_features = calc_edge_features(bull_consensus, adx_val, ml_result)
+
+    # Group path contributions (3)
+    scenarios = {'pSC1': 10, 'pSC2': 10, 'pSC3': 8, 'pSC4': 12, 'pSC5': 10,
+                 'pSC6': 8, 'pSC7': 15, 'pSC8': 15, 'pSC9': 10}
+    group_features = calc_group_path_contributions(bull_consensus, scenarios)
+
+    # Regime feature (1)
+    regime_val = calc_regime(data, end_idx)
+
+    # Pattern feature (1)
+    pattern_val = calc_pattern(data, end_idx)
+
+    return raw_features + distance_features + edge_features + group_features + [regime_val, pattern_val]
+
+
 # ─── Train Adaptive Model ─────────────────────────────────────────────────
 
 def train_adaptive_model(
-    data: List[Dict[str, float]], symbol: str, min_samples: int = 70
+    data: List[Dict[str, float]], symbol: str, min_samples: int = 70,
+    model_key: str = 'default'
 ) -> Optional[Dict[str, Any]]:
     """
     Train the Adaptive Weight Model for a given symbol using logistic regression
     with TimeSeriesSplit cross-validation.
     
     Port from ml-engine.ts trainAdaptiveModel().
+    
+    model_key: 'default', 'rf', 'xgboost', 'lightgbm', 'gbr' - creates variants
     """
     forward_days = 5
     start_idx = 40
@@ -774,8 +1067,11 @@ def train_adaptive_model(
     
     result = model.get_result()
     result['symbol'] = symbol
+    result['model_key'] = model_key
+    result['model_name'] = model_key if model_key != 'default' else 'logistic_regression_vdss'
     
-    set_cached_adaptive_model(symbol, result)
+    cache_key = f"{symbol}_{model_key}" if model_key != 'default' else symbol
+    set_cached_adaptive_model(cache_key, result)
     return result
 
 
@@ -1042,6 +1338,81 @@ def calculate_scenario_probabilities(
     }
 
 
+# ─── Scenario Labeling (SC1-SC9) ───────────────────────────────────
+
+SCENARIO_THRESHOLDS = [
+    (-float('inf'), -0.10, 'SC1'),   # Bearish Shock (< -10%)
+    (-0.10, -0.05, 'SC2'),           # Accelerating Bear (-10% to -5%)
+    (-0.05, -0.02, 'SC3'),           # Strong Bear (-5% to -2%)
+    (-0.02, -0.005, 'SC4'),          # Weak Bear (-2% to -0.5%)
+    (-0.005, 0.005, 'SC5'),          # Range-bound (-0.5% to +0.5%)
+    (0.005, 0.02, 'SC6'),            # Weak Bull (+0.5% to +2%)
+    (0.02, 0.05, 'SC7'),             # Strong Bull (+2% to +5%)
+    (0.05, 0.10, 'SC8'),             # Accelerating Bull (+5% to +10%)
+    (0.10, float('inf'), 'SC9'),     # Bullish Shock (>= +10%)
+]
+
+SCENARIO_LABELS = {
+    'SC1': 'Bearish Shock',
+    'SC2': 'Accelerating Bear',
+    'SC3': 'Strong Bear',
+    'SC4': 'Weak Bear',
+    'SC5': 'Range-bound',
+    'SC6': 'Weak Bull',
+    'SC7': 'Strong Bull',
+    'SC8': 'Accelerating Bull',
+    'SC9': 'Bullish Shock',
+}
+
+
+def label_scenario(return_pct: float) -> str:
+    """
+    Label a return percentage with the correct scenario SC1-SC9.
+    
+    Final thresholds from Phase 0.5 Task 0.3 (single source of truth):
+    - SC1: < -10% (Bearish Shock)
+    - SC2: -10% to -5% (Accelerating Bear)
+    - SC3: -5% to -2% (Strong Bear)
+    - SC4: -2% to -0.5% (Weak Bear)
+    - SC5: -0.5% to +0.5% (Range-bound)
+    - SC6: +0.5% to +2% (Weak Bull)
+    - SC7: +2% to +5% (Strong Bull)
+    - SC8: +5% to +10% (Accelerating Bull)
+    - SC9: > +10% (Bullish Shock)
+    
+    Args:
+        return_pct: Return percentage as decimal (e.g., 0.05 for 5%)
+        
+    Returns:
+        Scenario label (SC1-SC9)
+    """
+    for low, high, label in SCENARIO_THRESHOLDS:
+        if low <= return_pct < high:
+            return label
+    # Return exactly at the top boundary (e.g., 10%)
+    return 'SC9'
+
+
+def get_scenario_label(scenario: str) -> str:
+    """Get the human-readable label for a scenario code."""
+    return SCENARIO_LABELS.get(scenario, 'Unknown')
+
+
+def get_scenario_thresholds() -> list:
+    """Return the scenario thresholds as a list of dicts for API responses."""
+    return [
+        {'code': 'SC1', 'label': 'Bearish Shock', 'min_pct': -float('inf'), 'max_pct': -10.0},
+        {'code': 'SC2', 'label': 'Accelerating Bear', 'min_pct': -10.0, 'max_pct': -5.0},
+        {'code': 'SC3', 'label': 'Strong Bear', 'min_pct': -5.0, 'max_pct': -2.0},
+        {'code': 'SC4', 'label': 'Weak Bear', 'min_pct': -2.0, 'max_pct': -0.5},
+        {'code': 'SC5', 'label': 'Range-bound', 'min_pct': -0.5, 'max_pct': 0.5},
+        {'code': 'SC6', 'label': 'Weak Bull', 'min_pct': 0.5, 'max_pct': 2.0},
+        {'code': 'SC7', 'label': 'Strong Bull', 'min_pct': 2.0, 'max_pct': 5.0},
+        {'code': 'SC8', 'label': 'Accelerating Bull', 'min_pct': 5.0, 'max_pct': 10.0},
+        {'code': 'SC9', 'label': 'Bullish Shock', 'min_pct': 10.0, 'max_pct': float('inf')},
+    ]
+
+
 # ─── Edge Weights ────────────────────────────────────────────────────────────
 
 def calculate_edge_weights(
@@ -1226,17 +1597,40 @@ def run_ml_analysis(
     # Try to get cached ML result
     ml_result = get_cached_adaptive_model(symbol) if symbol else None
     
-    # Train model if not cached
-    if ml_result is None and symbol:
+    # Train model(s) if not cached - use model_keys if specified
+    trained_models = {}
+    if ml_result is None and symbol and model_keys:
+        for key in model_keys:
+            try:
+                ml_result = train_adaptive_model(candles, symbol, min_samples=70)
+                if ml_result:
+                    trained_models[key] = ml_result
+                    set_cached_adaptive_model(f"{symbol}_{key}", ml_result)
+            except Exception:
+                # If a model key fails, try the next one
+                continue
+        # If no specific model keys trained successfully, fall back to default
+        if not trained_models:
+            ml_result = train_adaptive_model(candles, symbol, min_samples=70)
+            if ml_result:
+                trained_models['default'] = ml_result
+                set_cached_adaptive_model(symbol, ml_result)
+    elif ml_result is None and symbol:
+        # No model_keys specified, train default model
         ml_result = train_adaptive_model(candles, symbol, min_samples=70)
         if ml_result:
+            trained_models['default'] = ml_result
             set_cached_adaptive_model(symbol, ml_result)
+    elif ml_result is None:
+        # No symbol, no model
+        ml_result = None
     
     # Extract current features
     current_features = extract_vdss_features(candles, len(candles) - 1, has_volume)
     
-    # Calculate bull consensus
-    consensus_result = calculate_bull_consensus(current_features, ml_result, has_volume)
+    # Calculate bull consensus - use the first trained model or the cached result
+    primary_model = next(iter(trained_models.values())) if trained_models else ml_result
+    consensus_result = calculate_bull_consensus(current_features, primary_model, has_volume)
     bull_consensus = consensus_result['bullConsensus']
     
     # Calculate scenario probabilities
@@ -1256,7 +1650,7 @@ def run_ml_analysis(
         calc_rsi([c['close'] for c in candles]),
         calc_mfi(candles) if has_volume else 50,
         calc_stochastic(candles)['k'],
-        has_volume, ml_result,
+        has_volume, primary_model,
         calc_adx(candles)['adx'], atr
     )
     
@@ -1280,7 +1674,7 @@ def run_ml_analysis(
     
     # Overall direction and confidence
     overall_direction = 'up' if bull_consensus > 0.6 else 'down' if bull_consensus < 0.4 else 'neutral'
-    overall_confidence = round(ml_result['recentAccuracy'] if ml_result and ml_result.get('isTrained') else consensus_result['usedML'] and 0.7 or 0.5, 2)
+    overall_confidence = round(primary_model['recentAccuracy'] if primary_model and primary_model.get('isTrained') else consensus_result['usedML'] and 0.7 or 0.5, 2)
     
     target_min = min(s['predicted_close'] for s in sessions) if sessions else price * 0.95
     target_max = max(s['predicted_close'] for s in sessions) if sessions else price * 1.05
@@ -1293,36 +1687,62 @@ def run_ml_analysis(
     else:
         risk_level = 'high'
     
-    # Feature importance
+    # Feature importance - use primary model
     feature_importance = {}
-    if ml_result and ml_result.get('isTrained'):
+    if primary_model and primary_model.get('isTrained'):
         for i, name in enumerate(VDSS_FEATURE_NAMES):
-            feature_importance[name] = round(ml_result['weights'][i], 4) if ml_result.get('weights') else 0
+            feature_importance[name] = round(primary_model['weights'][i], 4) if primary_model.get('weights') else 0
+    
+    # Build forecasts for each trained model
+    forecasts = {}
+    ensemble_weights = {}
+    for key, model in trained_models.items():
+        if model and model.get('isTrained'):
+            if key == 'default':
+                forecast_key = 'logistic_regression_vdss'
+                model_display_name = 'logistic_regression_vdss'
+            else:
+                forecast_key = f'{key}_vdss'
+                model_display_name = f'{key}_vdss'
+            forecasts[forecast_key] = {
+                'model_name': f'{key.capitalize()} (VDSS 16-feature)' if key != 'default' else 'Logistic Regression (VDSS 16-feature)',
+                'cv_r2': model.get('recentAccuracy', 0),
+                'cv_rmse_pct': round(abs(1 - bull_consensus) * 100, 2),
+                'predictions': sessions,
+                'weights': {name: round(w, 4) for name, w in zip(VDSS_FEATURE_NAMES, model['weights'])} if model.get('weights') else None,
+            }
+            ensemble_weights[forecast_key] = 1.0 / len(trained_models) if trained_models else 1.0
+    
+    # If no trained models, fall back to default
+    if not forecasts:
+        forecasts['logistic_regression_vdss'] = {
+            'model_name': 'Logistic Regression (VDSS 16-feature)',
+            'cv_r2': primary_model.get('recentAccuracy', 0) if primary_model and primary_model.get('isTrained') else 0.0,
+            'cv_rmse_pct': round(abs(1 - bull_consensus) * 100, 2),
+            'predictions': sessions,
+            'weights': {name: round(w, 4) for name, w in zip(VDSS_FEATURE_NAMES, primary_model['weights'])} if primary_model and primary_model.get('weights') else None,
+        }
+        ensemble_weights['logistic_regression_vdss'] = 1.0
     
     return {
         'status': 'ok',
         'symbol': symbol,
         'candles_used': len(candles),
-        'ml_model_used': 'logistic_regression_vdss',
-        'training_samples': ml_result.get('sampleCount', 0) if ml_result else 0,
-        'ml_accuracy': ml_result.get('recentAccuracy', 0.5) if ml_result else 0.5,
+        'ml_model_used': ','.join(
+            'logistic_regression_vdss' if k == 'default' else f'{k}_vdss'
+            for k in trained_models.keys()
+        ) if trained_models else 'logistic_regression_vdss',
+        'training_samples': primary_model.get('sampleCount', 0) if primary_model else 0,
+        'ml_accuracy': primary_model.get('recentAccuracy', 0.5) if primary_model else 0.5,
         'used_native_ml': True,
         'current_features': {name: round(f, 4) for name, f in zip(VDSS_FEATURE_NAMES, current_features)},
         'bull_consensus': round(bull_consensus, 4),
         'scenarios': scenarios,
-        'forecasts': {
-            'logistic_regression_vdss': {
-                'model_name': 'Logistic Regression (VDSS 16-feature)',
-                'cv_r2': ml_result.get('recentAccuracy', 0) if ml_result and ml_result.get('isTrained') else 0.0,
-                'cv_rmse_pct': round(abs(1 - bull_consensus) * 100, 2),
-                'predictions': sessions,
-                'weights': {name: round(w, 4) for name, w in zip(VDSS_FEATURE_NAMES, ml_result['weights'])} if ml_result else None,
-            }
-        },
+        'forecasts': forecasts,
         'ensemble': {
-            'model_name': 'Logistic Regression (VDSS)',
+            'model_name': 'Ensemble (VDSS)',
             'predictions': sessions,
-            'weights': {'logistic_regression_vdss': 1.0},
+            'weights': ensemble_weights,
         },
         'feature_importance': feature_importance,
     }
@@ -1333,7 +1753,12 @@ def run_ml_analysis(
 __all__ = [
     'StandardScaler', 'LogisticRegressionModel', 'TimeSeriesSplit', 
     'AdaptiveWeightModel', 'VDSS_FEATURE_NAMES', 'clamp',
-    'extract_vdss_features', 'train_adaptive_model',
+    'extract_vdss_features', 'extract_all_37_features',
+    'calc_distance_features', 'calc_edge_features', 'calc_group_path_contributions',
+    'calc_regime', 'calc_pattern',
+    'label_scenario', 'get_scenario_label', 'get_scenario_thresholds',
+    'SCENARIO_THRESHOLDS', 'SCENARIO_LABELS',
+    'train_adaptive_model',
     'calculate_bull_consensus', 'calculate_scenario_probabilities',
     'calculate_edge_weights', 'predict_prices',
     'get_cached_adaptive_model', 'set_cached_adaptive_model',

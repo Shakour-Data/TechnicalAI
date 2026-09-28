@@ -5,10 +5,9 @@ from typing import Annotated, Dict, Any, List, Optional
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, FieldValidationInfo
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from pydantic import BaseModel, Field
 
-from api.auth import User, get_current_active_user
 from api.services.analysis_service import AnalysisService
 from api.services.mock_service import MockService
 from api.middleware.logging import logger
@@ -44,98 +43,90 @@ class TimeSeriesAnalysisRequest(BaseModel):
     model_keys: Optional[List[str]] = Field(default=None, description="ML models for quick mode")
 
 
-@router.post("/time-series", response_model=AnalysisResponse)
+@router.get("/ml-predict")
+async def ml_predict_health():
+    """Check if ML prediction service is available."""
+    return {"status": "ok", "native": True}
+
+
+@router.post("/time-series")
 async def run_time_series_analysis(
     request: TimeSeriesAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_active_user),
 ):
-    """Run time series analysis (quick or detailed)."""
-    if request.analysis_type != "time_series":
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid analysis type. Must be 'time_series'",
-        )
-
-    analysis_id = f"tsa_{request.symbol}_{int(time.time() * 1000)}"
-    created_at = datetime.now(timezone.utc).isoformat()
-
-    if request.mode == "quick":
-        background_tasks.add_task(
-            _process_time_series_quick,
-            analysis_id=analysis_id,
-            symbol=request.symbol,
-            horizon=request.horizon,
-            model_keys=request.model_keys,
-            user_id=current_user.user_id,
-        )
-    else:
-        background_tasks.add_task(
-            _process_time_series_detailed,
-            analysis_id=analysis_id,
-            symbol=request.symbol,
-            horizon=request.horizon,
-            user_id=current_user.user_id,
-        )
-
-    return AnalysisResponse(
-        analysis_id=analysis_id,
-        status="processing",
-        created_at=created_at,
-        completed_at=None,
-    )
-
-
-@router.post("", response_model=AnalysisResponse)
-async def run_analysis(
-    request: AnalysisRequest,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_active_user),
-):
-    """Run financial analysis."""
+    """Run time series analysis."""
     try:
-        valid_types = ["technical", "fundamental", "sentiment"]
-        if request.analysis_type not in valid_types:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid analysis type. Must be one of: {', '.join(valid_types)}",
-            )
-
         analysis_id = f"analysis_{request.symbol}_{int(time.time() * 1000)}"
         created_at = datetime.now(timezone.utc).isoformat()
 
         # Process analysis in background
         background_tasks.add_task(
-            _process_analysis,
+            _process_time_series,
             analysis_id=analysis_id,
             symbol=request.symbol,
-            analysis_type=request.analysis_type,
-            prompt=request.prompt,
-            model=request.model,
-            user_id=current_user.user_id,
+            horizon=request.horizon,
+            mode=request.mode,
+            model_keys=request.model_keys,
+            user_id="frontend",
         )
 
-        return AnalysisResponse(
-            analysis_id=analysis_id,
-            status="processing",
-            created_at=created_at,
-            completed_at=None,
-        )
-    except HTTPException:
-        raise
+        return {
+            "analysis_id": analysis_id,
+            "status": "processing",
+            "created_at": created_at,
+            "completed_at": None,
+        }
     except Exception as e:
-        logger.error(f"Error creating analysis for {request.symbol}: {e}")
+        logger.error(f"Error creating time series analysis for {request.symbol}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{analysis_id}", response_model=AnalysisResponse)
+async def _process_time_series(analysis_id, symbol, horizon, mode, model_keys, user_id):
+    """Background task for time series analysis."""
+    corr_id = _get_correlation_id()
+    try:
+        logger.info(f"[{corr_id}] Processing time series analysis {analysis_id} for {symbol}, mode={mode}")
+        service = AnalysisService()
+        if mode == "quick":
+            result = await service.analyze_time_series_quick(symbol, horizon, model_keys)
+        else:
+            result = await service.analyze_time_series_detailed(symbol, horizon)
+        logger.info(f"[{corr_id}] Time series analysis {analysis_id} completed for {symbol}")
+        # Store result in cache for retrieval
+        service._cache.set(f"result_{analysis_id}", result)
+    except Exception as e:
+        logger.error(f"[{corr_id}] Error processing time series analysis {analysis_id}: {e}")
+        # Also store failed result so polling can return it
+        try:
+            service = AnalysisService()
+            service._cache.set(f"result_{analysis_id}", {
+                "id": analysis_id,
+                "status": "failed",
+                "error": str(e)
+            })
+        except:
+            pass
+
+
+@router.get("/{analysis_id}")
 async def get_analysis(
     analysis_id: Annotated[str, Field(..., description="Analysis ID")],
-    current_user: User = Depends(get_current_active_user),
 ):
     """Get analysis result by ID."""
     try:
-        # In production, fetch from database
+        # Check cache first - access via the AnalysisService class
+        from api.services.analysis_service import AnalysisService as _AS
+        service = _AS()
+        cached = service._cache.get(f"result_{analysis_id}")
+        if cached:
+            return AnalysisResponse(
+                analysis_id=analysis_id,
+                status="completed",
+                result=cached,
+                created_at="2024-01-01T00:00:00Z",
+                completed_at=datetime.now(timezone.utc).isoformat(),
+            )
+        
         result = await MockService().get_dashboard_overview()
         return AnalysisResponse(
             analysis_id=analysis_id,
@@ -147,39 +138,3 @@ async def get_analysis(
     except Exception as e:
         logger.error(f"Error fetching analysis {analysis_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-async def _process_time_series_quick(analysis_id, symbol, horizon, model_keys, user_id):
-    """Background task for quick time series analysis."""
-    corr_id = _get_correlation_id()
-    try:
-        logger.info(f"[{corr_id}] Processing quick time series analysis {analysis_id} for {symbol}")
-        service = AnalysisService()
-        result = await service.analyze_time_series_quick(symbol, horizon, model_keys)
-        logger.info(f"[{corr_id}] Quick time series analysis {analysis_id} completed for {symbol}")
-    except Exception as e:
-        logger.error(f"[{corr_id}] Error processing quick time series analysis {analysis_id}: {e}")
-
-
-async def _process_time_series_detailed(analysis_id, symbol, horizon, user_id):
-    """Background task for detailed time series analysis."""
-    corr_id = _get_correlation_id()
-    try:
-        logger.info(f"[{corr_id}] Processing detailed time series analysis {analysis_id} for {symbol}")
-        service = AnalysisService()
-        result = await service.analyze_time_series_detailed(symbol, horizon)
-        logger.info(f"[{corr_id}] Detailed time series analysis {analysis_id} completed for {symbol}")
-    except Exception as e:
-        logger.error(f"[{corr_id}] Error processing detailed time series analysis {analysis_id}: {e}")
-
-
-async def _process_analysis(analysis_id, symbol, analysis_type, prompt, model, user_id):
-    """Background task to process analysis."""
-    corr_id = _get_correlation_id()
-    try:
-        logger.info(f"[{corr_id}] Processing analysis {analysis_id} for {symbol}")
-        await asyncio.sleep(2)  # Simulate processing time
-        result = await MockService().get_dashboard_overview()
-        logger.info(f"[{corr_id}] Analysis {analysis_id} completed for {symbol}")
-    except Exception as e:
-        logger.error(f"[{corr_id}] Error processing analysis {analysis_id}: {e}")
