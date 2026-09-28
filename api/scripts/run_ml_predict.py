@@ -22,14 +22,19 @@ def main():
         sys.exit(0)
 
     if command == "analyze":
-        # Parse key=value arguments
+        # Get symbol from environment variable (avoids Unicode command-line issues on Windows)
+        symbol = os.environ.get("ML_SYMBOL", "")
+        if not symbol:
+            print(json.dumps({"error": "symbol is required"}))
+            sys.exit(1)
+
+        # Parse remaining key=value arguments from command line
         args = {}
         for arg in sys.argv[2:]:
             if "=" in arg:
                 key, value = arg.split("=", 1)
                 args[key] = value
 
-        symbol = args.get("symbol", "")
         try:
             horizon = int(args.get("horizon", "30"))
         except ValueError:
@@ -37,10 +42,6 @@ def main():
             sys.exit(1)
         model_keys_str = args.get("model_keys", "rf,xgboost,lightgbm,gbr")
         model_keys = [k.strip() for k in model_keys_str.split(",")] if model_keys_str else None
-
-        if not symbol:
-            print(json.dumps({"error": "symbol is required"}))
-            sys.exit(1)
 
         try:
             service = AnalysisService()

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync } from 'child_process';
-import path from 'path';
+import { fetchCandlestick } from '@/lib/tse-api';
+import { analyze, type TAResult } from '@/lib/ta-engine';
+import type { OHLCV } from '@/lib/ta-engine';
+import type { CandleData } from '@/lib/tse-api';
 
 // In-memory storage for analysis results
 const analysisResults = new Map<string, any>();
@@ -106,7 +108,7 @@ export async function POST(req: NextRequest) {
     const analysisId = `analysis_${symbol}_${Date.now()}`;
 
     // Prepare arguments for Python script
-    const scriptPath = path.join(process.cwd(), 'api', 'scripts', 'run_ml_predict.py');
+    const scriptPath = require('path').join(process.cwd(), 'api', 'scripts', 'run_ml_predict.py');
     let args = `symbol=${symbol} horizon=${horizon} mode=${mode}`;
     if (model_keys && model_keys.length > 0) {
       args += ` model_keys=${model_keys.join(',')}`;
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
     // Run Python script synchronously
     let result;
     try {
-      const pythonResult = execSync(
+      const pythonResult = require('child_process').execSync(
         `python "${scriptPath}" analyze ${args}`,
         { encoding: 'utf-8', timeout: 30000 }
       );
@@ -143,39 +145,144 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/analysis/[analysisId] — Get analysis result by ID.
+ * GET /api/analysis — Get analysis data for a symbol.
  *
  * @description
- *   Retrieves the result of a previously started analysis.
+ *   Retrieves market data and technical analysis for a given symbol.
+ *   Used by the frontend for real-time symbol viewing.
  *
- * @param  req - Next.js request with analysisId in params.
+ * @param  req - Next.js request with symbol/indexInsCode query parameters.
  *
  * @returns JSON response:
- *   - **200** `{ analysis_id, status: 'completed', result }`
- *   - **404** `{ error: 'Analysis not found' }`
+ *   - **200** `{ candles, ta, info, symbol }` — Market data with TA
+ *   - **400** `{ error }` — Missing or invalid symbol
  *   - **500** `{ error }` — Internal server error.
  */
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: { analysisId: string } }
+  req: NextRequest
 ) {
   try {
-    const { analysisId } = params;
+    const searchParams = req.nextUrl.searchParams;
+    const symbol = searchParams.get('symbol');
+    const indexInsCode = searchParams.get('indexInsCode');
 
-    const result = analysisResults.get(analysisId);
-    if (!result) {
-      return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
+    if (!symbol) {
+      return NextResponse.json({ error: 'symbol is required' }, { status: 400 });
     }
 
-    return NextResponse.json({
-      analysis_id: analysisId,
-      status: 'completed',
-      result: result,
-      created_at: new Date().toISOString(), // Not used by frontend but kept for compatibility
-      completed_at: new Date().toISOString(),
-    });
+    // Fetch candlestick data for the symbol
+    let candlesticks: CandleData[];
+    try {
+      candlesticks = await fetchCandlestick(symbol, 3); // type=3 for adjusted prices
+    } catch (fetchError) {
+      console.error(`[analysis] Failed to fetch candlesticks for ${symbol}:`, fetchError);
+      return NextResponse.json(
+        {
+          error: `داده‌های تاریخی برای نماد ${symbol} یافت نشد.`,
+          symbol,
+          candles: [],
+          ta: null,
+          info: null,
+        },
+        { status: 404 }
+      );
+    }
+
+    if (!candlesticks || candlesticks.length === 0) {
+      return NextResponse.json(
+        {
+          error: `داده‌ای برای نماد ${symbol} در دسترس نیست.`,
+          symbol,
+          candles: [],
+          ta: null,
+          info: null,
+        },
+        { status: 404 }
+      );
+    }
+
+    // Convert to OHLCV format for TA engine
+    let ohlcv: OHLCV[];
+    try {
+      ohlcv = candlesticks.map((c) => ({
+        date: c.date,
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+        volume: Number(c.volume || 0),
+      }));
+    } catch (mapError) {
+      console.error(`[analysis] Failed to map candlesticks for ${symbol}:`, mapError);
+      return NextResponse.json(
+        {
+          error: `خطا در پردازش داده‌های نماد ${symbol}`,
+          symbol,
+          candles: [],
+          ta: null,
+          info: null,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Run TA analysis
+    let ta: TAResult | null = null;
+    try {
+      ta = analyze(ohlcv, 'واحد');
+    } catch (taError) {
+      console.error(`[analysis] TA analysis failed for ${symbol}:`, taError);
+      // Continue with null ta - we still have candles and info
+    }
+
+    // Build info object
+    let info: Record<string, unknown> = {};
+    try {
+      const lastCandle = candlesticks[candlesticks.length - 1]!;
+      const prevCandle = candlesticks.length > 1 ? candlesticks[candlesticks.length - 2]! : lastCandle;
+      const lastPrice = Number(lastCandle.close);
+      const prevPrice = Number(prevCandle.close);
+      const change = prevPrice ? ((lastPrice - prevPrice) / prevPrice) * 100 : 0;
+
+      info = {
+        name: symbol,
+        symbol: symbol,
+        lastPrice: lastPrice,
+        change: change,
+        closePrice: lastPrice,
+        closeChange: lastPrice - prevPrice,
+        openPrice: Number(lastCandle.open),
+        minPrice: Number(lastCandle.low),
+        maxPrice: Number(lastCandle.high),
+        yesterdayClose: prevPrice,
+        volume: Number(lastCandle.volume || 0),
+        value: 0,
+        trades: 0,
+        eps: 0,
+        pe: 0,
+        currencyUnit: 'واحد',
+        category: 'stock',
+      };
+    } catch (infoError) {
+      console.error(`[analysis] Failed to build info for ${symbol}:`, infoError);
+      info = { symbol, error: 'Failed to build info' };
+    }
+
+    // Build response
+    const response: Record<string, unknown> = {
+      symbol: symbol,
+      candles: candlesticks,
+      ta: ta || {},
+      info: info,
+    };
+
+    if (indexInsCode) {
+      response.indexInsCode = indexInsCode;
+    }
+
+    return NextResponse.json(response);
   } catch (err: any) {
     console.error('[analysis] GET error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }

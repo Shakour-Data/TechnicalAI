@@ -134,7 +134,7 @@ async def label_scenario_endpoint(request: ScenarioLabelRequest):
             return_pct=request.return_pct,
             thresholds=thresholds,
         )
-    except Exception as e:
+    except (ValueError, KeyError, IndexError) as e:
         logger.error(f"Scenario labeling failed: {e}")
         raise HTTPException(status_code=500, detail=f"Scenario labeling failed: {e!s}")
 
