@@ -346,10 +346,21 @@ export async function fetchCandlestick(
     brsApiResponded = true;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const candles: CandleData[] = Array.isArray(data)
+    let candles: CandleData[] = Array.isArray(data)
       ? data
       : data.candle_daily_adjusted || data.candle_daily || data.data || data.candlesticks || [];
-    if (candles.length > 0) {
+if (candles.length > 0) {
+      // BrsApi/TSETMC returns newest first — reverse to chronological (oldest first)
+      // Use numeric date parsing for robust comparison regardless of digit format
+const parseDateNum = (d: string | undefined) => {
+        const n = d ? String(d).replace(/[^\d]/g, '') : '';
+        return n ? parseInt(n, 10) : 0;
+      };
+      const firstDateNum = parseDateNum(candles[0]?.date);
+      const lastDateNum = parseDateNum(candles[candles.length - 1]?.date);
+      if (firstDateNum > lastDateNum) {
+        candles.reverse();
+      }
       saveCandleFileCache(symbol, type, candles);
       return candles;
     }
@@ -365,6 +376,16 @@ export async function fetchCandlestick(
   if (finpyCandles) {
     finpyResponded = true;
     if (finpyCandles.length > 0) {
+      // finpy-tse returns newest first — reverse to chronological
+      const parseDateNum = (d: string | undefined) => {
+        const n = d ? String(d).replace(/[^\d]/g, '') : '';
+        return n ? parseInt(n, 10) : 0;
+      };
+      const firstDateNum = parseDateNum(finpyCandles[0]?.date);
+      const lastDateNum = parseDateNum(finpyCandles[finpyCandles.length - 1]?.date);
+      if (firstDateNum > lastDateNum) {
+        finpyCandles.reverse();
+      }
       saveCandleFileCache(symbol, type, finpyCandles);
       return finpyCandles;
     }
