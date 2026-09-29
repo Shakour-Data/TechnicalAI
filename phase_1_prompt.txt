@@ -1,0 +1,96 @@
+# TechnicalAI Phase 1: Calibration + Backtest Framework
+
+## Objective
+Implement parameter calibration from historical data and walk-forward backtest framework for strategy validation, replacing hardcoded parameters with data-driven calibration.
+
+## Tasks
+
+### 1.1 Branch Drift Parameter Calibration
+- Calibrate branch drift parameters from 2+ years of historical index/sector data (from Phase 0.5 historical probability snapshots)
+- Implement rolling-window calibration (30-day window, weekly rebalance)
+- Calculate drift rates per strategy branch (trend, breakout, reversal) from historical price changes
+- Drift model: Exponential smoothing with α=0.3 (allows 20%+ changes to be captured as meaningful regime shifts)
+- Store calibrated parameters per symbol with metadata (calibration_date, window_size, data_points, parameter_std)
+- Implement recursive least squares for online parameter updates
+- Ensure drift parameters respect TSE constraints (no short selling, 0.2% transaction cost)
+- Output: Calibrated drift parameters per symbol per branch
+
+### 1.2 Walk-Forward Backtest Framework
+- Implement walk-forward validation with expanding window:
+  * Initial training: 100 days
+  * Rolling forward: 1 day at a time
+  * Retrain model every 20 days
+  * Walk-forward window: minimum 60 days, maximum 180 days
+- Add rolling window validation (30/60/90-day windows)
+- Implement proper train/test temporal split (no random splits)
+- Track per-fold performance metrics (accuracy, precision, recall, F1)
+- Output: Backtest results with statistical significance
+
+### 1.3 Strategy Return Attribution
+- Decompose strategy returns by branch (trend, breakout, reversal)
+- Calculate branch-specific Sharpe ratios and drawdowns
+- Implement sector/industry attribution analysis
+- Add transaction cost modeling (0.2% per trade, TSE constraint)
+- Calculate net returns after all costs and constraints
+- Output: Return attribution per strategy component
+
+### 1.4 Parameter Sensitivity Analysis
+- Implement one-factor-at-a-time (OFAT) sensitivity analysis
+- Add Monte Carlo parameter perturbation for robustness testing
+- Calculate parameter elasticity and confidence intervals
+- Identify critical parameters vs. robust parameters
+- Output: Sensitivity rankings with confidence intervals
+
+### 1.5 Backtest Report Generator
+- Generate HTML/PDF backtest reports with visualizations
+- Include equity curve, drawdown analysis, metric summaries
+- Add comparative analysis vs. buy-and-hold benchmark
+- Include statistical significance testing (t-test, bootstrapping)
+- Add parameter optimization summary
+- Output: Professional backtest reports
+
+### 1.6 Model Calibration Persistence
+- Save calibrated parameters with versioning and timestamps
+- Implement parameter drift detection using statistical process control:
+  * Calculate parameter standard deviation over historical calibration period
+  * Alert when new parameter deviates by more than 1.96 standard deviations (95% confidence)
+  * Use exponentially weighted moving average of parameter changes
+  * Alternative: alert when parameter changes > 20% of historical mean ± 2σ
+- Add rollback to previous parameter sets with versioning
+- Ensure calibration data is audit-trailable
+- Output: Persisted calibration records
+
+### 1.7 Backtest Result Cache
+- Cache backtest results by symbol + parameter set + window
+- Implement invalidation policies (refresh after 30 days or when new data available)
+- Add result comparison functionality
+- Output: Efficient backtest result retrieval
+
+## Acceptance Criteria
+- [ ] Drift parameters calibrated from real historical data using Phase 0.5 probability snapshots
+- [ ] Walk-forward backtest framework functional with >60-day windows
+- [ ] Strategy returns decomposed by branch with attribution
+- [ ] Transaction costs (0.2%) properly modeled
+- [ ] TSE constraints enforced (no short selling)
+- [ ] Sensitivity analysis produces meaningful rankings
+- [ ] Backtest reports generated with all required metrics
+- [ ] Calibration results persisted with versioning and drift detection
+- [ ] Cached backtest results accessible via API
+- [ ] All unit tests pass with >80% coverage
+- [ ] Performance benchmarks met (backtest < 30 seconds per symbol)
+
+## Dependencies
+- Phase 0.5 completed (especially feature builder v2, scenario labels)
+- TSE index/sector historical data
+- ML models from Phase 0.5 (AdaptiveWeightModel)
+- numpy, pandas, scikit-learn, matplotlib
+- Existing analysis_service.py infrastructure
+
+## Notes
+- Calibration must use ONLY historical data (no peeking at future)
+- Walk-forward must use expanding window, not rolling Origin-1-2-3
+- Transaction cost: 0.2% per trade (one-way)
+- TSE constraint: positions cannot have negative exposure (no short selling)
+- Parameters should be recalibrated weekly, minimum 60 data points required
+- All calibration must be reproducible with fixed random seeds
+- Drift alert thresholds MUST be data-driven (1.96σ control limits), not fixed 20%

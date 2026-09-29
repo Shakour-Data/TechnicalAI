@@ -1,25 +1,53 @@
 import asyncio
 import json
 import logging
+import time
+import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import random
-import time
 
 from sqlalchemy import text
 
 from api.models.database import SessionLocal
 from api.models.analysis import Analysis, AnalysisResult
-from api.services.timeseries_analysis_service import TimeSeriesAnalysisService
+from api.services.tse_service import TSEService, Candle, TSE_INDICES, SECTOR_INDICES
+from api.services.ml_models import run_ml_analysis
+from api.services.data_source import DataSourceService
 
 logger = logging.getLogger(__name__)
 
 
+class TTLCache:
+    """Simple in-memory cache with TTL."""
+    def __init__(self, ttl_seconds: int = 300):
+        self._cache: Dict[str, tuple[Any, float]] = {}
+        self._ttl = ttl_seconds
+
+    def get(self, key: str) -> Optional[Any]:
+        if key in self._cache:
+            value, timestamp = self._cache[key]
+            if time.time() - timestamp < self._ttl:
+                return value
+            del self._cache[key]
+        return None
+
+    def set(self, key: str, value: Any) -> None:
+        self._cache[key] = (value, time.time())
+
+
+def _get_correlation_id() -> str:
+    return str(uuid.uuid4())[:8]
+
+
 class AnalysisService:
+    _shared_cache = TTLCache(ttl_seconds=300)
+
     def __init__(self):
         self.ollama_base_url = 'http://localhost:11434'
-        self.tse_base_url = 'http://localhost:3031'
-        self.ts_service = TimeSeriesAnalysisService()
+        self.tse_service = TSEService()
+        self.data_source = DataSourceService()
+        self._cache = AnalysisService._shared_cache
 
     async def analyze(self, symbol: str, analysis_type: str = "technical", prompt: Optional[str] = None,
                       model: Optional[str] = None, horizon: int = 30, model_keys: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -56,7 +84,7 @@ class AnalysisService:
         analysis_id = f"tsa_{symbol}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         try:
-            result = await self.ts_service.analyze(symbol, analysis_type="time_series", horizon=horizon, model_keys=model_keys)
+            result = await self.analyze_time_series_quick(symbol, horizon, model_keys)
             result["id"] = analysis_id
             result["analysis_type"] = "time_series"
             return result
@@ -74,7 +102,7 @@ class AnalysisService:
         analysis_id = f"tsa_detailed_{symbol}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         try:
-            result = await self.ts_service.analyze_with_detailed_decomposition(symbol, horizon)
+            result = await self.analyze_time_series_detailed(symbol, horizon)
             result["id"] = analysis_id
             return result
         except Exception as e:
@@ -100,7 +128,7 @@ class AnalysisService:
                 db.commit()
                 
                 if analysis_type == "time_series":
-                    result = await self.ts_service.analyze(symbol, analysis_type="time_series")
+                    result = await self.analyze_time_series_quick(symbol, horizon)
                 else:
                     result_data = await self._generate_analysis_result(symbol, analysis_type)
                 
@@ -254,3 +282,308 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"Error getting result for {analysis_id}: {e}")
             raise
+
+    async def analyze_time_series_quick(self, symbol: str, horizon: int = 30, model_keys: List[str] = None) -> Dict[str, Any]:
+        if not symbol or not symbol.strip():
+            raise ValueError("Symbol is required")
+        if horizon < 1 or horizon > 90:
+            raise ValueError("Horizon must be 1-90")
+        if model_keys:
+            valid_models = {"rf", "xgboost", "lightgbm", "gbr", "svr"}
+            invalid = set(model_keys) - valid_models
+            if invalid:
+                raise ValueError(f"Invalid models: {invalid}")
+        
+        cache_key = f"quick_{symbol}_{horizon}_{'_'.join(sorted(model_keys or []))}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+        
+        analysis_id = f"tsa_{symbol}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        corr_id = _get_correlation_id()
+        
+        try:
+            logger.info(f"[{corr_id}] Processing quick time series analysis {analysis_id} for {symbol}")
+            candles = await self._fetch_candles(symbol)
+            if len(candles) < 60:
+                return {
+                    "id": analysis_id,
+                    "status": "insufficient_data",
+                    "message": f"Need at least 60 candles, got {len(candles)}",
+                    "symbol": symbol
+                }
+
+            ml_result = self._run_native_ml_prediction(symbol, candles, horizon, model_keys or ["rf", "xgboost", "lightgbm", "gbr"])
+            
+            result = {
+                "id": analysis_id,
+                "symbol": symbol,
+                "status": "completed",
+                "analysis_type": "time_series",
+                "candles_used": len(candles),
+                "ml_forecast": ml_result,
+                "generated_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            self._cache.set(cache_key, result)
+            logger.info(f"[{corr_id}] Quick time series analysis {analysis_id} completed for {symbol}")
+            return result
+             
+        except Exception as e:
+            logger.error(f"[{corr_id}] Error analyzing {symbol}: {e}")
+            return {
+                "id": analysis_id,
+                "status": "failed",
+                "error": str(e),
+                "symbol": symbol
+            }
+
+    async def analyze_time_series_detailed(self, symbol: str, horizon: int = 30) -> Dict[str, Any]:
+        if not symbol or not symbol.strip():
+            raise ValueError("Symbol is required")
+        if horizon < 1 or horizon > 90:
+            raise ValueError("Horizon must be 1-90")
+        
+        analysis_id = f"tsa_detailed_{symbol}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        corr_id = _get_correlation_id()
+        
+        try:
+            logger.info(f"[{corr_id}] Processing detailed time series analysis {analysis_id} for {symbol}")
+            candles = await self._fetch_candles(symbol)
+            if len(candles) < 60:
+                return {
+                    "id": analysis_id,
+                    "status": "insufficient_data",
+                    "message": f"Need at least 60 candles, got {len(candles)}",
+                    "symbol": symbol
+                }
+
+            ml_result = self._run_native_ml_prediction(symbol, candles, horizon, ["rf", "xgboost", "lightgbm"])
+            
+            decomposition = self._compute_decomposition(candles)
+            volatility_analysis = self._compute_volatility_analysis(candles)
+            trend_analysis = self._compute_trend_analysis(candles)
+            seasonality = self._detect_seasonality(candles)
+            
+            result = {
+                "id": analysis_id,
+                "symbol": symbol,
+                "status": "completed",
+                "analysis_type": "detailed_time_series",
+                "candles_used": len(candles),
+                "date_range": [str(candles[0].date), str(candles[-1].date)],
+                "forecast": ml_result,
+                "decomposition": decomposition,
+                "volatility": volatility_analysis,
+                "trend": trend_analysis,
+                "seasonality": seasonality,
+                "generated_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            logger.info(f"[{corr_id}] Detailed time series analysis {analysis_id} completed for {symbol}")
+            return result
+             
+        except Exception as e:
+            logger.error(f"[{corr_id}] Error in detailed analysis for {symbol}: {e}")
+            return {
+                "id": analysis_id,
+                "status": "failed",
+                "error": str(e),
+                "symbol": symbol
+            }
+
+    async def _fetch_candles(self, symbol: str) -> List[Candle]:
+        try:
+            if symbol in TSE_INDICES:
+                return self.tse_service.fetch_index_history(symbol, limit=200)
+            elif symbol in SECTOR_INDICES:
+                return self.tse_service.fetch_sector_history(symbol, limit=200)
+            else:
+                # Try to fetch actual stock data for non-index/sector symbols
+                try:
+                    candles_data = await self.data_source._get_tse_history(
+                        symbol, 'tse', None, None, 200
+                    )
+                    # Convert dict candles to Candle objects
+                    candles = []
+                    for c in candles_data:
+                        candles.append(Candle(
+                            date=c['date'],
+                            open_price=float(c['open']) if c.get('open') else 0.0,
+                            high=float(c['high']) if c.get('high') else 0.0,
+                            low=float(c['low']) if c.get('low') else 0.0,
+                            close=float(c['close']) if c.get('close') else 0.0,
+                            volume=float(c['volume']) if c.get('volume') else 0.0,
+                        ))
+                    return candles
+                except Exception:
+                    # Fall back to Yahoo Finance if TSE data not available
+                    try:
+                        candles_data = await self.data_source._get_yfinance_history(
+                            symbol, None, None, 200
+                        )
+                        # Convert dict candles to Candle objects
+                        candles = []
+                        for c in candles_data:
+                            candles.append(Candle(
+                                date=c['date'],
+                                open_price=float(c['open']) if c.get('open') else 0.0,
+                                high=float(c['high']) if c.get('high') else 0.0,
+                                low=float(c['low']) if c.get('low') else 0.0,
+                                close=float(c['close']) if c.get('close') else 0.0,
+                                volume=float(c['volume']) if c.get('volume') else 0.0,
+                            ))
+                        return candles
+                    except Exception:
+                        return []
+        except Exception as e:
+            logger.error(f"Error fetching candles for {symbol}: {e}")
+            raise
+
+    def _prepare_candles_data(self, candles: List[Candle]) -> List[Dict[str, float]]:
+        """Convert Candle objects to the dict format expected by ML models."""
+        candles_data = []
+        for c in candles:
+            candles_data.append({
+                "date": c.date,
+                "open": c.open_price,
+                "high": c.high,
+                "low": c.low,
+                "close": c.close,
+                "volume": c.volume
+            })
+        return candles_data
+
+    def _run_native_ml_prediction(self, symbol: str, candles: List[Candle],
+                                         horizon: int, model_keys: List[str]) -> Dict[str, Any]:
+        """Run ML prediction using native Python models (no external service required)."""
+        candles_data = self._prepare_candles_data(candles)
+        
+        return run_ml_analysis(
+            candles_data,
+            symbol=symbol,
+            horizon=horizon,
+            model_keys=model_keys
+        )
+
+    def _compute_decomposition(self, candles: List[Candle]) -> Dict[str, Any]:
+        import numpy as np
+        series = np.array([c.close for c in candles])
+        
+        window = min(20, len(series) // 5)
+        if window < 3:
+            window = 3
+        
+        trend = np.convolve(series, np.ones(window)/window, mode='valid')
+        trend_padded = np.concatenate([trend[:window//2], trend, trend[-(window//2):]])
+        if len(trend_padded) < len(series):
+            trend_padded = np.pad(trend_padded, (0, len(series) - len(trend_padded)), 'edge')
+        elif len(trend_padded) > len(series):
+            trend_padded = trend_padded[:len(series)]
+        
+        seasonal = series - trend_padded
+        residual = series - trend_padded - seasonal.mean()
+        
+        return {
+            "trend": trend.tolist(),
+            "seasonal": seasonal.tolist(),
+            "residual": residual.tolist(),
+            "window": window,
+            "method": "moving_average"
+        }
+
+    def _compute_volatility_analysis(self, candles: List[Candle]) -> Dict[str, Any]:
+        import numpy as np
+        
+        returns = np.diff(np.log([c.close for c in candles]))
+        volatility = np.sqrt(252) * np.std(returns) * 100
+        rolling_vol = np.array([np.sqrt(252) * np.std(returns[max(0,i-19):i+1]) * 100 for i in range(len(returns))])
+        
+        q33 = np.percentile(rolling_vol, 33)
+        q66 = np.percentile(rolling_vol, 66)
+        
+        regime = "low" if volatility < q33 else ("medium" if volatility < q66 else "high")
+        
+        return {
+            "annualized_volatility": round(float(volatility), 2),
+            "regime": regime,
+            "rolling_volatility": rolling_vol.tolist(),
+            "volatility_quantiles": {"q33": round(float(q33), 2), "q66": round(float(q66), 2)}
+        }
+
+    def _compute_trend_analysis(self, candles: List[Candle]) -> Dict[str, Any]:
+        import numpy as np
+        
+        series = np.array([c.close for c in candles])
+        x = np.arange(len(series))
+        
+        short_window = min(10, len(series) // 10)
+        long_window = min(50, len(series) // 2)
+        
+        if short_window < 2 or long_window < 2:
+            return {"direction": "neutral", "strength": 0.0}
+        
+        short_ma = np.convolve(series, np.ones(short_window)/short_window, mode='valid')
+        long_ma = np.convolve(series, np.ones(long_window)/long_window, mode='valid')
+        
+        if len(short_ma) == 0 or len(long_ma) == 0:
+            return {"direction": "neutral", "strength": 0.0}
+        
+        min_len = min(len(short_ma), len(long_ma))
+        short_ma = short_ma[-min_len:]
+        long_ma = long_ma[-min_len:]
+        
+        diff = short_ma - long_ma
+        trend_strength = float(np.mean(np.abs(diff)) / np.mean(series[-min_len:]))
+        direction = "bullish" if diff[-1] > 0 else "bearish" if diff[-1] < 0 else "neutral"
+        
+        return {
+            "direction": direction,
+            "strength": round(trend_strength, 4),
+            "short_ma": short_ma.tolist(),
+            "long_ma": long_ma.tolist(),
+            "crossovers": int(np.sum(np.diff(np.sign(diff)) != 0))
+        }
+
+    def _detect_seasonality(self, candles: List[Candle]) -> Dict[str, Any]:
+        import numpy as np
+        
+        series = np.array([c.close for c in candles])
+        n = len(series)
+        
+        if n < 30:
+            return {"has_seasonality": False, "period": None}
+        
+        seasonal_periods = [5, 10, 20]
+        max_seasonal_strength = 0.0
+        best_period = None
+        
+        for period in seasonal_periods:
+            if n >= 2 * period:
+                seasonal_component = np.zeros(period)
+                counts = np.zeros(period)
+                for i in range(n):
+                    seasonal_component[i % period] += series[i]
+                    counts[i % period] += 1
+                seasonal_component = np.where(counts > 0, seasonal_component / counts, 0)
+                
+                reconstructed = np.tile(seasonal_component, n // period + 1)[:n]
+                residual = series - reconstructed
+                
+                ss_seasonal = np.var(reconstructed)
+                ss_total = np.var(series)
+                
+                if ss_total > 0:
+                    strength = ss_seasonal / ss_total
+                    if strength > max_seasonal_strength:
+                        max_seasonal_strength = strength
+                        best_period = period
+        
+        has_seasonality = max_seasonal_strength > 0.1
+        
+        return {
+            "has_seasonality": has_seasonality,
+            "seasonal_strength": round(float(max_seasonal_strength), 4),
+            "period": best_period if has_seasonality else None,
+            "method": "seasonal_decomposition"
+        }

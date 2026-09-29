@@ -1168,12 +1168,17 @@ function parseTgjuChartData(tgjuKey: string, jsonStr: string): TgjuOHLC[] | null
       console.warn(`[TGJU] ${tgjuKey}: Possible data drift detected (${driftCount} suspicious jumps out of ${candles.length} candles)`);
     }
 
-    // Reverse: API returns oldest-first (asc), we want newest-last for charting
-    const firstDate = candles[0].date;
-    const lastDate = candles[candles.length - 1].date;
-    if (firstDate > lastDate) {
-      candles.reverse();
-    }
+// Reverse: API returns oldest-first (asc), we want newest-last for charting
+     // Use numeric date parsing for robust comparison regardless of digit format
+     const parseDateNum = (d: string) => {
+       const n = String(d).replace(/[^\d]/g, '');
+       return n ? parseInt(n, 10) : 0;
+     };
+     const firstDateNum = parseDateNum(candles[0].date);
+     const lastDateNum = parseDateNum(candles[candles.length - 1].date);
+     if (firstDateNum > lastDateNum) {
+       candles.reverse();
+     }
 
     // ── Freshness validation: reject data that is too old (e.g. from 1392) ──
     if (!isDataFresh(candles)) {

@@ -101,6 +101,12 @@ class DataSourceService:
             data = response.json().get('candles', [])
             if not data:
                 raise ValueError(f"No data found for {symbol}")
+            # finpy-tse returns newest first — reverse to chronological (oldest first)
+            if data and len(data) > 1:
+                def _date_num(d: str) -> int:
+                    return int(''.join(filter(str.isdigit, d or '')))
+                if _date_num(data[0].get('date', '')) > _date_num(data[-1].get('date', '')):
+                    data.reverse()
             await self.cache_service.set(cache_key, data, ttl=300)
             return data
         except Exception as e:

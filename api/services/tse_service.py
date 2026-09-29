@@ -3,11 +3,12 @@ import time
 import json
 import logging
 import sqlite3
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 import hashlib
 
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -41,7 +42,7 @@ SECTOR_INDICES = {
     'محصولات چوبی': '58440550086834602',
     'محصولات کاغذی': '30106839080444358',
     'انتشار و چاپ': '25766336681098389',
-    'فرآورده های نفتی': '12331083953323969',
+    'فرآورده های نفت': '12331083953323969',
     'لاستیک': '36469751685735891',
     'فلزات اساسی': '32453344048876642',
     'محصولات فلزی': '1123534346391630',
@@ -204,23 +205,22 @@ class TSEService:
         # Fetch from CDN
         url = f"{self.base_url}/Index/GetIndexB2History/{web_id}"
         try:
-            result = subprocess.run(
-                ['curl', '-s', '-m', '120', url],
-                capture_output=True, text=True, timeout=130
-            )
-            if result.returncode != 0:
-                raise ConnectionError(f"Failed to fetch from {url}")
-            
-            entries = self._parse_b2_response(result.stdout)
-            candles = self._entries_to_candles(entries)
-            
-            if not candles:
-                raise ValueError(f"No candles found for {index_code}")
-            
-            # Cache results
-            self._save_to_cache(cache_key, candles)
-            
-            return candles[-limit:] if len(candles) > limit else candles
+            req = urllib.request.Request(url, headers={'User-Agent': 'TechnicalAI/1.0'})
+            with urllib.request.urlopen(req, timeout=120) as response:
+                if response.status != 200:
+                    raise ConnectionError(f"Failed to fetch from {url}: HTTP {response.status}")
+                
+                result_stdout = response.read().decode('utf-8')
+                entries = self._parse_b2_response(result_stdout)
+                candles = self._entries_to_candles(entries)
+                
+                if not candles:
+                    raise ValueError(f"No candles found for {index_code}")
+                
+                # Cache results
+                self._save_to_cache(cache_key, candles)
+                
+                return candles[-limit:] if len(candles) > limit else candles
             
         except Exception as e:
             logger.error(f"Error fetching index {index_code}: {e}")
@@ -235,17 +235,16 @@ class TSEService:
         # Similar to index history but using sector web ID
         url = f"{self.base_url}/Index/GetIndexB2History/{web_id}"
         try:
-            result = subprocess.run(
-                ['curl', '-s', '-m', '120', url],
-                capture_output=True, text=True, timeout=130
-            )
-            if result.returncode != 0:
-                raise ConnectionError(f"Failed to fetch sector {sector_name}")
-            
-            entries = self._parse_b2_response(result.stdout)
-            candles = self._entries_to_candles(entries)
-            
-            return candles[-limit:] if len(candles) > limit else candles
+            req = urllib.request.Request(url, headers={'User-Agent': 'TechnicalAI/1.0'})
+            with urllib.request.urlopen(req, timeout=120) as response:
+                if response.status != 200:
+                    raise ConnectionError(f"Failed to fetch sector {sector_name}: HTTP {response.status}")
+                
+                result_stdout = response.read().decode('utf-8')
+                entries = self._parse_b2_response(result_stdout)
+                candles = self._entries_to_candles(entries)
+                
+                return candles[-limit:] if len(candles) > limit else candles
             
         except Exception as e:
             logger.error(f"Error fetching sector {sector_name}: {e}")
@@ -287,225 +286,10 @@ class TSEService:
             })
         return sectors
 
+    def get_tse_indices(self) -> Dict[str, str]:
+        """Get TSE indices mapping."""
+        return dict(TSE_INDICES)
 
-class TGJUService:
-    """Service for fetching gold, forex, and commodity data from TGJU."""
-
-    def __init__(self):
-        self.base_url = os.environ.get('TGJU_API_URL', 'https://tgju.amirhossein.info')
-        self.api_url = 'https://api.tgju.org/v1/market/indicator/summary-table-data'
-
-    async def get_gold_price(self, gold_type: str = 'au24') -> Dict[str, Any]:
-        """Get gold price by type (au24, au18, silver, etc.)."""
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(f"{self.api_url}/{gold_type}")
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.error(f"Error fetching gold price for {gold_type}: {e}")
-            raise
-
-    async def get_forex_rate(self, pair: str) -> Dict[str, Any]:
-        """Get forex rate for a currency pair."""
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(f"{self.api_url}/{pair.lower()}")
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.error(f"Error fetching forex rate for {pair}: {e}")
-            raise
-
-    async def get_commodity_price(self, commodity: str) -> Dict[str, Any]:
-        """Get commodity price."""
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.get(f"{self.api_url}/{commodity.lower()}")
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.error(f"Error fetching commodity price for {commodity}: {e}")
-            raise
-
-    async def get_all_prices(self) -> Dict[str, Any]:
-        """Get all available prices (gold, forex, commodities)."""
-        results = {
-            'gold': {},
-            'forex': {},
-            'commodities': {},
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
-        
-        # Gold prices
-        gold_types = ['au24', 'au18', 'au14', 'silver', 'platinum', 'palladium']
-        for gold_type in gold_types:
-            try:
-                price = await self.get_gold_price(gold_type)
-                results['gold'][gold_type] = price
-            except Exception as e:
-                logger.warning(f"Failed to fetch gold {gold_type}: {e}")
-        
-        # Forex pairs
-        forex_pairs = ['usd', 'eur', 'gbp', 'jpy', 'chf', 'cad', 'aud', 'cny', 'try', 'aed']
-        for pair in forex_pairs:
-            try:
-                rate = await self.get_forex_rate(pair)
-                results['forex'][pair] = rate
-            except Exception as e:
-                logger.warning(f"Failed to fetch forex {pair}: {e}")
-        
-        # Commodities
-        commodities = ['crude-oil', 'natural-gas', 'copper', 'wheat', 'corn', 'soybean']
-        for commodity in commodities:
-            try:
-                price = await self.get_commodity_price(commodity)
-                results['commodities'][commodity] = price
-            except Exception as e:
-                logger.warning(f"Failed to fetch commodity {commodity}: {e}")
-        
-        return results
-
-
-class OllamaService:
-    """Service for local Ollama LLM integration."""
-
-    def __init__(self):
-        self.base_url = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
-        self.default_model = os.environ.get('OLLAMA_MODEL', 'gpt-oss:20b')
-        self.available_models = []
-
-    async def check_health(self) -> Dict[str, Any]:
-        """Check if Ollama server is running."""
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(f"{self.base_url}/api/tags")
-                if response.status_code == 200:
-                    data = response.json()
-                    self.available_models = [m.get('name') for m in data.get('models', [])]
-                    return {
-                        'status': 'ok',
-                        'models': self.available_models,
-                        'default_model': self.default_model
-                    }
-                return {'status': 'error', 'message': f'HTTP {response.status_code}'}
-        except Exception as e:
-            return {'status': 'error', 'message': str(e)}
-
-    async def chat_completion(self, messages: List[Dict[str, str]],
-                               model: Optional[str] = None,
-                               temperature: float = 0.7,
-                               max_tokens: int = 4096) -> str:
-        """Send a chat completion request to Ollama."""
-        model = model or self.default_model
-        
-        # Check if model is available
-        if model not in self.available_models:
-            logger.warning(f"Model {model} not in available models, using default")
-            model = self.default_model
-        
-        try:
-            import httpx
-            payload = {
-                'model': model,
-                'messages': messages,
-                'temperature': temperature,
-                'num_predict': max_tokens,
-                'stream': False
-            }
-            
-            async with httpx.AsyncClient(timeout=120) as client:
-                response = await client.post(
-                    f"{self.base_url}/api/chat",
-                    json=payload
-                )
-                response.raise_for_status()
-                
-                data = response.json()
-                return data.get('message', {}).get('content', '')
-                
-        except Exception as e:
-            logger.error(f"Ollama chat completion failed: {e}")
-            raise
-
-    async def analyze_market(self, symbol: str, data: Dict[str, Any],
-                              analysis_type: str = "technical") -> Dict[str, Any]:
-        """Analyze market data using Ollama."""
-        prompt = self._build_analysis_prompt(symbol, data, analysis_type)
-        
-        messages = [
-            {
-                'role': 'system',
-                'content': 'You are an expert financial analyst specializing in Iranian stock market (TSE, Farabourse) and international markets. Provide technical analysis with specific recommendations.'
-            },
-            {
-                'role': 'user',
-                'content': prompt
-            }
-        ]
-        
-        try:
-            response = await self.chat_completion(messages, temperature=0.3)
-            return {
-                'analysis': response,
-                'type': analysis_type,
-                'model': self.default_model,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }
-        except Exception as e:
-            logger.error(f"Market analysis failed for {symbol}: {e}")
-            raise
-
-    def _build_analysis_prompt(self, symbol: str, data: Dict[str, Any],
-                               analysis_type: str) -> str:
-        """Build analysis prompt based on type."""
-        if analysis_type == "technical":
-            return f"""Analyze the technical indicators for {symbol}:
-Current Price: {data.get('price', 'N/A')}
-RSI: {data.get('rsi', 'N/A')}
-MACD: {data.get('macd', 'N/A')}
-Bollinger Bands: {data.get('bollinger_bands', 'N/A')}
-Volume: {data.get('volume', 'N/A')}
-Trend: {data.get('trend', 'N/A')}
-
-Provide:
-1. Short-term trend prediction (1-5 sessions)
-2. Key support and resistance levels
-3. Trading recommendation (Buy/Hold/Sell) with reasoning
-4. Risk level assessment
-5. Expected price target"""
-        
-        elif analysis_type == "fundamental":
-            return f"""Analyze the fundamental indicators for {symbol}:
-P/E Ratio: {data.get('pe_ratio', 'N/A')}
-ROE: {data.get('roe', 'N/A')}
-Debt/Equity: {data.get('debt_to_equity', 'N/A')}
-Revenue Growth: {data.get('revenue_growth', 'N/A')}
-Profit Margin: {data.get('profit_margin', 'N/A')}
-Analyst Recommendation: {data.get('analyst_recommendation', 'N/A')}
-
-Provide:
-1. Valuation assessment
-2. Financial health analysis
-3. Growth prospects
-4. Investment recommendation (Buy/Hold/Sell)
-5. Target price range"""
-        
-        else:  # sentiment
-            return f"""Analyze the market sentiment for {symbol}:
-News Sentiment: {data.get('news_sentiment', 'N/A')}
-Social Sentiment: {data.get('social_sentiment', 'N/A')}
-Fear & Greed Index: {data.get('fear_greed_index', 'N/A')}
-Analyst Coverage: {data.get('analyst_coverage', 'N/A')}
-Market Hype: {data.get('market_hype', 'N/A')}
-
-Provide:
-1. Overall sentiment assessment
-2. Market mood analysis
-3. Risk factors
-4. Trading sentiment (Bullish/Bearish/Neutral)
-5. Key events to watch"""
+    def get_sector_indices(self) -> Dict[str, str]:
+        """Get sector indices mapping."""
+        return dict(SECTOR_INDICES)

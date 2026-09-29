@@ -1,0 +1,166 @@
+# TechnicalAI Phase 5: Interactive UI + Daily Reports + Conditional Alerts + Performance Dashboard
+
+## Objective
+Implement the frontend user interface components, automated reporting system, conditional alerting mechanism, and performance monitoring dashboard to provide a complete user experience for the TechnicalAI system.
+
+## Tasks
+
+### 5.1 Interactive Decision Graph UI
+- Implement real-time decision graph visualization using D3.js or similar
+- **FIXED node count: exactly 34 nodes** to match `decision-graph.ts` (Layer 0: 1 ROOT, Layer 1: 3 branches, Layer 2: 9 sub-branches, Layer 3: 19 events, Layer 4: 9 terminals)
+- Color-code nodes by branch (trend=cyan, breakout=amber, reversal=purple)
+- Size terminal nodes (SC1-SC9) by probability intensity
+- Interactive hover tooltips showing:
+  * Node probabilities
+  * Contributing factors
+  * Historical context
+- Click-to-drill-down on scenarios for detailed analysis
+- Responsive design for mobile and desktop
+- RTL layout support for Persian/English bilingual display
+- UI integrates with Phase 2 regime classifications (from Kalman filter)
+- Output: Interactive decision graph component with exactly 34 nodes
+
+### 5.2 Real-Time Probability Updates
+- Implement WebSocket connection for live probability updates
+- Subscribe to analysis service for scenario probability changes
+- Animate probability transitions with smooth easing
+- Update decision graph in real-time (< 500ms latency)
+- Show update timestamps and data freshness indicators
+- Implement fallback polling for environments without WebSocket
+- **REAL-TIME DATA**: Pulls from Phase 0.5 historical probability snapshots for instant context
+- Output: Real-time updating probability display
+
+### 5.3 Scenario Drill-Down Interface
+- Create detailed view for each scenario (SC1-SC9)
+- Show contributing factors with weights:
+  * Branch probabilities (trend, breakout, reversal)
+  * Edge probabilities
+  * Feature contributions (SHAP values from Phase 3)
+- Display historical performance of scenario
+- Show conditional probability distributions
+- Add scenario-specific trading recommendations
+- Include backtested success rates and risk metrics
+- Output: Detailed scenario analysis panels
+
+### 5.4 Daily Automated Reports
+- Implement scheduled report generation (daily at market close)
+- Generate PDF reports with:
+  * Executive summary
+  * Current decision graph snapshot (34-node DAG)
+  * Scenario probability breakdown
+  * Feature importance analysis (SHAP values from Phase 3)
+  * Model performance metrics
+  * Risk metrics (VaR, Expected Shortfall)
+  * Trading recommendations
+- Include comparison to previous day/week/month
+- Add benchmark comparison (buy-and-hold, sector averages)
+- Generate CSV exports of raw data
+- Email delivery with configurable recipient lists
+- Output: Professionally formatted daily reports
+
+### 5.5 Conditional Alerting System
+- Implement rule-based alert engine:
+  * Probability threshold alerts (e.g., SC9 > 30%)
+  * Change detection alerts (sudden probability shifts from Monte Carlo baselines)
+  * Anomaly detection alerts (from Phase 3 Isolation Forest + LOF)
+  * Regime change alerts (from Phase 2 Kalman filter state transitions)
+  * Feature threshold alerts (e.g., RSI > 80)
+  * Model confidence alerts (sudden accuracy drops)
+- Configure alert severity levels:
+  * Info: Informational updates
+  * Warning: Attention warranted
+  * Critical: Immediate action required
+- Delivery channels:
+  * In-app notifications
+  * Email alerts
+  * SMS integration (via Twilio API)
+  * Webhook endpoints for external systems
+- Alert deduplication and rate limiting
+- Output: Configurable conditional alerting system
+
+### 5.6 Performance Monitoring Dashboard
+- Implement real-time performance tracking:
+  * Prediction accuracy (rolling 30-day window)
+  * Calibration metrics (Expected Calibration Error)
+  * Sharpe ratio and risk-adjusted returns
+  * Drawdown analysis
+  * Win/loss ratios
+  * Scenario prediction accuracy (SC1-SC9)
+- **INTEGRATE WITH PHASE 1**: Compare against walk-forward backtest metrics
+- Visualization components:
+  * Equity curve with benchmark comparison
+  * Monthly returns heatmap
+  * Drawdown underwater chart
+  * Feature importance stability chart (SHAP trends)
+  * Model comparison over time
+- System health metrics:
+  * Data freshness indicators (from Phase 0.5 snapshots)
+  * Model staleness warnings (when last training > 30 days)
+  * Computation latency monitoring
+  * Error rate tracking
+- Customizable time windows (1D, 1W, 1M, 3M, YTD)
+- Output: Comprehensive performance monitoring dashboard
+
+### 5.7 User Preferences and Customization
+- Implement user profile system:
+  * Favorite symbols/watchlists
+  * Preferred alert thresholds
+  * Report scheduling preferences
+  * UI theme selection (light/dark)
+  * Notification channel preferences
+- Save preferences to user account or local storage
+- Implement preset configurations:
+  * Conservative trader
+  * Aggressive trader
+  * Long-term investor
+  * Day trader
+- Export/import user configurations
+- Output: Customizable user experience
+
+### 5.8 Multi-Language Support
+- Implement i18n for Persian (Farsi) and English
+- Language toggle in UI header
+- Persistent language preference
+- RTL layout when Persian selected
+- All tooltips, labels, and reports bilingual
+- Date/number formatting per locale
+- Output: Fully bilingual interface
+
+## Acceptance Criteria
+- [ ] Interactive decision graph renders correctly with exactly 34 nodes
+- [ ] Scenario drill-down shows detailed contributing factors
+- [ ] Daily reports generate automatically at market close
+- [ ] Conditional alerts trigger based on configured rules
+- [ ] Performance dashboard shows accurate metrics
+- [ ] User preferences persist across sessions
+- [ ] Multi-language support works for Persian and English
+- [ ] All UI components responsive on mobile and desktop
+- [ ] Unit tests for UI components with >80% coverage
+- [ ] Performance: UI updates < 1 second for all interactions
+- [ ] Alert system delivers notifications reliably
+- [ ] Reports generated in < 10 seconds
+- [ ] No security vulnerabilities in user preferences storage
+- [ ] Real-time updates pull from Phase 0.5 probability snapshots
+- [ ] Dashboard integrates with Phase 1 backtest metrics
+
+## Dependencies
+- All previous phases (0.5 through 4.0) completed
+- Backend APIs from analysis_service.py and ml_models.py
+- Frontend framework: React/Next.js (existing)
+- Visualization libraries: D3.js, Chart.js, or similar
+- State management: Redux or Context API
+- Styling: Tailwind CSS (existing)
+- PDF generation: jsPDF or similar
+- Email service: SMTP or SendGrid integration
+- WebSocket support in backend
+
+## Notes
+- UI must integrate with existing TechnicalAI frontend architecture
+- Real-time updates must use efficient WebSocket implementation
+- Alert system must prevent alert fatigue with deduplication
+- Performance dashboard must show statistically significant metrics
+- All user data must be stored securely with proper validation
+- Reports must be generation efficient for daily scheduling
+- Multi-language implementation must follow i18n best practices
+- System must gracefully handle backend downtime or slow responses
+- Decision graph must exactly match Phase 2 decision-graph.ts node structure (34 nodes total)

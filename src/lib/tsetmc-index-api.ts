@@ -202,6 +202,17 @@ function parseB2Response(jsonStr: string): IndexCandle[] {
       volume: 0,
     });
   }
+  // TSETMC CDN returns newest first — reverse to chronological
+  // Use numeric date parsing for robust comparison regardless of digit format
+  const parseDateNum = (d: string | undefined) => {
+    const n = d ? String(d).replace(/[^\d]/g, '') : '';
+    return n ? parseInt(n, 10) : 0;
+  };
+  const firstDateNum = parseDateNum(candles[0]?.date);
+  const lastDateNum = parseDateNum(candles[candles.length - 1]?.date);
+  if (firstDateNum > lastDateNum) {
+    candles.reverse();
+  }
   return candles;
 }
 

@@ -1,0 +1,107 @@
+# TechnicalAI Phase 2: Change Point Detection + Kalman Filter + Entropy + Cross-Correlation
+
+## Objective
+Implement advanced statistical techniques for regime detection, state estimation, and feature enhancement using change point detection, Kalman filtering, entropy measures, and cross-correlation analysis.
+
+## DEFINED MODELS (no ambiguity)
+- Kalman filter variant: LOCAL LINEAR TREND MODEL ONLY (1 state variable: hidden trend). No stochastic volatility, no HMM variants.
+- Cross-correlation method: SIMPLE ROLLING CORRELATION (window = 20 days). NO DCC (too heavy for TSE data volume).
+- Causal discovery: GRANGER CAUSALITY (lag = 1-3 days). NOT Transfer Entropy (requires too much data for meaningful results on financial time series).
+
+## Tasks
+
+### 2.1 Change Point Detection (Ruptures Library)
+- Implement multiple change point detection algorithms:
+  * PELT (Penalized) for exact optimal segmentation
+  * Binary Segmentation for approximate detection
+- Detect regime changes in:
+  * Price returns (log returns)
+  * Volatility (squared returns or ATR)
+  * Volume dynamics
+- Apply appropriate cost functions:
+  * "l2" for mean changes
+  * "rbf" for distribution changes
+- Ensure change points respect minimum regime duration (10 days)
+- Output: Detected change points with confidence scores per symbol
+
+### 2.2 Kalman Filter — LOCAL LINEAR TREND MODEL ONLY
+- Implement Kalman filter for state estimation of:
+  * Hidden trend component (single state variable: local linear trend)
+- State-space formulation:
+  * State equation: α_{t+1} = α_t + η_t, where η_t ~ N(0, σ²_η)
+  * Observation equation: y_t = α_t + ε_t, where ε_t ~ N(0, σ²_ε)
+  * Parameters σ²_η and σ²_ε estimated via MLE from historical data
+- Add smoothing (Rauch-Tung-Striebel) for backward pass
+- Implement 1-step ahead prediction with prediction intervals
+- NO stochastic volatility models, NO HMM variants. Local linear trend is the single defined model.
+- Output: Filtered/smoothed trend state estimates with uncertainty bounds
+
+### 2.3 Entropy Measures for Regime Detection
+- Implement Shannon entropy for regime uncertainty:
+  * H = -Σ p_i log(p_i) where p_i are regime probabilities from decision graph
+- Calculate conditional entropy between indicators:
+  * H(Y|X) = H(X,Y) - H(X)
+- Use entropy-based features for regime classification:
+  * Permutation entropy for time series complexity
+  * Sample entropy for regularity/predictability
+- Output: Entropy-based features and regime uncertainty measures
+
+### 2.4 Cross-Correlation Analysis — Rolling Correlation Only
+- Implement **rolling window correlation** (window = 20 days) for lead-lag relationships:
+  * Between price and volume
+  * Between different technical indicators
+  * Between TSE indices and sectors
+- Calculate time-lagged correlations:
+  * ρ(τ) = Corr(X_t, Y_{t+τ}) for τ = -3 to +3 (short lag only)
+- Identify significant leads/lags using Bonferroni-corrected p-values (p < 0.05)
+- Add rolling correlation for time-varying relationships
+- NO DCC models — rolling correlation provides sufficient information at lower computational cost
+- Output: Cross-correlation matrices and significant lead-lag relationships
+
+### 2.5 Feature Integration Pipeline (37-Feature Limit Enforcement)
+- New features from this phase must REPLACE existing features (not augment).
+- Replacement mapping (example — final mapping must be confirmed):
+  * Change point count → replaces 's_sr' (SR distance)
+  * Kalman trend state → replaces 's_trend' (trend R²×angle)
+  * Entropy → replaces 'f_div' (divergence)
+  * Rolling correlation → replaces 'f_stoch_cross' (stochastic cross)
+  * Granger causality p-values → replaces 'f_macd_cross' (MACD cross)
+- Net result: still exactly 37 features. Each addition requires an explicit removal.
+- Add feature selection to prevent overfitting (mutual information for ranking)
+- Output: Enhanced feature set maintaining exactly 37 features
+
+### 2.6 Real-Time Statistical Monitoring
+- Implement online change point detection for live trading
+- Add Kalman filter predictions for 1-step ahead forecasting
+- Implement entropy-based anomaly detection
+- Add rolling correlation alerts for regime shifts
+- Output: Real-time statistical signals for trading decisions
+
+## Acceptance Criteria
+- [ ] Change point detection identifies regimes with >60% accuracy
+- [ ] Kalman filter reduces state estimation error by >30% vs. raw data
+- [ ] Entropy measures correlate with regime changes (p < 0.05)
+- [ ] Rolling correlation detects significant leads/lags (p < 0.01)
+- [ ] Granger causality tests produce meaningful causal indicators
+- [ ] All statistical methods use only historical data (no look-ahead)
+- [ ] Feature replacement mapping preserves exactly 37 features
+- [ ] Local linear trend is the ONLY Kalman variant implemented
+- [ ] Unit tests for each statistical method with >80% coverage
+- [ ] Performance benchmarks met (< 5 seconds per symbol for all methods)
+- [ ] Documentation of mathematical formulations provided
+- [ ] No deep learning or prohibited models used
+
+## Dependencies
+- Phase 0.5 and 1.0 completed
+- Python libraries: ruptures, numpy, scipy, statsmodels
+- Existing feature engineering and ML model infrastructure
+- TSE data pipeline from Phase 0.5
+
+## Notes
+- Kalman filter MUST be local linear trend only — no stochastic volatility, no HMM variants
+- Rolling correlation replaces DCC (computational efficiency vs. benefit ratio)
+- Granger causality replaces transfer entropy (transfer entropy requires thousands of samples for meaningful results; financial data is too noisy)
+- ALL new features must explicitly replace existing features to maintain 37-feature limit
+- Change point detection must respect temporal order
+- Correlation testing must account for autocorrelation in significance testing
+- All methods must be computationally efficient for daily updates

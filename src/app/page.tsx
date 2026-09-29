@@ -12,8 +12,7 @@ import AnalysisSidebar, { CollapsedSidebarExpand } from '@/components/tse/analys
 import VdssGraph from '@/components/tse/vdss-graph';
 import VdesAnalysis from "@/components/tse/vdes-analysis";
 import PatternsPanel from "@/components/tse/patterns-panel";
-import MLForecast from "@/components/tse/ml-forecast";
-import TimeSeriesPanel from "@/components/tse/time-series-panel";
+import TimeSeriesAnalysis from "@/components/tse/time-series-analysis";
 import HelpPage from "@/components/help-page";
 import DocsPage from "@/components/docs-page";
 import { toPersianDigits } from '@/lib/jalali';
@@ -98,8 +97,7 @@ const TGJU_CATEGORIES = new Set([
 const SIDEBAR_ITEMS = [
   { id: 'indicators', label: 'اندیکاتورها', icon: Activity, color: 'text-cyan-400', activeBg: 'bg-cyan-400/10 border-cyan-400/20', hoverBg: 'hover:bg-cyan-400/5' },
   { id: 'patterns', label: 'الگوهای تکنیکال', icon: Activity, color: 'text-pink-400', activeBg: 'bg-pink-400/10 border-pink-400/20', hoverBg: 'hover:bg-pink-400/5' },
-  { id: 'ml-forecast', label: 'یادگیری ماشین', icon: BrainCircuit, color: 'text-orange-400', activeBg: 'bg-orange-400/10 border-orange-400/20', hoverBg: 'hover:bg-orange-400/5' },
-  { id: 'time-series', label: 'تحلیل سری زمان', icon: TrendingUp, color: 'text-green-400', activeBg: 'bg-green-400/10 border-green-400/20', hoverBg: 'hover:bg-green-400/5' },
+  { id: 'time-series', label: 'یادگیری ماشین و تحلیل سری های زمانی', icon: BrainCircuit, color: 'text-green-400', activeBg: 'bg-green-400/10 border-green-400/20', hoverBg: 'hover:bg-green-400/5' },
   { id: 'graph', label: 'گراف تصمیم', icon: GitBranch, color: 'text-amber-400', activeBg: 'bg-amber-400/10 border-amber-400/20', hoverBg: 'hover:bg-amber-400/5' },
   { id: 'visual', label: 'توضیح‌دهنده تصویری', icon: FileText, color: 'text-purple-400', activeBg: 'bg-purple-400/10 border-purple-400/20', hoverBg: 'hover:bg-purple-400/5' },
 ] as const;
@@ -727,32 +725,22 @@ function LandingPage({ onSearch }: { onSearch: (symbol: string, category?: strin
                 <IndicatorsPanel ta={data.ta} instrumentCategory={data.info?.category} priceDecimals={decimals} />
               )}
 
-               {/* PANEL: Patterns */}
-               {activePanel === 'patterns' && (
-                 <PatternsPanel data={data} priceDecimals={decimals} instrumentCategory={data.info?.category} />
-               )}
+{/* PANEL: Patterns */}
+                {activePanel === 'patterns' && (
+                  <PatternsPanel data={data} priceDecimals={decimals} instrumentCategory={data.info?.category} />
+                )}
 
-               {/* PANEL: ML Forecast */}
-               {activePanel === 'ml-forecast' && (
-                 <MLForecast 
-                   symbolName={data.info?.name ?? data.symbol} 
-                   candles={data.candles} 
-                   currentPrice={lastPrice} 
-                   priceDecimals={decimals} 
-                 />
-               )}
+                {/* PANEL: Time Series Analysis */}
+                {activePanel === 'time-series' && (
+                  <TimeSeriesAnalysis 
+                    symbol={data.symbol} 
+                    candles={data.candles} 
+                    currentPrice={lastPrice} 
+                    priceDecimals={decimals} 
+                  />
+                )}
 
-               {/* PANEL: Time Series Analysis */}
-               {activePanel === 'time-series' && (
-                 <TimeSeriesPanel 
-                   symbol={data.symbol} 
-                   candles={data.candles} 
-                   currentPrice={lastPrice} 
-                   priceDecimals={decimals} 
-                 />
-               )}
-
-              {/* PANEL: Decision Graph */}
+               {/* PANEL: Decision Graph */}
               {activePanel === 'graph' && (
                 <VdssGraph
                   symbolName={data.info?.name ?? data.symbol}

@@ -1,0 +1,156 @@
+# TechnicalAI Phase 0.0: Project Foundations & Readiness
+
+## Objective
+Establish the foundational infrastructure, project structure, and baseline implementations required before any phase can proceed. This phase focuses on project setup, dependency management, basic architecture, and ensuring the codebase is in a state where phases 0.5 through 6.0 can build upon it systematically.
+
+## CRITICAL FOUNDATION DECISIONS (must be settled before any phase)
+
+1. **37-Feature VDSS Limit**: Final definition. Feature extraction MUST output exactly 37 features. Composition:
+   - 16 VDSS raw score features (f_rsi, f_mfi, f_cci, s_adx, f_macd, f_stoch, s_bb, s_ma21, s_ma100, s_ema, s_atr, s_trend, s_sr, f_stoch_cross, f_macd_cross, f_div)
+   - 12 distance features (normalized price distances to key levels: R1, S1, MA100, trend lines, S/R zones)
+   - 4 edge probability features (up, down, pullback, risk — computed from decision graph edge weights)
+   - 3 group path contributions (simple average of path contributions across 3 branches: trend, breakout, reversal)
+   - 1 regime feature (current market regime: bull/bear/neutral/volatile — from Phase 2 regime engine)
+   - 1 pattern feature (detected candlestick pattern: doji, hammer, shooting star, engulfing)
+
+2. **Scenario Label Definition (FINAL)**: SC1-SC9 thresholds from Phase 0.5 Task 0.3 are the single source of truth. All phases MUST use these exact thresholds:
+   - SC1: < -10% (Bearish Shock)
+   - SC2: -10% to -5% (Accelerating Bear)
+   - SC3: -5% to -2% (Strong Bear)
+   - SC4: -2% to -0.5% (Weak Bear)
+   - SC5: -0.5% to +0.5% (Range-bound)
+   - SC6: +0.5% to +2% (Weak Bull)
+   - SC7: +2% to +5% (Strong Bull)
+   - SC8: +5% to +10% (Accelerating Bull)
+   - SC9: > +10% (Bullish Shock)
+
+3. **Ensemble Weighting**: Inverse-variance weighting based on out-of-sample performance (Phase 0.5 CRITICAL DESIGN DECISION #10)
+
+4. **Path Contribution Aggregation**: Simple average of 3 branch path contributions per scenario (Phase 0.5 CRITICAL DESIGN DECISION #11)
+
+5. **No-Prohibition Rules** (from Phase 0.5 Notes):
+   - Do NOT use Prophet, N-BEATS, TFT, or deep learning models
+   - Do NOT use SMOTE or ADASYN for time series
+   - Use ONLY scikit-learn, statsmodels, ruptures, lightgbm
+   - Prevent data leakage at all costs
+   - Use walk-forward validation exclusively
+   - No autoencoders (Phase 3 Task 3.3 explicitly prohibits)
+   - Temperature scaling NOT for tree-based models (Phase 3 Task 3.4)
+   - BCa NOT compatible with block stationary bootstrap (Phase 4 Task 4.3)
+   - Kalman filter MUST be local linear trend only (Phase 2 Task 2.2)
+
+## Projects Structure Requirements
+
+### 1. Python Backend Infrastructure
+- [ ] FastAPI/Flask application with all API endpoints
+- [ ] PostgreSQL database with Prisma ORM
+- [ ] Redis for job queuing (optional, for async pipeline)
+- [ ] Environment configuration (.env.example with all required vars)
+- [ ] Database migration system (Alembic + Prisma)
+- [ ] API versioning (/api/v1/)
+
+### 2. Node.js/TypeScript Frontend Infrastructure
+- [ ] Next.js application with existing architecture
+- [ ] Tailwind CSS for styling
+- [ ] D3.js or Chart.js for visualization
+- [ ] Redux or Context API for state management
+- [ ] RTL support for Persian/English bilingual display
+- [ ] Multi-language support (i18n) for Persian and English
+
+### 3. Core Data Pipeline (STUB — to be expanded in Phase 0.5)
+- [ ] TSE data fetch service (indices and sectors)
+- [ ] OHLCV data storage in PostgreSQL
+- [ ] Daily data update cron job framework
+- [ ] Data validation and gap-filling mechanisms
+- [ ] API rate limiting and error handling
+
+### 4. ML Pipeline Foundation (STUB — to be expanded in Phase 0.5)
+- [ ] VDSS feature extraction producing exactly 37 features
+- [ ] Scenario probability calculation (3-branch DAG)
+- [ ] LightGBM model training framework (placeholder)
+- [ ] Model persistence system (save/load with versioning)
+- [ ] Class weighting for imbalance handling (class_weight='balanced')
+
+### 5. Test Infrastructure
+- [ ] Unit test framework (pytest for Python, Jest for TypeScript)
+- [ ] Integration test framework
+- [ ] Test data fixtures with known outcomes
+- [ ] >80% code coverage target for new code
+- [ ] Performance benchmark harness
+
+### 6. CI/CD Foundation
+- [ ] GitHub Actions or similar CI pipeline
+- [ ] Linting configuration (ruff, black, isort for Python; eslint, prettier for TS)
+- [ ] Automated testing on PR
+- [ ] Staging deployment on merge
+- [ ] Docker configuration for containerization
+
+### 7. Documentation Framework
+- [ ] Project README with setup instructions
+- [ ] API documentation template (OpenAPI/Swagger)
+- [ ] Phase-wise task tracking (these prompt files)
+- [ ] Code docstrings and type hints
+- [ ] Architecture decision records
+
+## Acceptance Criteria for Phase 0.0
+
+- [ ] Project structure is organized and navigable
+- [ ] All required dependencies are installed and configurable
+- [ ] Database schema is defined in Prisma and can migrate
+- [ ] Basic API endpoints exist and respond correctly
+- [ ] Feature extraction outputs exactly 37 features (stub implementation)
+- [ ] Scenario labels SC1-SC9 match the FINAL definitions (Task 0.3 thresholds)
+- [ ] No critical dependencies are missing
+- [ ] Test infrastructure is operational (at least one test runs)
+- [ ] CI pipeline is configured and can lint/typecheck
+- [ ] Documentation is generated and accessible
+- [ ] Project can be built and run in development mode
+
+## Dependencies to Install/Configure
+
+### Python Dependencies (from api/requirements.txt and package.json):
+- numpy, pandas, scikit-learn, statsmodels
+- lightgbm, shap
+- ruptures, scipy
+- fastapi, uvicorn
+- sqlalchemy, alembic
+- redis (optional)
+- pytest, black, ruff, isort
+
+### Node.js Dependencies:
+- next, react, typescript
+- tailwindcss, d3, chart.js
+- eslint, prettier
+- i18next (for multi-language support)
+
+### Database:
+- PostgreSQL 13+ with pgvector (optional)
+- Prisma ORM configured
+- Alembic migrations
+
+### Tools:
+- Docker & Docker Compose
+- Git for version control
+- npm/yarn for package management
+
+## Phase 0.0 Deliverables
+
+1. **Project Structure Audit**: Document current state, identify gaps, create improvement plan
+2. **Dependencies Installation**: All Python and Node.js packages installed and verified
+3. **Environment Configuration**: .env files with all required variables
+4. **Database Schema Migration**: Prisma schema validated, migrations tested
+5. **37-Feature Stub Implementation**: Feature extraction returns exactly 37 features (with placeholder values)
+6. **Scenario Label Stub**: SC1-SC9 labeling matches FINAL thresholds
+7. **Basic API Endpoints**: Health check, data fetch, model predict endpoints
+8. **Test Suite**: At least one unit test and one integration test passing
+9. **CI Pipeline**: Lint, typecheck, and test commands working
+10. **Documentation Index**: All prompt files referenced, architecture documented
+
+## Notes
+
+- This phase does NOT implement full functionality — it establishes the FOUNDATION upon which all subsequent phases build
+- ALL scenario thresholds in Task 0.3 are FINAL — any downstream phase using different thresholds is incorrect
+- The 37-feature limit is ENFORCED — any new features must EXPLICITLY replace existing ones (see Phase 2 Task 2.5 replacement mapping)
+- Inverse-variance ensemble weighting is the ONLY acceptable method (Phase 0.5 CRITICAL DESIGN DECISION #10)
+- Path contribution simple average is the ONLY acceptable method (Phase 0.5 CRITICAL DESIGN DECISION #11)
+- This phase sets the stage but does NOT complete any phase's full task list — it's purely foundational

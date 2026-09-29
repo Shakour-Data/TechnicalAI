@@ -1,0 +1,1 @@
+{"symbol":"TEST","horizon":5,"mode":"quick","model_keys":["rf","xgboost","lightgbm","gbr"]}
