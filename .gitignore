@@ -118,12 +118,16 @@ mini-services/ml-trainer/models/
 
 # Database JSON data files (runtime/generated)
 db/*.json
+api/models/ab_tests.json
 
 # Download directory
 download/
 
 # Prompts directory (typo, contains sensitive data)
 docs/promps/
+
+# Kilo workspace metadata
+.kilo/
 
 # Editor temp files
 *.swp
