@@ -1,0 +1,315 @@
+{
+  "models": {
+    "lightgbm_scenario_test": {
+      "versions": {
+        "1.0.0": {
+          "version": "1.0.0",
+          "type": "lightgbm",
+          "description": "Test LightGBM model for integration testing",
+          "training_data_ref": null,
+          "feature_names": [
+            "f_rsi",
+            "f_mfi",
+            "f_cci",
+            "s_adx",
+            "f_macd",
+            "f_stoch",
+            "s_bb",
+            "s_ma21",
+            "s_ma100",
+            "s_ema",
+            "s_atr",
+            "s_trend",
+            "s_sr",
+            "f_stochCross",
+            "f_macdCross",
+            "f_div",
+            "d_r1",
+            "d_s1",
+            "d_ma100",
+            "d_trend_up",
+            "d_trend_down",
+            "d_sr_resistance",
+            "d_sr_support",
+            "d_ema_gap",
+            "d_bb_position",
+            "d_atr_range",
+            "d_volume_profile",
+            "d_session_high",
+            "e_up",
+            "e_down",
+            "e_pullback",
+            "e_risk",
+            "g_trend",
+            "g_breakout",
+            "g_reversal",
+            "regime",
+            "pattern"
+          ],
+          "hyperparameters": {
+            "learningRate": 0.01,
+            "maxDepth": 6,
+            "numTrees": 100
+          },
+          "training_metrics": {
+            "accuracy": 0.85,
+            "precision": 0.83,
+            "recall": 0.87,
+            "f1": 0.85
+          },
+          "validation_metrics": {
+            "accuracy": 0.82,
+            "precision": 0.8,
+            "recall": 0.84,
+            "f1": 0.82
+          },
+          "created_by": "system",
+          "parent_model": null,
+          "parent_version": null,
+          "tags": [],
+          "status": "staging",
+          "created_at": "2026-10-01T20:53:54.113466+00:00",
+          "file_path": null,
+          "file_hash": null,
+          "file_size": 0
+        },
+        "2.0.0": {
+          "version": "2.0.0",
+          "type": "lightgbm",
+          "description": "Test LightGBM model for integration testing",
+          "training_data_ref": null,
+          "feature_names": [
+            "f_rsi",
+            "f_mfi",
+            "f_cci",
+            "s_adx",
+            "f_macd",
+            "f_stoch",
+            "s_bb",
+            "s_ma21",
+            "s_ma100",
+            "s_ema",
+            "s_atr",
+            "s_trend",
+            "s_sr",
+            "f_stochCross",
+            "f_macdCross",
+            "f_div",
+            "d_r1",
+            "d_s1",
+            "d_ma100",
+            "d_trend_up",
+            "d_trend_down",
+            "d_sr_resistance",
+            "d_sr_support",
+            "d_ema_gap",
+            "d_bb_position",
+            "d_atr_range",
+            "d_volume_profile",
+            "d_session_high",
+            "e_up",
+            "e_down",
+            "e_pullback",
+            "e_risk",
+            "g_trend",
+            "g_breakout",
+            "g_reversal",
+            "regime",
+            "pattern"
+          ],
+          "hyperparameters": {
+            "learningRate": 0.01,
+            "maxDepth": 6,
+            "numTrees": 100
+          },
+          "training_metrics": {
+            "accuracy": 0.85,
+            "precision": 0.83,
+            "recall": 0.87,
+            "f1": 0.85
+          },
+          "validation_metrics": {
+            "accuracy": 0.82,
+            "precision": 0.8,
+            "recall": 0.84,
+            "f1": 0.82
+          },
+          "created_by": "system",
+          "parent_model": null,
+          "parent_version": null,
+          "tags": [],
+          "status": "staging",
+          "created_at": "2026-10-01T20:53:54.055558+00:00",
+          "file_path": null,
+          "file_hash": null,
+          "file_size": 0,
+          "promotion_history": [
+            {
+              "action": "promoted",
+              "reason": "Version 2 ready for production",
+              "timestamp": "2026-10-01T20:53:54.063869+00:00"
+            },
+            {
+              "action": "demoted",
+              "reason": "new_promotion",
+              "timestamp": "2026-10-01T20:53:54.070026+00:00"
+            }
+          ]
+        }
+      }
+    },
+    "lightgbm_scenario_a": {
+      "versions": {
+        "1.0.0": {
+          "version": "1.0.0",
+          "type": "lightgbm",
+          "description": "Test LightGBM model for integration testing",
+          "training_data_ref": null,
+          "feature_names": [
+            "f_rsi",
+            "f_mfi",
+            "f_cci",
+            "s_adx",
+            "f_macd",
+            "f_stoch",
+            "s_bb",
+            "s_ma21",
+            "s_ma100",
+            "s_ema",
+            "s_atr",
+            "s_trend",
+            "s_sr",
+            "f_stochCross",
+            "f_macdCross",
+            "f_div",
+            "d_r1",
+            "d_s1",
+            "d_ma100",
+            "d_trend_up",
+            "d_trend_down",
+            "d_sr_resistance",
+            "d_sr_support",
+            "d_ema_gap",
+            "d_bb_position",
+            "d_atr_range",
+            "d_volume_profile",
+            "d_session_high",
+            "e_up",
+            "e_down",
+            "e_pullback",
+            "e_risk",
+            "g_trend",
+            "g_breakout",
+            "g_reversal",
+            "regime",
+            "pattern"
+          ],
+          "hyperparameters": {
+            "learningRate": 0.01,
+            "maxDepth": 6,
+            "numTrees": 100
+          },
+          "training_metrics": {
+            "accuracy": 0.85,
+            "precision": 0.83,
+            "recall": 0.87,
+            "f1": 0.85
+          },
+          "validation_metrics": {
+            "accuracy": 0.82,
+            "precision": 0.8,
+            "recall": 0.84,
+            "f1": 0.82
+          },
+          "created_by": "system",
+          "parent_model": null,
+          "parent_version": null,
+          "tags": [],
+          "status": "shadow",
+          "created_at": "2026-10-01T20:53:54.143737+00:00",
+          "file_path": null,
+          "file_hash": null,
+          "file_size": 0,
+          "shadow_since": "2026-10-01T20:53:54.169926+00:00"
+        }
+      }
+    },
+    "logistic_regression_vdss_b": {
+      "versions": {
+        "1.0.0": {
+          "version": "1.0.0",
+          "type": "logistic_regression",
+          "description": "Test LightGBM model for integration testing",
+          "training_data_ref": null,
+          "feature_names": [
+            "f_rsi",
+            "f_mfi",
+            "f_cci",
+            "s_adx",
+            "f_macd",
+            "f_stoch",
+            "s_bb",
+            "s_ma21",
+            "s_ma100",
+            "s_ema",
+            "s_atr",
+            "s_trend",
+            "s_sr",
+            "f_stochCross",
+            "f_macdCross",
+            "f_div",
+            "d_r1",
+            "d_s1",
+            "d_ma100",
+            "d_trend_up",
+            "d_trend_down",
+            "d_sr_resistance",
+            "d_sr_support",
+            "d_ema_gap",
+            "d_bb_position",
+            "d_atr_range",
+            "d_volume_profile",
+            "d_session_high",
+            "e_up",
+            "e_down",
+            "e_pullback",
+            "e_risk",
+            "g_trend",
+            "g_breakout",
+            "g_reversal",
+            "regime",
+            "pattern"
+          ],
+          "hyperparameters": {
+            "learningRate": 0.01,
+            "maxDepth": 6,
+            "numTrees": 100
+          },
+          "training_metrics": {
+            "accuracy": 0.85,
+            "precision": 0.83,
+            "recall": 0.87,
+            "f1": 0.85
+          },
+          "validation_metrics": {
+            "accuracy": 0.82,
+            "precision": 0.8,
+            "recall": 0.84,
+            "f1": 0.82
+          },
+          "created_by": "system",
+          "parent_model": null,
+          "parent_version": null,
+          "tags": [],
+          "status": "shadow",
+          "created_at": "2026-10-01T20:53:54.152921+00:00",
+          "file_path": null,
+          "file_hash": null,
+          "file_size": 0,
+          "shadow_since": "2026-10-01T20:53:54.171028+00:00"
+        }
+      }
+    }
+  },
+  "next_version_id": 189
+}
