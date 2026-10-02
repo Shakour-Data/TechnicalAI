@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     try {
       const pythonResult = require('child_process').execSync(
         `python "${scriptPath}" analyze ${args}`,
-        { encoding: 'utf-8', timeout: 30000 }
+        { encoding: 'utf-8', timeout: 30000, env: { ...process.env, ML_SYMBOL: symbol } }
       );
       result = JSON.parse(pythonResult.trim());
     } catch (e) {

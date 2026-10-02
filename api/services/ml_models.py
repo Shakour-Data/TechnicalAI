@@ -1687,11 +1687,17 @@ def run_ml_analysis(
     else:
         risk_level = 'high'
     
-    # Feature importance - use primary model
+    # Feature importance - use primary model.
+    # The adaptive model is trained on the 16 raw VDSS features, so its weight
+    # vector has length 16. Map it to the first 16 raw feature names (guarded by
+    # len(weights) so a shorter/longer weight vector can never cause an IndexError).
+    raw_feature_names = VDSS_FEATURE_NAMES[:16]
     feature_importance = {}
-    if primary_model and primary_model.get('isTrained'):
-        for i, name in enumerate(VDSS_FEATURE_NAMES):
-            feature_importance[name] = round(primary_model['weights'][i], 4) if primary_model.get('weights') else 0
+    if primary_model and primary_model.get('isTrained') and primary_model.get('weights'):
+        weights = primary_model['weights']
+        for i, name in enumerate(raw_feature_names):
+            if i < len(weights):
+                feature_importance[name] = round(weights[i], 4)
     
     # Build forecasts for each trained model
     forecasts = {}
@@ -1709,7 +1715,7 @@ def run_ml_analysis(
                 'cv_r2': model.get('recentAccuracy', 0),
                 'cv_rmse_pct': round(abs(1 - bull_consensus) * 100, 2),
                 'predictions': sessions,
-                'weights': {name: round(w, 4) for name, w in zip(VDSS_FEATURE_NAMES, model['weights'])} if model.get('weights') else None,
+                'weights': {name: round(w, 4) for name, w in zip(raw_feature_names, model['weights'])} if model.get('weights') else None,
             }
             ensemble_weights[forecast_key] = 1.0 / len(trained_models) if trained_models else 1.0
     
@@ -1720,7 +1726,7 @@ def run_ml_analysis(
             'cv_r2': primary_model.get('recentAccuracy', 0) if primary_model and primary_model.get('isTrained') else 0.0,
             'cv_rmse_pct': round(abs(1 - bull_consensus) * 100, 2),
             'predictions': sessions,
-            'weights': {name: round(w, 4) for name, w in zip(VDSS_FEATURE_NAMES, primary_model['weights'])} if primary_model and primary_model.get('weights') else None,
+            'weights': {name: round(w, 4) for name, w in zip(raw_feature_names, primary_model['weights'])} if primary_model and primary_model.get('weights') else None,
         }
         ensemble_weights['logistic_regression_vdss'] = 1.0
     

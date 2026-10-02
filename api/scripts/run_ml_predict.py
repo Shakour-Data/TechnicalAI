@@ -25,6 +25,14 @@ def main():
         # Get symbol from environment variable (avoids Unicode command-line issues on Windows)
         symbol = os.environ.get("ML_SYMBOL", "")
         if not symbol:
+            # Fallback to command line argument
+            args = {}
+            for arg in sys.argv[2:]:
+                if "=" in arg:
+                    key, value = arg.split("=", 1)
+                    args[key] = value
+            symbol = args.get("symbol", "")
+        if not symbol:
             print(json.dumps({"error": "symbol is required"}))
             sys.exit(1)
 

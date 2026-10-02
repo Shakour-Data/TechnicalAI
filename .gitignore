@@ -115,6 +115,11 @@ db/cache/
 
 # ML model artifacts (binary model files)
 mini-services/ml-trainer/models/
+models/TEST/
+models/TEST2/
+models/TEST3/
+models/TEST_INTEGRATION/
+models/TEST_SYMBOL/
 
 # Database JSON data files (runtime/generated)
 db/*.json

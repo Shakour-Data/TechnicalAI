@@ -59,13 +59,13 @@ def test_feature_extraction():
     features = extract_vdss_features(candles, len(candles) - 1, has_volume=True)
     
     assert len(features) == 16, f"Expected 16 features, got {len(features)}"
-    assert len(VDSS_FEATURE_NAMES) == 16, f"Expected 16 feature names, got {len(VDSS_FEATURE_NAMES)}"
+    assert len(VDSS_FEATURE_NAMES) == 37, f"Expected 37 feature names, got {len(VDSS_FEATURE_NAMES)}"
     
     for i, (f, name) in enumerate(zip(features, VDSS_FEATURE_NAMES)):
         assert 0 <= f <= 1, f"Feature {name} value {f} out of range [0, 1]"
     
     print(f"  PASS: Extracted {len(features)} features with valid ranges")
-    print(f"  Features: {', '.join(VDSS_FEATURE_NAMES)}")
+    print(f"  VDSS_FEATURE_NAMES count: {len(VDSS_FEATURE_NAMES)} (16 raw + 12 distance + 4 edge + 3 group + 1 regime + 1 pattern)")
 
 
 def test_indicator_functions():
